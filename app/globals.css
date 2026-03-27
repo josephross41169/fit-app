@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #F0FDF4;
+  --card: #FFFFFF;
+  --primary: #16A34A;
+  --secondary: #22C55E;
+  --success: #16A34A;
+  --text: #1A1A1A;
+  --text-secondary: #6B7280;
+  --border: #BBF7D0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #FFF8F0;
+  color: #1A1A1A;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #DDD6FE;
+  border-radius: 2px;
+}
+
+/* Hide scrollbar for stories */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
