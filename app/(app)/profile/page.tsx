@@ -584,6 +584,100 @@ export default function ProfilePage() {
     return "wellness";
   }
 
+  // ── Real activity log state ──
+  const [realDays, setRealDays] = useState<typeof DAYS>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadLogs() {
+      setLoadingLogs(true);
+      try {
+        const { data } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .eq('user_id', user!.id)
+          .order('logged_at', { ascending: false })
+          .limit(60);
+
+        if (!data || data.length === 0) {
+          setRealDays([]);
+          setLoadingLogs(false);
+          return;
+        }
+
+        const byDate = new Map<string, any[]>();
+        data.forEach((log: any) => {
+          const d = new Date(log.logged_at);
+          const key = `${d.getMonth() + 1}.${d.getDate()}`;
+          if (!byDate.has(key)) byDate.set(key, []);
+          byDate.get(key)!.push(log);
+        });
+
+        const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+        const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
+          const [month, day] = dateKey.split('.').map(Number);
+          const date = new Date(new Date().getFullYear(), month - 1, day);
+          const dayName = DAY_NAMES[date.getDay()];
+
+          const workoutLog = logs.find((l: any) => l.log_type === 'workout');
+          const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
+
+          const workout = workoutLog ? {
+            type: workoutLog.workout_type || 'Workout',
+            duration: workoutLog.workout_duration_min ? `${workoutLog.workout_duration_min} min` : '—',
+            calories: workoutLog.workout_calories || 0,
+            exercises: Array.isArray(workoutLog.exercises)
+              ? workoutLog.exercises.map((e: any) => ({
+                  name: e.name || '',
+                  sets: parseInt(e.sets) || 0,
+                  reps: parseInt(e.reps) || 0,
+                  weight: e.weight || '—',
+                }))
+              : [],
+          } : null;
+
+          const totalCalories = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
+          const totalProtein  = nutritionLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
+          const totalCarbs    = nutritionLogs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
+          const totalFat      = nutritionLogs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
+
+          const nutrition = nutritionLogs.length > 0 ? {
+            calories: Math.round(totalCalories),
+            protein:  Math.round(totalProtein),
+            carbs:    Math.round(totalCarbs),
+            fat:      Math.round(totalFat),
+            sugar:    0,
+            meals: nutritionLogs.map((l: any) => ({
+              key:   l.meal_type || 'Meal',
+              emoji: '🍽️',
+              name:  Array.isArray(l.food_items) && l.food_items.length > 0
+                       ? l.food_items.map((f: any) => f.name).join(', ')
+                       : (l.notes || 'Logged meal'),
+              cal:   l.calories_total || 0,
+            })),
+          } : null;
+
+          return {
+            id: dateKey,
+            label: dayName,
+            emoji: workout ? '💪' : '🌅',
+            workout,
+            nutrition,
+          };
+        });
+
+        setRealDays(days);
+      } catch (e) {
+        console.error('Failed to load activity logs:', e);
+        setRealDays([]);
+      }
+      setLoadingLogs(false);
+    }
+    loadLogs();
+  }, [user]);
+
   // ── Badge state ──
   const [earnedBadges,setEarnedBadges] = useState<string[]>([]);
 
@@ -865,7 +959,24 @@ export default function ProfilePage() {
           {/* CENTER */}
           <div>
             <div style={{fontWeight:900,fontSize:20,color:C.text,marginBottom:16}}>Activity Log</div>
-            {DAYS.map(day=><DayCard key={day.id} day={day}/>)}
+            {loadingLogs ? (
+              <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
+                <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}}/>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                <div style={{fontSize:14}}>Loading activity log...</div>
+              </div>
+            ) : realDays.length === 0 ? (
+              <div style={{textAlign:"center",padding:"48px 24px",background:C.white,borderRadius:22,border:`2px solid ${C.greenMid}`}}>
+                <div style={{fontSize:48,marginBottom:12}}>📋</div>
+                <div style={{fontWeight:800,fontSize:18,color:C.text,marginBottom:8}}>No activity logged yet</div>
+                <div style={{fontSize:14,color:C.sub,marginBottom:20}}>Your workouts, nutrition, and wellness logs will appear here.</div>
+                <a href="/post" style={{display:"inline-block",padding:"12px 28px",borderRadius:16,background:`linear-gradient(135deg,${C.blue},#22C55E)`,color:"#fff",fontWeight:900,fontSize:15,textDecoration:"none"}}>
+                  + Log Activity
+                </a>
+              </div>
+            ) : (
+              realDays.map(day => <DayCard key={day.id} day={day as any}/>)
+            )}
           </div>
 
           {/* RIGHT */}
