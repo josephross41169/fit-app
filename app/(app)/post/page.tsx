@@ -45,6 +45,7 @@ export default function PostPage() {
   const [posted, setPosted] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Workout state
   const [woType, setWoType] = useState("");
@@ -86,24 +87,30 @@ export default function PostPage() {
   }
 
   async function handleSave() {
-    if (!user) return;
+    if (!user) {
+      setSaveError("You must be logged in. Please refresh and sign in again.");
+      return;
+    }
     setLoading(true);
+    setSaveError(null);
 
     const base = { user_id: user.id, is_public: !isPrivate, logged_at: new Date().toISOString() };
+    let error: any = null;
 
     if (logTab === 'workout') {
-      await supabase.from('activity_logs').insert({
+      const res = await supabase.from('activity_logs').insert({
         ...base,
         log_type: 'workout',
-        workout_type: woType,
+        workout_type: woType || null,
         workout_duration_min: woDuration ? parseInt(woDuration) : null,
         workout_calories: woCalories ? parseInt(woCalories) : null,
         exercises: exercises.length > 0 ? exercises : null,
         cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
         notes: woNotes || null,
       });
+      error = res.error;
     } else if (logTab === 'nutrition') {
-      await supabase.from('activity_logs').insert({
+      const res = await supabase.from('activity_logs').insert({
         ...base,
         log_type: 'nutrition',
         meal_type: mealType,
@@ -114,8 +121,9 @@ export default function PostPage() {
         water_oz: water ? parseFloat(water) : null,
         notes: nutNotes || null,
       });
+      error = res.error;
     } else if (logTab === 'wellness') {
-      await supabase.from('activity_logs').insert({
+      const res = await supabase.from('activity_logs').insert({
         ...base,
         log_type: 'wellness',
         wellness_type: wellnessType,
@@ -123,11 +131,16 @@ export default function PostPage() {
         mood: mood || null,
         notes: wellnessNotes || null,
       });
+      error = res.error;
     }
 
     setLoading(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    if (error) {
+      setSaveError(error.message || "Something went wrong. Please try again.");
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
   }
 
   async function handlePost() {
@@ -144,6 +157,12 @@ export default function PostPage() {
     setPosted(true);
     setTimeout(() => setPosted(false), 2500);
   }
+
+  const SaveErrorBanner = () => saveError ? (
+    <div style={{ background: "#FEE2E2", border: "1.5px solid #FECACA", borderRadius: 14, padding: "12px 16px", fontSize: 13, color: "#DC2626", fontWeight: 600 }}>
+      {"\u26A0\uFE0F"} {saveError}
+    </div>
+  ) : null;
 
   const PrivacyToggle = () => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.white, borderRadius: 16, padding: "14px 18px", border: `2px solid ${C.greenMid}`, marginBottom: 4 }}>
@@ -391,9 +410,10 @@ export default function PostPage() {
                 </label>
               </div>
 
+              <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: "pointer" }}>
-                💾 Save to Log
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
           )}
@@ -462,9 +482,10 @@ export default function PostPage() {
                 </label>
               </div>
 
+              <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: "pointer" }}>
-                💾 Save to Log
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
           )}
@@ -507,9 +528,10 @@ export default function PostPage() {
                 </div>
               </div>
 
+              <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: "pointer" }}>
-                💾 Save to Log
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
           )}
