@@ -49,20 +49,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        try {
-          const withProfile = await fetchProfile(session.user);
-          setUser(withProfile);
-        } catch {
-          setUser(session.user);
+    let initialLoadDone = false;
+
+    // Hard timeout — no matter what, unblock the app after 4 seconds
+    const timeout = setTimeout(() => {
+      if (!initialLoadDone) {
+        initialLoadDone = true;
+        setLoading(false);
+      }
+    }, 4000);
+
+    async function initSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        if (session?.user) {
+          try {
+            const withProfile = await fetchProfile(session.user);
+            setUser(withProfile);
+          } catch {
+            setUser(session.user);
+          }
+        }
+      } catch {
+        // network error — still unblock
+      } finally {
+        if (!initialLoadDone) {
+          initialLoadDone = true;
+          clearTimeout(timeout);
+          setLoading(false);
         }
       }
-      setLoading(false);
-    }).catch(() => {
-      setLoading(false);
-    });
+    }
+
+    initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
@@ -76,10 +96,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null);
       }
-      setLoading(false);
+      // Always unblock after auth state resolves
+      if (!initialLoadDone) {
+        initialLoadDone = true;
+        clearTimeout(timeout);
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function signUp(email: string, password: string, username: string, fullName: string) {
