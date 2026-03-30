@@ -1,5 +1,6 @@
 ﻿"use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
@@ -39,6 +40,7 @@ const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement
 
 export default function PostPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [mainMode, setMainMode] = useState<MainMode>("log");
   const [logTab, setLogTab] = useState<LogTab>("workout");
   const [saved, setSaved] = useState(false);
@@ -86,6 +88,22 @@ export default function PostPage() {
     const r = new FileReader(); r.onload = ev => set(ev.target!.result as string); r.readAsDataURL(f); e.target.value = "";
   }
 
+  async function ensureProfile() {
+    if (!user) return false;
+    const { data } = await supabase.from('users').select('id').eq('id', user.id).single();
+    if (!data) {
+      const email = user.email || '';
+      const fallback = email.split('@')[0] || 'user';
+      const { error } = await supabase.from('users').insert({
+        id: user.id,
+        username: (user.user_metadata?.username || fallback).toLowerCase().replace(/[^a-z0-9_]/g, ''),
+        full_name: user.user_metadata?.full_name || fallback,
+      });
+      if (error) return false;
+    }
+    return true;
+  }
+
   async function handleSave() {
     if (!user) {
       setSaveError("You must be logged in. Please refresh and sign in again.");
@@ -94,44 +112,56 @@ export default function PostPage() {
     setLoading(true);
     setSaveError(null);
 
+    // Ensure user profile row exists (foreign key guard)
+    const profileOk = await ensureProfile();
+    if (!profileOk) {
+      setSaveError("Could not verify your profile. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
+
     const base = { user_id: user.id, is_public: !isPrivate, logged_at: new Date().toISOString() };
     let error: any = null;
 
-    if (logTab === 'workout') {
-      const res = await supabase.from('activity_logs').insert({
-        ...base,
-        log_type: 'workout',
-        workout_type: woType || null,
-        workout_duration_min: woDuration ? parseInt(woDuration) : null,
-        workout_calories: woCalories ? parseInt(woCalories) : null,
-        exercises: exercises.length > 0 ? exercises : null,
-        cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
-        notes: woNotes || null,
-      });
-      error = res.error;
-    } else if (logTab === 'nutrition') {
-      const res = await supabase.from('activity_logs').insert({
-        ...base,
-        log_type: 'nutrition',
-        meal_type: mealType,
-        food_items: foodItems.length > 0 ? foodItems : null,
-        protein_g: protein ? parseFloat(protein) : null,
-        carbs_g: carbs ? parseFloat(carbs) : null,
-        fat_g: fat ? parseFloat(fat) : null,
-        water_oz: water ? parseFloat(water) : null,
-        notes: nutNotes || null,
-      });
-      error = res.error;
-    } else if (logTab === 'wellness') {
-      const res = await supabase.from('activity_logs').insert({
-        ...base,
-        log_type: 'wellness',
-        wellness_type: wellnessType,
-        wellness_duration_min: wellnessDuration ? parseInt(wellnessDuration) : null,
-        mood: mood || null,
-        notes: wellnessNotes || null,
-      });
-      error = res.error;
+    try {
+      if (logTab === 'workout') {
+        const res = await supabase.from('activity_logs').insert({
+          ...base,
+          log_type: 'workout',
+          workout_type: woType || null,
+          workout_duration_min: woDuration ? parseInt(woDuration) : null,
+          workout_calories: woCalories ? parseInt(woCalories) : null,
+          exercises: exercises.length > 0 ? exercises : null,
+          cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
+          notes: woNotes || null,
+        });
+        error = res.error;
+      } else if (logTab === 'nutrition') {
+        const res = await supabase.from('activity_logs').insert({
+          ...base,
+          log_type: 'nutrition',
+          meal_type: mealType,
+          food_items: foodItems.length > 0 ? foodItems : null,
+          protein_g: protein ? parseFloat(protein) : null,
+          carbs_g: carbs ? parseFloat(carbs) : null,
+          fat_g: fat ? parseFloat(fat) : null,
+          water_oz: water ? parseFloat(water) : null,
+          notes: nutNotes || null,
+        });
+        error = res.error;
+      } else if (logTab === 'wellness') {
+        const res = await supabase.from('activity_logs').insert({
+          ...base,
+          log_type: 'wellness',
+          wellness_type: wellnessType,
+          wellness_duration_min: wellnessDuration ? parseInt(wellnessDuration) : null,
+          mood: mood || null,
+          notes: wellnessNotes || null,
+        });
+        error = res.error;
+      }
+    } catch (e: any) {
+      error = { message: e?.message || "Network error. Check your connection and try again." };
     }
 
     setLoading(false);
@@ -139,23 +169,42 @@ export default function PostPage() {
       setSaveError(error.message || "Something went wrong. Please try again.");
     } else {
       setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
     }
   }
 
   async function handlePost() {
-    if (!user) return;
+    if (!user) {
+      setSaveError("You must be logged in. Please refresh and sign in again.");
+      return;
+    }
     setLoading(true);
-    await supabase.from('posts').insert({
-      user_id: user.id,
-      caption: caption || null,
-      post_type: postType.toLowerCase() as any,
-      location: location || null,
-      is_public: true,
-    });
-    setLoading(false);
-    setPosted(true);
-    setTimeout(() => setPosted(false), 2500);
+    setSaveError(null);
+
+    const profileOk = await ensureProfile();
+    if (!profileOk) {
+      setSaveError("Could not verify your profile. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('posts').insert({
+        user_id: user.id,
+        caption: caption || null,
+        post_type: postType.toLowerCase() as any,
+        location: location || null,
+        is_public: true,
+      });
+      setLoading(false);
+      if (error) {
+        setSaveError(error.message || "Something went wrong. Please try again.");
+      } else {
+        setPosted(true);
+      }
+    } catch (e: any) {
+      setLoading(false);
+      setSaveError(e?.message || "Network error. Check your connection and try again.");
+    }
   }
 
   const SaveErrorBanner = () => saveError ? (
@@ -186,21 +235,29 @@ export default function PostPage() {
     </div>
   );
 
-  if (saved) return (
-    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-      <div style={{ fontSize: 64 }}>✅</div>
-      <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Saved to Log!</div>
-      <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>{isPrivate ? "🔒 Saved privately" : "🌐 Visible on your profile"}</div>
-    </div>
-  );
+  if (saved) {
+    setTimeout(() => router.push("/profile"), 1500);
+    return (
+      <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <div style={{ fontSize: 64 }}>✅</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Saved to Log!</div>
+        <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>{isPrivate ? "🔒 Saved privately" : "🌐 Visible on your profile"}</div>
+        <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to your profile...</div>
+      </div>
+    );
+  }
 
-  if (posted) return (
-    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-      <div style={{ fontSize: 64 }}>🚀</div>
-      <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Posted to Feed!</div>
-      <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>🌐 Visible to your followers on the feed</div>
-    </div>
-  );
+  if (posted) {
+    setTimeout(() => router.push("/feed"), 1500);
+    return (
+      <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <div style={{ fontSize: 64 }}>🚀</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Posted to Feed!</div>
+        <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>🌐 Visible to your followers</div>
+        <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to the feed...</div>
+      </div>
+    );
+  }
 
   const TAB_DEFS = [
     { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#16A34A" },
