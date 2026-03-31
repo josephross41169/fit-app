@@ -680,14 +680,42 @@ export default function FeedPage() {
             )
           ) : (
             <>
-              {dbPosts.length === 0 && !loadingFeed && (
-                <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
-                  👋 These are sample posts. Log a workout or share to feed to see real content!
+              {loadingFeed ? (
+                <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
+                  <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                  <p style={{ fontWeight:600 }}>Loading feed…</p>
                 </div>
+              ) : dbPosts.length > 0 ? (
+                dbPosts.map((p: any) => {
+                  const mapped = {
+                    id: p.id,
+                    user: p.users?.full_name || p.users?.username || "User",
+                    username: p.users?.username || "user",
+                    avatar: (p.users?.full_name || p.users?.username || "U").slice(0,2).toUpperCase(),
+                    time: new Date(p.created_at).toLocaleDateString(),
+                    dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
+                    dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
+                    photos: p.media_url ? [p.media_url] : [],
+                    caption: p.caption || "",
+                    likes: p.likes_count || 0,
+                    liked: false,
+                    comments: [],
+                    workout: null,
+                    nutrition: null,
+                    wellness: null,
+                  };
+                  return <PostCard key={p.id} post={mapped} onUpdate={() => {}} />;
+                })
+              ) : (
+                <>
+                  <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
+                    👋 No posts yet. Share something to the feed to see it here!
+                  </div>
+                  {posts.map(post => (
+                    <PostCard key={post.id} post={post} onUpdate={updatePost} />
+                  ))}
+                </>
               )}
-              {posts.map(post => (
-                <PostCard key={post.id} post={post} onUpdate={updatePost} />
-              ))}
             </>
           )}
         </div>

@@ -34,12 +34,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfile(authUser: User): Promise<AuthUser> {
-    const { data } = await supabase
-      .from('users')
-      .select('username, full_name, bio, avatar_url, banner_url, followers_count, following_count, posts_count')
-      .eq('id', authUser.id)
-      .single();
-    return { ...authUser, profile: data || undefined };
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('username, full_name, bio, avatar_url, banner_url, followers_count, following_count, posts_count')
+        .eq('id', authUser.id)
+        .single();
+      return { ...authUser, profile: data || undefined };
+    } catch {
+      return authUser;
+    }
   }
 
   async function refreshProfile() {
@@ -49,65 +53,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    let initialLoadDone = false;
-
-    // Hard timeout — no matter what, unblock the app after 2 seconds
-    const timeout = setTimeout(() => {
-      if (!initialLoadDone) {
-        initialLoadDone = true;
+    // Get the current session — this reads from localStorage, should be instant
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        // IMMEDIATELY set the user so the app doesn't redirect to login
+        // Then load profile in background without blocking
+        setUser(session.user);
+        setLoading(false);
+        // Load profile in background — updates user silently
+        fetchProfile(session.user).then(withProfile => setUser(withProfile));
+      } else {
         setLoading(false);
       }
-    }, 2000);
+    }).catch(() => {
+      setLoading(false);
+    });
 
-    async function initSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        if (session?.user) {
-          try {
-            const withProfile = await fetchProfile(session.user);
-            setUser(withProfile);
-          } catch {
-            setUser(session.user);
-          }
-        }
-      } catch {
-        // network error — still unblock
-      } finally {
-        if (!initialLoadDone) {
-          initialLoadDone = true;
-          clearTimeout(timeout);
-          setLoading(false);
-        }
-      }
-    }
-
-    initSession();
-
+    // Listen for auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-        try {
-          const withProfile = await fetchProfile(session.user);
-          setUser(withProfile);
-        } catch {
-          setUser(session.user);
-        }
+        // Same pattern — set user immediately, profile loads in background
+        setUser(session.user);
+        setLoading(false);
+        fetchProfile(session.user).then(withProfile => setUser(withProfile));
       } else {
         setUser(null);
-      }
-      // Always unblock after auth state resolves
-      if (!initialLoadDone) {
-        initialLoadDone = true;
-        clearTimeout(timeout);
         setLoading(false);
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   async function signUp(email: string, password: string, username: string, fullName: string) {
