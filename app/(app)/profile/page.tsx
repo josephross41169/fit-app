@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
@@ -592,6 +593,7 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const { user, refreshProfile } = useAuth();
+  const router = useRouter();
   const [profile,setProfile] = useState({
     name: "",
     username: "",
@@ -738,6 +740,36 @@ export default function ProfilePage() {
     loadLogs();
   }, [user]);
 
+  // ── Followers / Following modal ──
+  const [socialModal,setSocialModal] = useState<"followers"|"following"|null>(null);
+  const [socialList,setSocialList]   = useState<{id:string;username:string;full_name:string;avatar_url:string|null}[]>([]);
+  const [socialLoading,setSocialLoading] = useState(false);
+
+  async function openSocialModal(type:"followers"|"following") {
+    if (!user) return;
+    setSocialModal(type);
+    setSocialLoading(true);
+    setSocialList([]);
+    try {
+      if (type === "followers") {
+        const { data } = await supabase
+          .from('follows')
+          .select('follower_id, users!follows_follower_id_fkey(id,username,full_name,avatar_url)')
+          .eq('following_id', user.id)
+          .limit(100);
+        setSocialList((data || []).map((r:any) => r.users).filter(Boolean));
+      } else {
+        const { data } = await supabase
+          .from('follows')
+          .select('following_id, users!follows_following_id_fkey(id,username,full_name,avatar_url)')
+          .eq('follower_id', user.id)
+          .limit(100);
+        setSocialList((data || []).map((r:any) => r.users).filter(Boolean));
+      }
+    } catch {}
+    setSocialLoading(false);
+  }
+
   // ── Badge state ──
   const [earnedBadges,setEarnedBadges] = useState<string[]>([]);
 
@@ -853,6 +885,48 @@ export default function ProfilePage() {
         }
         .highlight-slot:hover .highlight-remove { opacity: 1 !important; }
       `}</style>
+
+      {/* ── Followers / Following Modal ── */}
+      {socialModal && (
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setSocialModal(null)}>
+          <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:440,maxHeight:"75vh",overflow:"hidden",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px",borderBottom:`2px solid ${C.greenMid}`}}>
+              <div style={{fontWeight:900,fontSize:18,color:C.text}}>{socialModal==="followers"?"👥 Followers":"➡️ Following"}</div>
+              <button onClick={()=>setSocialModal(null)} style={{width:34,height:34,borderRadius:"50%",border:"none",background:C.greenLight,color:C.sub,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"12px 16px"}}>
+              {socialLoading ? (
+                <div style={{textAlign:"center",padding:"32px 0",color:C.sub}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite",margin:"0 auto 10px"}}/>
+                  <div style={{fontSize:13}}>Loading...</div>
+                </div>
+              ) : socialList.length === 0 ? (
+                <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
+                  <div style={{fontSize:40,marginBottom:10}}>👤</div>
+                  <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No one here yet</div>
+                  <div style={{fontSize:13}}>{socialModal==="followers"?"No followers yet":"Not following anyone yet"}</div>
+                </div>
+              ) : (
+                socialList.map(u=>(
+                  <div key={u.id} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 8px",borderRadius:16,cursor:"pointer",transition:"background 0.15s"}}
+                    onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
+                    onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
+                    onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
+                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
+                      {u.avatar_url ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:14,color:C.text}}>{u.full_name}</div>
+                      <div style={{fontSize:12,color:C.sub}}>@{u.username}</div>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:18,height:18,flexShrink:0}}><path d="M9 18l6-6-6-6"/></svg>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast ── */}
       {badgeToast && (
@@ -1004,8 +1078,14 @@ export default function ProfilePage() {
             <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>
 
             <div style={{background:C.white,borderRadius:18,padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,border:`1.5px solid ${C.greenMid}`,marginBottom:14}}>
-              {[{l:"Posts",v:user?.profile?.posts_count??0},{l:"Followers",v:user?.profile?.followers_count??0},{l:"Following",v:user?.profile?.following_count??0}].map(s=>(
-                <div key={s.l} style={{textAlign:"center"}}>
+              {[
+                {l:"Posts",v:user?.profile?.posts_count??0,onClick:undefined},
+                {l:"Followers",v:user?.profile?.followers_count??0,onClick:()=>openSocialModal("followers")},
+                {l:"Following",v:user?.profile?.following_count??0,onClick:()=>openSocialModal("following")},
+              ].map(s=>(
+                <div key={s.l} onClick={s.onClick} style={{textAlign:"center",cursor:s.onClick?"pointer":"default",borderRadius:12,padding:"4px 0",transition:"background 0.15s"}}
+                  onMouseEnter={e=>{if(s.onClick)(e.currentTarget as HTMLDivElement).style.background=C.greenLight}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background="transparent"}}>
                   <div style={{fontSize:22,fontWeight:900,color:C.blue}}>{s.v}</div>
                   <div style={{fontSize:11,color:C.sub,marginTop:2}}>{s.l}</div>
                 </div>

@@ -1,6 +1,7 @@
 ﻿"use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const C = {
   blue:"#16A34A", greenLight:"#F0FDF4", greenMid:"#BBF7D0",
@@ -381,7 +382,29 @@ function WorldTab() {
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DiscoverPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<"local" | "world">("local");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{id:string;username:string;full_name:string;avatar_url:string|null}[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeout = useRef<any>(null);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(async () => {
+      setSearchLoading(true);
+      const q = searchQuery.trim().toLowerCase();
+      const { data } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+        .limit(20);
+      setSearchResults(data || []);
+      setSearchLoading(false);
+    }, 300);
+    return () => clearTimeout(searchTimeout.current);
+  }, [searchQuery]);
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh" }}>
@@ -402,11 +425,46 @@ export default function DiscoverPage() {
           </div>
 
           {/* Search bar */}
-          <div style={{ flex:1,maxWidth:380,display:"flex",alignItems:"center",gap:10,background:C.greenLight,borderRadius:24,padding:"8px 16px",border:`1.5px solid ${C.greenMid}` }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:16,height:16,flexShrink:0 }}>
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input placeholder="Search people, brands, events..." style={{ background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1 }} />
+          <div style={{ flex:1,maxWidth:380,position:"relative" }}>
+            <div style={{ display:"flex",alignItems:"center",gap:10,background:C.greenLight,borderRadius:24,padding:"8px 16px",border:`1.5px solid ${searchQuery ? C.blue : C.greenMid}` }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:16,height:16,flexShrink:0 }}>
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input
+                placeholder="Search people..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{ background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1 }}
+              />
+              {searchQuery && (
+                <button onClick={()=>setSearchQuery("")} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>×</button>
+              )}
+            </div>
+            {/* Search results dropdown */}
+            {searchQuery.trim() && (
+              <div style={{ position:"absolute",top:"calc(100% + 8px)",left:0,right:0,background:C.white,borderRadius:18,border:`1.5px solid ${C.greenMid}`,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",zIndex:200,overflow:"hidden",maxHeight:320,overflowY:"auto" }}>
+                {searchLoading ? (
+                  <div style={{ padding:"16px",textAlign:"center",color:C.sub,fontSize:13 }}>Searching...</div>
+                ) : searchResults.length === 0 ? (
+                  <div style={{ padding:"16px",textAlign:"center",color:C.sub,fontSize:13 }}>No results for "{searchQuery}"</div>
+                ) : (
+                  searchResults.map(u => (
+                    <div key={u.id} onClick={()=>{setSearchQuery("");router.push(`/profile/${u.username}`);}}
+                      style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`,transition:"background 0.1s" }}
+                      onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
+                      onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
+                      <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
+                        {u.avatar_url ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontWeight:800,fontSize:14,color:C.text }}>{u.full_name}</div>
+                        <div style={{ fontSize:12,color:C.sub }}>@{u.username}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
 
