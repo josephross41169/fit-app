@@ -38,6 +38,16 @@ body {
   border-radius: 2px;
 }
 
+/* Remove number input spinners globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* Hide scrollbar for stories */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
