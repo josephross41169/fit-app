@@ -419,6 +419,16 @@ function DayCard({day}:{day:typeof DAYS[0]}) {
                 ))}
               </div>
               {nut && <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {/* Nutrition photos */}
+                {(nutrition as any).photoUrls && (nutrition as any).photoUrls.length > 0 && (
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                    {(nutrition as any).photoUrls.map((src: string, i: number) => (
+                      <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                        <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {nutrition.meals.map(meal=>(
                   <div key={meal.key} style={{background:C.white,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,border:`1.5px solid ${C.greenMid}`}}>
                     <div style={{width:46,height:46,borderRadius:13,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{meal.emoji}</div>
@@ -534,13 +544,9 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
         <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:C.greenLight,color:C.blue,border:"none",cursor:"pointer"}}>✏️ Edit</button>
       </div>
       {items.map((item,i)=>(
-        <div key={i} style={{background:i%2===0?C.greenLight:C.goldLight,borderRadius:14,padding:"13px 15px",marginBottom:10}}>
-          {Object.entries(item).map(([k,v])=>(
-            <div key={k} style={{fontSize:13,color:C.text,marginBottom:2}}>
-              <span style={{fontWeight:700,textTransform:"capitalize"}}>{k}: </span>
-              <span style={{color:C.sub}}>{v as string}</span>
-            </div>
-          ))}
+        <div key={i} style={{background:i%2===0?C.greenLight:C.goldLight,borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
+          {item.emoji && <span style={{fontSize:24,flexShrink:0}}>{item.emoji}</span>}
+          <span style={{fontSize:14,fontWeight:700,color:C.text}}>{item.name || item.label || Object.values(item).filter((_,idx)=>idx>0).join(' ')}</span>
         </div>
       ))}
     </div>
@@ -649,6 +655,7 @@ export default function ProfilePage() {
             carbs:    Math.round(totalCarbs),
             fat:      Math.round(totalFat),
             sugar:    0,
+            photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
             meals: nutritionLogs.map((l: any) => ({
               key:   l.meal_type || 'Meal',
               emoji: '🍽️',
