@@ -168,6 +168,21 @@ export default function PostPage() {
     }
   }
 
+  async function uploadPhoto(dataUrl: string, bucket: string, path: string): Promise<string | null> {
+    try {
+      const base64 = dataUrl.split(',')[1];
+      const mime = dataUrl.split(';')[0].split(':')[1];
+      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: mime });
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(path, blob, { contentType: mime, upsert: true });
+      if (uploadError) return null;
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+      return urlData.publicUrl;
+    } catch { return null; }
+  }
+
   async function handlePost() {
     if (!user) {
       setSaveError("You must be logged in. Please refresh and sign in again.");
@@ -183,10 +198,19 @@ export default function PostPage() {
       return;
     }
 
+    // Upload photo to Supabase Storage if provided
+    let mediaUrl: string | null = null;
+    if (feedPhoto) {
+      const filePath = `${user.id}/${Date.now()}.jpg`;
+      mediaUrl = await uploadPhoto(feedPhoto, 'posts', filePath);
+    }
+
     try {
       const { error } = await supabase.from('posts').insert({
         user_id: user.id,
         caption: caption || null,
+        media_url: mediaUrl,
+        media_type: mediaUrl ? 'image' : null,
         post_type: postType.toLowerCase() as any,
         location: location || null,
         is_public: true,

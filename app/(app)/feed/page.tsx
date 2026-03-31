@@ -357,12 +357,14 @@ function SideUserBlock({ post }: { post: Post }) {
 const CURRENT_USER = "joey_fit";
 
 // ── Post Card (left column — media + social only) ─────────────────────────────
-function PostCard({ post, onUpdate }: { post: Post; onUpdate: (p: Post) => void }) {
+function PostCard({ post, onUpdate, onDelete }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void }) {
   const isOwner = post.username === CURRENT_USER;
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [lightbox, setLightbox] = useState<string|null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [m, d] = post.dateShort.split(".").map(Number);
 
   function toggleLike() {
@@ -408,6 +410,28 @@ function PostCard({ post, onUpdate }: { post: Post; onUpdate: (p: Post) => void 
             <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
             <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
           </div>
+          {isOwner && onDelete && (
+            <div style={{ position:"relative" }}>
+              <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:C.sub,fontSize:20,lineHeight:1 }}>···</button>
+              {showMenu && (
+                <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:C.white,border:`1.5px solid ${C.greenMid}`,borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",minWidth:160,overflow:"hidden" }}>
+                  {!confirmDelete ? (
+                    <button onClick={() => setConfirmDelete(true)} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#EF4444",display:"flex",alignItems:"center",gap:8 }}>
+                      🗑️ Delete Post
+                    </button>
+                  ) : (
+                    <div style={{ padding:"12px 16px" }}>
+                      <div style={{ fontSize:13,fontWeight:700,color:C.text,marginBottom:10 }}>Delete this post?</div>
+                      <div style={{ display:"flex",gap:8 }}>
+                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); onDelete(); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer" }}>Yes, delete</button>
+                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Caption */}
@@ -453,6 +477,9 @@ function PostCard({ post, onUpdate }: { post: Post; onUpdate: (p: Post) => void 
               <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
             </label>
             <span style={{ fontSize:12,color:C.sub }}>{post.photos.length} photo{post.photos.length!==1?"s":""}</span>
+            <button onClick={() => onUpdate({ ...post, photos: post.photos.filter((_,i) => i !== currentPhoto) })} style={{ marginLeft:"auto",fontSize:12,fontWeight:700,color:"#EF4444",background:"#FEE2E2",border:"none",cursor:"pointer",padding:"5px 14px",borderRadius:20 }}>
+              🗑️ Remove Photo
+            </button>
           </div>
         )}
 
@@ -571,17 +598,53 @@ export default function FeedPage() {
   }, [feedTab, user]);
 
   function updatePost(updated: Post) {
-    setPosts(prev => prev.map(p => p.id === updated.id ? updated : p));
+    if (dbPosts.find((p: any) => p.id === updated.id)) {
+      setDbPosts(prev => prev.map((p: any) => p.id === updated.id ? { ...p, ...updated } : p));
+    } else {
+      setPosts(prev => prev.map(p => p.id === updated.id ? updated : p));
+    }
   }
 
-  const activityPosts = posts.filter(p => p.workout || p.nutrition || p.wellness);
+  async function deletePost(id: number | string) {
+    // Try Supabase first for real posts
+    const isDbPost = dbPosts.find((p: any) => p.id === id);
+    if (isDbPost) {
+      await supabase.from('posts').delete().eq('id', id);
+      setDbPosts(prev => prev.filter((p: any) => p.id !== id));
+    } else {
+      setPosts(prev => prev.filter(p => p.id !== id));
+    }
+  }
+
+  // Use real DB posts when available, fall back to mock
+  const displayPosts = dbPosts.length > 0
+    ? dbPosts.map((p: any) => ({
+        id: p.id,
+        user: p.users?.full_name || p.users?.username || "User",
+        username: p.users?.username || "user",
+        avatar: (p.users?.full_name || p.users?.username || "U").slice(0, 2).toUpperCase(),
+        time: new Date(p.created_at).toLocaleDateString(),
+        dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
+        dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
+        photos: p.media_url ? [p.media_url] : [],
+        caption: p.caption || "",
+        likes: p.likes_count || 0,
+        liked: false,
+        comments: [],
+        workout: null,
+        nutrition: null,
+        wellness: null,
+      }))
+    : posts;
+
+  const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
 
   // On mobile: interleave posts + activity blocks so both are visible
   // On desktop: keep two-column layout
   const mobileItems: Array<{ type: "post"; data: Post } | { type: "activity"; data: Post } | { type: "suggested"; data: typeof SUGGESTED_USERS[0] }> = [];
-  const maxLen = Math.max(posts.length, activityPosts.length);
+  const maxLen = Math.max(displayPosts.length, activityPosts.length);
   for (let i = 0; i < maxLen; i++) {
-    if (posts[i]) mobileItems.push({ type: "post", data: posts[i] });
+    if (displayPosts[i]) mobileItems.push({ type: "post", data: displayPosts[i] });
     if (activityPosts[i]) mobileItems.push({ type: "activity", data: activityPosts[i] });
   }
   SUGGESTED_USERS.forEach(u => mobileItems.push({ type: "suggested", data: u }));
@@ -667,7 +730,7 @@ export default function FeedPage() {
                   dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                   photos: p.media_url ? [p.media_url] : [],
-                  caption: p.content || "",
+                  caption: p.caption || "",
                   likes: p.likes_count || 0,
                   liked: false,
                   comments: [],
@@ -683,36 +746,18 @@ export default function FeedPage() {
               {loadingFeed ? (
                 <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
                   <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                   <p style={{ fontWeight:600 }}>Loading feed…</p>
                 </div>
-              ) : dbPosts.length > 0 ? (
-                dbPosts.map((p: any) => {
-                  const mapped = {
-                    id: p.id,
-                    user: p.users?.full_name || p.users?.username || "User",
-                    username: p.users?.username || "user",
-                    avatar: (p.users?.full_name || p.users?.username || "U").slice(0,2).toUpperCase(),
-                    time: new Date(p.created_at).toLocaleDateString(),
-                    dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
-                    dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                    photos: p.media_url ? [p.media_url] : [],
-                    caption: p.caption || "",
-                    likes: p.likes_count || 0,
-                    liked: false,
-                    comments: [],
-                    workout: null,
-                    nutrition: null,
-                    wellness: null,
-                  };
-                  return <PostCard key={p.id} post={mapped} onUpdate={() => {}} />;
-                })
               ) : (
                 <>
-                  <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
-                    👋 No posts yet. Share something to the feed to see it here!
-                  </div>
-                  {posts.map(post => (
-                    <PostCard key={post.id} post={post} onUpdate={updatePost} />
+                  {displayPosts.length === 0 && (
+                    <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
+                      👋 No posts yet. Share something to the feed to see it here!
+                    </div>
+                  )}
+                  {displayPosts.map(post => (
+                    <PostCard key={post.id} post={post} onUpdate={updatePost} onDelete={() => deletePost(post.id)} />
                   ))}
                 </>
               )}
@@ -791,7 +836,7 @@ export default function FeedPage() {
                 dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                 photos: p.media_url ? [p.media_url] : [],
-                caption: p.content || "",
+                caption: p.caption || "",
                 likes: p.likes_count || 0,
                 liked: false,
                 comments: [],
@@ -811,7 +856,7 @@ export default function FeedPage() {
         )}
         {mobileItems.map((item, idx) => {
           if (item.type === "post") {
-            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} />;
+            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} onDelete={() => deletePost(item.data.id)} />;
           }
           if (item.type === "activity") {
             return (

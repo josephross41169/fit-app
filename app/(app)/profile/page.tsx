@@ -181,9 +181,10 @@ const emptyCardio:CardioEntry  = {type:"",duration:"",distance:""};
 const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[] };
-function DayCard({day, workoutLogId, nutritionLogIds}:DayCardProps) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; onDelete?: ()=>void };
+function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
   const [open,setOpen]       = useState(false);
+  const [confirmDel,setConfirmDel] = useState(false);
   const [nut,setNut]         = useState(false);
   const [editWo,setEditWo]   = useState(false);
   const [editNut,setEditNut] = useState(false);
@@ -249,6 +250,17 @@ function DayCard({day, workoutLogId, nutritionLogIds}:DayCardProps) {
         <div style={{width:34,height:34,borderRadius:"50%",background:C.greenLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
           <svg viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
         </div>
+        {onDelete && (
+          <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+            {!confirmDel
+              ? <button onClick={()=>setConfirmDel(true)} style={{width:34,height:34,borderRadius:"50%",background:"#FEE2E2",border:"none",color:"#EF4444",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+              : <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <button onClick={()=>onDelete()} style={{padding:"5px 10px",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer"}}>Delete</button>
+                  <button onClick={()=>setConfirmDel(false)} style={{padding:"5px 10px",borderRadius:10,border:`1px solid ${C.greenMid}`,background:C.greenLight,color:C.sub,fontWeight:800,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                </div>
+            }
+          </div>
+        )}
       </button>
 
       {/* BODY */}
@@ -264,9 +276,10 @@ function DayCard({day, workoutLogId, nutritionLogIds}:DayCardProps) {
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
             {photos.map((src,i)=>(
-              <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:16,overflow:"hidden",cursor:"pointer",background:"none"}}>
-                <img src={src} style={{width:108,height:108,objectFit:"cover",display:"block"}} alt=""/>
-              </button>
+              <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.greenMid}`}}>
+                <img onClick={()=>setLb(src)} src={src} style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt=""/>
+                <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>
+              </div>
             ))}
             <label style={{width:108,height:108,borderRadius:16,border:`2px dashed ${C.greenMid}`,background:C.greenLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:4}}>
               <span style={{fontSize:28,color:C.blue}}>+</span>
@@ -603,6 +616,21 @@ export default function ProfilePage() {
   // ── Highlights state ──
   const [highlights,setHighlights] = useState<string[]>([]);
   const [highlightLb,setHighlightLb] = useState<string|null>(null);
+
+  // Load persisted highlights from localStorage on mount
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const saved = localStorage.getItem(`fit_highlights_${user.id}`);
+      if (saved) setHighlights(JSON.parse(saved));
+    } catch {}
+  }, [user?.id]);
+
+  // Load avatar/banner from profile
+  useEffect(() => {
+    if (user?.profile?.avatar_url) setAvatar(user.profile.avatar_url);
+    if (user?.profile?.banner_url) setBanner(user.profile.banner_url);
+  }, [user?.profile?.avatar_url, user?.profile?.banner_url]);
   const [showAllPhotos,setShowAllPhotos] = useState(false);
   const [photoFilter,setPhotoFilter] = useState<"all"|"workout"|"nutrition"|"wellness">("all");
 
@@ -725,21 +753,66 @@ export default function ProfilePage() {
   const [badgeNote,setBadgeNote] = useState("");
   const [badgeToast,setBadgeToast] = useState<string|null>(null);
 
-  function loadImg(e:React.ChangeEvent<HTMLInputElement>,set:(s:string)=>void){
+  async function uploadToStorage(dataUrl: string, bucket: string, path: string): Promise<string | null> {
+    try {
+      const base64 = dataUrl.split(',')[1];
+      const mime = dataUrl.split(';')[0].split(':')[1];
+      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: mime });
+      const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType: mime, upsert: true });
+      if (error) return null;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      return data.publicUrl;
+    } catch { return null; }
+  }
+
+  function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }) {
     const f=e.target.files?.[0]; if(!f) return;
-    const r=new FileReader(); r.onload=ev=>set(ev.target!.result as string); r.readAsDataURL(f); e.target.value="";
+    const r=new FileReader();
+    r.onload=async ev=>{
+      const dataUrl = ev.target!.result as string;
+      set(dataUrl); // show immediately
+      if (supabasePath && user) {
+        const publicUrl = await uploadToStorage(dataUrl, supabasePath.bucket, supabasePath.path);
+        if (publicUrl) {
+          set(publicUrl);
+          await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
+        }
+      }
+    };
+    r.readAsDataURL(f); e.target.value="";
   }
 
   function addHighlight(e:React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if(!f) return;
     const r = new FileReader();
-    r.onload = ev => setHighlights(h => [...h, ev.target!.result as string]);
+    r.onload = async ev => {
+      const dataUrl = ev.target!.result as string;
+      let url = dataUrl;
+      if (user) {
+        const publicUrl = await uploadToStorage(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
+        if (publicUrl) url = publicUrl;
+      }
+      setHighlights(h => {
+        const next = [...h, url];
+        if (user) {
+          try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+    };
     r.readAsDataURL(f);
     e.target.value = "";
   }
 
   function removeHighlight(idx:number) {
-    setHighlights(h => h.filter((_,i) => i !== idx));
+    setHighlights(h => {
+      const next = h.filter((_,i) => i !== idx);
+      if (user) {
+        try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
   }
 
   async function claimBadge() {
@@ -911,7 +984,7 @@ export default function ProfilePage() {
                 ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"block"}} alt="Profile"/>
                 : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
               <div style={{position:"absolute",bottom:8,right:8,width:30,height:30,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>📷</div>
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar)}/>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
             </label>
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
@@ -925,7 +998,7 @@ export default function ProfilePage() {
               {bannerImg
                 ? <img src={bannerImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Click to add Banner Photo</span>}
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner)}/>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
             </label>
 
             <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>
@@ -997,17 +1070,27 @@ export default function ProfilePage() {
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <div style={{fontSize:14}}>Loading activity log...</div>
               </div>
-            ) : realDays.length === 0 ? (
-              <div style={{textAlign:"center",padding:"48px 24px",background:C.white,borderRadius:22,border:`2px solid ${C.greenMid}`}}>
-                <div style={{fontSize:48,marginBottom:12}}>📋</div>
-                <div style={{fontWeight:800,fontSize:18,color:C.text,marginBottom:8}}>No activity logged yet</div>
-                <div style={{fontSize:14,color:C.sub,marginBottom:20}}>Your workouts, nutrition, and wellness logs will appear here.</div>
-                <a href="/post" style={{display:"inline-block",padding:"12px 28px",borderRadius:16,background:`linear-gradient(135deg,${C.blue},#22C55E)`,color:"#fff",fontWeight:900,fontSize:15,textDecoration:"none"}}>
-                  + Log Activity
-                </a>
-              </div>
             ) : (
-              realDays.map(day => <DayCard key={day.id} day={day as any} workoutLogId={(day as any)._workoutLogId} nutritionLogIds={(day as any)._nutritionLogIds}/>)
+              (realDays.length > 0 ? realDays : DAYS).map(day => {
+                const isReal = realDays.length > 0;
+                return (
+                  <DayCard
+                    key={day.id}
+                    day={day as any}
+                    workoutLogId={(day as any)._workoutLogId}
+                    nutritionLogIds={(day as any)._nutritionLogIds}
+                    onDelete={isReal ? async () => {
+                      const wid = (day as any)._workoutLogId;
+                      const nids: string[] = (day as any)._nutritionLogIds || [];
+                      const allIds = [...(wid ? [wid] : []), ...nids];
+                      if (allIds.length > 0) {
+                        await supabase.from('activity_logs').delete().in('id', allIds);
+                      }
+                      setRealDays(prev => prev.filter(d => d.id !== day.id));
+                    } : undefined}
+                  />
+                );
+              })
             )}
           </div>
 
