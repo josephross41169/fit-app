@@ -181,7 +181,8 @@ const emptyCardio:CardioEntry  = {type:"",duration:"",distance:""};
 const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-function DayCard({day}:{day:typeof DAYS[0]}) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[] };
+function DayCard({day, workoutLogId, nutritionLogIds}:DayCardProps) {
   const [open,setOpen]       = useState(false);
   const [nut,setNut]         = useState(false);
   const [editWo,setEditWo]   = useState(false);
@@ -204,8 +205,30 @@ function DayCard({day}:{day:typeof DAYS[0]}) {
     }); e.target.value="";
   }
 
-  function saveWorkout()   { setWorkout({...woBuf});   setEditWo(false);   }
-  function saveNutrition() { setNutrition({...nutBuf}); setEditNut(false);  }
+  async function saveWorkout() {
+    setWorkout({...woBuf});
+    setEditWo(false);
+    if (workoutLogId) {
+      await supabase.from('activity_logs').update({
+        workout_type: woBuf.type,
+        workout_duration_min: parseInt(woBuf.duration) || null,
+        workout_calories: woBuf.calories,
+        exercises: woBuf.exercises,
+      }).eq('id', workoutLogId);
+    }
+  }
+  async function saveNutrition() {
+    setNutrition({...nutBuf});
+    setEditNut(false);
+    if (nutritionLogIds && nutritionLogIds.length > 0) {
+      await supabase.from('activity_logs').update({
+        calories_total: nutBuf.calories,
+        protein_g: nutBuf.protein,
+        carbs_g: nutBuf.carbs,
+        fat_g: nutBuf.fat,
+      }).eq('id', nutritionLogIds[0]);
+    }
+  }
   function saveWellness()  { setWellness(wellBuf.entries.length ? {...wellBuf} : null); setEditWell(false); }
 
   return (<>
@@ -672,6 +695,8 @@ export default function ProfilePage() {
             emoji: workout ? '💪' : '🌅',
             workout,
             nutrition,
+            _workoutLogId: workoutLog?.id || null,
+            _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
           };
         });
 
@@ -982,7 +1007,7 @@ export default function ProfilePage() {
                 </a>
               </div>
             ) : (
-              realDays.map(day => <DayCard key={day.id} day={day as any}/>)
+              realDays.map(day => <DayCard key={day.id} day={day as any} workoutLogId={(day as any)._workoutLogId} nutritionLogIds={(day as any)._nutritionLogIds}/>)
             )}
           </div>
 
