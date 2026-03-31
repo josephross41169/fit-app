@@ -112,8 +112,13 @@ export default function PostPage() {
     setLoading(true);
     setSaveError(null);
 
-    // Best-effort profile creation — never block the save
-    await ensureProfile().catch(() => {});
+    // Ensure user profile row exists (foreign key guard)
+    const profileOk = await ensureProfile();
+    if (!profileOk) {
+      setSaveError("Could not verify your profile. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
 
     const base = { user_id: user.id, is_public: !isPrivate, logged_at: new Date().toISOString() };
     let error: any = null;
@@ -137,7 +142,6 @@ export default function PostPage() {
           log_type: 'nutrition',
           meal_type: mealType,
           food_items: foodItems.length > 0 ? foodItems : null,
-          calories_total: foodItems.length > 0 ? foodItems.reduce((s, f) => s + (parseFloat(f.calories) || 0), 0) : null,
           protein_g: protein ? parseFloat(protein) : null,
           carbs_g: carbs ? parseFloat(carbs) : null,
           fat_g: fat ? parseFloat(fat) : null,
@@ -392,7 +396,7 @@ export default function PostPage() {
                   </div>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Calories Burned</label>
-                    <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 450" value={woCalories} onChange={e => setWoCalories(e.target.value)} />
+                    <input style={iStyle} type="number" placeholder="e.g. 450" value={woCalories} onChange={e => setWoCalories(e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -417,8 +421,8 @@ export default function PostPage() {
                   {exercises.map((ex, i) => (
                     <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 80px 36px", gap: 8, marginBottom: 8, alignItems: "center" }}>
                       <input style={iStyle} placeholder="Name" value={ex.name} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                      <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, sets: e.target.value } : x))} />
-                      <input style={iStyle} type="text" inputMode="numeric" value={ex.reps} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, reps: e.target.value } : x))} />
+                      <input style={iStyle} type="number" value={ex.sets} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, sets: e.target.value } : x))} />
+                      <input style={iStyle} type="number" value={ex.reps} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, reps: e.target.value } : x))} />
                       <input style={iStyle} placeholder="lbs" value={ex.weight} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, weight: e.target.value } : x))} />
                       <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 18, cursor: "pointer" }}>×</button>
                     </div>
@@ -496,7 +500,7 @@ export default function PostPage() {
                 ) : foodItems.map((item, i) => (
                   <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 90px 36px", gap: 8, marginBottom: 8, alignItems: "center" }}>
                     <input style={iStyle} placeholder="Food name" value={item.name} onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                    <input style={iStyle} type="text" inputMode="numeric" placeholder="kcal" value={item.calories} onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, calories: e.target.value } : x))} />
+                    <input style={iStyle} type="number" placeholder="kcal" value={item.calories} onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, calories: e.target.value } : x))} />
                     <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))} style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 18, cursor: "pointer" }}>×</button>
                   </div>
                 ))}
@@ -509,7 +513,7 @@ export default function PostPage() {
                   {[{ l: "Protein (g)", v: protein, s: setProtein }, { l: "Carbs (g)", v: carbs, s: setCarbs }, { l: "Fat (g)", v: fat, s: setFat }].map(f => (
                     <div key={f.l}>
                       <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>{f.l}</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="0" value={f.v} onChange={e => f.s(e.target.value)} />
+                      <input style={iStyle} type="number" placeholder="0" value={f.v} onChange={e => f.s(e.target.value)} />
                     </div>
                   ))}
                 </div>

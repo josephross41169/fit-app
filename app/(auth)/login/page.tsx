@@ -23,8 +23,15 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
+    // Hard 8s timeout — never hang forever
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      setError("Sign in is taking too long. Check your connection and try again.");
+    }, 8000);
+
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      clearTimeout(timeoutId);
       if (error) {
         setError(error.message);
         setLoading(false);
@@ -32,6 +39,7 @@ export default function LoginPage() {
         router.push("/feed");
       }
     } catch (err: any) {
+      clearTimeout(timeoutId);
       setError(err?.message || "Something went wrong. Please try again.");
       setLoading(false);
     }
