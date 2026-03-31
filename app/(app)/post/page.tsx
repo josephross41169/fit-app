@@ -130,9 +130,9 @@ export default function PostPage() {
     setLoading(true);
     setSaveError(null);
 
-    // Ensure user profile row exists (foreign key guard)
-    const profileOk = await ensureProfile();
-    if (!profileOk) {
+    // Best-effort profile creation — don't block save if it fails
+    await ensureProfile().catch(() => {});
+    if (false) {
       setSaveError("Could not verify your profile. Please refresh and try again.");
       setLoading(false);
       return;
@@ -203,12 +203,7 @@ export default function PostPage() {
     setLoading(true);
     setSaveError(null);
 
-    const profileOk = await ensureProfile();
-    if (!profileOk) {
-      setSaveError("Could not verify your profile. Please refresh and try again.");
-      setLoading(false);
-      return;
-    }
+    await ensureProfile().catch(() => {});
 
     try {
       const { error } = await supabase.from('posts').insert({

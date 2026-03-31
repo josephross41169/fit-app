@@ -51,13 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let initialLoadDone = false;
 
-    // Hard timeout — no matter what, unblock the app after 4 seconds
+    // Hard timeout — no matter what, unblock the app after 2 seconds
     const timeout = setTimeout(() => {
       if (!initialLoadDone) {
         initialLoadDone = true;
         setLoading(false);
       }
-    }, 4000);
+    }, 2000);
 
     async function initSession() {
       try {
