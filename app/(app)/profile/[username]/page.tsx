@@ -69,14 +69,15 @@ export default function UserProfilePage() {
   return (
     <div style={{ minHeight: "100vh", background: GL, paddingBottom: 80 }}>
       {/* Banner */}
-      <div style={{ height: 140, background: `linear-gradient(135deg, ${G}, #22C55E)`, position: "relative" }}>
+      <div style={{ height: 160, background: `linear-gradient(135deg, ${G}, #22C55E)`, position: "relative", flexShrink: 0 }}>
         {profile.banner_url && <img src={profile.banner_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />}
       </div>
 
-      {/* Header */}
-      <div style={{ padding: "0 20px 20px", background: "#fff", borderBottom: `2px solid ${GM}` }}>
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: -40, marginBottom: 12 }}>
-          <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${G}, #22C55E)`, border: "4px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: "#fff", overflow: "hidden", flexShrink: 0 }}>
+      {/* Header — avatar floats up from below banner */}
+      <div style={{ background: "#fff", borderBottom: `2px solid ${GM}`, paddingBottom: 16 }}>
+        {/* Avatar row — sits right below banner, overlapping up */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingLeft: 16, paddingRight: 16, marginTop: -44 }}>
+          <div style={{ width: 88, height: 88, borderRadius: "50%", background: `linear-gradient(135deg, ${G}, #22C55E)`, border: "4px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 900, color: "#fff", overflow: "hidden", flexShrink: 0, zIndex: 2 }}>
             {profile.avatar_url ? <img src={profile.avatar_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" /> : initials}
           </div>
           <div style={{ display:"flex",gap:8 }}>
@@ -96,12 +97,11 @@ export default function UserProfilePage() {
             )}
           </div>
         </div>
-        <h1 style={{ fontWeight: 900, fontSize: 20, color: "#1A1A1A", margin: "0 0 2px" }}>{profile.full_name}</h1>
-        <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 8px" }}>@{profile.username}</p>
-        {profile.bio && <p style={{ fontSize: 14, color: "#374151", margin: "0 0 12px", lineHeight: 1.5 }}>{profile.bio}</p>}
-        <div style={{ display: "flex", gap: 24 }}>
+        <h1 style={{ fontWeight: 900, fontSize: 20, color: "#1A1A1A", margin: "12px 0 2px", paddingLeft: 16 }}>{profile.full_name}</h1>
+        <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 8px", paddingLeft: 16 }}>@{profile.username}</p>
+        {profile.bio && <p style={{ fontSize: 14, color: "#374151", margin: "0 0 12px", lineHeight: 1.5, paddingLeft: 16 }}>{profile.bio}</p>}
+        <div style={{ display: "flex", gap: 24, paddingLeft: 16 }}>
           {[
-            { l: "Posts", v: profile.posts_count ?? 0 },
             { l: "Followers", v: profile.followers_count ?? 0 },
             { l: "Following", v: profile.following_count ?? 0 },
           ].map(s => (

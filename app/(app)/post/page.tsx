@@ -79,6 +79,8 @@ export default function PostPage() {
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
+  const [feedPhotos, setFeedPhotos] = useState<string[]>([]); // carousel
+  const [carouselIdx, setCarouselIdx] = useState(0);
   const [caption, setCaption] = useState("");
   const [tagPeople, setTagPeople] = useState("");
   const [location, setLocation] = useState("");
@@ -188,6 +190,7 @@ export default function PostPage() {
       setSaveError("You must be logged in. Please refresh and sign in again.");
       return;
     }
+    if (loading || posted) return; // prevent double submit
     setLoading(true);
     setSaveError(null);
 
@@ -198,17 +201,21 @@ export default function PostPage() {
       return;
     }
 
-    // Upload photo via server-side API (bypasses storage RLS)
-    let mediaUrl: string | null = null;
-    if (feedPhoto) {
-      mediaUrl = await uploadPhoto(feedPhoto, 'posts', `${user.id}/${Date.now()}.jpg`);
+    // Upload all carousel photos
+    const photosToUpload = feedPhotos.length > 0 ? feedPhotos : (feedPhoto ? [feedPhoto] : []);
+    const uploadedUrls: string[] = [];
+    for (const photo of photosToUpload) {
+      const url = await uploadPhoto(photo, 'posts', `${user.id}/${Date.now()}-${uploadedUrls.length}.jpg`);
+      if (url) uploadedUrls.push(url);
     }
+    const mediaUrl = uploadedUrls[0] || null;
 
     try {
       const { error } = await supabase.from('posts').insert({
         user_id: user.id,
         caption: caption || null,
         media_url: mediaUrl,
+        media_urls: uploadedUrls.length > 1 ? uploadedUrls : null, // store all for carousel
         media_type: mediaUrl ? 'image' : null,
         post_type: 'general' as any,
         location: location || null,
@@ -616,19 +623,52 @@ export default function PostPage() {
 
           /* ─── SHARE TO FEED ─── */
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Big photo upload */}
-            <label style={{ display: "block", cursor: "pointer" }}>
-              {feedPhoto ? (
-                <img src={feedPhoto} style={{ width: "100%", height: 340, objectFit: "cover", borderRadius: 22, display: "block" }} alt="" />
-              ) : (
-                <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 22, height: 340, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: C.greenLight, gap: 12 }}>
-                  <div style={{ fontSize: 56 }}>📸</div>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: C.blue }}>Add Photo or Video</div>
-                  <div style={{ fontSize: 13, color: C.sub }}>Tap to upload from your device</div>
+
+            {/* ── Carousel photo area ── */}
+            {feedPhotos.length > 0 ? (
+              <div style={{ position:"relative",borderRadius:22,overflow:"hidden",background:"#000",aspectRatio:"1/1" }}>
+                <img src={feedPhotos[carouselIdx]} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} alt="" />
+                {/* Dots */}
+                {feedPhotos.length > 1 && (
+                  <div style={{ position:"absolute",bottom:10,left:"50%",transform:"translateX(-50%)",display:"flex",gap:5 }}>
+                    {feedPhotos.map((_,i)=>(
+                      <button key={i} onClick={()=>setCarouselIdx(i)} style={{ width:i===carouselIdx?20:8,height:8,borderRadius:4,border:"none",background:i===carouselIdx?"#fff":"rgba(255,255,255,0.5)",cursor:"pointer",transition:"width 0.2s",padding:0 }}/>
+                    ))}
+                  </div>
+                )}
+                {/* Prev/Next */}
+                {carouselIdx > 0 && <button onClick={()=>setCarouselIdx(i=>i-1)} style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>‹</button>}
+                {carouselIdx < feedPhotos.length-1 && <button onClick={()=>setCarouselIdx(i=>i+1)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>›</button>}
+                {/* Remove current */}
+                <button onClick={()=>{ setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); setCarouselIdx(Math.min(carouselIdx,n.length-1)); return n; }); }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
+              </div>
+            ) : (
+              <label style={{ display:"block",cursor:"pointer" }}>
+                <div style={{ border:`2px dashed ${C.greenMid}`,borderRadius:22,aspectRatio:"1/1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:C.greenLight,gap:12 }}>
+                  <div style={{ fontSize:56 }}>📸</div>
+                  <div style={{ fontSize:17,fontWeight:800,color:C.blue }}>Add Photos or Videos</div>
+                  <div style={{ fontSize:13,color:C.sub }}>Tap to upload • Select multiple</div>
                 </div>
-              )}
-              <input type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setFeedPhoto)} />
-            </label>
+                <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
+                  const files = Array.from(e.target.files||[]);
+                  files.forEach(f=>{ const r=new FileReader(); r.onload=ev=>setFeedPhotos(p=>[...p,ev.target!.result as string]); r.readAsDataURL(f); });
+                  e.target.value="";
+                }} />
+              </label>
+            )}
+
+            {/* Add more button when photos exist */}
+            {feedPhotos.length > 0 && (
+              <label style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:16,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,cursor:"pointer",justifyContent:"center" }}>
+                <span style={{ fontSize:16 }}>➕</span>
+                <span style={{ fontWeight:700,fontSize:13,color:C.blue }}>Add more ({feedPhotos.length} photo{feedPhotos.length!==1?"s":""})</span>
+                <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
+                  const files = Array.from(e.target.files||[]);
+                  files.forEach(f=>{ const r=new FileReader(); r.onload=ev=>setFeedPhotos(p=>[...p,ev.target!.result as string]); r.readAsDataURL(f); });
+                  e.target.value="";
+                }} />
+              </label>
+            )}
 
             {/* Caption + details */}
             <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}`, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -646,8 +686,8 @@ export default function PostPage() {
               </div>
             </div>
 
-            <button onClick={handlePost} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: "pointer" }}>
-              Post to Feed 🚀
+            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
+              {loading?"Posting...":"Post to Feed 🚀"}
             </button>
           </div>
         )}

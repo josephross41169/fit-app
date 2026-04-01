@@ -729,6 +729,14 @@ export default function ProfilePage() {
   const [cropAspect,setCropAspect] = useState(1);
   const [cropCallback,setCropCallback] = useState<((url:string)=>void)|null>(null);
 
+  // ── Feed photos (for All Photos modal) ──
+  const [feedPhotos,setFeedPhotos] = useState<string[]>([]);
+  useEffect(()=>{
+    if(!user) return;
+    supabase.from('posts').select('media_url').eq('user_id',user.id).eq('is_public',true).not('media_url','is',null).order('created_at',{ascending:false})
+      .then(({data})=>{ if(data) setFeedPhotos(data.map((p:any)=>p.media_url).filter(Boolean)); });
+  },[user?.id]);
+
   // ── Highlights state ──
   const [highlights,setHighlights] = useState<string[]>([]);
   const [highlightLb,setHighlightLb] = useState<string|null>(null);
@@ -1129,46 +1137,24 @@ export default function ProfilePage() {
       {showAllPhotos && (
         <div style={{position:"fixed",inset:0,zIndex:9997,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{background:C.white,borderRadius:"0 0 24px 24px",padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-            <div style={{fontWeight:900,fontSize:20,color:C.text}}>All Photos</div>
+            <div style={{fontWeight:900,fontSize:20,color:C.text}}>📸 All Photos</div>
             <button onClick={()=>setShowAllPhotos(false)} style={{width:38,height:38,borderRadius:"50%",border:"none",background:C.greenLight,color:C.text,fontSize:22,cursor:"pointer",lineHeight:"38px",textAlign:"center"}}>×</button>
           </div>
-          {/* Filter tabs */}
-          <div style={{background:C.white,padding:"0 24px 16px",display:"flex",gap:8,flexShrink:0}}>
-            {(["all","workout","nutrition","wellness"] as const).map(f=>(
-              <button key={f} onClick={()=>setPhotoFilter(f)} style={{
-                padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",
-                background:photoFilter===f?C.blue:C.greenLight,
-                color:photoFilter===f?"#fff":C.sub,
-                transition:"all 0.15s",
-              }}>
-                {f==="all"?"All":f==="workout"?"💪 Workouts":f==="nutrition"?"🥗 Nutrition":"🌿 Wellness"}
-              </button>
-            ))}
-          </div>
-          {/* Photo grid */}
           <div style={{flex:1,overflowY:"auto",padding:"16px 24px 32px"}}>
-            {(() => {
-              const filtered = highlights
-                .map((src,i)=>({src,idx:i,type:getPhotoType(i)}))
-                .filter(p=>photoFilter==="all"||p.type===photoFilter);
-              if(filtered.length===0) return (
-                <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
-                  <div style={{fontSize:40,marginBottom:12}}>📭</div>
-                  <div style={{fontSize:15,fontWeight:600}}>
-                    {highlights.length===0?"No photos yet. Add some highlights!":"No photos in this category."}
-                  </div>
-                </div>
-              );
-              return (
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                  {filtered.map(({src,idx})=>(
-                    <button key={idx} onClick={()=>{setHighlightLb(src);}} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:14,overflow:"hidden",cursor:"pointer",background:"none",aspectRatio:"1"}}>
-                      <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
+            {feedPhotos.length===0 ? (
+              <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
+                <div style={{fontSize:40,marginBottom:12}}>📭</div>
+                <div style={{fontSize:15,fontWeight:600}}>No feed photos yet. Post something!</div>
+              </div>
+            ) : (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                {feedPhotos.map((src,idx)=>(
+                  <button key={idx} onClick={()=>setHighlightLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:14,overflow:"hidden",cursor:"pointer",background:"none",aspectRatio:"1"}}>
+                    <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1211,7 +1197,6 @@ export default function ProfilePage() {
 
             <div style={{background:C.white,borderRadius:18,padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,border:`1.5px solid ${C.greenMid}`,marginBottom:14}}>
               {[
-                {l:"Posts",v:user?.profile?.posts_count??0,onClick:undefined},
                 {l:"Followers",v:user?.profile?.followers_count??0,onClick:()=>openSocialModal("followers")},
                 {l:"Following",v:user?.profile?.following_count??0,onClick:()=>openSocialModal("following")},
               ].map(s=>(

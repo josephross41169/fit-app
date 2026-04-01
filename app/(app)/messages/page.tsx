@@ -205,12 +205,11 @@ export default function MessagesPage() {
           filter: `conversation_id=eq.${activeConvId}`,
         },
         (payload) => {
+          const newMsg = payload.new as Message;
           setMessages((prev) => {
-            const newMsg = payload.new as Message;
             if (prev.find((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          // Refresh conversation list to update last message
           loadConversations();
         }
       )
@@ -223,6 +222,13 @@ export default function MessagesPage() {
     };
   }, [activeConvId, loadConversations]);
 
+  // ── Poll messages in active conversation ────────────────────────────────────
+  useEffect(() => {
+    if (!activeConvId) return;
+    const poll = setInterval(() => loadMessages(activeConvId), 3000);
+    return () => clearInterval(poll);
+  }, [activeConvId, loadMessages]);
+
   // ── Scroll to bottom on new messages ───────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -232,6 +238,9 @@ export default function MessagesPage() {
   useEffect(() => {
     if (user) {
       loadConversations();
+      // Poll every 5s so new convs/messages appear even without realtime
+      const poll = setInterval(() => loadConversations(), 5000);
+      return () => clearInterval(poll);
     }
   }, [user, loadConversations]);
 
