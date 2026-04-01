@@ -101,6 +101,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── Load conversations for a user ─────────────────────────────────────────
+    if (action === 'get_conversations') {
+      const { userId } = payload;
+      const { data: partRows } = await admin
+        .from('conversation_participants').select('conversation_id').eq('user_id', userId);
+      if (!partRows || partRows.length === 0) return NextResponse.json({ conversations: [] });
+      const convIds = partRows.map((p: any) => p.conversation_id);
+      const { data: convRows } = await admin
+        .from('conversations')
+        .select(`id, created_at, conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+        .in('id', convIds);
+      const conversations = (convRows || []).map((row: any) => {
+        const other = (row.conversation_participants || []).find((p: any) => p.user_id !== userId);
+        const msgs = (row.messages || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return {
+          id: row.id, created_at: row.created_at,
+          otherUser: other?.users || { id:'', username:'Unknown', full_name:'Unknown', avatar_url: null },
+          lastMessage: msgs[0] || null,
+          unread: msgs[0] ? msgs[0].sender_id !== userId : false,
+        };
+      }).sort((a: any, b: any) => {
+        const at = a.lastMessage?.created_at || a.created_at;
+        const bt = b.lastMessage?.created_at || b.created_at;
+        return new Date(bt).getTime() - new Date(at).getTime();
+      });
+      return NextResponse.json({ conversations });
+    }
+
+    // ── Load messages for a conversation ──────────────────────────────────────
+    if (action === 'get_messages') {
+      const { conversationId } = payload;
+      const { data, error } = await admin
+        .from('messages').select('*').eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+      if (error) return NextResponse.json({ messages: [] });
+      return NextResponse.json({ messages: data || [] });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

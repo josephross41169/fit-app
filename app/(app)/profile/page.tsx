@@ -638,12 +638,16 @@ function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: num
     const ctx = canvas.getContext('2d')!;
     const img = new Image();
     img.onload = () => {
-      const scaledW = img.naturalWidth * scale;
-      const scaledH = img.naturalHeight * scale;
-      // pos is offset of image relative to crop box top-left
-      const offsetX = (CROP_W - scaledW) / 2 + pos.x;
-      const offsetY = (CROP_H - scaledH) / 2 + pos.y;
-      ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+      // Fit image to cover the crop box, then apply scale and drag offset
+      const baseW = img.naturalWidth;
+      const baseH = img.naturalHeight;
+      // Calculate cover size (fill the box at scale=1)
+      const coverScale = Math.max(CROP_W / baseW, CROP_H / baseH);
+      const drawW = baseW * coverScale * scale;
+      const drawH = baseH * coverScale * scale;
+      const drawX = (CROP_W - drawW) / 2 + pos.x;
+      const drawY = (CROP_H - drawH) / 2 + pos.y;
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
       onDone(canvas.toDataURL('image/jpeg', 0.92));
     };
     img.src = src;
@@ -658,7 +662,7 @@ function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: num
         {/* Crop preview box */}
         <div
           ref={containerRef}
-          style={{ width:CROP_W,height:CROP_H,borderRadius:aspect===1?"50%":16,overflow:"hidden",cursor:"grab",position:"relative",background:"#000",margin:"0 auto",touchAction:"none",border:"2px solid #16A34A" }}
+          style={{ width:CROP_W,height:CROP_H,borderRadius:aspect===1?"50%":16,overflow:"hidden",cursor:"grab",position:"relative",background:"#111",margin:"0 auto",touchAction:"none",border:"2px solid #16A34A" }}
           onMouseDown={e=>onDown(e.clientX,e.clientY)}
           onMouseMove={e=>onMove(e.clientX,e.clientY)}
           onMouseUp={()=>dragging.current=false}
@@ -667,27 +671,30 @@ function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: num
           onTouchMove={e=>{e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);}}
           onTouchEnd={()=>dragging.current=false}
         >
+          {/* Use object-fit:cover approach — image always covers the box, drag shifts it */}
           <img
             src={src}
             draggable={false}
             style={{
               position:"absolute",
-              width: CROP_W * scale,
-              height: "auto",
+              width: `${scale * 100}%`,
+              height: `${scale * 100}%`,
+              objectFit: "cover",
               top: "50%",
               left: "50%",
               transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
               userSelect:"none",
               pointerEvents:"none",
+              maxWidth: "none",
             }}
             alt=""
           />
         </div>
 
-        <div style={{ marginTop:14,display:"flex",gap:10,justifyContent:"center" }}>
-          <button onClick={()=>setScale(s=>Math.max(0.5,s-0.15))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-          <span style={{fontSize:13,color:"#8892A4",lineHeight:"36px",minWidth:48,textAlign:"center"}}>{Math.round(scale*100)}%</span>
-          <button onClick={()=>setScale(s=>Math.min(3,s+0.15))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+        <div style={{ marginTop:14,display:"flex",gap:10,justifyContent:"center",alignItems:"center" }}>
+          <button onClick={()=>setScale(s=>Math.max(1,s-0.1))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>−</button>
+          <span style={{fontSize:13,color:"#8892A4",minWidth:48,textAlign:"center"}}>{Math.round(scale*100)}%</span>
+          <button onClick={()=>setScale(s=>Math.min(3,s+0.1))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>+</button>
         </div>
 
         <div style={{ display:"flex",gap:12,marginTop:16 }}>
@@ -1264,7 +1271,7 @@ export default function ProfilePage() {
             <div className="profile-stats-bio">
             <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>
 
-            <div style={{background:C.white,borderRadius:18,padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,border:`1.5px solid ${C.greenMid}`,marginBottom:14}}>
+            <div style={{background:C.white,borderRadius:18,padding:"14px 18px",display:"flex",justifyContent:"center",gap:40,border:`1.5px solid ${C.greenMid}`,marginBottom:14}}>
               {[
                 {l:"Followers",v:user?.profile?.followers_count??0,onClick:()=>openSocialModal("followers")},
                 {l:"Following",v:user?.profile?.following_count??0,onClick:()=>openSocialModal("following")},
