@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const C = {
   blue: "#16A34A",
@@ -120,6 +121,11 @@ export default function PostPage() {
 
     try {
       if (logTab === 'workout') {
+        // Upload workout photo if present
+        let woPhotoUrl: string | null = null;
+        if (woPhoto) {
+          woPhotoUrl = await uploadPhoto(woPhoto, 'activity', `${user.id}/workout-${Date.now()}.jpg`);
+        }
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'workout',
@@ -129,9 +135,15 @@ export default function PostPage() {
           exercises: exercises.length > 0 ? exercises : null,
           cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
           notes: woNotes || null,
+          photo_url: woPhotoUrl,
         });
         error = res.error;
       } else if (logTab === 'nutrition') {
+        // Upload nutrition photo if present
+        let nutPhotoUrl: string | null = null;
+        if (nutPhoto) {
+          nutPhotoUrl = await uploadPhoto(nutPhoto, 'activity', `${user.id}/nutrition-${Date.now()}.jpg`);
+        }
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'nutrition',
@@ -143,6 +155,7 @@ export default function PostPage() {
           fat_g: fat ? parseFloat(fat) : null,
           water_oz: water ? parseFloat(water) : null,
           notes: nutNotes || null,
+          photo_url: nutPhotoUrl,
         });
         error = res.error;
       } else if (logTab === 'wellness') {
@@ -168,20 +181,7 @@ export default function PostPage() {
     }
   }
 
-  async function uploadPhoto(dataUrl: string, bucket: string, path: string): Promise<string | null> {
-    try {
-      const base64 = dataUrl.split(',')[1];
-      const mime = dataUrl.split(';')[0].split(':')[1];
-      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: mime });
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(path, blob, { contentType: mime, upsert: true });
-      if (uploadError) return null;
-      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-      return urlData.publicUrl;
-    } catch { return null; }
-  }
+  // uploadPhoto imported from @/lib/uploadPhoto — uses server-side API to bypass storage RLS
 
   async function handlePost() {
     if (!user) {
@@ -198,11 +198,10 @@ export default function PostPage() {
       return;
     }
 
-    // Upload photo to Supabase Storage if provided
+    // Upload photo via server-side API (bypasses storage RLS)
     let mediaUrl: string | null = null;
     if (feedPhoto) {
-      const filePath = `${user.id}/${Date.now()}.jpg`;
-      mediaUrl = await uploadPhoto(feedPhoto, 'posts', filePath);
+      mediaUrl = await uploadPhoto(feedPhoto, 'posts', `${user.id}/${Date.now()}.jpg`);
     }
 
     try {

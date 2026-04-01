@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const C = {
   blue:"#16A34A", greenLight:"#F0FDF4", greenMid:"#BBF7D0",
@@ -201,9 +202,32 @@ function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
   const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
   const [m,d] = day.id.split(".").map(Number);
 
+  // Load existing photo from DB on mount
+  useEffect(() => {
+    if ((day as any).photo_url) setPhotos([(day as any).photo_url]);
+  }, []);
+
   function onFiles(e:React.ChangeEvent<HTMLInputElement>) {
     Array.from(e.target.files??[]).forEach(f=>{
-      const r=new FileReader(); r.onload=ev=>setPhotos(p=>[...p,ev.target!.result as string]); r.readAsDataURL(f);
+      const r=new FileReader();
+      r.onload=async ev=>{
+        const dataUrl = ev.target!.result as string;
+        setPhotos(p=>[...p, dataUrl]); // show preview immediately
+        // Upload to Supabase via server API
+        const { uploadPhoto: up } = await import('@/lib/uploadPhoto');
+        const logId = workoutLogId || (nutritionLogIds?.[0]);
+        const bucket = 'activity';
+        const path = `${logId || Date.now()}/photo-${Date.now()}.jpg`;
+        const publicUrl = await up(dataUrl, bucket, path);
+        if (publicUrl) {
+          setPhotos(p => p.map(u => u === dataUrl ? publicUrl : u));
+          // Save URL back to the activity log
+          if (logId) {
+            await supabase.from('activity_logs').update({ photo_url: publicUrl }).eq('id', logId);
+          }
+        }
+      };
+      r.readAsDataURL(f);
     }); e.target.value="";
   }
 
@@ -727,6 +751,7 @@ export default function ProfilePage() {
             nutrition,
             _workoutLogId: workoutLog?.id || null,
             _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
+            photo_url: workoutLog?.photo_url || nutritionLogs[0]?.photo_url || null,
           };
         });
 
@@ -785,27 +810,16 @@ export default function ProfilePage() {
   const [badgeNote,setBadgeNote] = useState("");
   const [badgeToast,setBadgeToast] = useState<string|null>(null);
 
-  async function uploadToStorage(dataUrl: string, bucket: string, path: string): Promise<string | null> {
-    try {
-      const base64 = dataUrl.split(',')[1];
-      const mime = dataUrl.split(';')[0].split(':')[1];
-      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: mime });
-      const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType: mime, upsert: true });
-      if (error) return null;
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl;
-    } catch { return null; }
-  }
+  // uploadPhoto imported from @/lib/uploadPhoto — server-side, bypasses RLS
 
   function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }) {
     const f=e.target.files?.[0]; if(!f) return;
     const r=new FileReader();
     r.onload=async ev=>{
       const dataUrl = ev.target!.result as string;
-      set(dataUrl); // show immediately
+      set(dataUrl); // show immediately as preview
       if (supabasePath && user) {
-        const publicUrl = await uploadToStorage(dataUrl, supabasePath.bucket, supabasePath.path);
+        const publicUrl = await uploadPhoto(dataUrl, supabasePath.bucket, supabasePath.path);
         if (publicUrl) {
           set(publicUrl);
           await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
@@ -820,18 +834,23 @@ export default function ProfilePage() {
     const r = new FileReader();
     r.onload = async ev => {
       const dataUrl = ev.target!.result as string;
-      let url = dataUrl;
-      if (user) {
-        const publicUrl = await uploadToStorage(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
-        if (publicUrl) url = publicUrl;
-      }
+      let url = dataUrl; // show preview immediately
       setHighlights(h => {
         const next = [...h, url];
-        if (user) {
-          try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
-        }
+        if (user) { try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {} }
         return next;
       });
+      if (user) {
+        const publicUrl = await uploadPhoto(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
+        if (publicUrl) {
+          // Replace the base64 preview with the real URL
+          setHighlights(h => {
+            const next = h.map(u => u === dataUrl ? publicUrl : u);
+            try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
+      }
     };
     r.readAsDataURL(f);
     e.target.value = "";

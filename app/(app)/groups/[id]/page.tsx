@@ -3,14 +3,14 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 const C = {
-  blue:"#7C3AED", blueLight:"#F3F0FF", blueMid:"#DDD6FE",
-  gold:"#F5A623", text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F8F5FF",
+  blue:"#16A34A", blueLight:"#F0FDF4", blueMid:"#BBF7D0",
+  gold:"#F5A623", text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F0FDF4",
   dark:"#0F1117", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
 };
 
 const CATEGORY_COLORS: Record<string,string> = {
-  "Running":"#7C3AED","Strength":"#7C3AED","Yoga":"#52C97A","HIIT":"#EF4444",
-  "Bodybuilding":"#F5A623","Nutrition":"#10B981","Wellness":"#A78BFA","Calisthenics":"#06B6D4",
+  "Running":"#16A34A","Strength":"#16A34A","Yoga":"#52C97A","HIIT":"#EF4444",
+  "Bodybuilding":"#F5A623","Nutrition":"#10B981","Wellness":"#22C55E","Calisthenics":"#06B6D4",
 };
 
 // ── Full group data ────────────────────────────────────────────────────────────
@@ -272,10 +272,10 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const DIFFICULTY_COLORS: Record<string,string> = {
-  "Beginner":"#10B981", "Medium":"#7C3AED", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#7C3AED",
+  "Beginner":"#10B981", "Medium":"#16A34A", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#16A34A",
 };
 const NOTE_CATEGORY_COLORS: Record<string,string> = {
-  "Workout":"#7C3AED", "Recipe":"#10B981", "Mindset":"#7C3AED", "General":"#F5A623",
+  "Workout":"#16A34A", "Recipe":"#10B981", "Mindset":"#16A34A", "General":"#F5A623",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -394,7 +394,7 @@ export default function GroupPage() {
 
           {/* Action buttons — lives inside left column, naturally aligned */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
-            <button onClick={() => setJoined(j=>!j)} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#7C3AED,#9333EA)", color:joined?"#7C3AED":"#fff", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:joined?"none":"0 4px 16px rgba(124,58,237,0.35)", transition:"all 0.15s" }}>
+            <button onClick={() => setJoined(j=>!j)} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s" }}>
               {joined ? "✓ Joined" : "Join Group"}
             </button>
             <button style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>Share</button>
@@ -501,7 +501,7 @@ export default function GroupPage() {
                     <div key={entry.rank} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
                       onClick={() => router.push(`/profile/${entry.name.toLowerCase().replace(/\s/g,"_")}`)}>
                       {/* Rank */}
-                      <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F3F0FF", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
+                      <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                         {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                       </div>
                       {/* Avatar */}
@@ -544,7 +544,7 @@ export default function GroupPage() {
                   </div>
                   <div style={{ padding:"14px 20px" }}>
                     <p style={{ fontSize:13, color:C.sub, lineHeight:1.6, marginBottom:14 }}>{ch.desc}</p>
-                    <button onClick={() => setJoinedChallenges(p=>({...p,[ch.id]:!p[ch.id]}))} style={{ width:"100%", padding:"10px", borderRadius:12, border:"none", background:joinedChallenges[ch.id]?"#F3F0FF":`linear-gradient(135deg,${catColor},${catColor}CC)`, color:joinedChallenges[ch.id]?catColor:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>
+                    <button onClick={() => setJoinedChallenges(p=>({...p,[ch.id]:!p[ch.id]}))} style={{ width:"100%", padding:"10px", borderRadius:12, border:"none", background:joinedChallenges[ch.id]?"#F0FDF4":`linear-gradient(135deg,${catColor},${catColor}CC)`, color:joinedChallenges[ch.id]?catColor:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>
                       {joinedChallenges[ch.id] ? `✓ Joined — ${ch.badge} Challenge Accepted!` : "Accept Challenge"}
                     </button>
                   </div>
