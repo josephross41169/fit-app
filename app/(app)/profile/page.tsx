@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -615,96 +615,7 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
 }
 
 // ── Crop Modal ────────────────────────────────────────────────────────────────
-function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: number; onDone: (cropped: string) => void; onCancel: () => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const dragging = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const CROP_W = 300;
-  const CROP_H = Math.round(CROP_W / aspect);
-
-  function onDown(clientX: number, clientY: number) { dragging.current = true; lastPos.current = { x: clientX, y: clientY }; }
-  function onMove(clientX: number, clientY: number) {
-    if (!dragging.current) return;
-    setPos(p => ({ x: p.x + (clientX - lastPos.current.x), y: p.y + (clientY - lastPos.current.y) }));
-    lastPos.current = { x: clientX, y: clientY };
-  }
-
-  function handleDone() {
-    const canvas = document.createElement('canvas');
-    canvas.width = CROP_W;
-    canvas.height = CROP_H;
-    const ctx = canvas.getContext('2d')!;
-    const img = new Image();
-    img.onload = () => {
-      // Fit image to cover the crop box, then apply scale and drag offset
-      const baseW = img.naturalWidth;
-      const baseH = img.naturalHeight;
-      // Calculate cover size (fill the box at scale=1)
-      const coverScale = Math.max(CROP_W / baseW, CROP_H / baseH);
-      const drawW = baseW * coverScale * scale;
-      const drawH = baseH * coverScale * scale;
-      const drawX = (CROP_W - drawW) / 2 + pos.x;
-      const drawY = (CROP_H - drawH) / 2 + pos.y;
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-      onDone(canvas.toDataURL('image/jpeg', 0.92));
-    };
-    img.src = src;
-  }
-
-  return (
-    <div style={{ position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20 }}>
-      <div style={{ background:"#1A1D2E",borderRadius:24,padding:24,width:"100%",maxWidth:360 }}>
-        <div style={{ fontWeight:900,fontSize:18,color:"#fff",marginBottom:4 }}>Crop Photo</div>
-        <div style={{ fontSize:12,color:"#8892A4",marginBottom:16 }}>Drag to reposition · Slider to zoom</div>
-
-        {/* Crop preview box */}
-        <div
-          ref={containerRef}
-          style={{ width:CROP_W,height:CROP_H,borderRadius:aspect===1?"50%":16,overflow:"hidden",cursor:"grab",position:"relative",background:"#111",margin:"0 auto",touchAction:"none",border:"2px solid #16A34A" }}
-          onMouseDown={e=>onDown(e.clientX,e.clientY)}
-          onMouseMove={e=>onMove(e.clientX,e.clientY)}
-          onMouseUp={()=>dragging.current=false}
-          onMouseLeave={()=>dragging.current=false}
-          onTouchStart={e=>onDown(e.touches[0].clientX,e.touches[0].clientY)}
-          onTouchMove={e=>{e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);}}
-          onTouchEnd={()=>dragging.current=false}
-        >
-          {/* Use object-fit:cover approach — image always covers the box, drag shifts it */}
-          <img
-            src={src}
-            draggable={false}
-            style={{
-              position:"absolute",
-              width: `${scale * 100}%`,
-              height: `${scale * 100}%`,
-              objectFit: "cover",
-              top: "50%",
-              left: "50%",
-              transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
-              userSelect:"none",
-              pointerEvents:"none",
-              maxWidth: "none",
-            }}
-            alt=""
-          />
-        </div>
-
-        <div style={{ marginTop:14,display:"flex",gap:10,justifyContent:"center",alignItems:"center" }}>
-          <button onClick={()=>setScale(s=>Math.max(1,s-0.1))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>−</button>
-          <span style={{fontSize:13,color:"#8892A4",minWidth:48,textAlign:"center"}}>{Math.round(scale*100)}%</span>
-          <button onClick={()=>setScale(s=>Math.min(3,s+0.1))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>+</button>
-        </div>
-
-        <div style={{ display:"flex",gap:12,marginTop:16 }}>
-          <button onClick={onCancel} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"1.5px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer",fontSize:14 }}>Cancel</button>
-          <button onClick={handleDone} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:900,cursor:"pointer",fontSize:14 }}>✓ Use Photo</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// (crop modal removed — photos use adjust-to-fit / object-fit:cover)
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
@@ -918,25 +829,20 @@ export default function ProfilePage() {
 
   // uploadPhoto imported from @/lib/uploadPhoto — server-side, bypasses RLS
 
-  function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }, aspect=1) {
+  // Adjust to fit — uploads directly, photo is displayed with object-fit:cover
+  function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }) {
     const f=e.target.files?.[0]; if(!f) return;
     const r=new FileReader();
-    r.onload=ev=>{
+    r.onload=async ev=>{
       const dataUrl = ev.target!.result as string;
-      // Open crop modal
-      setCropSrc(dataUrl);
-      setCropAspect(aspect);
-      setCropCallback(() => async (cropped: string) => {
-        setCropSrc(null);
-        set(cropped);
-        if (supabasePath && user) {
-          const publicUrl = await uploadPhoto(cropped, supabasePath.bucket, supabasePath.path);
-          if (publicUrl) {
-            set(publicUrl);
-            await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
-          }
+      set(dataUrl); // show immediately
+      if (supabasePath && user) {
+        const publicUrl = await uploadPhoto(dataUrl, supabasePath.bucket, supabasePath.path);
+        if (publicUrl) {
+          set(publicUrl);
+          await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
         }
-      });
+      }
     };
     r.readAsDataURL(f); e.target.value="";
   }
@@ -1000,14 +906,7 @@ export default function ProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
-      {cropSrc && cropCallback && (
-        <CropModal
-          src={cropSrc}
-          aspect={cropAspect}
-          onDone={url => { cropCallback(url); setCropCallback(null); }}
-          onCancel={() => { setCropSrc(null); setCropCallback(null); }}
-        />
-      )}
+
       <style jsx global>{`
         @media (max-width: 767px) {
           .profile-layout {
@@ -1246,7 +1145,7 @@ export default function ProfilePage() {
                 ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"block"}} alt="Profile"/>
                 : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
               <div style={{position:"absolute",bottom:8,right:8,width:30,height:30,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>📷</div>
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined,1)}/>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
             </label>
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
@@ -1264,7 +1163,7 @@ export default function ProfilePage() {
               <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
                 <span style={{fontSize:16}}>📷</span>
                 <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
-                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined, 16/9)}/>
+                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
               </label>
             </div>
 
