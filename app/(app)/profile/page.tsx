@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -614,6 +614,82 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
   );
 }
 
+// ── Crop Modal ────────────────────────────────────────────────────────────────
+function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: number; onDone: (cropped: string) => void; onCancel: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragging = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const PREVIEW = 320;
+  const PREVIEW_H = Math.round(PREVIEW / aspect);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => { imgRef.current = img; setLoaded(true); };
+    img.src = src;
+  }, [src]);
+
+  useEffect(() => {
+    if (!loaded || !canvasRef.current || !imgRef.current) return;
+    const ctx = canvasRef.current.getContext('2d')!;
+    ctx.clearRect(0, 0, PREVIEW, PREVIEW_H);
+    const img = imgRef.current;
+    const sw = img.naturalWidth * scale;
+    const sh = img.naturalHeight * scale;
+    ctx.drawImage(img, offset.x, offset.y, sw, sh);
+  }, [loaded, scale, offset]);
+
+  function onMouseDown(e: React.MouseEvent) { dragging.current = true; lastPos.current = { x: e.clientX, y: e.clientY }; }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!dragging.current) return;
+    setOffset(o => ({ x: o.x + (e.clientX - lastPos.current.x), y: o.y + (e.clientY - lastPos.current.y) }));
+    lastPos.current = { x: e.clientX, y: e.clientY };
+  }
+  function onTouchStart(e: React.TouchEvent) { dragging.current = true; lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragging.current) return;
+    setOffset(o => ({ x: o.x + (e.touches[0].clientX - lastPos.current.x), y: o.y + (e.touches[0].clientY - lastPos.current.y) }));
+    lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+
+  function handleDone() {
+    if (!canvasRef.current) return;
+    onDone(canvasRef.current.toDataURL('image/jpeg', 0.92));
+  }
+
+  return (
+    <div style={{ position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.85)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20 }}>
+      <div style={{ background:"#1A1D2E",borderRadius:24,padding:24,width:"100%",maxWidth:380 }}>
+        <div style={{ fontWeight:900,fontSize:18,color:"#fff",marginBottom:4 }}>Crop Photo</div>
+        <div style={{ fontSize:12,color:"#8892A4",marginBottom:16 }}>Drag to reposition · Pinch or slider to zoom</div>
+        <canvas
+          ref={canvasRef}
+          width={PREVIEW}
+          height={PREVIEW_H}
+          style={{ width:"100%",aspectRatio:`${aspect}`,borderRadius:aspect===1?"50%":16,cursor:"grab",display:"block",background:"#000",touchAction:"none" }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={()=>dragging.current=false}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={()=>dragging.current=false}
+        />
+        <div style={{ marginTop:16,display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:12,color:"#8892A4" }}>Zoom</span>
+          <input type="range" min={0.2} max={3} step={0.05} value={scale} onChange={e=>setScale(parseFloat(e.target.value))} style={{ flex:1 }} />
+        </div>
+        <div style={{ display:"flex",gap:12,marginTop:20 }}>
+          <button onClick={onCancel} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"1.5px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer" }}>Cancel</button>
+          <button onClick={handleDone} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:900,cursor:"pointer" }}>Use Photo</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const { user, refreshProfile } = useAuth();
@@ -638,6 +714,11 @@ export default function ProfilePage() {
   const [profileImg,setAvatar]= useState<string|null>(null);
   const [editProfile,setEditProfile] = useState(false);
   const [brands,setBrands] = useState([{emoji:"👟",name:"New Balance"},{emoji:"👕",name:"Gym Shark"},{emoji:"🎧",name:"AirPods"}]);
+
+  // ── Crop state ──
+  const [cropSrc,setCropSrc] = useState<string|null>(null);
+  const [cropAspect,setCropAspect] = useState(1);
+  const [cropCallback,setCropCallback] = useState<((url:string)=>void)|null>(null);
 
   // ── Highlights state ──
   const [highlights,setHighlights] = useState<string[]>([]);
@@ -812,19 +893,25 @@ export default function ProfilePage() {
 
   // uploadPhoto imported from @/lib/uploadPhoto — server-side, bypasses RLS
 
-  function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }) {
+  function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }, aspect=1) {
     const f=e.target.files?.[0]; if(!f) return;
     const r=new FileReader();
-    r.onload=async ev=>{
+    r.onload=ev=>{
       const dataUrl = ev.target!.result as string;
-      set(dataUrl); // show immediately as preview
-      if (supabasePath && user) {
-        const publicUrl = await uploadPhoto(dataUrl, supabasePath.bucket, supabasePath.path);
-        if (publicUrl) {
-          set(publicUrl);
-          await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
+      // Open crop modal
+      setCropSrc(dataUrl);
+      setCropAspect(aspect);
+      setCropCallback(() => async (cropped: string) => {
+        setCropSrc(null);
+        set(cropped);
+        if (supabasePath && user) {
+          const publicUrl = await uploadPhoto(cropped, supabasePath.bucket, supabasePath.path);
+          if (publicUrl) {
+            set(publicUrl);
+            await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
+          }
         }
-      }
+      });
     };
     r.readAsDataURL(f); e.target.value="";
   }
@@ -888,6 +975,14 @@ export default function ProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
+      {cropSrc && cropCallback && (
+        <CropModal
+          src={cropSrc}
+          aspect={cropAspect}
+          onDone={url => { cropCallback(url); setCropCallback(null); }}
+          onCancel={() => { setCropSrc(null); setCropCallback(null); }}
+        />
+      )}
       <style jsx global>{`
         @media (max-width: 767px) {
           .profile-layout {
@@ -898,9 +993,12 @@ export default function ProfilePage() {
             gap: 16px !important;
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
-          .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; }
-          .profile-banner-block { min-width: unset !important; width: 100% !important; }
-          .profile-outer { padding: 16px 12px 80px !important; max-width: 100% !important; }
+          .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
+          .profile-avatar-col { order: 2 !important; margin-top: -48px !important; z-index: 2 !important; position: relative !important; }
+          .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
+          .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
+          .profile-outer { padding: 0 0 80px !important; max-width: 100% !important; }
+          .profile-stats-bio { padding: 0 16px !important; }
         }
         .highlight-slot:hover .highlight-remove { opacity: 1 !important; }
       `}</style>
@@ -1071,13 +1169,13 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:28,alignItems:"flex-start",flexWrap:"wrap",marginBottom:36}}>
           {/* Avatar */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,flexShrink:0}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,flexShrink:0}}>
             <label style={{position:"relative",cursor:"pointer",display:"block"}}>
               {profileImg
                 ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"block"}} alt="Profile"/>
                 : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
               <div style={{position:"absolute",bottom:8,right:8,width:30,height:30,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>📷</div>
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined,1)}/>
             </label>
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
@@ -1087,13 +1185,19 @@ export default function ProfilePage() {
 
           {/* Banner + stats */}
           <div className="profile-banner-block" style={{flex:1,minWidth:260}}>
-            <label style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",cursor:"pointer",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.blue},#BBF7D0)`,border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center"} as any}>
+            <div className="profile-banner-label" style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.blue},#BBF7D0)`,border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
               {bannerImg
                 ? <img src={bannerImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Banner"/>
-                : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Click to add Banner Photo</span>}
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
-            </label>
+                : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
+              {/* Always-visible camera button overlay for banner */}
+              <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
+                <span style={{fontSize:16}}>📷</span>
+                <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
+                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined, 16/9)}/>
+              </label>
+            </div>
 
+            <div className="profile-stats-bio">
             <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>
 
             <div style={{background:C.white,borderRadius:18,padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,border:`1.5px solid ${C.greenMid}`,marginBottom:14}}>
@@ -1114,6 +1218,7 @@ export default function ProfilePage() {
             <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`2px solid ${C.blue}`,background:C.white,color:C.blue,fontWeight:700,fontSize:14,cursor:"pointer"}}>
               ✏️ Edit Profile
             </button>
+            </div>{/* end profile-stats-bio */}
           </div>
         </div>
 

@@ -399,10 +399,10 @@ function PostCard({ post, onUpdate, onDelete }: { post: Post; onUpdate: (p: Post
 
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
-          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
+          <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
             {post.avatar}
           </div>
-          <div style={{ flex:1 }}>
+          <div style={{ flex:1,cursor:"pointer" }} onClick={() => window.location.href=`/profile/${post.username}`}>
             <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</div>
             <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
           </div>
