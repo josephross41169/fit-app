@@ -354,27 +354,52 @@ function SideUserBlock({ post }: { post: Post }) {
   );
 }
 
-const CURRENT_USER = "joey_fit";
-
 // ── Post Card (left column — media + social only) ─────────────────────────────
-function PostCard({ post, onUpdate, onDelete }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void }) {
-  const isOwner = post.username === CURRENT_USER;
+function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; currentUser?: any }) {
+  const isOwner = currentUser && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username);
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [lightbox, setLightbox] = useState<string|null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [commentLoading, setCommentLoading] = useState(false);
   const [m, d] = post.dateShort.split(".").map(Number);
 
-  function toggleLike() {
+  async function toggleLike() {
+    if (!currentUser || likeLoading) return;
+    setLikeLoading(true);
+    const isDbPost = typeof post.id === 'string' && post.id.includes('-');
+    if (isDbPost) {
+      if (post.liked) {
+        await supabase.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', post.id);
+      } else {
+        await supabase.from('likes').insert({ user_id: currentUser.id, post_id: post.id });
+      }
+    }
     onUpdate({ ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 });
+    setLikeLoading(false);
   }
-  function submitComment() {
-    if (!commentText.trim()) return;
-    const nc: Comment = { id: Date.now(), user: "Joey", avatar: "JB", text: commentText.trim(), time: "Just now" };
+
+  async function submitComment() {
+    if (!commentText.trim() || commentLoading) return;
+    setCommentLoading(true);
+    const isDbPost = typeof post.id === 'string' && post.id.includes('-');
+    const displayName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "You";
+    const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+    const nc: Comment = { id: Date.now(), user: displayName, avatar: initials, text: commentText.trim(), time: "Just now" };
+    if (isDbPost && currentUser) {
+      const { data } = await supabase.from('comments').insert({
+        user_id: currentUser.id,
+        post_id: post.id,
+        content: commentText.trim(),
+      }).select('id').single();
+      if (data) nc.id = data.id;
+    }
     onUpdate({ ...post, comments: [...post.comments, nc] });
     setCommentText("");
+    setCommentLoading(false);
   }
   function addPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
@@ -485,8 +510,8 @@ function PostCard({ post, onUpdate, onDelete }: { post: Post; onUpdate: (p: Post
 
         {/* Actions */}
         <div style={{ padding:"12px 18px",display:"flex",alignItems:"center",gap:20,borderTop:`1px solid ${C.greenLight}`,marginTop:12 }}>
-          <button onClick={toggleLike} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
-            <svg viewBox="0 0 24 24" fill={post.liked?"#FF6B6B":"none"} stroke={post.liked?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:24,height:24,transition:"all 0.15s" }}>
+          <button onClick={toggleLike} disabled={likeLoading} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:likeLoading?"default":"pointer",padding:0,opacity:likeLoading?0.7:1 }}>
+            <svg viewBox="0 0 24 24" fill={post.liked?"#FF6B6B":"none"} stroke={post.liked?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:24,height:24,transition:"all 0.15s",transform:post.liked?"scale(1.15)":"scale(1)" }}>
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
             <span style={{ fontSize:14,fontWeight:700,color:post.liked?"#FF6B6B":C.sub }}>{post.likes}</span>
@@ -530,10 +555,14 @@ function PostCard({ post, onUpdate, onDelete }: { post: Post; onUpdate: (p: Post
 
         {/* Comment input */}
         <div style={{ padding:"0 18px 16px",display:"flex",gap:10,alignItems:"center" }}>
-          <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0 }}>JB</div>
+          <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
+            {currentUser?.profile?.avatar_url
+              ? <img src={currentUser.profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+              : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
+          </div>
           <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:C.greenLight,borderRadius:24,padding:"8px 16px",border:`1.5px solid ${C.greenMid}` }}>
-            <input id={`ci-${post.id}`} value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submitComment()} placeholder="Add a comment..." style={{ flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:C.text }} />
-            {commentText.trim() && <button onClick={submitComment} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0 }}>Post</button>}
+            <input id={`ci-${post.id}`} value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submitComment()} placeholder="Add a comment..." style={{ flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:C.text }} />
+            {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
           </div>
         </div>
       </div>
@@ -555,12 +584,24 @@ export default function FeedPage() {
     async function loadFeed() {
       const { data } = await supabase
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url)`)
+        .select(`*, users (id, username, full_name, avatar_url), comments (id, content, created_at, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(20);
+
       if (data && data.length > 0) {
-        setDbPosts(data);
+        // Check which posts the current user has liked
+        let likedPostIds: Set<string> = new Set();
+        if (user) {
+          const postIds = data.map((p: any) => p.id);
+          const { data: likeData } = await supabase
+            .from('likes')
+            .select('post_id')
+            .eq('user_id', user.id)
+            .in('post_id', postIds);
+          if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+        }
+        setDbPosts(data.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) })));
       }
       setLoadingFeed(false);
     }
@@ -599,7 +640,9 @@ export default function FeedPage() {
 
   function updatePost(updated: Post) {
     if (dbPosts.find((p: any) => p.id === updated.id)) {
-      setDbPosts(prev => prev.map((p: any) => p.id === updated.id ? { ...p, ...updated } : p));
+      setDbPosts(prev => prev.map((p: any) => p.id === updated.id
+        ? { ...p, likes_count: updated.likes, _liked: updated.liked, comments: updated.comments.map((c: any) => ({ id: c.id, content: c.text, created_at: new Date().toISOString(), users: { full_name: c.user, username: c.user } })) }
+        : p));
     } else {
       setPosts(prev => prev.map(p => p.id === updated.id ? updated : p));
     }
@@ -622,15 +665,21 @@ export default function FeedPage() {
         id: p.id,
         user: p.users?.full_name || p.users?.username || "User",
         username: p.users?.username || "user",
-        avatar: (p.users?.full_name || p.users?.username || "U").slice(0, 2).toUpperCase(),
-        time: new Date(p.created_at).toLocaleDateString(),
+        avatar: p.users?.avatar_url || (p.users?.full_name || p.users?.username || "U").slice(0, 2).toUpperCase(),
+        time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
         photos: p.media_url ? [p.media_url] : [],
         caption: p.caption || "",
         likes: p.likes_count || 0,
-        liked: false,
-        comments: [],
+        liked: p._liked || false,
+        comments: (p.comments || []).map((c: any) => ({
+          id: c.id,
+          user: c.users?.full_name || c.users?.username || "User",
+          avatar: (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+          text: c.content || "",
+          time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+        })),
         workout: null,
         nutrition: null,
         wellness: null,
@@ -757,7 +806,7 @@ export default function FeedPage() {
                     </div>
                   )}
                   {displayPosts.map(post => (
-                    <PostCard key={post.id} post={post} onUpdate={updatePost} onDelete={() => deletePost(post.id)} />
+                    <PostCard key={post.id} post={post} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(post.id)} />
                   ))}
                 </>
               )}
@@ -856,7 +905,7 @@ export default function FeedPage() {
         )}
         {mobileItems.map((item, idx) => {
           if (item.type === "post") {
-            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} onDelete={() => deletePost(item.data.id)} />;
+            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} />;
           }
           if (item.type === "activity") {
             return (
