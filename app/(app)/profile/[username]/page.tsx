@@ -1,13 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import FollowButton from "@/components/FollowButton";
 
 const G = "#16A34A", GL = "#F0FDF4", GM = "#BBF7D0";
 
 export default function UserProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const router = useRouter();
+  const { user: currentUser } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -76,7 +79,22 @@ export default function UserProfilePage() {
           <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${G}, #22C55E)`, border: "4px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: "#fff", overflow: "hidden", flexShrink: 0 }}>
             {profile.avatar_url ? <img src={profile.avatar_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" /> : initials}
           </div>
-          <FollowButton targetUserId={profile.id} />
+          <div style={{ display:"flex",gap:8 }}>
+            <FollowButton targetUserId={profile.id} />
+            {currentUser && currentUser.id !== profile.id && (
+              <button
+                onClick={async () => {
+                  const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ action:'create_conversation', payload:{ userId: currentUser.id, otherUserId: profile.id }}) });
+                  const json = await res.json();
+                  if (json.conversationId) router.push('/messages');
+                }}
+                style={{ padding:"8px 16px",borderRadius:12,border:`1.5px solid ${G}`,background:"#fff",color:G,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6 }}
+              >
+                ✉️ Message
+              </button>
+            )}
+          </div>
         </div>
         <h1 style={{ fontWeight: 900, fontSize: 20, color: "#1A1A1A", margin: "0 0 2px" }}>{profile.full_name}</h1>
         <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 8px" }}>@{profile.username}</p>

@@ -365,6 +365,8 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
   const [commentLoading, setCommentLoading] = useState(false);
+  const [replyTo, setReplyTo] = useState<{id:number|string;user:string}|null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
   const [m, d] = post.dateShort.split(".").map(Number);
 
   async function toggleLike() {
@@ -395,12 +397,14 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
     const isDbPost = typeof post.id === 'string' && post.id.includes('-');
     const displayName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "You";
     const avatarInitials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-    const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: commentText.trim(), time: "Just now" };
+    const fullText = replyTo ? `@${replyTo.user.split(' ')[0]} ${commentText.trim()}` : commentText.trim();
+    setReplyTo(null);
+    const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: fullText, time: "Just now" };
     if (isDbPost && currentUser) {
       const { data } = await supabase.from('comments').insert({
         user_id: currentUser.id,
         post_id: post.id,
-        content: commentText.trim(),
+        content: fullText,
       }).select('id').single();
       if (data) nc.id = data.id;
       // Notify post owner
@@ -561,6 +565,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
                     <span style={{ fontSize:10,color:C.sub }}>{c.time}</span>
                   </div>
                   <p style={{ fontSize:13,color:C.text,margin:0,lineHeight:1.5 }}>{c.text}</p>
+                  <button onClick={()=>{ setReplyTo({id:c.id,user:c.user}); setCommentText(`@${c.user.split(' ')[0]} `); setTimeout(()=>commentInputRef.current?.focus(),50); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.sub,padding:"4px 0 0",marginTop:2 }}>Reply</button>
                 </div>
               </div>
             ))}
@@ -573,6 +578,12 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         )}
 
         {/* Comment input */}
+        {replyTo && (
+          <div style={{ padding:"0 18px 6px",display:"flex",alignItems:"center",gap:8 }}>
+            <span style={{ fontSize:12,color:C.sub }}>Replying to <strong>{replyTo.user.split(' ')[0]}</strong></span>
+            <button onClick={()=>{setReplyTo(null);setCommentText("");}} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:14,padding:0,lineHeight:1}}>×</button>
+          </div>
+        )}
         <div style={{ padding:"0 18px 16px",display:"flex",gap:10,alignItems:"center" }}>
           <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
             {currentUser?.profile?.avatar_url
@@ -580,7 +591,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
           <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:C.greenLight,borderRadius:24,padding:"8px 16px",border:`1.5px solid ${C.greenMid}` }}>
-            <input id={`ci-${post.id}`} value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submitComment()} placeholder="Add a comment..." style={{ flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:C.text }} />
+            <input ref={commentInputRef} id={`ci-${post.id}`} value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submitComment()} placeholder={replyTo?`Reply to ${replyTo.user.split(' ')[0]}...`:"Add a comment..."} style={{ flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:C.text }} />
             {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
           </div>
         </div>
@@ -720,7 +731,7 @@ export default function FeedPage() {
         id: p.id,
         user: p.users?.full_name || p.users?.username || "User",
         username: p.users?.username || "user",
-        avatar: p.users?.avatar_url || (p.users?.full_name || p.users?.username || "U").slice(0, 2).toUpperCase(),
+        avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
         time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),

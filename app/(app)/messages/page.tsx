@@ -277,7 +277,7 @@ export default function MessagesPage() {
   }, [searchQuery, user]);
 
   // ── Start / open conversation ───────────────────────────────────────────────
-  const openOrCreateConversation = async (otherUserId: string) => {
+  const openOrCreateConversation = async (otherUserId: string, otherUser?: UserResult) => {
     if (!user) return;
     setShowNewModal(false);
     setSearchQuery("");
@@ -292,10 +292,27 @@ export default function MessagesPage() {
     if (json.error) { console.error('create_conversation error:', json.error); return; }
 
     const convId = json.conversationId;
-    await loadConversations();
+
+    // If we already have the other user's info, optimistically add the conversation
+    // so we don't depend on loadConversations finishing before setActiveConvId
+    if (otherUser) {
+      setConversations(prev => {
+        if (prev.find(c => c.id === convId)) return prev;
+        return [{
+          id: convId,
+          created_at: new Date().toISOString(),
+          otherUser,
+          lastMessage: null,
+          unread: false,
+        }, ...prev];
+      });
+    }
+
     setActiveConvId(convId);
-    loadMessages(convId);
+    setMessages([]);
     setMobileShowThread(true);
+    loadMessages(convId);
+    loadConversations(); // refresh in background
   };
 
   const activeConv = conversations.find((c) => c.id === activeConvId);
@@ -576,7 +593,7 @@ export default function MessagesPage() {
               {searchResults.map((u) => (
                 <button
                   key={u.id}
-                  onClick={() => openOrCreateConversation(u.id)}
+                  onClick={() => openOrCreateConversation(u.id, u)}
                   className="w-full flex items-center gap-3 px-5 py-3 transition-all"
                   style={{ background: "transparent" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#16A34A22")}

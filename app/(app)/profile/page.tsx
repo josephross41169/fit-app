@@ -684,13 +684,13 @@ function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: num
           />
         </div>
 
-        <div style={{ marginTop:16,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:12,color:"#8892A4" }}>🔍</span>
-          <input type="range" min={0.5} max={3} step={0.05} value={scale} onChange={e=>setScale(parseFloat(e.target.value))} style={{ flex:1,accentColor:"#16A34A" }} />
-          <span style={{ fontSize:12,color:"#8892A4" }}>{Math.round(scale*100)}%</span>
+        <div style={{ marginTop:14,display:"flex",gap:10,justifyContent:"center" }}>
+          <button onClick={()=>setScale(s=>Math.max(0.5,s-0.15))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+          <span style={{fontSize:13,color:"#8892A4",lineHeight:"36px",minWidth:48,textAlign:"center"}}>{Math.round(scale*100)}%</span>
+          <button onClick={()=>setScale(s=>Math.min(3,s+0.15))} style={{width:36,height:36,borderRadius:"50%",border:"1.5px solid #2A2D3E",background:"#0F1117",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
         </div>
 
-        <div style={{ display:"flex",gap:12,marginTop:20 }}>
+        <div style={{ display:"flex",gap:12,marginTop:16 }}>
           <button onClick={onCancel} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"1.5px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer",fontSize:14 }}>Cancel</button>
           <button onClick={handleDone} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:900,cursor:"pointer",fontSize:14 }}>✓ Use Photo</button>
         </div>
@@ -1277,6 +1277,21 @@ export default function ProfilePage() {
           {/* CENTER */}
           <div>
             <div style={{fontWeight:900,fontSize:20,color:C.text,marginBottom:16}}>Activity Log</div>
+            {/* Badge milestone cards in timeline */}
+            {earnedBadges.length > 0 && (
+              <div style={{marginBottom:16}}>
+                {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b=>(
+                  <div key={b.id} style={{background:`linear-gradient(135deg,${C.gold}22,${C.goldLight})`,border:`2px solid ${C.gold}`,borderRadius:20,padding:"16px 20px",marginBottom:12,display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{width:52,height:52,borderRadius:16,background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>{b.emoji}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:900,fontSize:15,color:C.text}}>🏆 {b.label}</div>
+                      <div style={{fontSize:12,color:C.sub,marginTop:2}}>{b.desc}</div>
+                    </div>
+                    <div style={{fontSize:11,color:C.gold,fontWeight:700}}>Milestone!</div>
+                  </div>
+                ))}
+              </div>
+            )}
             {loadingLogs ? (
               <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
                 <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}}/>
