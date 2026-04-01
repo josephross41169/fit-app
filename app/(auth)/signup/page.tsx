@@ -33,6 +33,7 @@ export default function SignupPage() {
         email,
         password,
         options: {
+          emailRedirectTo: 'https://fit-app-ecru.vercel.app/feed',
           data: {
             full_name: fullName,
             username: username.toLowerCase(),
