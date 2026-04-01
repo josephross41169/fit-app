@@ -729,8 +729,9 @@ export default function ProfilePage() {
   const [cropAspect,setCropAspect] = useState(1);
   const [cropCallback,setCropCallback] = useState<((url:string)=>void)|null>(null);
 
-  // ── Feed photos (for All Photos modal) ──
+  // ── Feed photos (for All Photos modal + Highlight picker) ──
   const [feedPhotos,setFeedPhotos] = useState<string[]>([]);
+  const [showHighlightPicker,setShowHighlightPicker] = useState(false);
   useEffect(()=>{
     if(!user) return;
     supabase.from('posts').select('media_url').eq('user_id',user.id).eq('is_public',true).not('media_url','is',null).order('created_at',{ascending:false})
@@ -1020,6 +1021,74 @@ export default function ProfilePage() {
         .highlight-slot:hover .highlight-remove { opacity: 1 !important; }
       `}</style>
 
+      {/* ── Highlight Picker Modal ── */}
+      {showHighlightPicker && (
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={()=>setShowHighlightPicker(false)}>
+          <div style={{background:C.white,borderRadius:"0 0 24px 24px",padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+            <div>
+              <div style={{fontWeight:900,fontSize:18,color:C.text}}>Choose a Highlight</div>
+              <div style={{fontSize:12,color:C.sub,marginTop:2}}>Tap any photo to add it to highlights</div>
+            </div>
+            <button onClick={()=>setShowHighlightPicker(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:C.greenLight,color:C.text,fontSize:20,cursor:"pointer"}}>×</button>
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:"16px 20px 32px"}} onClick={e=>e.stopPropagation()}>
+            {feedPhotos.length === 0 ? (
+              <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
+                <div style={{fontSize:40,marginBottom:12}}>📭</div>
+                <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No feed photos yet</div>
+                <div style={{fontSize:13}}>Post photos to your feed first, then add them as highlights</div>
+              </div>
+            ) : (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                {feedPhotos.map((src,idx)=>{
+                  const alreadyAdded = highlights.includes(src);
+                  return (
+                    <button key={idx} onClick={async ()=>{
+                      if(alreadyAdded) return;
+                      // Add directly from feed URL — no re-upload needed
+                      setHighlights(h=>{
+                        const next=[...h,src];
+                        if(user){ try{ localStorage.setItem(`fit_highlights_${user.id}`,JSON.stringify(next)); }catch{} }
+                        return next;
+                      });
+                      setShowHighlightPicker(false);
+                    }} style={{padding:0,border:`3px solid ${alreadyAdded?C.blue:C.greenMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"none",aspectRatio:"1",position:"relative"}}>
+                      <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                      {alreadyAdded && (
+                        <div style={{position:"absolute",inset:0,background:"rgba(22,163,74,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <span style={{fontSize:28}}>✓</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {/* Also allow uploading from camera roll */}
+            <label style={{display:"flex",alignItems:"center",gap:10,marginTop:20,padding:"14px 16px",borderRadius:16,border:`1.5px dashed ${C.greenMid}`,background:C.greenLight,cursor:"pointer",justifyContent:"center"}}>
+              <span style={{fontSize:20}}>📷</span>
+              <span style={{fontWeight:700,fontSize:14,color:C.blue}}>Upload from camera roll</span>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
+                const f=e.target.files?.[0]; if(!f) return;
+                const r=new FileReader();
+                r.onload=async ev=>{
+                  const dataUrl=ev.target!.result as string;
+                  setShowHighlightPicker(false);
+                  let url=dataUrl;
+                  if(user){
+                    const {uploadPhoto:up}=await import('@/lib/uploadPhoto');
+                    const publicUrl=await up(dataUrl,'avatars',`${user.id}/highlights/${Date.now()}.jpg`);
+                    if(publicUrl) url=publicUrl;
+                  }
+                  setHighlights(h=>{ const next=[...h,url]; if(user){ try{ localStorage.setItem(`fit_highlights_${user.id}`,JSON.stringify(next)); }catch{} } return next; });
+                };
+                r.readAsDataURL(f); e.target.value="";
+              }}/>
+            </label>
+          </div>
+        </div>
+      )}
+
       {/* ── Followers / Following Modal ── */}
       {socialModal && (
         <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setSocialModal(null)}>
@@ -1242,10 +1311,10 @@ export default function ProfilePage() {
                   }
                   if (i === highlights.length) {
                     return (
-                      <label key={i} style={{aspectRatio:"1",borderRadius:12,border:`2px dashed ${C.greenMid}`,background:C.greenLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:2}}>
+                      <button key={i} onClick={()=>setShowHighlightPicker(true)} style={{aspectRatio:"1",borderRadius:12,border:`2px dashed ${C.greenMid}`,background:C.greenLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:2,padding:0}}>
                         <span style={{fontSize:22,color:C.blue,lineHeight:1}}>+</span>
-                        <input type="file" accept="image/*" style={{display:"none"}} onChange={addHighlight}/>
-                      </label>
+                        <span style={{fontSize:9,color:C.sub,fontWeight:600}}>Add</span>
+                      </button>
                     );
                   }
                   return (
