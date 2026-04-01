@@ -616,74 +616,83 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
 
 // ── Crop Modal ────────────────────────────────────────────────────────────────
 function CropModal({ src, aspect, onDone, onCancel }: { src: string; aspect: number; onDone: (cropped: string) => void; onCancel: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState({ x: 0, y: 0 });
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
-  const PREVIEW = 320;
-  const PREVIEW_H = Math.round(PREVIEW / aspect);
+  const CROP_W = 300;
+  const CROP_H = Math.round(CROP_W / aspect);
 
-  useEffect(() => {
-    const img = new Image();
-    img.onload = () => { imgRef.current = img; setLoaded(true); };
-    img.src = src;
-  }, [src]);
-
-  useEffect(() => {
-    if (!loaded || !canvasRef.current || !imgRef.current) return;
-    const ctx = canvasRef.current.getContext('2d')!;
-    ctx.clearRect(0, 0, PREVIEW, PREVIEW_H);
-    const img = imgRef.current;
-    const sw = img.naturalWidth * scale;
-    const sh = img.naturalHeight * scale;
-    ctx.drawImage(img, offset.x, offset.y, sw, sh);
-  }, [loaded, scale, offset]);
-
-  function onMouseDown(e: React.MouseEvent) { dragging.current = true; lastPos.current = { x: e.clientX, y: e.clientY }; }
-  function onMouseMove(e: React.MouseEvent) {
+  function onDown(clientX: number, clientY: number) { dragging.current = true; lastPos.current = { x: clientX, y: clientY }; }
+  function onMove(clientX: number, clientY: number) {
     if (!dragging.current) return;
-    setOffset(o => ({ x: o.x + (e.clientX - lastPos.current.x), y: o.y + (e.clientY - lastPos.current.y) }));
-    lastPos.current = { x: e.clientX, y: e.clientY };
-  }
-  function onTouchStart(e: React.TouchEvent) { dragging.current = true; lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
-  function onTouchMove(e: React.TouchEvent) {
-    if (!dragging.current) return;
-    setOffset(o => ({ x: o.x + (e.touches[0].clientX - lastPos.current.x), y: o.y + (e.touches[0].clientY - lastPos.current.y) }));
-    lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    setPos(p => ({ x: p.x + (clientX - lastPos.current.x), y: p.y + (clientY - lastPos.current.y) }));
+    lastPos.current = { x: clientX, y: clientY };
   }
 
   function handleDone() {
-    if (!canvasRef.current) return;
-    onDone(canvasRef.current.toDataURL('image/jpeg', 0.92));
+    const canvas = document.createElement('canvas');
+    canvas.width = CROP_W;
+    canvas.height = CROP_H;
+    const ctx = canvas.getContext('2d')!;
+    const img = new Image();
+    img.onload = () => {
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      // pos is offset of image relative to crop box top-left
+      const offsetX = (CROP_W - scaledW) / 2 + pos.x;
+      const offsetY = (CROP_H - scaledH) / 2 + pos.y;
+      ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+      onDone(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.src = src;
   }
 
   return (
-    <div style={{ position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.85)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20 }}>
-      <div style={{ background:"#1A1D2E",borderRadius:24,padding:24,width:"100%",maxWidth:380 }}>
+    <div style={{ position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20 }}>
+      <div style={{ background:"#1A1D2E",borderRadius:24,padding:24,width:"100%",maxWidth:360 }}>
         <div style={{ fontWeight:900,fontSize:18,color:"#fff",marginBottom:4 }}>Crop Photo</div>
-        <div style={{ fontSize:12,color:"#8892A4",marginBottom:16 }}>Drag to reposition · Pinch or slider to zoom</div>
-        <canvas
-          ref={canvasRef}
-          width={PREVIEW}
-          height={PREVIEW_H}
-          style={{ width:"100%",aspectRatio:`${aspect}`,borderRadius:aspect===1?"50%":16,cursor:"grab",display:"block",background:"#000",touchAction:"none" }}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
+        <div style={{ fontSize:12,color:"#8892A4",marginBottom:16 }}>Drag to reposition · Slider to zoom</div>
+
+        {/* Crop preview box */}
+        <div
+          ref={containerRef}
+          style={{ width:CROP_W,height:CROP_H,borderRadius:aspect===1?"50%":16,overflow:"hidden",cursor:"grab",position:"relative",background:"#000",margin:"0 auto",touchAction:"none",border:"2px solid #16A34A" }}
+          onMouseDown={e=>onDown(e.clientX,e.clientY)}
+          onMouseMove={e=>onMove(e.clientX,e.clientY)}
           onMouseUp={()=>dragging.current=false}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
+          onMouseLeave={()=>dragging.current=false}
+          onTouchStart={e=>onDown(e.touches[0].clientX,e.touches[0].clientY)}
+          onTouchMove={e=>{e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);}}
           onTouchEnd={()=>dragging.current=false}
-        />
-        <div style={{ marginTop:16,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:12,color:"#8892A4" }}>Zoom</span>
-          <input type="range" min={0.2} max={3} step={0.05} value={scale} onChange={e=>setScale(parseFloat(e.target.value))} style={{ flex:1 }} />
+        >
+          <img
+            src={src}
+            draggable={false}
+            style={{
+              position:"absolute",
+              width: CROP_W * scale,
+              height: "auto",
+              top: "50%",
+              left: "50%",
+              transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+              userSelect:"none",
+              pointerEvents:"none",
+            }}
+            alt=""
+          />
         </div>
+
+        <div style={{ marginTop:16,display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:12,color:"#8892A4" }}>🔍</span>
+          <input type="range" min={0.5} max={3} step={0.05} value={scale} onChange={e=>setScale(parseFloat(e.target.value))} style={{ flex:1,accentColor:"#16A34A" }} />
+          <span style={{ fontSize:12,color:"#8892A4" }}>{Math.round(scale*100)}%</span>
+        </div>
+
         <div style={{ display:"flex",gap:12,marginTop:20 }}>
-          <button onClick={onCancel} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"1.5px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer" }}>Cancel</button>
-          <button onClick={handleDone} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:900,cursor:"pointer" }}>Use Photo</button>
+          <button onClick={onCancel} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"1.5px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer",fontSize:14 }}>Cancel</button>
+          <button onClick={handleDone} style={{ flex:1,padding:"12px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:900,cursor:"pointer",fontSize:14 }}>✓ Use Photo</button>
         </div>
       </div>
     </div>

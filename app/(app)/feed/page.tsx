@@ -376,6 +376,13 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         await supabase.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', post.id);
       } else {
         await supabase.from('likes').insert({ user_id: currentUser.id, post_id: post.id });
+        // Notify post owner (only if not liking own post)
+        const postOwnerId = (post as any)._ownerId;
+        if (postOwnerId && postOwnerId !== currentUser.id) {
+          const name = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || 'Someone';
+          fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ action:'create_notification', payload:{ userId: postOwnerId, fromUserId: currentUser.id, type:'like', referenceId: post.id, body:`${name} liked your post` }}) });
+        }
       }
     }
     onUpdate({ ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 });
@@ -387,8 +394,8 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
     setCommentLoading(true);
     const isDbPost = typeof post.id === 'string' && post.id.includes('-');
     const displayName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "You";
-    const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-    const nc: Comment = { id: Date.now(), user: displayName, avatar: initials, text: commentText.trim(), time: "Just now" };
+    const avatarInitials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+    const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: commentText.trim(), time: "Just now" };
     if (isDbPost && currentUser) {
       const { data } = await supabase.from('comments').insert({
         user_id: currentUser.id,
@@ -396,6 +403,12 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         content: commentText.trim(),
       }).select('id').single();
       if (data) nc.id = data.id;
+      // Notify post owner
+      const postOwnerId = (post as any)._ownerId;
+      if (postOwnerId && postOwnerId !== currentUser.id) {
+        fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'create_notification', payload:{ userId: postOwnerId, fromUserId: currentUser.id, type:'comment', referenceId: post.id, body:`${displayName} commented: "${commentText.trim().slice(0,50)}"` }}) });
+      }
     }
     onUpdate({ ...post, comments: [...post.comments, nc] });
     setCommentText("");
@@ -425,7 +438,9 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
           <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
-            {post.avatar}
+            {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
+              ? <img src={post.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+              : post.avatar}
           </div>
           <div style={{ flex:1,cursor:"pointer" }} onClick={() => window.location.href=`/profile/${post.username}`}>
             <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</div>
@@ -535,7 +550,11 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
           <div style={{ padding:"0 18px 10px",display:"flex",flexDirection:"column",gap:10 }}>
             {visibleComments.map(c => (
               <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0 }}>{c.avatar}</div>
+                <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
+                  {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
+                    ? <img src={c.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                    : c.avatar}
+                </div>
                 <div style={{ flex:1,background:C.greenLight,borderRadius:14,padding:"9px 13px",border:`1px solid ${C.greenMid}` }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3 }}>
                     <span style={{ fontWeight:800,fontSize:12,color:C.text }}>{c.user}</span>
@@ -579,6 +598,15 @@ export default function FeedPage() {
   const [feedTab, setFeedTab] = useState<"foryou" | "following">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeout = useRef<any>(null);
+  // Notifications
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
     async function loadFeed() {
@@ -638,6 +666,33 @@ export default function FeedPage() {
     loadFollowingFeed();
   }, [feedTab, user]);
 
+  // Search users
+  useEffect(() => {
+    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(async () => {
+      setSearchLoading(true);
+      const q = searchQuery.trim();
+      const { data } = await supabase.from('users').select('id,username,full_name,avatar_url').or(`username.ilike.%${q}%,full_name.ilike.%${q}%`).limit(10);
+      setSearchResults(data || []);
+      setSearchLoading(false);
+    }, 300);
+    return () => clearTimeout(searchTimeout.current);
+  }, [searchQuery]);
+
+  // Load notifications
+  useEffect(() => {
+    if (!user) return;
+    async function loadNotifs() {
+      const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_notifications', payload:{ userId: user!.id }}) });
+      const json = await res.json();
+      setNotifications(json.notifications || []);
+    }
+    loadNotifs();
+    const interval = setInterval(loadNotifs, 30000); // poll every 30s
+    return () => clearInterval(interval);
+  }, [user]);
+
   function updatePost(updated: Post) {
     if (dbPosts.find((p: any) => p.id === updated.id)) {
       setDbPosts(prev => prev.map((p: any) => p.id === updated.id
@@ -683,7 +738,8 @@ export default function FeedPage() {
         workout: null,
         nutrition: null,
         wellness: null,
-      }))
+        _ownerId: p.user_id,
+      } as any))
     : posts;
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
@@ -718,17 +774,63 @@ export default function FeedPage() {
 
       {/* ── Sticky Header ── */}
       <div style={{ position:"sticky",top:0,zIndex:100,background:C.white,borderBottom:`2px solid ${C.greenLight}` }}>
-        <div className="feed-header-inner" style={{ padding:"14px 28px 12px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-          <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+        <div className="feed-header-inner" style={{ padding:"14px 28px 12px",display:"flex",alignItems:"center",gap:12,justifyContent:"space-between" }}>
+          <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
             <span style={{ fontSize:20 }}>⚡</span>
             <span style={{ fontWeight:900,fontSize:22,color:C.blue,letterSpacing:3 }}>FIT</span>
           </div>
-          <button style={{ background:"none",border:"none",cursor:"pointer",position:"relative" }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:24,height:24 }}>
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-            <div style={{ position:"absolute",top:-2,right:-2,width:10,height:10,borderRadius:"50%",background:"#FF6B6B",border:`2px solid ${C.white}` }}/>
-          </button>
+          {/* Search bar */}
+          <div style={{ flex:1,maxWidth:360,position:"relative" }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8,background:C.greenLight,borderRadius:24,padding:"7px 14px",border:`1.5px solid ${searchQuery?C.blue:C.greenMid}` }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:15,height:15,flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search people..." style={{background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1,minWidth:0}}/>
+              {searchQuery && <button onClick={()=>{setSearchQuery("");setSearchResults([]);}} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>×</button>}
+            </div>
+            {searchQuery.trim() && (
+              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:C.white,borderRadius:16,border:`1.5px solid ${C.greenMid}`,boxShadow:"0 8px 24px rgba(0,0,0,0.10)",zIndex:200,overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
+                {searchLoading ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>Searching...</div>
+                : searchResults.length===0 ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>No results</div>
+                : searchResults.map(u=>(
+                  <div key={u.id} onClick={()=>{setSearchQuery("");setSearchResults([]);window.location.href=`/profile/${u.username}`;}}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`}}
+                    onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
+                      {u.avatar_url?<img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(u.full_name||u.username||"?")[0].toUpperCase()}
+                    </div>
+                    <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{u.full_name}</div><div style={{fontSize:11,color:C.sub}}>@{u.username}</div></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Notifications bell */}
+          <div style={{position:"relative",flexShrink:0}}>
+            <button onClick={async()=>{setShowNotifs(s=>!s);if(!showNotifs&&user){await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mark_notifications_read',payload:{userId:user.id}})});setNotifications(p=>p.map(n=>({...n,read:true})));} }} style={{background:"none",border:"none",cursor:"pointer",position:"relative",padding:4}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:24,height:24}}>
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              {unreadCount > 0 && <div style={{position:"absolute",top:-2,right:-2,minWidth:16,height:16,borderRadius:8,background:"#FF6B6B",border:`2px solid ${C.white}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",padding:"0 3px"}}>{unreadCount>9?"9+":unreadCount}</div>}
+            </button>
+            {showNotifs && (
+              <div style={{position:"absolute",right:0,top:"calc(100% + 8px)",width:320,background:C.white,borderRadius:20,border:`1.5px solid ${C.greenMid}`,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",zIndex:200,overflow:"hidden",maxHeight:400,overflowY:"auto"}}>
+                <div style={{padding:"14px 18px 10px",fontWeight:900,fontSize:15,color:C.text,borderBottom:`1px solid ${C.greenLight}`}}>🔔 Notifications</div>
+                {notifications.length===0 ? <div style={{padding:"24px",textAlign:"center",color:C.sub,fontSize:13}}>No notifications yet</div>
+                : notifications.map(n=>(
+                  <div key={n.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:n.read?"transparent":"#F0FDF4",borderBottom:`1px solid ${C.greenLight}`,cursor:"pointer"}}
+                    onClick={()=>setShowNotifs(false)}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
+                      {n.from_user?.avatar_url?<img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,color:C.text,lineHeight:1.4}}>{n.body}</div>
+                      <div style={{fontSize:11,color:C.sub,marginTop:2}}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
+                    </div>
+                    {!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:C.blue,flexShrink:0}}/>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         {/* Feed tabs */}
         <div style={{ display:"flex",gap:4,padding:"0 28px 10px" }}>

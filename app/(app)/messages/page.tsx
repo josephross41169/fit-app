@@ -248,16 +248,11 @@ export default function MessagesPage() {
     const content = inputText.trim();
     setInputText("");
 
-    const { error } = await supabase.from("messages").insert({
-      conversation_id: activeConvId,
-      sender_id: user.id,
-      content,
+    await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send_message', payload: { conversationId: activeConvId, senderId: user.id, content } }),
     });
-
-    if (error) {
-      console.error("sendMessage error:", error);
-    }
-    // Realtime will pick it up; also reload convs list
     loadConversations();
   };
 
@@ -288,64 +283,18 @@ export default function MessagesPage() {
     setSearchQuery("");
     setSearchResults([]);
 
-    // Check if a conversation between these two users already exists
-    const { data: myConvs } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", user.id);
+    const res = await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create_conversation', payload: { userId: user.id, otherUserId } }),
+    });
+    const json = await res.json();
+    if (json.error) { console.error('create_conversation error:', json.error); return; }
 
-    const myConvIds = (myConvs ?? []).map((c: { conversation_id: string }) => c.conversation_id);
-
-    if (myConvIds.length > 0) {
-      const { data: sharedConvs } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .eq("user_id", otherUserId)
-        .in("conversation_id", myConvIds);
-
-      if (sharedConvs && sharedConvs.length > 0) {
-        const existingConvId = sharedConvs[0].conversation_id;
-        await loadConversations();
-        const conv = conversations.find((c) => c.id === existingConvId);
-        if (conv) {
-          selectConversation(conv);
-        } else {
-          setActiveConvId(existingConvId);
-          loadMessages(existingConvId);
-          setMobileShowThread(true);
-        }
-        return;
-      }
-    }
-
-    // Create new conversation
-    const { data: newConv, error: convError } = await supabase
-      .from("conversations")
-      .insert({})
-      .select()
-      .single();
-
-    if (convError || !newConv) {
-      console.error("createConversation error:", convError);
-      return;
-    }
-
-    // Add both participants
-    const { error: partError } = await supabase
-      .from("conversation_participants")
-      .insert([
-        { conversation_id: newConv.id, user_id: user.id },
-        { conversation_id: newConv.id, user_id: otherUserId },
-      ]);
-
-    if (partError) {
-      console.error("addParticipants error:", partError);
-      return;
-    }
-
+    const convId = json.conversationId;
     await loadConversations();
-    setActiveConvId(newConv.id);
-    setMessages([]);
+    setActiveConvId(convId);
+    loadMessages(convId);
     setMobileShowThread(true);
   };
 
