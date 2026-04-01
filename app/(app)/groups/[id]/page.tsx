@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const C = {
   blue:"#16A34A", blueLight:"#F0FDF4", blueMid:"#BBF7D0",
@@ -11,9 +12,10 @@ const C = {
 const CATEGORY_COLORS: Record<string,string> = {
   "Running":"#16A34A","Strength":"#16A34A","Yoga":"#52C97A","HIIT":"#EF4444",
   "Bodybuilding":"#F5A623","Nutrition":"#10B981","Wellness":"#22C55E","Calisthenics":"#06B6D4",
+  "General":"#16A34A",
 };
 
-// ── Full group data ────────────────────────────────────────────────────────────
+// ── Full group data (mock fallback) ────────────────────────────────────────────
 const ALL_GROUPS: Record<string, any> = {
   "lv-morning-runners": {
     name:"LV Morning Runners", category:"Running", emoji:"🏃", members:284, isLocal:true,
@@ -24,146 +26,109 @@ const ALL_GROUPS: Record<string, any> = {
     events:[
       { id:"1", name:"Saturday 5K", date:"Mar 29", time:"6:00 AM", emoji:"🏃", price:"Free", description:"Weekly group run at Red Rock Canyon. All paces welcome. Meet at the lower trailhead.", comments:[] },
       { id:"3", name:"Monthly Trail Race", date:"Apr 12", time:"7:00 AM", emoji:"🏅", price:"$15", description:"Official timed trail race through Red Rock. 5K and 10K distances available.", comments:[] },
-      { id:"5", name:"Group Stretch & Recovery", date:"Apr 5", time:"8:00 AM", emoji:"🧘", price:"Free", description:"Post-race recovery session with guided stretching and foam rolling.", comments:[] },
     ],
     posts:[
-      { id:"1", user:"Kayla Nguyen", avatar:"KN", time:"2h ago", content:"6 miles done this morning! Red Rock at sunrise is something else entirely 🏔️ See everyone Saturday!", likes:34, photo:"https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80" },
-      { id:"2", user:"Diego Reyes", avatar:"DR", time:"1d ago", content:"New PR on the Saturday loop — 24:12 🔥 Training is paying off. Who's doing the April race?", likes:58, photo:null },
-      { id:"3", user:"Marcus Bell", avatar:"MB", time:"2d ago", content:"Reminder: this Saturday we're meeting at the LOWER trailhead, not the main lot. Parking fills fast!", likes:21, photo:null },
+      { id:"1", user:"Kayla Nguyen", avatar:"KN", time:"2h ago", content:"6 miles done this morning! Red Rock at sunrise is something else entirely 🏔️", likes:34, photo:"https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80" },
+      { id:"2", user:"Diego Reyes", avatar:"DR", time:"1d ago", content:"New PR on the Saturday loop — 24:12 🔥 Training is paying off.", likes:58, photo:null },
     ],
     members_list:[
       { avatar:"KN", name:"Kayla Nguyen", role:"Organizer", rank:1, points:2840 },
       { avatar:"DR", name:"Diego Reyes", role:"Top Member", rank:2, points:2100 },
       { avatar:"MB", name:"Marcus Bell", role:"Top Member", rank:3, points:1890 },
-      { avatar:"PS", name:"Priya Sharma", role:"Member", rank:4, points:1240 },
-      { avatar:"LT", name:"Lena Torres", role:"Member", rank:5, points:980 },
     ],
     leaderboard:[
       { avatar:"DR", name:"Diego Reyes", score:"42 runs", metric:"Miles This Month", value:"186 mi", rank:1 },
       { avatar:"KN", name:"Kayla Nguyen", score:"38 runs", metric:"Miles This Month", value:"172 mi", rank:2 },
       { avatar:"MB", name:"Marcus Bell", score:"31 runs", metric:"Miles This Month", value:"148 mi", rank:3 },
-      { avatar:"PS", name:"Priya Sharma", score:"24 runs", metric:"Miles This Month", value:"112 mi", rank:4 },
-      { avatar:"LT", name:"Lena Torres", score:"18 runs", metric:"Miles This Month", value:"84 mi", rank:5 },
     ],
     challenges:[
-      { id:"1", name:"5 Minute Mile Club", emoji:"⚡", desc:"Run a sub-5 minute mile and post your proof. Verified by group moderators.", participants:12, deadline:"Apr 30", difficulty:"Elite", badge:"⚡" },
-      { id:"2", name:"100 Mile March", emoji:"🏅", desc:"Log 100 miles in March. Every run counts. Track in the app and post your progress.", participants:47, deadline:"Mar 31", difficulty:"Hard", badge:"💯" },
-      { id:"3", name:"Trail Newbie", emoji:"🌿", desc:"Complete your first Red Rock trail run and post a selfie at the summit.", participants:28, deadline:"May 1", difficulty:"Beginner", badge:"🌿" },
+      { id:"1", name:"5 Minute Mile Club", emoji:"⚡", desc:"Run a sub-5 minute mile and post your proof.", participants:12, deadline:"Apr 30", difficulty:"Elite", badge:"⚡" },
+      { id:"2", name:"100 Mile March", emoji:"🏅", desc:"Log 100 miles in March. Every run counts.", participants:47, deadline:"Mar 31", difficulty:"Hard", badge:"💯" },
     ],
     notes:[
-      { id:"1", user:"Kayla Nguyen", avatar:"KN", time:"3h ago", category:"Workout", content:"My go-to pre-run warmup: 5 min walk → 20 leg swings → 10 hip circles → easy jog for 5 min. Changed everything for me!", likes:24 },
-      { id:"2", user:"Diego Reyes", avatar:"DR", time:"1d ago", category:"Recipe", content:"Post-run recovery smoothie 🥤 Banana + almond milk + 2 scoops protein + frozen mango + a handful of spinach. You won't taste the spinach, I promise.", likes:41 },
-      { id:"3", user:"Marcus Bell", avatar:"MB", time:"2d ago", category:"Mindset", content:"When you don't feel like running: put your shoes on and just walk out the door. That's the only commitment. Once you're outside, you'll run. Works every time.", likes:67 },
+      { id:"1", user:"Kayla Nguyen", avatar:"KN", time:"3h ago", category:"Workout", content:"My go-to pre-run warmup: 5 min walk → 20 leg swings → 10 hip circles → easy jog for 5 min.", likes:24 },
+      { id:"2", user:"Diego Reyes", avatar:"DR", time:"1d ago", category:"Recipe", content:"Post-run recovery smoothie 🥤 Banana + almond milk + 2 scoops protein + frozen mango.", likes:41 },
     ],
   },
   "summerlin-iron-club": {
     name:"Summerlin Iron Club", category:"Strength", emoji:"🏋️", members:156, isLocal:true,
     city:"Las Vegas, NV", meetFrequency:"Mon / Wed / Fri 5:30AM", location:"24 Hour Fitness · Summerlin",
     tags:["#Powerlifting","#Summerlin","#Strength"],
-    description:"Serious lifters who show up early and push each other. Powerlifting-focused with a supportive community vibe. We track each other's PRs and celebrate every milestone together.",
+    description:"Serious lifters who show up early and push each other. Powerlifting-focused with a supportive community vibe.",
     recentPhoto:"https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&q=80",
     events:[
       { id:"2", name:"Max Out Monday", date:"Mar 31", time:"5:30 AM", emoji:"💪", price:"Free", description:"Weekly 1RM attempts. Squat, bench, deadlift. Spotters provided.", comments:[] },
-      { id:"4", name:"Form Check Workshop", date:"Apr 6", time:"10:00 AM", emoji:"🏋️", price:"Free", description:"Bring your lifts, get feedback from experienced coaches in the group.", comments:[] },
     ],
     posts:[
       { id:"1", user:"Jake Morrison", avatar:"JM", time:"3h ago", content:"New bench PR today — 225 for 5 clean reps. The Iron Club energy in the early morning is unmatched 💪", likes:47, photo:"https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=600&q=80" },
-      { id:"2", user:"Mike Davis", avatar:"MD", time:"1d ago", content:"Squatted 315 this morning. If you're not training before the sun comes up, are you even training?", likes:89, photo:null },
     ],
     members_list:[
       { avatar:"JM", name:"Jake Morrison", role:"Organizer", rank:1, points:3200 },
       { avatar:"MD", name:"Mike Davis", role:"Top Member", rank:2, points:2800 },
-      { avatar:"SC", name:"Sara Chen", role:"Top Member", rank:3, points:1900 },
-      { avatar:"CR", name:"Chris R.", role:"Member", rank:4, points:1400 },
-      { avatar:"LF", name:"Luna F.", role:"Member", rank:5, points:980 },
     ],
     leaderboard:[
       { avatar:"MD", name:"Mike Davis", score:"315 squat", metric:"Best Lift This Month", value:"405 deadlift", rank:1 },
       { avatar:"JM", name:"Jake Morrison", score:"225 bench", metric:"Best Lift This Month", value:"385 deadlift", rank:2 },
-      { avatar:"SC", name:"Sara Chen", score:"185 squat", metric:"Best Lift This Month", value:"275 deadlift", rank:3 },
-      { avatar:"CR", name:"Chris R.", score:"205 squat", metric:"Best Lift This Month", value:"315 deadlift", rank:4 },
-      { avatar:"LF", name:"Luna F.", score:"135 squat", metric:"Best Lift This Month", value:"185 deadlift", rank:5 },
     ],
     challenges:[
       { id:"1", name:"1000 Pound Club", emoji:"🏆", desc:"Total your squat + bench + deadlift to 1000 lbs or more in a single session.", participants:8, deadline:"Jun 1", difficulty:"Elite", badge:"🏆" },
-      { id:"2", name:"Every Day in April", emoji:"🔥", desc:"Hit the gym every single day in April. Rest days count if you do mobility work.", participants:23, deadline:"Apr 30", difficulty:"Hard", badge:"🔥" },
     ],
     notes:[
-      { id:"1", user:"Jake Morrison", avatar:"JM", time:"5h ago", category:"Workout", content:"Current push day: Bench 5x5 → Incline DB 4x10 → Cable flies 3x15 → Shoulder press 4x12 → Lateral raises 3x20. Takes about 70 min. Gains have been insane.", likes:38 },
-      { id:"2", user:"Mike Davis", avatar:"MD", time:"1d ago", category:"Recipe", content:"Bulking meal: 1lb ground beef + white rice + butter + salt. 1200 calories, 80g protein. Not glamorous but it works.", likes:52 },
+      { id:"1", user:"Jake Morrison", avatar:"JM", time:"5h ago", category:"Workout", content:"Current push day: Bench 5x5 → Incline DB 4x10 → Cable flies 3x15.", likes:38 },
     ],
   },
   "vegas-yoga-collective": {
     name:"Vegas Yoga Collective", category:"Yoga", emoji:"🧘", members:412, isLocal:true,
     city:"Las Vegas, NV", meetFrequency:"Every Sunday 8AM", location:"Sunset Park · Las Vegas",
     tags:["#Yoga","#Wellness","#LasVegas","#Mindfulness"],
-    description:"Free community yoga every Sunday in the park. All levels, all ages, all bodies. Mats provided for beginners. Come as you are, leave better than you arrived.",
+    description:"Free community yoga every Sunday in the park. All levels, all ages, all bodies. Mats provided for beginners.",
     recentPhoto:"https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=1200&q=80",
     events:[
       { id:"5", name:"Sunday Flow", date:"Mar 30", time:"8:00 AM", emoji:"🧘", price:"Free", description:"60 minute vinyasa flow for all levels. Mats and blocks provided.", comments:[] },
-      { id:"6", name:"Full Moon Meditation", date:"Apr 13", time:"7:30 PM", emoji:"🌕", price:"Free", description:"Evening meditation under the full moon. Guided breathing and sound bowl session.", comments:[] },
     ],
     posts:[
-      { id:"1", user:"Maya Torres", avatar:"MT", time:"4h ago", content:"Last Sunday was our biggest turnout yet — 60+ people in the park 🌿 Community is everything. See you all this Sunday!", likes:112, photo:"https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80" },
+      { id:"1", user:"Maya Torres", avatar:"MT", time:"4h ago", content:"Last Sunday was our biggest turnout yet — 60+ people in the park 🌿", likes:112, photo:"https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80" },
     ],
     members_list:[
       { avatar:"MT", name:"Maya Torres", role:"Organizer", rank:1, points:4200 },
       { avatar:"PS", name:"Priya Sharma", role:"Top Member", rank:2, points:2800 },
-      { avatar:"LT", name:"Lena Torres", role:"Top Member", rank:3, points:2100 },
-      { avatar:"NO", name:"Natacha O.", role:"Member", rank:4, points:1600 },
-      { avatar:"KN", name:"Kayla N.", role:"Member", rank:5, points:980 },
     ],
     leaderboard:[
       { avatar:"MT", name:"Maya Torres", score:"52 sessions", metric:"Sessions This Month", value:"60 hrs total", rank:1 },
       { avatar:"PS", name:"Priya Sharma", score:"38 sessions", metric:"Sessions This Month", value:"42 hrs total", rank:2 },
-      { avatar:"LT", name:"Lena Torres", score:"31 sessions", metric:"Sessions This Month", value:"36 hrs total", rank:3 },
-      { avatar:"NO", name:"Natacha O.", score:"24 sessions", metric:"Sessions This Month", value:"28 hrs total", rank:4 },
-      { avatar:"KN", name:"Kayla N.", score:"18 sessions", metric:"Sessions This Month", value:"21 hrs total", rank:5 },
     ],
     challenges:[
-      { id:"1", name:"30-Day Morning Practice", emoji:"🌅", desc:"Practice yoga every morning for 30 days, even if just 10 minutes. Log your streak.", participants:84, deadline:"Apr 30", difficulty:"Medium", badge:"🌅" },
-      { id:"2", name:"Headstand Journey", emoji:"🤸", desc:"Document your path to your first headstand. Share progress posts weekly.", participants:31, deadline:"May 15", difficulty:"Hard", badge:"🤸" },
+      { id:"1", name:"30-Day Morning Practice", emoji:"🌅", desc:"Practice yoga every morning for 30 days, even if just 10 minutes.", participants:84, deadline:"Apr 30", difficulty:"Medium", badge:"🌅" },
     ],
     notes:[
-      { id:"1", user:"Maya Torres", avatar:"MT", time:"2h ago", category:"Mindset", content:"When I'm anxious I do box breathing: inhale 4 counts, hold 4, exhale 4, hold 4. Repeat 4 times. Works faster than anything else I've tried.", likes:89 },
-      { id:"2", user:"Priya Sharma", avatar:"PS", time:"1d ago", category:"Recipe", content:"Post-yoga golden milk: warm oat milk + turmeric + ginger + cinnamon + black pepper + a little honey. Anti-inflammatory and so comforting.", likes:64 },
+      { id:"1", user:"Maya Torres", avatar:"MT", time:"2h ago", category:"Mindset", content:"When I'm anxious I do box breathing: inhale 4 counts, hold 4, exhale 4, hold 4.", likes:89 },
     ],
   },
   "lv-hiit-squad": {
     name:"LV HIIT Squad", category:"HIIT", emoji:"🔥", members:198, isLocal:true,
     city:"Las Vegas, NV", meetFrequency:"Tue / Thu 6PM", location:"Springs Preserve · Las Vegas",
     tags:["#HIIT","#LasVegas","#Bootcamp","#Cardio"],
-    description:"High intensity, zero judgment. Outdoor bootcamp sessions that leave you completely gassed. Bring water, bring your ego to lose, and bring a friend.",
+    description:"High intensity, zero judgment. Outdoor bootcamp sessions that leave you completely gassed.",
     recentPhoto:"https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=1200&q=80",
     events:[
       { id:"4", name:"Thursday Burnout", date:"Mar 27", time:"6:00 PM", emoji:"🔥", price:"Free", description:"45 minute HIIT circuit. Burpees, box jumps, sprint intervals. Bring water.", comments:[] },
-      { id:"7", name:"Spring Challenge Kickoff", date:"Apr 1", time:"6:00 PM", emoji:"🏆", price:"Free", description:"Kickoff for the 30-day Spring Shred challenge. Partner workouts.", comments:[] },
     ],
     posts:[
       { id:"1", user:"Marcus Bell", avatar:"MB", time:"5h ago", content:"Tuesday's session was absolutely brutal and I loved every second. Thursday we go again 🔥", likes:34, photo:null },
-      { id:"2", user:"Diego Reyes", avatar:"DR", time:"2d ago", content:"Personal best on the sprint interval today — 40 second 200m. Progress is real when you show up consistently.", likes:56, photo:"https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80" },
     ],
     members_list:[
       { avatar:"MB", name:"Marcus Bell", role:"Organizer", rank:1, points:3100 },
       { avatar:"DR", name:"Diego Reyes", role:"Top Member", rank:2, points:2400 },
-      { avatar:"KN", name:"Kayla Nguyen", role:"Top Member", rank:3, points:1800 },
-      { avatar:"JM", name:"Jake M.", role:"Member", rank:4, points:1200 },
-      { avatar:"SC", name:"Sara C.", role:"Member", rank:5, points:890 },
     ],
     leaderboard:[
       { avatar:"MB", name:"Marcus Bell", score:"28 sessions", metric:"Calories Burned", value:"18,400 cal", rank:1 },
       { avatar:"DR", name:"Diego Reyes", score:"24 sessions", metric:"Calories Burned", value:"15,800 cal", rank:2 },
-      { avatar:"KN", name:"Kayla Nguyen", score:"21 sessions", metric:"Calories Burned", value:"13,200 cal", rank:3 },
-      { avatar:"JM", name:"Jake M.", score:"18 sessions", metric:"Calories Burned", value:"11,900 cal", rank:4 },
-      { avatar:"SC", name:"Sara C.", score:"14 sessions", metric:"Calories Burned", value:"9,100 cal", rank:5 },
     ],
     challenges:[
-      { id:"1", name:"Spring Shred 30", emoji:"🌱", desc:"30 days of consecutive HIIT workouts. Miss a day and start over. Accountability posts required.", participants:34, deadline:"Apr 30", difficulty:"Hard", badge:"🌱" },
-      { id:"2", name:"100 Burpee Club", emoji:"💀", desc:"Complete 100 consecutive burpees and post your time. Under 10 minutes gets a badge.", participants:11, deadline:"May 1", difficulty:"Elite", badge:"💀" },
+      { id:"1", name:"Spring Shred 30", emoji:"🌱", desc:"30 days of consecutive HIIT workouts. Miss a day and start over.", participants:34, deadline:"Apr 30", difficulty:"Hard", badge:"🌱" },
     ],
     notes:[
-      { id:"1", user:"Marcus Bell", avatar:"MB", time:"1h ago", category:"Workout", content:"My HIIT protocol that never gets boring: 40 sec on / 20 sec off. Round 1: burpees, mountain climbers, jump squats. Round 2: sprints, lateral shuffles, high knees. 4 rounds = 24 min of pure fire.", likes:45 },
-      { id:"2", user:"Diego Reyes", avatar:"DR", time:"1d ago", category:"Mindset", content:"Stopped telling myself 'I have to work out' and started saying 'I get to work out.' Sounds small but it completely changed how I show up.", likes:78 },
+      { id:"1", user:"Marcus Bell", avatar:"MB", time:"1h ago", category:"Workout", content:"My HIIT protocol: 40 sec on / 20 sec off. Round 1: burpees, mountain climbers, jump squats.", likes:45 },
     ],
   },
   "global-gains-community": {
@@ -172,42 +137,28 @@ const ALL_GROUPS: Record<string, any> = {
     description:"The internet's most supportive bodybuilding community. Post your lifts, get form checks, share progress, and get hyped by 48,000 people who actually get it.",
     recentPhoto:"https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=1200&q=80",
     events:[
-      { id:"8", name:"Weekly Check-In Thread", date:"Every Monday", time:"All Day", emoji:"📊", price:"Free", description:"Post your weekly progress photo, current lifts, and goals for the week. Community feedback only.", comments:[] },
-      { id:"9", name:"April Body Transformation Challenge", date:"Apr 1", time:"All Day", emoji:"🏆", price:"Free", description:"8 week transformation challenge. Submit before/after at week 4 and week 8. Top 3 win merch.", comments:[] },
+      { id:"8", name:"Weekly Check-In Thread", date:"Every Monday", time:"All Day", emoji:"📊", price:"Free", description:"Post your weekly progress photo, current lifts, and goals for the week.", comments:[] },
     ],
     posts:[
-      { id:"1", user:"Chris B.", avatar:"CB", time:"1h ago", content:"Prep week 8. Coming in tighter than I've ever been. The community accountability keeps me locked in 💪", likes:2840, photo:"https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80" },
-      { id:"2", user:"Jordan Kim", avatar:"JK", time:"4h ago", content:"Hit 405 deadlift today. Wouldn't have pushed for this without you all constantly pushing me. Grateful 🙏", likes:1240, photo:null },
-      { id:"3", user:"Alex R.", avatar:"AR", time:"8h ago", content:"Form check request — is my squat depth good? Video in comments. Be honest!", likes:67, photo:null },
+      { id:"1", user:"Chris B.", avatar:"CB", time:"1h ago", content:"Prep week 8. Coming in tighter than I've ever been. 💪", likes:2840, photo:"https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80" },
     ],
     members_list:[
       { avatar:"CB", name:"Chris B.", role:"Top Contributor", rank:1, points:48200 },
       { avatar:"MT", name:"Maya T.", role:"Moderator", rank:2, points:31500 },
-      { avatar:"JK", name:"Jordan Kim", role:"Top Contributor", rank:3, points:22800 },
-      { avatar:"AR", name:"Alex R.", role:"Top Contributor", rank:4, points:18400 },
-      { avatar:"BK", name:"Brandon K.", role:"Member", rank:5, points:12300 },
     ],
     leaderboard:[
       { avatar:"CB", name:"Chris B.", score:"284 posts", metric:"Community Points", value:"48,200 pts", rank:1 },
       { avatar:"JK", name:"Jordan Kim", score:"198 posts", metric:"Community Points", value:"31,500 pts", rank:2 },
-      { avatar:"AR", name:"Alex R.", score:"156 posts", metric:"Community Points", value:"22,800 pts", rank:3 },
-      { avatar:"BK", name:"Brandon K.", score:"112 posts", metric:"Community Points", value:"18,400 pts", rank:4 },
-      { avatar:"MT", name:"Maya T.", score:"89 posts", metric:"Community Points", value:"12,300 pts", rank:5 },
     ],
     challenges:[
       { id:"1", name:"1000 Pound Club", emoji:"🏆", desc:"Total your squat + bench + deadlift to 1000 lbs or more. Post the video.", participants:312, deadline:"Jun 1", difficulty:"Elite", badge:"🏆" },
-      { id:"2", name:"8-Week Transformation", emoji:"📸", desc:"Document your physique transformation over 8 weeks with weekly check-in photos.", participants:1840, deadline:"May 30", difficulty:"Hard", badge:"📸" },
-      { id:"3", name:"365 Streak", emoji:"🔥", desc:"Work out every single day for a full year. Log it daily. No rest days.", participants:48, deadline:"Dec 31", difficulty:"Legendary", badge:"🔥" },
     ],
     notes:[
-      { id:"1", user:"Chris B.", avatar:"CB", time:"2h ago", category:"Workout", content:"Current chest split: Flat bench 5x5 → Incline DB press 4x10 → Pec deck 4x15 → Cable crossover 3x20 → Push-ups to failure. Volume is everything in the off-season.", likes:1240 },
-      { id:"2", user:"Jordan Kim", avatar:"JK", time:"6h ago", category:"Recipe", content:"Bulk meal prep: 5 lbs ground turkey + jasmine rice + mixed veggies. Season with everything. Divide into 10 containers. 450 cal / 48g protein per container. $35 total.", likes:890 },
-      { id:"3", user:"Alex R.", avatar:"AR", time:"1d ago", category:"Mindset", content:"Stopped comparing my year 1 to someone else's year 10. Biggest mindset shift of my life. Run your own race.", likes:2100 },
+      { id:"1", user:"Chris B.", avatar:"CB", time:"2h ago", category:"Workout", content:"Current chest split: Flat bench 5x5 → Incline DB press 4x10 → Pec deck 4x15.", likes:1240 },
     ],
   },
 };
 
-// Fill remaining online groups with minimal data
 ["women-who-lift","macro-masters","mindful-movement-collective","5k-to-marathon","calisthenics-worldwide"].forEach(id => {
   if (!ALL_GROUPS[id]) {
     ALL_GROUPS[id] = {
@@ -220,28 +171,47 @@ const ALL_GROUPS: Record<string, any> = {
   }
 });
 
-// ── Reusable EventCard (avoids useState-in-map violation) ─────────────────────
-function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComments, addEventComment }: {
+// ── EventCard ─────────────────────────────────────────────────────────────────
+function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComments, addEventComment, onRSVP, rsvped }: {
   event: any; catColor: string;
   commentInputs: Record<string,string>;
   setCommentInputs: React.Dispatch<React.SetStateAction<Record<string,string>>>;
   eventComments: Record<string,{user:string;text:string;time:string}[]>;
   addEventComment: (id:string) => void;
+  onRSVP?: (id:string) => void;
+  rsvped?: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
   const comments = eventComments[event.id] || [];
   const darkCard = "#1A1D2E", darkBorder = "#2A2D3E", darkSub = "#8892A4", gold = "#F5A623";
+
+  // Format event date
+  const dateDisplay = event.event_date
+    ? new Date(event.event_date).toLocaleDateString('en-US', { month:'short', day:'numeric' })
+    : event.date || 'TBD';
+  const timeDisplay = event.event_date
+    ? new Date(event.event_date).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' })
+    : event.time || '';
+
   return (
     <div style={{ background:darkCard, borderRadius:16, border:`1px solid ${darkBorder}`, marginBottom:12, overflow:"hidden" }}>
       <div style={{ padding:"13px 14px", cursor:"pointer" }} onClick={() => setShowComments(s=>!s)}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ width:44, height:44, borderRadius:12, background:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{event.emoji}</div>
+          <div style={{ width:44, height:44, borderRadius:12, background:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{event.emoji || '📅'}</div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{event.name}</div>
-            <div style={{ fontSize:11, color:darkSub, marginTop:2 }}>📅 {event.date} · ⏰ {event.time}</div>
-            <div style={{ fontSize:11, fontWeight:700, color:gold, marginTop:1 }}>{event.price}</div>
+            <div style={{ fontSize:11, color:darkSub, marginTop:2 }}>📅 {dateDisplay} · ⏰ {timeDisplay}</div>
+            <div style={{ fontSize:11, fontWeight:700, color:gold, marginTop:1 }}>{event.price || 'Free'}</div>
           </div>
-          <div style={{ color:darkSub, fontSize:12 }}>{showComments?"▲":"▼"}</div>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+            {onRSVP && (
+              <button onClick={e => { e.stopPropagation(); onRSVP(event.id); }} style={{ padding:"4px 10px", borderRadius:8, border:"none", background:rsvped?catColor+"33":"rgba(255,255,255,0.1)", color:rsvped?catColor:"#E2E8F0", fontWeight:700, fontSize:10, cursor:"pointer" }}>
+                {rsvped ? "✓ RSVP'd" : "RSVP"}
+              </button>
+            )}
+            {event.rsvp_count > 0 && <div style={{ fontSize:10, color:darkSub }}>{event.rsvp_count} going</div>}
+            <div style={{ color:darkSub, fontSize:12 }}>{showComments?"▲":"▼"}</div>
+          </div>
         </div>
         {event.description && <p style={{ fontSize:11, color:darkSub, lineHeight:1.5, marginTop:8, marginBottom:0 }}>{event.description}</p>}
       </div>
@@ -270,20 +240,36 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 const DIFFICULTY_COLORS: Record<string,string> = {
   "Beginner":"#10B981", "Medium":"#16A34A", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#16A34A",
 };
 const NOTE_CATEGORY_COLORS: Record<string,string> = {
-  "Workout":"#16A34A", "Recipe":"#10B981", "Mindset":"#16A34A", "General":"#F5A623",
+  "Workout":"#16A34A", "Recipe":"#10B981", "Mindset":"#16A34A", "General":"#F5A623", "Tip":"#06B6D4",
 };
+const EMOJI_OPTIONS = ["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","📅","🎯"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function GroupPage() {
   const { id } = useParams<{ id:string }>();
   const router = useRouter();
-  const group = ALL_GROUPS[id as string];
+
+  // ── DB State ──
+  const [dbGroup, setDbGroup] = useState<any>(null);
+  const [dbPosts, setDbPosts] = useState<any[]>([]);
+  const [dbEvents, setDbEvents] = useState<any[]>([]);
+  const [dbChallenges, setDbChallenges] = useState<any[]>([]);
+  const [dbNotes, setDbNotes] = useState<any[]>([]);
+  const [dbMembers, setDbMembers] = useState<any[]>([]);
+  const [dbLeaderboard, setDbLeaderboard] = useState<any[]>([]);
+  const [isMemberDB, setIsMemberDB] = useState(false);
+  const [joinedChallengeIdsDB, setJoinedChallengeIdsDB] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [rsvpedEvents, setRsvpedEvents] = useState<Set<string>>(new Set());
+
+  // ── UI State ──
   const [joined, setJoined] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [tab, setTab] = useState<"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members">("posts");
   const [postLikes, setPostLikes] = useState<Record<string,number>>({});
   const [likedPosts, setLikedPosts] = useState<Record<string,boolean>>({});
@@ -295,7 +281,96 @@ export default function GroupPage() {
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
   const [noteLikes, setNoteLikes] = useState<Record<string,number>>({});
 
-  if (!group) {
+  // ── Post form state ──
+  const [postContent, setPostContent] = useState("");
+  const [postSubmitting, setPostSubmitting] = useState(false);
+
+  // ── Create Event modal ──
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventForm, setEventForm] = useState({ name:'', description:'', date:'', time:'', location:'', price:'Free', emoji:'📅' });
+  const [eventSubmitting, setEventSubmitting] = useState(false);
+
+  // ── Create Challenge modal ──
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
+  const [challengeForm, setChallengeForm] = useState({ name:'', description:'', emoji:'🏆', metric_label:'', metric_unit:'', difficulty:'Medium', deadline:'' });
+  const [challengeSubmitting, setChallengeSubmitting] = useState(false);
+
+  // ── Log Progress modal ──
+  const [logProgressChallenge, setLogProgressChallenge] = useState<any>(null);
+  const [logValue, setLogValue] = useState('');
+  const [logNote, setLogNote] = useState('');
+  const [logSubmitting, setLogSubmitting] = useState(false);
+  const [challengeScores, setChallengeScores] = useState<Record<string,number>>({});
+
+  // ── Load data on mount ──
+  useEffect(() => {
+    loadGroupData();
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
+  }, [id]);
+
+  async function loadGroupData() {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const params = new URLSearchParams({ action: 'get_group', groupId: id as string });
+      if (user) params.append('userId', user.id);
+      const res = await fetch(`/api/db?${params}`);
+      const data = await res.json();
+
+      if (data.group) {
+        setDbGroup(data.group);
+        setDbPosts(data.posts || []);
+        setDbEvents(data.events || []);
+        setDbChallenges(data.challenges || []);
+        setDbNotes(data.notes || []);
+        setDbMembers(data.members || []);
+        setIsMemberDB(data.is_member || false);
+        setJoined(data.is_member || false);
+        setJoinedChallengeIdsDB(data.joined_challenge_ids || []);
+
+        // Init challenge scores from joined challenges
+        const scores: Record<string, number> = {};
+        (data.joined_challenge_ids || []).forEach((cid: string) => { scores[cid] = 0; });
+        setChallengeScores(scores);
+
+        // Load leaderboard
+        const lbParams = new URLSearchParams({ action: 'get_leaderboard', groupId: data.group.id });
+        const lbRes = await fetch(`/api/db?${lbParams}`);
+        const lbData = await lbRes.json();
+        setDbLeaderboard(lbData.leaderboard || []);
+      }
+    } catch {
+      // Fall through to mock data
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Use DB group if available, otherwise fall back to mock
+  const mockGroup = ALL_GROUPS[id as string];
+  const group = dbGroup ? {
+    name: dbGroup.name,
+    category: dbGroup.category || 'General',
+    emoji: dbGroup.emoji || '💪',
+    members: dbGroup.member_count || 0,
+    isLocal: !dbGroup.is_online,
+    city: dbGroup.location || 'Online',
+    meetFrequency: dbGroup.meet_frequency || '',
+    location: dbGroup.location || '',
+    tags: dbGroup.tags || [],
+    description: dbGroup.description || '',
+    recentPhoto: dbGroup.banner_url || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&q=80',
+    events: dbEvents,
+    posts: dbPosts,
+    members_list: dbMembers,
+    leaderboard: dbLeaderboard,
+    challenges: dbChallenges,
+    notes: dbNotes,
+    _dbId: dbGroup.id,
+    _isOwner: currentUser && dbGroup.created_by === currentUser?.id,
+  } : mockGroup;
+
+  if (!loading && !group) {
     return (
       <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
         <div style={{ background:C.white, borderRadius:24, border:`2px solid ${C.blueMid}`, padding:"48px 40px", maxWidth:440, width:"100%", textAlign:"center" }}>
@@ -307,28 +382,243 @@ export default function GroupPage() {
     );
   }
 
+  if (loading || !group) {
+    return (
+      <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ fontWeight:700, fontSize:16, color:C.sub }}>Loading group...</div>
+      </div>
+    );
+  }
+
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
-  const allNotes = [...(group.notes || []), ...localNotes];
+  const isOwnerOrMod = group._isOwner || isMemberDB;
+
+  // ── Merged notes (DB + local) ──
+  const allNotes = [
+    ...dbNotes.map((n: any) => ({
+      id: n.id, user: n.user?.full_name || n.user?.username || 'Unknown',
+      avatar: (n.user?.full_name || n.user?.username || 'U').slice(0,2).toUpperCase(),
+      time: new Date(n.created_at).toLocaleDateString(), category: n.category, content: n.content, likes: n.likes_count || 0,
+    })),
+    ...localNotes,
+  ];
+
+  // ── Merged posts (DB + local) ──
+  const allPosts = dbPosts.map((p: any) => ({
+    id: p.id, user: p.user?.full_name || p.user?.username || 'Unknown',
+    avatar: (p.user?.full_name || p.user?.username || 'U').slice(0,2).toUpperCase(),
+    time: new Date(p.created_at).toLocaleDateString(), content: p.content, likes: p.likes_count || 0, photo: p.media_url || null,
+  }));
+
+  // Use mock posts as fallback if no DB posts
+  const displayPosts = allPosts.length > 0 ? allPosts : (mockGroup?.posts || []);
+  const displayEvents = dbEvents.length > 0 ? dbEvents : (mockGroup?.events || []);
+  const displayChallenges = dbChallenges.length > 0 ? dbChallenges : (mockGroup?.challenges || []);
+  const displayLeaderboard = dbLeaderboard.length > 0
+    ? dbLeaderboard.map((e: any, i: number) => ({
+        rank: i + 1,
+        avatar: (e.user?.full_name || e.user?.username || 'U').slice(0,2).toUpperCase(),
+        name: e.user?.full_name || e.user?.username || 'Unknown',
+        score: `${e.score} ${e.metric_label || ''}`,
+        metric: e.metric_label || '',
+        value: `${e.score} pts`,
+      }))
+    : (mockGroup?.leaderboard || []);
+  const displayMembers = dbMembers.length > 0
+    ? dbMembers.map((m: any, i: number) => ({
+        rank: i + 1,
+        avatar: (m.user?.full_name || m.user?.username || 'U').slice(0,2).toUpperCase(),
+        name: m.user?.full_name || m.user?.username || 'Unknown',
+        role: m.role === 'owner' ? 'Organizer' : m.role === 'moderator' ? 'Moderator' : 'Member',
+        points: 0,
+      }))
+    : (mockGroup?.members_list || []);
+
+  // ── Event helpers ──
+  function addEventComment(eventId: string) {
+    const text = commentInputs[eventId]?.trim();
+    if (!text) return;
+    setEventComments(prev => ({ ...prev, [eventId]: [...(prev[eventId] || []), { user:"You", text, time:"Just now" }] }));
+    setCommentInputs(prev => ({ ...prev, [eventId]: "" }));
+  }
+
+  async function handleRSVP(eventId: string) {
+    if (rsvpedEvents.has(eventId)) return;
+    setRsvpedEvents(prev => new Set([...prev, eventId]));
+    if (currentUser && group._dbId) {
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rsvp_event', payload: { userId: currentUser.id, eventId } }),
+      });
+    }
+  }
+
+  // ── Join group ──
+  async function handleJoinGroup() {
+    if (joined || joining) return;
+    setJoining(true);
+    try {
+      if (currentUser && group._dbId) {
+        await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'join_group', payload: { userId: currentUser.id, groupId: group._dbId } }),
+        });
+        setIsMemberDB(true);
+      }
+      setJoined(true);
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  // ── Submit post ──
+  async function submitPost() {
+    if (!postContent.trim() || postSubmitting) return;
+    setPostSubmitting(true);
+    try {
+      if (currentUser && group._dbId) {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_group_post', payload: { userId: currentUser.id, groupId: group._dbId, content: postContent } }),
+        });
+        const data = await res.json();
+        if (data.post) {
+          const p = data.post;
+          setDbPosts(prev => [{
+            id: p.id, user: p.user?.full_name || p.user?.username || 'You',
+            avatar: (currentUser?.email || 'Y').slice(0,2).toUpperCase(),
+            time: 'Just now', content: p.content, likes: 0, photo: null,
+          }, ...prev]);
+        }
+      } else {
+        // Mock add
+        setDbPosts(prev => [{ id: String(Date.now()), user:'You', avatar:'JB', time:'Just now', content:postContent, likes_count:0, media_url:null, created_at:new Date().toISOString() }, ...prev]);
+      }
+      setPostContent("");
+    } finally {
+      setPostSubmitting(false);
+    }
+  }
+
+  // ── Submit event ──
+  async function submitEvent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!eventForm.name.trim() || eventSubmitting) return;
+    setEventSubmitting(true);
+    try {
+      if (currentUser && group._dbId) {
+        const eventDate = eventForm.date && eventForm.time ? new Date(`${eventForm.date}T${eventForm.time}`).toISOString() : null;
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_group_event', payload: { userId: currentUser.id, groupId: group._dbId, name: eventForm.name, description: eventForm.description, event_date: eventDate, location: eventForm.location, price: eventForm.price, emoji: eventForm.emoji } }),
+        });
+        const data = await res.json();
+        if (data.event) setDbEvents(prev => [...prev, data.event]);
+      }
+      setShowEventModal(false);
+      setEventForm({ name:'', description:'', date:'', time:'', location:'', price:'Free', emoji:'📅' });
+    } finally {
+      setEventSubmitting(false);
+    }
+  }
+
+  // ── Submit challenge ──
+  async function submitChallenge(e: React.FormEvent) {
+    e.preventDefault();
+    if (!challengeForm.name.trim() || !challengeForm.metric_label.trim() || challengeSubmitting) return;
+    setChallengeSubmitting(true);
+    try {
+      if (currentUser && group._dbId) {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_challenge', payload: { userId: currentUser.id, groupId: group._dbId, ...challengeForm, deadline: challengeForm.deadline || null } }),
+        });
+        const data = await res.json();
+        if (data.challenge) setDbChallenges(prev => [...prev, data.challenge]);
+      }
+      setShowChallengeModal(false);
+      setChallengeForm({ name:'', description:'', emoji:'🏆', metric_label:'', metric_unit:'', difficulty:'Medium', deadline:'' });
+    } finally {
+      setChallengeSubmitting(false);
+    }
+  }
+
+  // ── Join challenge ──
+  async function handleJoinChallenge(ch: any) {
+    const chId = ch.id;
+    if (joinedChallenges[chId] || joinedChallengeIdsDB.includes(chId)) return;
+    setJoinedChallenges(p => ({...p,[chId]:true}));
+    if (currentUser && group._dbId) {
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'join_challenge', payload: { userId: currentUser.id, challengeId: chId, groupId: group._dbId } }),
+      });
+      setJoinedChallengeIdsDB(prev => [...prev, chId]);
+    }
+  }
+
+  // ── Log progress ──
+  async function submitLogProgress() {
+    if (!logValue || logSubmitting || !logProgressChallenge) return;
+    setLogSubmitting(true);
+    try {
+      if (currentUser && group._dbId) {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'log_challenge_progress', payload: { userId: currentUser.id, challengeId: logProgressChallenge.id, groupId: group._dbId, value: Number(logValue), note: logNote } }),
+        });
+        const data = await res.json();
+        if (data.newScore !== undefined) {
+          setChallengeScores(p => ({...p,[logProgressChallenge.id]:data.newScore}));
+        }
+      }
+      setLogProgressChallenge(null);
+      setLogValue('');
+      setLogNote('');
+      // Refresh leaderboard
+      if (group._dbId) {
+        const lbRes = await fetch(`/api/db?action=get_leaderboard&groupId=${group._dbId}`);
+        const lbData = await lbRes.json();
+        setDbLeaderboard(lbData.leaderboard || []);
+      }
+    } finally {
+      setLogSubmitting(false);
+    }
+  }
+
+  // ── Submit note ──
+  async function submitNote() {
+    if (!noteText.trim()) return;
+    if (currentUser && group._dbId) {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: noteText, category: noteCategory } }),
+      });
+      const data = await res.json();
+      if (data.note) {
+        const n = data.note;
+        setDbNotes(prev => [{
+          id: n.id, user: { full_name: n.user?.full_name, username: n.user?.username },
+          created_at: n.created_at, category: n.category, content: n.content, likes_count: 0,
+        }, ...prev]);
+      }
+    } else {
+      setLocalNotes(prev => [...prev, { id: String(Date.now()), user:"You", avatar:"JB", time:"Just now", category:noteCategory, content:noteText, likes:0 }]);
+    }
+    setNoteText("");
+  }
 
   function togglePostLike(postId: string, baseLikes: number) {
     setLikedPosts(p => ({ ...p, [postId]: !p[postId] }));
     setPostLikes(p => ({ ...p, [postId]: likedPosts[postId] ? baseLikes : baseLikes + 1 }));
-  }
-
-  function addEventComment(eventId: string) {
-    const text = commentInputs[eventId]?.trim();
-    if (!text) return;
-    setEventComments(prev => ({
-      ...prev,
-      [eventId]: [...(prev[eventId] || []), { user:"You", text, time:"Just now" }],
-    }));
-    setCommentInputs(prev => ({ ...prev, [eventId]: "" }));
-  }
-
-  function submitNote() {
-    if (!noteText.trim()) return;
-    setLocalNotes(prev => [...prev, { id: String(Date.now()), user:"You", avatar:"JB", time:"Just now", category:noteCategory, content:noteText, likes:0 }]);
-    setNoteText("");
   }
 
   return (
@@ -357,6 +647,144 @@ export default function GroupPage() {
         }
       `}</style>
 
+      {/* ── Create Event Modal ── */}
+      {showEventModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setShowEventModal(false)}>
+          <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:460, padding:"24px", maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0", marginBottom:16 }}>🗓️ Create Event</div>
+            <form onSubmit={submitEvent}>
+              {[
+                { label:"Event Name *", key:"name", placeholder:"e.g. Saturday Morning Run" },
+                { label:"Description", key:"description", placeholder:"What to expect..." },
+                { label:"Location", key:"location", placeholder:"Red Rock Canyon / Online" },
+                { label:"Price", key:"price", placeholder:"Free" },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom:12 }}>
+                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>{f.label}</label>
+                  <input value={(eventForm as any)[f.key]} onChange={e => setEventForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                </div>
+              ))}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+                <div>
+                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Date</label>
+                  <input type="date" value={eventForm.date} onChange={e => setEventForm(p=>({...p,date:e.target.value}))}
+                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Time</label>
+                  <input type="time" value={eventForm.time} onChange={e => setEventForm(p=>({...p,time:e.target.value}))}
+                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                </div>
+              </div>
+              <div style={{ marginBottom:16 }}>
+                <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Emoji</label>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                  {["📅","🏃","🏋️","🧘","🔥","🏆","🎯","🌅","🤸","💪"].map(em => (
+                    <button key={em} type="button" onClick={() => setEventForm(p=>({...p,emoji:em}))}
+                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${eventForm.emoji===em?"#16A34A":"#2A2D3E"}`, background:eventForm.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button type="button" onClick={() => setShowEventModal(false)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
+                <button type="submit" disabled={eventSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:eventSubmitting?0.7:1 }}>
+                  {eventSubmitting ? "Creating..." : "Create Event"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create Challenge Modal ── */}
+      {showChallengeModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setShowChallengeModal(false)}>
+          <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:460, padding:"24px", maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0", marginBottom:16 }}>⚡ Create Challenge</div>
+            <form onSubmit={submitChallenge}>
+              {/* Emoji */}
+              <div style={{ marginBottom:12 }}>
+                <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Emoji</label>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                  {["🏆","🔥","⚡","🌱","💪","🏅","🤸","🎯","🌅","💀","🥇","🚀"].map(em => (
+                    <button key={em} type="button" onClick={() => setChallengeForm(p=>({...p,emoji:em}))}
+                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${challengeForm.emoji===em?"#16A34A":"#2A2D3E"}`, background:challengeForm.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {[
+                { label:"Challenge Name *", key:"name", placeholder:"e.g. 30 Day Workout Streak" },
+                { label:"Description", key:"description", placeholder:"What's this challenge about?" },
+                { label:"What to Track (Metric) *", key:"metric_label", placeholder:"e.g. Workouts Completed, Miles Run" },
+                { label:"Unit (optional)", key:"metric_unit", placeholder:"e.g. sessions, mi, lbs" },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom:12 }}>
+                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>{f.label}</label>
+                  <input value={(challengeForm as any)[f.key]} onChange={e => setChallengeForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                </div>
+              ))}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+                <div>
+                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Difficulty</label>
+                  <select value={challengeForm.difficulty} onChange={e => setChallengeForm(p=>({...p,difficulty:e.target.value}))}
+                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
+                    {["Beginner","Medium","Hard","Elite"].map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Deadline</label>
+                  <input type="date" value={challengeForm.deadline} onChange={e => setChallengeForm(p=>({...p,deadline:e.target.value}))}
+                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button type="button" onClick={() => setShowChallengeModal(false)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
+                <button type="submit" disabled={challengeSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:challengeSubmitting?0.7:1 }}>
+                  {challengeSubmitting ? "Creating..." : "Create Challenge"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Log Progress Modal ── */}
+      {logProgressChallenge && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setLogProgressChallenge(null)}>
+          <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:360, padding:"24px" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0", marginBottom:4 }}>📊 Log Progress</div>
+            <div style={{ fontSize:12, color:"#8892A4", marginBottom:16 }}>Challenge: {logProgressChallenge.name}</div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Add {logProgressChallenge.metric_label || logProgressChallenge.metric_label || 'Progress'} {logProgressChallenge.metric_unit ? `(${logProgressChallenge.metric_unit})` : ''}</label>
+              <input type="number" min="0" step="any" value={logValue} onChange={e => setLogValue(e.target.value)} placeholder="0"
+                style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 12px", fontSize:18, color:"#E2E8F0", outline:"none", fontFamily:"inherit", fontWeight:800, textAlign:"center", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:16 }}>
+              <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Note (optional)</label>
+              <input value={logNote} onChange={e => setLogNote(e.target.value)} placeholder="e.g. Morning workout, felt great!"
+                style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+            </div>
+            {challengeScores[logProgressChallenge.id] !== undefined && (
+              <div style={{ textAlign:"center", fontSize:12, color:"#8892A4", marginBottom:12 }}>
+                Current score: <strong style={{ color:catColor }}>{challengeScores[logProgressChallenge.id]}</strong> {logProgressChallenge.metric_unit || ''}
+              </div>
+            )}
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setLogProgressChallenge(null)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
+              <button onClick={submitLogProgress} disabled={!logValue || logSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!logValue||logSubmitting)?0.5:1 }}>
+                {logSubmitting ? "Saving..." : "Log Progress 💪"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Hero Banner ── */}
       <div style={{ width:"100%", height:260, position:"relative", overflow:"hidden" }}>
         <img src={group.recentPhoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
@@ -371,7 +799,7 @@ export default function GroupPage() {
           <div style={{ fontWeight:900, fontSize:26, color:"#fff", textShadow:"0 2px 8px rgba(0,0,0,0.5)", marginBottom:8 }}>{group.name}</div>
           <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
-              👥 {group.members.toLocaleString()} members
+              👥 {(group.members || 0).toLocaleString()} members
             </span>
             {group.isLocal ? (
               <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
@@ -392,10 +820,10 @@ export default function GroupPage() {
         {/* ══ LEFT: Main content ══ */}
         <div className="groups-left" style={{ flex:1, minWidth:0 }}>
 
-          {/* Action buttons — lives inside left column, naturally aligned */}
+          {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
-            <button onClick={() => setJoined(j=>!j)} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s" }}>
-              {joined ? "✓ Joined" : "Join Group"}
+            <button onClick={handleJoinGroup} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
+              {joining ? "Joining..." : joined ? "✓ Joined" : "Join Group"}
             </button>
             <button style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>Share</button>
             <button style={{ padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>···</button>
@@ -407,14 +835,16 @@ export default function GroupPage() {
             <p style={{ fontSize:14, color:C.sub, lineHeight:1.7, marginBottom:10 }}>{group.description}</p>
             {group.meetFrequency && <div style={{ display:"flex", gap:8, fontSize:13, color:C.sub, marginBottom:5 }}><span>🗓️</span><span><strong style={{ color:C.text }}>Meets:</strong> {group.meetFrequency}</span></div>}
             {group.location && <div style={{ display:"flex", gap:8, fontSize:13, color:C.sub, marginBottom:10 }}><span>📍</span><span><strong style={{ color:C.text }}>Location:</strong> {group.location}</span></div>}
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {group.tags.map((t:string) => (
-                <span key={t} style={{ background:C.blueLight, color:C.blue, fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:99, border:`1px solid ${C.blueMid}` }}>{t}</span>
-              ))}
-            </div>
+            {group.tags && group.tags.length > 0 && (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {group.tags.map((t:string) => (
+                  <span key={t} style={{ background:C.blueLight, color:C.blue, fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:99, border:`1px solid ${C.blueMid}` }}>{t}</span>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Tabs — desktop: 4 tabs | mobile: 6 tabs (adds Events + Members) */}
+          {/* Tabs */}
           <div className="groups-tabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}`, overflowX:"auto" }}>
             {([
               { key:"posts", label:"📸 Posts" },
@@ -427,11 +857,8 @@ export default function GroupPage() {
                 background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
                 color: tab===t.key ? "#fff" : C.sub,
                 fontWeight:800, fontSize:12, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap", flexShrink:0,
-              }}>
-                {t.label}
-              </button>
+              }}>{t.label}</button>
             ))}
-            {/* Mobile-only extra tabs */}
             {([
               { key:"events", label:"🗓️ Events" },
               { key:"members", label:"👥 Members" },
@@ -443,23 +870,32 @@ export default function GroupPage() {
                   background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
                   color: tab===t.key ? "#fff" : C.sub,
                   fontWeight:800, fontSize:12, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap", flexShrink:0,
-                }}>
-                {t.label}
-              </button>
+                }}>{t.label}</button>
             ))}
           </div>
 
-          {/* ── POSTS & MEDIA ── */}
+          {/* ── POSTS ── */}
           {tab==="posts" && (
             <div>
-              {group.posts.map((post:any) => (
+              {/* Post form */}
+              {joined && (
+                <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"14px 18px", marginBottom:18 }}>
+                  <textarea value={postContent} onChange={e => setPostContent(e.target.value)}
+                    placeholder="Share something with the group..."
+                    style={{ width:"100%", background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text, resize:"vertical", minHeight:80, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />
+                  <button onClick={submitPost} disabled={!postContent.trim() || postSubmitting}
+                    style={{ marginTop:10, padding:"9px 22px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!postContent.trim()||postSubmitting)?0.6:1 }}>
+                    {postSubmitting ? "Posting..." : "Post 📸"}
+                  </button>
+                </div>
+              )}
+              {displayPosts.map((post:any) => (
                 <div key={post.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:18, overflow:"hidden" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px 10px" }}>
-                    <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, cursor:"pointer" }}
-                      onClick={() => router.push(`/profile/${post.user.toLowerCase().replace(/\s/g,"_")}`)}>
+                    <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
                       {post.avatar}
                     </div>
-                    <div style={{ flex:1, cursor:"pointer" }} onClick={() => router.push(`/profile/${post.user.toLowerCase().replace(/\s/g,"_")}`)}>
+                    <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{post.user}</div>
                       <div style={{ fontSize:11, color:C.sub }}>{post.time}</div>
                     </div>
@@ -471,20 +907,22 @@ export default function GroupPage() {
                   )}
                   <div style={{ padding:"10px 18px 14px" }}>
                     <p style={{ fontSize:14, color:C.text, lineHeight:1.65, margin:"0 0 10px" }}>{post.content}</p>
-                    <button onClick={() => togglePostLike(post.id, post.likes)} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                    <button onClick={() => togglePostLike(post.id, post.likes || post.likes_count || 0)} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
                       <svg viewBox="0 0 24 24" fill={likedPosts[post.id]?"#FF6B6B":"none"} stroke={likedPosts[post.id]?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                       </svg>
-                      <span style={{ fontSize:13, fontWeight:700, color:likedPosts[post.id]?"#FF6B6B":C.sub }}>{(postLikes[post.id] ?? post.likes).toLocaleString()}</span>
+                      <span style={{ fontSize:13, fontWeight:700, color:likedPosts[post.id]?"#FF6B6B":C.sub }}>{(postLikes[post.id] ?? (post.likes || post.likes_count || 0)).toLocaleString()}</span>
                     </button>
                   </div>
                 </div>
               ))}
-              <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
-                <div style={{ fontSize:24, marginBottom:6 }}>🚧</div>
-                <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>Live posts in beta</div>
-                <div style={{ fontSize:12, color:C.sub }}>Real-time group posts and media appear here once connected to the database.</div>
-              </div>
+              {displayPosts.length === 0 && (
+                <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
+                  <div style={{ fontSize:24, marginBottom:6 }}>📸</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No posts yet</div>
+                  <div style={{ fontSize:12, color:C.sub }}>Be the first to post in this group!</div>
+                </div>
+              )}
             </div>
           )}
 
@@ -494,17 +932,20 @@ export default function GroupPage() {
               <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, overflow:"hidden", marginBottom:16 }}>
                 <div style={{ background:`linear-gradient(135deg,${catColor},${catColor}CC)`, padding:"16px 20px" }}>
                   <div style={{ fontWeight:900, fontSize:16, color:"#fff" }}>🏆 {group.name} Leaderboard</div>
-                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>Updated weekly · Based on activity and engagement</div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>Updated in real-time · Based on challenge scores</div>
                 </div>
+                {displayLeaderboard.length === 0 && (
+                  <div style={{ padding:"24px", textAlign:"center", color:C.sub, fontSize:13 }}>
+                    No leaderboard entries yet. Join a challenge to get ranked!
+                  </div>
+                )}
                 <div style={{ padding:"8px 0" }}>
-                  {group.leaderboard?.map((entry:any) => (
+                  {displayLeaderboard.map((entry:any) => (
                     <div key={entry.rank} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
                       onClick={() => router.push(`/profile/${entry.name.toLowerCase().replace(/\s/g,"_")}`)}>
-                      {/* Rank */}
                       <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                         {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                       </div>
-                      {/* Avatar */}
                       <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
                         {entry.avatar}
                       </div>
@@ -526,52 +967,95 @@ export default function GroupPage() {
           {/* ── CHALLENGES ── */}
           {tab==="challenges" && (
             <div>
-              {group.challenges?.map((ch:any) => (
-                <div key={ch.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:16, overflow:"hidden" }}>
-                  <div style={{ background:`linear-gradient(135deg,${catColor}22,${catColor}11)`, padding:"16px 20px", borderBottom:`1px solid ${C.blueMid}` }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                      <div style={{ width:52, height:52, borderRadius:14, background:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
-                        {ch.emoji}
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                          <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{ch.name}</span>
-                          <span style={{ background:DIFFICULTY_COLORS[ch.difficulty]+"22", color:DIFFICULTY_COLORS[ch.difficulty], fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99, border:`1px solid ${DIFFICULTY_COLORS[ch.difficulty]}44` }}>{ch.difficulty}</span>
+              {group._dbId && (
+                <div style={{ marginBottom:16, display:"flex", justifyContent:"flex-end" }}>
+                  <button onClick={() => setShowChallengeModal(true)}
+                    style={{ padding:"9px 18px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>
+                    + Create Challenge
+                  </button>
+                </div>
+              )}
+              {displayChallenges.length === 0 && (
+                <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
+                  <div style={{ fontSize:24, marginBottom:6 }}>⚡</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No active challenges</div>
+                  <div style={{ fontSize:12, color:C.sub }}>Create the first challenge for this group!</div>
+                </div>
+              )}
+              {displayChallenges.map((ch:any) => {
+                const isJoined = joinedChallenges[ch.id] || joinedChallengeIdsDB.includes(ch.id);
+                const diff = ch.difficulty || ch.difficulty;
+                const deadline = ch.deadline ? new Date(ch.deadline).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : ch.deadline;
+                return (
+                  <div key={ch.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:16, overflow:"hidden" }}>
+                    <div style={{ background:`linear-gradient(135deg,${catColor}22,${catColor}11)`, padding:"16px 20px", borderBottom:`1px solid ${C.blueMid}` }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <div style={{ width:52, height:52, borderRadius:14, background:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
+                          {ch.emoji || '🏆'}
                         </div>
-                        <div style={{ fontSize:12, color:C.sub }}>👥 {ch.participants} participating · 📅 Ends {ch.deadline}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                            <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{ch.name}</span>
+                            {diff && <span style={{ background:(DIFFICULTY_COLORS[diff]||catColor)+"22", color:DIFFICULTY_COLORS[diff]||catColor, fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99, border:`1px solid ${(DIFFICULTY_COLORS[diff]||catColor)}44` }}>{diff}</span>}
+                          </div>
+                          <div style={{ fontSize:12, color:C.sub }}>
+                            👥 {ch.participant_count || ch.participants || 0} participating
+                            {deadline && <span> · 📅 Ends {deadline}</span>}
+                          </div>
+                          {ch.metric_label && <div style={{ fontSize:11, color:catColor, fontWeight:700, marginTop:2 }}>📊 Tracking: {ch.metric_label}{ch.metric_unit ? ` (${ch.metric_unit})` : ''}</div>}
+                        </div>
                       </div>
                     </div>
+                    <div style={{ padding:"14px 20px" }}>
+                      <p style={{ fontSize:13, color:C.sub, lineHeight:1.6, marginBottom:14 }}>{ch.description || ch.desc}</p>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button onClick={() => handleJoinChallenge(ch)}
+                          style={{ flex:1, padding:"10px", borderRadius:12, border:"none", background:isJoined?"#F0FDF4":`linear-gradient(135deg,${catColor},${catColor}CC)`, color:isJoined?catColor:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>
+                          {isJoined ? `✓ Joined — ${ch.emoji || '🏆'} Challenge Accepted!` : "Accept Challenge"}
+                        </button>
+                        {isJoined && (
+                          <button onClick={() => setLogProgressChallenge(ch)}
+                            style={{ padding:"10px 16px", borderRadius:12, border:`2px solid ${catColor}`, background:"transparent", color:catColor, fontWeight:800, fontSize:13, cursor:"pointer" }}>
+                            Log Progress
+                          </button>
+                        )}
+                      </div>
+                      {isJoined && challengeScores[ch.id] !== undefined && (
+                        <div style={{ marginTop:8, fontSize:12, color:C.sub }}>
+                          Your score: <strong style={{ color:catColor }}>{challengeScores[ch.id]}</strong> {ch.metric_unit || ''}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ padding:"14px 20px" }}>
-                    <p style={{ fontSize:13, color:C.sub, lineHeight:1.6, marginBottom:14 }}>{ch.desc}</p>
-                    <button onClick={() => setJoinedChallenges(p=>({...p,[ch.id]:!p[ch.id]}))} style={{ width:"100%", padding:"10px", borderRadius:12, border:"none", background:joinedChallenges[ch.id]?"#F0FDF4":`linear-gradient(135deg,${catColor},${catColor}CC)`, color:joinedChallenges[ch.id]?catColor:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>
-                      {joinedChallenges[ch.id] ? `✓ Joined — ${ch.badge} Challenge Accepted!` : "Accept Challenge"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
           {/* ── COMMUNITY NOTES ── */}
           {tab==="notes" && (
             <div>
-              {/* Post a note */}
               <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:18 }}>
                 <div style={{ fontWeight:800, fontSize:14, color:C.text, marginBottom:12 }}>Share something with the group</div>
-                {/* Category picker */}
                 <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
-                  {["Workout","Recipe","Mindset","General"].map(cat => (
+                  {["Workout","Recipe","Mindset","General","Tip"].map(cat => (
                     <button key={cat} onClick={() => setNoteCategory(cat)} style={{ padding:"6px 14px", borderRadius:99, border:`1.5px solid ${noteCategory===cat?NOTE_CATEGORY_COLORS[cat]:C.blueMid}`, background:noteCategory===cat?`${NOTE_CATEGORY_COLORS[cat]}18`:"transparent", color:noteCategory===cat?NOTE_CATEGORY_COLORS[cat]:C.sub, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-                      {cat==="Workout"?"💪":cat==="Recipe"?"🥗":cat==="Mindset"?"🧠":"💬"} {cat}
+                      {cat==="Workout"?"💪":cat==="Recipe"?"🥗":cat==="Mindset"?"🧠":cat==="Tip"?"💡":"💬"} {cat}
                     </button>
                   ))}
                 </div>
-                <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Share a workout routine, recipe, mindset tip, or anything that might help the group..." style={{ width:"100%", background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text, resize:"vertical", minHeight:90, fontFamily:"inherit", outline:"none" }} />
+                <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Share a workout routine, recipe, mindset tip, or anything that might help the group..."
+                  style={{ width:"100%", background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text, resize:"vertical", minHeight:90, fontFamily:"inherit", outline:"none" }} />
                 <button onClick={submitNote} style={{ marginTop:10, padding:"10px 24px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>Post Note</button>
               </div>
 
-              {/* Notes feed */}
+              {allNotes.length === 0 && (
+                <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
+                  <div style={{ fontSize:24, marginBottom:6 }}>💬</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No community notes yet</div>
+                  <div style={{ fontSize:12, color:C.sub }}>Share a tip, recipe, or mindset note!</div>
+                </div>
+              )}
               {allNotes.map((note:any) => (
                 <div key={note.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
@@ -583,7 +1067,7 @@ export default function GroupPage() {
                       <div style={{ fontSize:10, color:C.sub }}>{note.time}</div>
                     </div>
                     <span style={{ background:`${NOTE_CATEGORY_COLORS[note.category]||C.blue}18`, color:NOTE_CATEGORY_COLORS[note.category]||C.blue, fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:99, border:`1px solid ${NOTE_CATEGORY_COLORS[note.category]||C.blue}33` }}>
-                      {note.category==="Workout"?"💪":note.category==="Recipe"?"🥗":note.category==="Mindset"?"🧠":"💬"} {note.category}
+                      {note.category==="Workout"?"💪":note.category==="Recipe"?"🥗":note.category==="Mindset"?"🧠":note.category==="Tip"?"💡":"💬"} {note.category}
                     </span>
                   </div>
                   <p style={{ fontSize:14, color:C.text, lineHeight:1.7, margin:"0 0 10px" }}>{note.content}</p>
@@ -597,29 +1081,36 @@ export default function GroupPage() {
               ))}
             </div>
           )}
-          {/* ── MOBILE ONLY: Events tab ── */}
+
+          {/* ── MOBILE: Events tab ── */}
           {tab === "events" && (
             <div className="groups-mobile-tab-content">
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>🗓️ Upcoming Events</div>
-                <div style={{ fontSize:12, color:C.sub }}>{group.events?.length} scheduled</div>
+              <div style={{ marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>🗓️ Upcoming Events</div>
+                  <div style={{ fontSize:12, color:C.sub }}>{displayEvents.length} scheduled</div>
+                </div>
+                {group._dbId && (
+                  <button onClick={() => setShowEventModal(true)} style={{ padding:"7px 14px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>+ Event</button>
+                )}
               </div>
-              {group.events?.map((event:any) => (
+              {displayEvents.map((event:any) => (
                 <EventCard key={event.id} event={event} catColor={catColor}
                   commentInputs={commentInputs} setCommentInputs={setCommentInputs}
-                  eventComments={eventComments} addEventComment={addEventComment} />
+                  eventComments={eventComments} addEventComment={addEventComment}
+                  onRSVP={handleRSVP} rsvped={rsvpedEvents.has(event.id)} />
               ))}
             </div>
           )}
 
-          {/* ── MOBILE ONLY: Members tab ── */}
+          {/* ── MOBILE: Members tab ── */}
           {tab === "members" && (
             <div className="groups-mobile-tab-content">
               <div style={{ marginBottom:12 }}>
-                <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>👥 Top Members</div>
-                <div style={{ fontSize:12, color:C.sub }}>Moderators & most active</div>
+                <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>👥 Members</div>
+                <div style={{ fontSize:12, color:C.sub }}>{displayMembers.length} members</div>
               </div>
-              {group.members_list?.map((m:any, i:number) => (
+              {displayMembers.map((m:any, i:number) => (
                 <div key={i} onClick={() => router.push(`/profile/${m.name.toLowerCase().replace(/\s/g,"_")}`)}
                   style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
                   <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
@@ -628,7 +1119,7 @@ export default function GroupPage() {
                     <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
                     <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
                   </div>
-                  <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>
+                  {m.points > 0 && <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
                 </div>
               ))}
             </div>
@@ -640,24 +1131,31 @@ export default function GroupPage() {
 
           {/* Events sidebar */}
           <div style={{ marginBottom:20 }}>
-            <div style={{ marginBottom:12, paddingBottom:10, borderBottom:`1px solid ${C.darkBorder}` }}>
-              <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>🗓️ Upcoming Events</div>
-              <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{group.events?.length} scheduled</div>
+            <div style={{ marginBottom:12, paddingBottom:10, borderBottom:`1px solid ${C.darkBorder}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>🗓️ Upcoming Events</div>
+                <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{displayEvents.length} scheduled</div>
+              </div>
+              {group._dbId && (
+                <button onClick={() => setShowEventModal(true)} style={{ padding:"5px 12px", borderRadius:8, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>+ Event</button>
+              )}
             </div>
-            {group.events?.map((event:any) => (
+            {displayEvents.length === 0 && <div style={{ fontSize:12, color:C.darkSub, textAlign:"center", padding:"12px 0" }}>No events yet</div>}
+            {displayEvents.map((event:any) => (
               <EventCard key={event.id} event={event} catColor={catColor}
                 commentInputs={commentInputs} setCommentInputs={setCommentInputs}
-                eventComments={eventComments} addEventComment={addEventComment} />
+                eventComments={eventComments} addEventComment={addEventComment}
+                onRSVP={handleRSVP} rsvped={rsvpedEvents.has(event.id)} />
             ))}
           </div>
 
-          {/* Members sidebar — trending people aesthetic */}
+          {/* Members sidebar */}
           <div>
             <div style={{ marginBottom:12, paddingBottom:10, borderBottom:`1px solid ${C.darkBorder}` }}>
               <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👥 Top Members</div>
               <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>Moderators & most active</div>
             </div>
-            {group.members_list?.map((m:any, i:number) => (
+            {displayMembers.map((m:any, i:number) => (
               <div key={i} onClick={() => router.push(`/profile/${m.name.toLowerCase().replace(/\s/g,"_")}`)}
                 style={{ background:C.darkCard, borderRadius:14, border:`1px solid ${C.darkBorder}`, marginBottom:9, padding:"12px 14px", display:"flex", alignItems:"center", gap:11, cursor:"pointer", transition:"border-color 0.15s" }}
                 onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = catColor}
@@ -671,7 +1169,7 @@ export default function GroupPage() {
                   <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
                   <div style={{ fontSize:10, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.darkSub, marginTop:1, fontWeight:m.role==="Organizer"||m.role==="Moderator"?700:400 }}>{m.role}</div>
                 </div>
-                <div style={{ fontSize:11, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>
+                {m.points > 0 && <div style={{ fontSize:11, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
               </div>
             ))}
           </div>

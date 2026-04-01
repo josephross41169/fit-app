@@ -7,6 +7,144 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const action = searchParams.get('action');
+    const userId = searchParams.get('userId');
+
+    // ── Get all groups ─────────────────────────────────────────────────────
+    if (action === 'get_groups') {
+      const { data: groups, error } = await admin
+        .from('groups')
+        .select('*')
+        .order('member_count', { ascending: false });
+
+      if (error) return NextResponse.json({ groups: [] });
+
+      // Check membership for current user
+      let memberGroupIds: string[] = [];
+      if (userId) {
+        const { data: memberships } = await admin
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', userId);
+        memberGroupIds = (memberships || []).map((m: any) => m.group_id);
+      }
+
+      const enriched = (groups || []).map((g: any) => ({
+        ...g,
+        is_member: memberGroupIds.includes(g.id),
+      }));
+
+      return NextResponse.json({ groups: enriched });
+    }
+
+    // ── Get single group with full details ─────────────────────────────────
+    if (action === 'get_group') {
+      const groupId = searchParams.get('groupId');
+      if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 });
+
+      // Try UUID lookup first, then slug
+      let groupData: any = null;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(groupId)) {
+        const { data } = await admin.from('groups').select('*').eq('id', groupId).single();
+        groupData = data;
+      }
+      if (!groupData) {
+        const { data } = await admin.from('groups').select('*').eq('slug', groupId).single();
+        groupData = data;
+      }
+      if (!groupData) return NextResponse.json({ group: null });
+
+      const gid = groupData.id;
+
+      // Load posts, events, challenges, notes, members in parallel
+      const [postsRes, eventsRes, challengesRes, notesRes, membersRes] = await Promise.all([
+        admin.from('group_posts')
+          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)')
+          .eq('group_id', gid)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        admin.from('group_events')
+          .select('*')
+          .eq('group_id', gid)
+          .order('event_date', { ascending: true }),
+        admin.from('challenges')
+          .select('*')
+          .eq('group_id', gid)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+        admin.from('community_notes')
+          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)')
+          .eq('group_id', gid)
+          .order('created_at', { ascending: false })
+          .limit(30),
+        admin.from('group_members')
+          .select('*, user:users!group_members_user_id_fkey(id,username,full_name,avatar_url)')
+          .eq('group_id', gid)
+          .order('joined_at', { ascending: true }),
+      ]);
+
+      // Check user membership and joined challenges
+      let isMember = false;
+      let joinedChallengeIds: string[] = [];
+      if (userId) {
+        const { data: memRow } = await admin
+          .from('group_members')
+          .select('role')
+          .eq('group_id', gid)
+          .eq('user_id', userId)
+          .single();
+        isMember = !!memRow;
+
+        const { data: cpRows } = await admin
+          .from('challenge_participants')
+          .select('challenge_id')
+          .eq('user_id', userId);
+        joinedChallengeIds = (cpRows || []).map((r: any) => r.challenge_id);
+      }
+
+      return NextResponse.json({
+        group: groupData,
+        posts: postsRes.data || [],
+        events: eventsRes.data || [],
+        challenges: challengesRes.data || [],
+        notes: notesRes.data || [],
+        members: membersRes.data || [],
+        is_member: isMember,
+        joined_challenge_ids: joinedChallengeIds,
+      });
+    }
+
+    // ── Get leaderboard for a group ────────────────────────────────────────
+    if (action === 'get_leaderboard') {
+      const groupId = searchParams.get('groupId');
+      const challengeId = searchParams.get('challengeId');
+      if (!groupId) return NextResponse.json({ leaderboard: [] });
+
+      let query = admin
+        .from('leaderboard_entries')
+        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url)')
+        .eq('group_id', groupId)
+        .order('score', { ascending: false })
+        .limit(50);
+
+      if (challengeId) {
+        query = query.eq('challenge_id', challengeId);
+      }
+
+      const { data } = await query;
+      return NextResponse.json({ leaderboard: data || [] });
+    }
+
+    return NextResponse.json({ error: 'Unknown GET action' }, { status: 400 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { action, payload } = await req.json();
@@ -137,6 +275,360 @@ export async function POST(req: NextRequest) {
         .order('created_at', { ascending: true });
       if (error) return NextResponse.json({ messages: [] });
       return NextResponse.json({ messages: data || [] });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GROUPS ACTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ── Create group ───────────────────────────────────────────────────────
+    if (action === 'create_group') {
+      const { userId, name, description, category, emoji, location, meet_frequency, is_online, tags } = payload;
+      if (!userId || !name) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      const { data: group, error } = await admin.from('groups').insert({
+        name,
+        description: description || '',
+        category: category || 'General',
+        emoji: emoji || '💪',
+        location: location || null,
+        meet_frequency: meet_frequency || null,
+        is_online: is_online || false,
+        tags: tags || [],
+        member_count: 1,
+        created_by: userId,
+        slug,
+      }).select().single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Add creator as owner
+      await admin.from('group_members').insert({
+        group_id: group.id,
+        user_id: userId,
+        role: 'owner',
+      });
+
+      return NextResponse.json({ group });
+    }
+
+    // ── Join group ─────────────────────────────────────────────────────────
+    if (action === 'join_group') {
+      const { userId, groupId } = payload;
+      if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      // Check if already a member
+      const { data: existing } = await admin
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', groupId)
+        .eq('user_id', userId)
+        .single();
+
+      if (existing) return NextResponse.json({ ok: true, already: true });
+
+      const { error } = await admin.from('group_members').insert({
+        group_id: groupId,
+        user_id: userId,
+        role: 'member',
+      });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Increment member_count
+      await admin.rpc('increment_group_member_count', { gid: groupId }).catch(() => {
+        // Fallback: manual increment
+        admin.from('groups')
+          .select('member_count')
+          .eq('id', groupId)
+          .single()
+          .then(({ data }) => {
+            if (data) {
+              admin.from('groups').update({ member_count: (data.member_count || 0) + 1 }).eq('id', groupId);
+            }
+          });
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Leave group ────────────────────────────────────────────────────────
+    if (action === 'leave_group') {
+      const { userId, groupId } = payload;
+      if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      await admin.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+
+      // Decrement member_count
+      const { data: g } = await admin.from('groups').select('member_count').eq('id', groupId).single();
+      if (g && g.member_count > 0) {
+        await admin.from('groups').update({ member_count: g.member_count - 1 }).eq('id', groupId);
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Create group post ──────────────────────────────────────────────────
+    if (action === 'create_group_post') {
+      const { userId, groupId, content, media_url } = payload;
+      if (!userId || !groupId || !content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { data, error } = await admin.from('group_posts').insert({
+        group_id: groupId,
+        user_id: userId,
+        content,
+        media_url: media_url || null,
+      }).select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ post: data });
+    }
+
+    // ── Create group event ─────────────────────────────────────────────────
+    if (action === 'create_group_event') {
+      const { userId, groupId, name, description, event_date, location, price, emoji } = payload;
+      if (!userId || !groupId || !name) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { data, error } = await admin.from('group_events').insert({
+        group_id: groupId,
+        creator_id: userId,
+        name,
+        description: description || null,
+        event_date: event_date || null,
+        location: location || null,
+        price: price || 'Free',
+        emoji: emoji || '📅',
+      }).select().single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ event: data });
+    }
+
+    // ── RSVP event ─────────────────────────────────────────────────────────
+    if (action === 'rsvp_event') {
+      const { userId, eventId } = payload;
+      if (!userId || !eventId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { error } = await admin.from('group_event_rsvps').insert({
+        event_id: eventId,
+        user_id: userId,
+      });
+      if (error && !error.message.includes('duplicate')) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      // Increment rsvp_count
+      const { data: ev } = await admin.from('group_events').select('rsvp_count').eq('id', eventId).single();
+      if (ev) {
+        await admin.from('group_events').update({ rsvp_count: (ev.rsvp_count || 0) + 1 }).eq('id', eventId);
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Create challenge ───────────────────────────────────────────────────
+    if (action === 'create_challenge') {
+      const { userId, groupId, name, description, emoji, metric_label, metric_unit, difficulty, deadline } = payload;
+      if (!userId || !groupId || !name || !metric_label) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { data, error } = await admin.from('challenges').insert({
+        group_id: groupId,
+        creator_id: userId,
+        name,
+        description: description || null,
+        emoji: emoji || '🏆',
+        metric_label,
+        metric_unit: metric_unit || null,
+        difficulty: difficulty || 'Medium',
+        deadline: deadline || null,
+        is_active: true,
+        participant_count: 0,
+      }).select().single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ challenge: data });
+    }
+
+    // ── Join challenge ─────────────────────────────────────────────────────
+    if (action === 'join_challenge') {
+      const { userId, challengeId, groupId } = payload;
+      if (!userId || !challengeId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { error } = await admin.from('challenge_participants').insert({
+        challenge_id: challengeId,
+        user_id: userId,
+        score: 0,
+        log_entries: [],
+      });
+      if (error && !error.message.includes('duplicate')) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      // Increment participant_count
+      const { data: ch } = await admin.from('challenges').select('participant_count,metric_label').eq('id', challengeId).single();
+      if (ch) {
+        await admin.from('challenges').update({ participant_count: (ch.participant_count || 0) + 1 }).eq('id', challengeId);
+      }
+
+      // Create or update leaderboard entry
+      if (groupId) {
+        await admin.from('leaderboard_entries').upsert({
+          group_id: groupId,
+          user_id: userId,
+          challenge_id: challengeId,
+          score: 0,
+          metric_label: ch?.metric_label || '',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'group_id,user_id,challenge_id' });
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Log challenge progress ─────────────────────────────────────────────
+    if (action === 'log_challenge_progress') {
+      const { userId, challengeId, groupId, value, note } = payload;
+      if (!userId || !challengeId || value === undefined) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      // Get existing participant record
+      const { data: cp } = await admin.from('challenge_participants')
+        .select('score,log_entries')
+        .eq('challenge_id', challengeId)
+        .eq('user_id', userId)
+        .single();
+
+      if (!cp) return NextResponse.json({ error: 'Not a participant' }, { status: 400 });
+
+      const newEntry = { value: Number(value), note: note || '', logged_at: new Date().toISOString() };
+      const newEntries = [...(cp.log_entries || []), newEntry];
+      const newScore = (cp.score || 0) + Number(value);
+
+      await admin.from('challenge_participants').update({
+        score: newScore,
+        log_entries: newEntries,
+      }).eq('challenge_id', challengeId).eq('user_id', userId);
+
+      // Update leaderboard
+      if (groupId) {
+        const { data: ch } = await admin.from('challenges').select('metric_label').eq('id', challengeId).single();
+        await admin.from('leaderboard_entries').upsert({
+          group_id: groupId,
+          user_id: userId,
+          challenge_id: challengeId,
+          score: newScore,
+          metric_label: ch?.metric_label || '',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'group_id,user_id,challenge_id' });
+      }
+
+      return NextResponse.json({ ok: true, newScore });
+    }
+
+    // ── Create community note ──────────────────────────────────────────────
+    if (action === 'create_community_note') {
+      const { userId, groupId, content, category } = payload;
+      if (!userId || !groupId || !content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { data, error } = await admin.from('community_notes').insert({
+        group_id: groupId,
+        user_id: userId,
+        content,
+        category: category || 'General',
+        likes_count: 0,
+      }).select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ note: data });
+    }
+
+    // ── Seed groups data (for setup) ───────────────────────────────────────
+    if (action === 'seed_groups') {
+      const { creatorId, memberIds } = payload;
+
+      // Create "FIT Beta Testers" group
+      const slug = 'fit-beta-testers';
+
+      // Check if it already exists
+      const { data: existing } = await admin.from('groups').select('id').eq('slug', slug).single();
+      if (existing) {
+        return NextResponse.json({ ok: true, message: 'Already seeded', groupId: existing.id });
+      }
+
+      const { data: group, error: gErr } = await admin.from('groups').insert({
+        name: 'FIT Beta Testers',
+        description: 'The official group for FIT app beta testers. Share feedback, report bugs, and be part of building something great.',
+        category: 'Wellness',
+        emoji: '🚀',
+        is_online: true,
+        tags: ['#BetaTesting', '#FITapp', '#Community'],
+        member_count: 1,
+        created_by: creatorId,
+        slug,
+      }).select().single();
+
+      if (gErr || !group) return NextResponse.json({ error: gErr?.message }, { status: 500 });
+
+      const gid = group.id;
+
+      // Add creator as owner
+      await admin.from('group_members').insert({ group_id: gid, user_id: creatorId, role: 'owner' });
+
+      // Add additional members
+      if (memberIds && memberIds.length > 0) {
+        await admin.from('group_members').insert(
+          memberIds.map((uid: string) => ({ group_id: gid, user_id: uid, role: 'member' }))
+        );
+        await admin.from('groups').update({ member_count: 1 + memberIds.length }).eq('id', gid);
+      }
+
+      // Add challenge
+      const { data: challenge } = await admin.from('challenges').insert({
+        group_id: gid,
+        creator_id: creatorId,
+        name: '30 Day Workout Streak',
+        description: 'Work out every day for 30 days. Log each session to track your progress on the leaderboard.',
+        emoji: '🔥',
+        metric_label: 'Workouts Completed',
+        metric_unit: 'sessions',
+        difficulty: 'Hard',
+        deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        is_active: true,
+        participant_count: 1,
+      }).select().single();
+
+      if (challenge) {
+        // Add creator as participant
+        await admin.from('challenge_participants').insert({
+          challenge_id: challenge.id,
+          user_id: creatorId,
+          score: 0,
+          log_entries: [],
+        });
+
+        // Add leaderboard entry
+        await admin.from('leaderboard_entries').insert({
+          group_id: gid,
+          user_id: creatorId,
+          challenge_id: challenge.id,
+          score: 0,
+          metric_label: 'Workouts Completed',
+        });
+      }
+
+      // Add event
+      await admin.from('group_events').insert({
+        group_id: gid,
+        creator_id: creatorId,
+        name: 'First Beta Testing Session',
+        description: 'Our first official beta testing session! We\'ll go through the app together, test all features, and collect feedback.',
+        event_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        location: 'Online via Discord',
+        price: 'Free',
+        emoji: '🚀',
+      });
+
+      return NextResponse.json({ ok: true, groupId: gid });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
