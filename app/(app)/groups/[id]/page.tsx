@@ -176,7 +176,7 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
   event: any; catColor: string;
   commentInputs: Record<string,string>;
   setCommentInputs: React.Dispatch<React.SetStateAction<Record<string,string>>>;
-  eventComments: Record<string,{user:string;text:string;time:string}[]>;
+  eventComments: Record<string,{user:string;avatar?:string;text:string;time:string}[]>;
   addEventComment: (id:string) => void;
   onRSVP?: (id:string) => void;
   rsvped?: boolean;
@@ -221,7 +221,7 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
             <div style={{ marginBottom:8 }}>
               {comments.map((c,i) => (
                 <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
-                  <div style={{ width:26, height:26, borderRadius:"50%", background:catColor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:900, color:"#fff", flexShrink:0 }}>JB</div>
+                  <div style={{ width:26, height:26, borderRadius:"50%", background:catColor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:900, color:"#fff", flexShrink:0 }}>{c.avatar || 'U'}</div>
                   <div style={{ flex:1, background:"#252A3D", borderRadius:10, padding:"7px 10px" }}>
                     <span style={{ fontSize:11, fontWeight:700, color:"#E2E8F0" }}>{c.user} </span>
                     <span style={{ fontSize:11, color:darkSub }}>{c.text}</span>
@@ -305,6 +305,19 @@ export default function GroupPage() {
   const [logNote, setLogNote] = useState('');
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [challengeScores, setChallengeScores] = useState<Record<string,number>>({});
+
+  // ── More menu / Delete group ──
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // ── Banner upload ──
+  const [bannerUploading, setBannerUploading] = useState(false);
+
+  // ── Note replies ──
+  const [noteReplies, setNoteReplies] = useState<Record<string, {user:string; avatar:string; text:string; time:string}[]>>({});
+  const [noteReplyInputs, setNoteReplyInputs] = useState<Record<string,string>>({});
+  const [expandedNoteReplies, setExpandedNoteReplies] = useState<Record<string,boolean>>({});
 
   // ── Load data on mount ──
   useEffect(() => {
@@ -402,6 +415,7 @@ export default function GroupPage() {
     ...dbNotes.map((n: any) => ({
       id: n.id, user: n.user?.full_name || n.user?.username || 'Unknown',
       avatar: (n.user?.full_name || n.user?.username || 'U').slice(0,2).toUpperCase(),
+      avatarUrl: n.user?.avatar_url || null,
       time: new Date(n.created_at).toLocaleDateString(), category: n.category, content: n.content, likes: n.likes_count || 0,
     })),
     ...localNotes,
@@ -424,6 +438,7 @@ export default function GroupPage() {
         rank: i + 1,
         avatar: (e.user?.full_name || e.user?.username || 'U').slice(0,2).toUpperCase(),
         name: e.user?.full_name || e.user?.username || 'Unknown',
+        username: e.user?.username || null,
         score: `${e.score} ${e.metric_label || ''}`,
         metric: e.metric_label || '',
         value: `${e.score} pts`,
@@ -435,6 +450,8 @@ export default function GroupPage() {
         avatar: (m.user?.full_name || m.user?.username || 'U').slice(0,2).toUpperCase(),
         avatarUrl: m.user?.avatar_url || null,
         name: m.user?.full_name || m.user?.username || 'Unknown',
+        username: m.user?.username || null,
+        userId: m.user_id || null,
         role: m.role === 'owner' ? 'Organizer' : m.role === 'moderator' ? 'Moderator' : 'Member',
         points: 0,
       }))
@@ -444,8 +461,16 @@ export default function GroupPage() {
   function addEventComment(eventId: string) {
     const text = commentInputs[eventId]?.trim();
     if (!text) return;
-    setEventComments(prev => ({ ...prev, [eventId]: [...(prev[eventId] || []), { user:"You", text, time:"Just now" }] }));
+    setEventComments(prev => ({ ...prev, [eventId]: [...(prev[eventId] || []), { user:"You", avatar: (currentUser?.email || 'Y').slice(0,2).toUpperCase(), text, time:"Just now" }] }));
     setCommentInputs(prev => ({ ...prev, [eventId]: "" }));
+    // Persist in background
+    if (currentUser) {
+      fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_event_comment', payload: { eventId, userId: currentUser.id, text } }),
+      }).catch(() => {});
+    }
   }
 
   async function handleRSVP(eventId: string) {
@@ -648,6 +673,57 @@ export default function GroupPage() {
     setPostCommentInputs(prev => ({ ...prev, [postId]: '' }));
   }
 
+  async function handleDeleteGroup() {
+    if (!group._dbId || !currentUser) return;
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_group', payload: { userId: currentUser.id, groupId: group._dbId } }),
+      });
+      const data = await res.json();
+      if (!data.error) {
+        router.push('/connect');
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(false);
+    }
+  }
+
+  async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser || !group._dbId) return;
+    setBannerUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `groups/${group._dbId}/banner.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('activity').upload(path, file, { upsert: true });
+      if (uploadError) { console.error(uploadError); return; }
+      const { data: { publicUrl } } = supabase.storage.from('activity').getPublicUrl(path);
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_group_banner', payload: { groupId: group._dbId, bannerUrl: publicUrl, userId: currentUser.id } }),
+      });
+      await loadGroupData();
+    } finally {
+      setBannerUploading(false);
+    }
+  }
+
+  function submitNoteReply(noteId: string) {
+    const text = noteReplyInputs[noteId]?.trim();
+    if (!text) return;
+    const initials = (currentUser?.email || 'Y').slice(0, 2).toUpperCase();
+    setNoteReplies(prev => ({
+      ...prev,
+      [noteId]: [...(prev[noteId] || []), { user: 'You', avatar: initials, text, time: 'Just now' }],
+    }));
+    setNoteReplyInputs(prev => ({ ...prev, [noteId]: '' }));
+  }
+
   return (
     <div style={{ background:C.bg, minHeight:"100vh", paddingBottom:80, overflowX:"hidden", maxWidth:"100vw" }}>
       <style jsx global>{`
@@ -812,17 +888,45 @@ export default function GroupPage() {
         </div>
       )}
 
+      {/* ── Delete Confirm Modal ── */}
+      {deleteConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1001, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#fff", borderRadius:20, padding:"28px 24px", maxWidth:380, width:"100%", textAlign:"center" }}>
+            <div style={{ fontSize:36, marginBottom:12 }}>🗑️</div>
+            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:8 }}>Delete this group?</div>
+            <div style={{ fontSize:13, color:C.sub, marginBottom:20 }}>This will permanently delete the group and all its posts, events, and challenges. This cannot be undone.</div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setDeleteConfirm(false)} style={{ flex:1, padding:"12px", borderRadius:12, border:`1.5px solid ${C.blueMid}`, background:"transparent", color:C.sub, fontWeight:700, cursor:"pointer" }}>Cancel</button>
+              <button onClick={handleDeleteGroup} disabled={deleting} style={{ flex:1, padding:"12px", borderRadius:12, border:"none", background:"#EF4444", color:"#fff", fontWeight:800, cursor:"pointer", opacity:deleting?0.7:1 }}>
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Hero Banner ── */}
       <div style={{ width:"100%", height:260, position:"relative", overflow:"hidden" }}>
         <img src={group.recentPhoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.78) 100%)" }} />
+        {bannerUploading && (
+          <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:10 }}>
+            <div style={{ color:"#fff", fontWeight:700 }}>Uploading...</div>
+          </div>
+        )}
         <button onClick={() => router.back()} style={{ position:"absolute", top:20, left:20, background:"rgba(0,0,0,0.4)", border:"1.5px solid rgba(255,255,255,0.3)", borderRadius:12, color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", cursor:"pointer", backdropFilter:"blur(6px)" }}>
           ← Back
         </button>
         <div style={{ position:"absolute", top:20, right:20, background:catColor, borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:800, color:"#fff" }}>
           {group.emoji} {group.category}
         </div>
-        <div style={{ position:"absolute", bottom:24, left:28, right:28 }}>
+        {group._isOwner && (
+          <button onClick={() => document.getElementById('banner-upload')?.click()} style={{ position:"absolute", bottom:24, right:20, background:"rgba(0,0,0,0.5)", border:"1.5px solid rgba(255,255,255,0.4)", borderRadius:10, color:"#fff", fontSize:12, fontWeight:700, padding:"7px 14px", cursor:"pointer", backdropFilter:"blur(4px)" }}>
+            📷 Change Photo
+          </button>
+        )}
+        <input id="banner-upload" type="file" accept="image/*" style={{ display:"none" }} onChange={handleBannerUpload} />
+        <div style={{ position:"absolute", bottom:24, left:28, right:group._isOwner?160:28 }}>
           <div style={{ fontWeight:900, fontSize:26, color:"#fff", textShadow:"0 2px 8px rgba(0,0,0,0.5)", marginBottom:8 }}>{group.name}</div>
           <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
@@ -855,7 +959,23 @@ export default function GroupPage() {
             <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(22,163,74,0.1)` : C.white, border:`2px solid ${shareCopied ? "#16A34A" : C.blueMid}`, color:shareCopied ? "#16A34A" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
             </button>
-            <button style={{ padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>···</button>
+            <div style={{ position:"relative" }}>
+              <button onClick={() => setShowMoreMenu(p => !p)} style={{ padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>···</button>
+              {showMoreMenu && (
+                <div style={{ position:"absolute", top:"110%", right:0, background:"#fff", borderRadius:12, border:`1.5px solid ${C.blueMid}`, boxShadow:"0 8px 32px rgba(0,0,0,0.12)", zIndex:200, minWidth:160, overflow:"hidden" }}>
+                  {group._isOwner && (
+                    <button onClick={() => { setDeleteConfirm(true); setShowMoreMenu(false); }}
+                      style={{ width:"100%", padding:"13px 18px", background:"none", border:"none", color:"#EF4444", fontWeight:700, fontSize:14, cursor:"pointer", textAlign:"left" }}>
+                      🗑️ Delete Group
+                    </button>
+                  )}
+                  <button onClick={() => setShowMoreMenu(false)}
+                    style={{ width:"100%", padding:"13px 18px", background:"none", border:"none", color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer", textAlign:"left" }}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* About card */}
@@ -1002,7 +1122,7 @@ export default function GroupPage() {
                 <div style={{ padding:"8px 0" }}>
                   {displayLeaderboard.map((entry:any) => (
                     <div key={entry.rank} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
-                      onClick={() => router.push(`/profile/${entry.name.toLowerCase().replace(/\s/g,"_")}`)}>
+                      onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
                       <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                         {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                       </div>
@@ -1119,8 +1239,8 @@ export default function GroupPage() {
               {allNotes.map((note:any) => (
                 <div key={note.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                    <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0 }}>
-                      {note.avatar}
+                    <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                      {note.avatarUrl ? <img src={note.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : note.avatar}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:13, color:C.text }}>{note.user}</div>
@@ -1131,12 +1251,43 @@ export default function GroupPage() {
                     </span>
                   </div>
                   <p style={{ fontSize:14, color:C.text, lineHeight:1.7, margin:"0 0 10px" }}>{note.content}</p>
-                  <button onClick={() => setNoteLikes(p=>({...p,[note.id]:(p[note.id]??note.likes)+1}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:18,height:18 }}>
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                    </svg>
-                    <span style={{ fontSize:12, color:C.sub }}>{(noteLikes[note.id]??note.likes).toLocaleString()}</span>
-                  </button>
+                  <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                    <button onClick={() => setNoteLikes(p=>({...p,[note.id]:(p[note.id]??note.likes)+1}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:18,height:18 }}>
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                      </svg>
+                      <span style={{ fontSize:12, color:C.sub }}>{(noteLikes[note.id]??note.likes).toLocaleString()}</span>
+                    </button>
+                    <button onClick={() => setExpandedNoteReplies(p => ({...p,[note.id]:!p[note.id]}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:18,height:18 }}>
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                      <span style={{ fontSize:12, color:C.sub }}>{(noteReplies[note.id]||[]).length}</span>
+                    </button>
+                  </div>
+                  {expandedNoteReplies[note.id] && (
+                    <div style={{ marginTop:10, borderTop:`1px solid ${C.blueMid}`, paddingTop:10 }}>
+                      {(noteReplies[note.id]||[]).map((r,i) => (
+                        <div key={i} style={{ display:"flex", gap:8, marginBottom:8 }}>
+                          <div style={{ width:26, height:26, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:900, color:"#fff", flexShrink:0 }}>{r.avatar}</div>
+                          <div style={{ flex:1, background:C.blueLight, borderRadius:12, padding:"6px 10px" }}>
+                            <span style={{ fontSize:11, fontWeight:800, color:C.text }}>{r.user} </span>
+                            <span style={{ fontSize:12, color:C.sub }}>{r.text}</span>
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                        <input
+                          value={noteReplyInputs[note.id]||''}
+                          onChange={e => setNoteReplyInputs(p => ({...p,[note.id]:e.target.value}))}
+                          onKeyDown={e => e.key==='Enter' && submitNoteReply(note.id)}
+                          placeholder="Write a reply..."
+                          style={{ flex:1, background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:20, padding:"7px 14px", fontSize:12, color:C.text, outline:"none", fontFamily:"inherit" }}
+                        />
+                        <button onClick={() => submitNoteReply(note.id)} style={{ padding:"7px 14px", borderRadius:20, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>Reply</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1171,7 +1322,7 @@ export default function GroupPage() {
                 <div style={{ fontSize:12, color:C.sub }}>{displayMembers.length} members</div>
               </div>
               {displayMembers.map((m:any, i:number) => (
-                <div key={i} onClick={() => router.push(`/profile/${m.name.toLowerCase().replace(/\s/g,"_")}`)}
+                <div key={i} onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
                   style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
                   <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
@@ -1216,7 +1367,7 @@ export default function GroupPage() {
               <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>Moderators & most active</div>
             </div>
             {displayMembers.map((m:any, i:number) => (
-              <div key={i} onClick={() => router.push(`/profile/${m.name.toLowerCase().replace(/\s/g,"_")}`)}
+              <div key={i} onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
                 style={{ background:C.darkCard, borderRadius:14, border:`1px solid ${C.darkBorder}`, marginBottom:9, padding:"12px 14px", display:"flex", alignItems:"center", gap:11, cursor:"pointer", transition:"border-color 0.15s" }}
                 onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = catColor}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}

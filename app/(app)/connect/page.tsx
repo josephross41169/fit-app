@@ -533,17 +533,18 @@ function NearbyPlaces() {
 // ─────────────────────────────────────────────────────────────────────────────
 // RIGHT SIDEBAR
 // ─────────────────────────────────────────────────────────────────────────────
-function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online"; onCreateGroup: () => void }) {
+function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joined"; onCreateGroup: () => void }) {
+  const effectiveTab = tab === "joined" ? "online" : tab;
   return (
     <div className="connect-sidebar" style={{ width:320, flexShrink:0, paddingTop:20, paddingBottom:20 }}>
       {/* Create a group CTA */}
       <div style={{ background:`linear-gradient(135deg,#16A34A,#22C55E)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
-        <div style={{ fontSize:32, marginBottom:8 }}>{tab==="local"?"📍":"🌍"}</div>
+        <div style={{ fontSize:32, marginBottom:8 }}>{effectiveTab==="local"?"📍":"🌍"}</div>
         <div style={{ fontWeight:900, fontSize:16, color:"#fff", marginBottom:6 }}>
-          {tab==="local" ? "Start a Local Group" : "Create an Online Group"}
+          {effectiveTab==="local" ? "Start a Local Group" : "Create an Online Group"}
         </div>
         <p style={{ fontSize:12, color:"rgba(255,255,255,0.85)", lineHeight:1.6, marginBottom:14 }}>
-          {tab==="local"
+          {effectiveTab==="local"
             ? "Organize your city's fitness community. Free to create, forever."
             : "Build your worldwide tribe. Any goal, any timezone, any level."}
         </p>
@@ -555,13 +556,13 @@ function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online"; onCre
       {/* Stats panel */}
       <div style={{ background:C.darkCard, borderRadius:16, border:`1px solid ${C.darkBorder}`, padding:"16px", marginBottom:16 }}>
         <div style={{ fontWeight:900, fontSize:14, color:"#E2E8F0", marginBottom:12 }}>
-          {tab==="local" ? "📍 Las Vegas Groups" : "🌍 Global Stats"}
+          {effectiveTab==="local" ? "📍 Las Vegas Groups" : "🌍 Global Stats"}
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
           {[
-            { val: tab==="local" ? "4+" : "6+", label: tab==="local" ? "Active Groups" : "Featured Groups" },
-            { val: tab==="local" ? "1,050+" : "211K+", label:"Total Members" },
-            { val: tab==="local" ? "4" : "3", label: tab==="local" ? "Events This Week" : "Trending Now" },
+            { val: effectiveTab==="local" ? "4+" : "6+", label: effectiveTab==="local" ? "Active Groups" : "Featured Groups" },
+            { val: effectiveTab==="local" ? "1,050+" : "211K+", label:"Total Members" },
+            { val: effectiveTab==="local" ? "4" : "3", label: effectiveTab==="local" ? "Events This Week" : "Trending Now" },
             { val:"Free", label:"To Join" },
           ].map((s,i) => (
             <div key={i} style={{ background:"#252A3D", borderRadius:10, padding:"12px 10px", textAlign:"center" }}>
@@ -593,15 +594,42 @@ function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online"; onCre
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ConnectPage() {
-  const [tab, setTab] = useState<"local"|"online">("local");
+  const [tab, setTab] = useState<"local"|"online"|"joined">("local");
   const [search, setSearch] = useState("");
   const [dbGroups, setDbGroups] = useState<any[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [joinedGroups, setJoinedGroups] = useState<any[]>([]);
+  const [loadingJoined, setLoadingJoined] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadGroups();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
   }, []);
+
+  useEffect(() => {
+    if (tab === 'joined' && currentUserId) {
+      loadJoinedGroups();
+    }
+  }, [tab, currentUserId]);
+
+  async function loadJoinedGroups() {
+    setLoadingJoined(true);
+    try {
+      const res = await fetch(`/api/db?action=get_user_groups&userId=${currentUserId}`);
+      const data = await res.json();
+      if (data.groups) {
+        setJoinedGroups(data.groups.map((g: any) => normalizeDbGroup({ ...g, is_member: true })));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingJoined(false);
+    }
+  }
 
   async function loadGroups() {
     try {
@@ -679,14 +707,18 @@ export default function ConnectPage() {
         </div>
 
         <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 24px", display:"flex", gap:0, marginTop:12 }}>
-          {(["local","online"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
+          {([
+            { key:"local", label:"📍 Local Groups" },
+            { key:"online", label:"🌍 Online Groups" },
+            { key:"joined", label:"✅ My Groups" },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} style={{
               padding:"10px 28px", fontWeight:800, fontSize:14, background:"none", border:"none", cursor:"pointer",
-              color: tab===t ? C.blue : C.sub,
-              borderBottom: tab===t ? `3px solid ${C.blue}` : "3px solid transparent",
+              color: tab===t.key ? C.blue : C.sub,
+              borderBottom: tab===t.key ? `3px solid ${C.blue}` : "3px solid transparent",
               transition:"all 0.15s",
             }}>
-              {t === "local" ? "📍 Local Groups" : "🌍 Online Groups"}
+              {t.label}
             </button>
           ))}
         </div>
@@ -697,37 +729,73 @@ export default function ConnectPage() {
 
         <div style={{ flex:1, minWidth:0 }}>
           {/* Banner */}
-          <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
-            <div style={{ fontSize:40 }}>{tab==="local"?"📍":"🌍"}</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>
-                {tab==="local" ? "Las Vegas, NV — Local Groups" : "Online Groups — Worldwide"}
+          {tab !== "joined" && (
+            <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+              <div style={{ fontSize:40 }}>{tab==="local"?"📍":"🌍"}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>
+                  {tab==="local" ? "Las Vegas, NV — Local Groups" : "Online Groups — Worldwide"}
+                </div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>
+                  {tab==="local"
+                    ? `${filteredLocal.length} active groups near you · Real people, real meetups`
+                    : `${filteredOnline.length} featured groups · Connect with anyone, anywhere`}
+                </div>
               </div>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>
-                {tab==="local"
-                  ? `${filteredLocal.length} active groups near you · Real people, real meetups`
-                  : `${filteredOnline.length} featured groups · Connect with anyone, anywhere`}
+              {tab==="local" && (
+                <button style={{ background:"rgba(255,255,255,0.2)", border:"1.5px solid rgba(255,255,255,0.4)", borderRadius:10, color:"#fff", fontSize:12, fontWeight:700, padding:"8px 16px", cursor:"pointer", flexShrink:0 }}>
+                  Change City
+                </button>
+              )}
+            </div>
+          )}
+
+          {tab === "joined" && (
+            <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+              <div style={{ fontSize:40 }}>✅</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>My Groups</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>
+                  {joinedGroups.length > 0 ? `${joinedGroups.length} groups you've joined` : "Groups you've joined will appear here"}
+                </div>
               </div>
             </div>
-            {tab==="local" && (
-              <button style={{ background:"rgba(255,255,255,0.2)", border:"1.5px solid rgba(255,255,255,0.4)", borderRadius:10, color:"#fff", fontSize:12, fontWeight:700, padding:"8px 16px", cursor:"pointer", flexShrink:0 }}>
-                Change City
-              </button>
-            )}
-          </div>
+          )}
 
-          {loadingGroups && (
+          {loadingGroups && tab !== "joined" && (
             <div style={{ textAlign:"center", padding:"40px 0", color:C.sub, fontSize:14 }}>Loading groups...</div>
           )}
 
-          {!loadingGroups && (
+          {tab === "joined" && (
+            loadingJoined
+              ? <div style={{ textAlign:"center", padding:"40px 0", color:C.sub, fontSize:14 }}>Loading your groups...</div>
+              : !currentUserId
+                ? (
+                  <div style={{ textAlign:"center", padding:"40px 24px", background:C.white, borderRadius:18, border:`2px dashed ${C.greenMid}` }}>
+                    <div style={{ fontSize:32, marginBottom:8 }}>🔐</div>
+                    <div style={{ fontWeight:800, fontSize:15, color:C.text, marginBottom:6 }}>Sign in to see your groups</div>
+                    <div style={{ fontSize:13, color:C.sub }}>Log in to view and manage the groups you've joined.</div>
+                  </div>
+                )
+                : joinedGroups.length === 0
+                  ? (
+                    <div style={{ textAlign:"center", padding:"40px 24px", background:C.white, borderRadius:18, border:`2px dashed ${C.greenMid}` }}>
+                      <div style={{ fontSize:32, marginBottom:8 }}>🤝</div>
+                      <div style={{ fontWeight:800, fontSize:15, color:C.text, marginBottom:6 }}>You haven't joined any groups yet.</div>
+                      <div style={{ fontSize:13, color:C.sub }}>Browse Local or Online groups to find your community!</div>
+                    </div>
+                  )
+                  : joinedGroups.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadJoinedGroups()} />)
+          )}
+
+          {!loadingGroups && tab !== "joined" && (
             tab === "local"
               ? filteredLocal.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadGroups()} />)
               : filteredOnline.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadGroups()} />)
           )}
         </div>
 
-        <ConnectSidebar tab={tab} onCreateGroup={() => setShowCreateModal(true)} />
+        <ConnectSidebar tab={tab as "local" | "online" | "joined"} onCreateGroup={() => setShowCreateModal(true)} />
       </div>
     </div>
   );

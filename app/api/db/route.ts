@@ -139,6 +139,35 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ leaderboard: data || [] });
     }
 
+    // ── Get user's joined groups ───────────────────────────────────────────
+    if (action === 'get_user_groups') {
+      const userId = searchParams.get('userId');
+      if (!userId) return NextResponse.json({ groups: [] });
+      const { data: memberships } = await admin
+        .from('group_members')
+        .select('group_id, groups(*)')
+        .eq('user_id', userId);
+      const groups = (memberships || []).map((m: any) => m.groups).filter(Boolean);
+      return NextResponse.json({ groups });
+    }
+
+    // ── Get event comments ─────────────────────────────────────────────────
+    if (action === 'get_event_comments') {
+      const eventId = searchParams.get('eventId');
+      const { data: comments } = await admin
+        .from('group_event_comments')
+        .select('*, users(full_name, username)')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: true });
+      return NextResponse.json({
+        comments: (comments || []).map((c: any) => ({
+          user: c.users?.full_name || c.users?.username || 'Anonymous',
+          text: c.content,
+          time: new Date(c.created_at).toLocaleTimeString(),
+        })),
+      });
+    }
+
     return NextResponse.json({ error: 'Unknown GET action' }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -630,6 +659,41 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json({ ok: true, groupId: gid });
+    }
+
+    // ── Delete group ───────────────────────────────────────────────────────
+    if (action === 'delete_group') {
+      const { userId, groupId } = payload;
+      if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const { data: grp } = await admin.from('groups').select('created_by, creator_id').eq('id', groupId).single();
+      if (!grp || (grp.created_by !== userId && grp.creator_id !== userId)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+      await admin.from('groups').delete().eq('id', groupId);
+      return NextResponse.json({ success: true });
+    }
+
+    // ── Add event comment ──────────────────────────────────────────────────
+    if (action === 'add_event_comment') {
+      const { eventId, userId, text } = payload;
+      if (!eventId || !text) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const { data: user } = await admin.from('users').select('full_name, username').eq('id', userId).single();
+      const userName = user?.full_name || user?.username || 'You';
+      const { error } = await admin.from('group_event_comments').insert({
+        event_id: eventId,
+        user_id: userId || null,
+        content: text,
+      });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true, comment: { user: userName, text, time: 'Just now' } });
+    }
+
+    // ── Update group banner ────────────────────────────────────────────────
+    if (action === 'update_group_banner') {
+      const { groupId, bannerUrl, userId } = payload;
+      if (!groupId || !bannerUrl) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      await admin.from('groups').update({ banner_url: bannerUrl }).eq('id', groupId);
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
