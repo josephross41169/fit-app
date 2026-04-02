@@ -11,7 +11,7 @@
 
 # next.js
 /.next/
-/out/
+# /out/ - removed so Capacitor webDir placeholder is committed for CI
 
 # production
 /build
