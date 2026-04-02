@@ -379,14 +379,20 @@ function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
                 {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
               </div>
-              {workout.exercises.map((ex,i)=>(
+              {workout.exercises.map((ex,i)=>{
+                const wsArr: string[] = (ex as any).weights && Array.isArray((ex as any).weights) ? (ex as any).weights : [];
+                const weightDisplay = wsArr.length > 1
+                  ? wsArr.join(' / ') + ' lbs'
+                  : (wsArr[0] || ex.weight || '—');
+                return (
                 <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
                   <span style={{fontSize:14,fontWeight:600,color:C.text}}>{ex.name}</span>
                   <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.sets}</span>
                   <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.reps}</span>
-                  <span style={{fontSize:15,fontWeight:800,color:C.gold,textAlign:"center"}}>{ex.weight}</span>
+                  <span style={{fontSize:13,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
                 </div>
-              ))}
+                );
+              })}
               {/* Cardio display */}
               {workout.cardio && workout.cardio.length > 0 && (<>
                 <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.greenMid}`}}>
@@ -480,16 +486,52 @@ function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
                 ))}
               </div>
               {nut && <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {/* Nutrition photos */}
-                {(nutrition as any).photoUrls && (nutrition as any).photoUrls.length > 0 && (
-                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
-                    {(nutrition as any).photoUrls.map((src: string, i: number) => (
-                      <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
-                        <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Nutrition photos — supports JSON per-meal photos or legacy array */}
+                {(()=>{
+                  const photoUrls: string[] = (nutrition as any).photoUrls || [];
+                  // Try to parse any URL that looks like JSON (per-meal photos)
+                  const parsedMealPhotos: Record<string,string> = {};
+                  const plainPhotos: string[] = [];
+                  photoUrls.forEach((url: string) => {
+                    if (url && url.trim().startsWith('{')) {
+                      try { Object.assign(parsedMealPhotos, JSON.parse(url)); } catch {}
+                    } else if (url) {
+                      plainPhotos.push(url);
+                    }
+                  });
+                  const MEAL_LABELS: Record<string,string> = {
+                    Breakfast:'🌅 Breakfast', Lunch:'☀️ Lunch', Dinner:'🌙 Dinner', Snack:'🍎 Snack',
+                    'Pre-workout':'⚡ Pre-WO', 'Post-workout':'💪 Post-WO',
+                  };
+                  const hasMealPhotos = Object.keys(parsedMealPhotos).length > 0;
+                  const hasPlainPhotos = plainPhotos.length > 0;
+                  if (!hasMealPhotos && !hasPlainPhotos) return null;
+                  return (
+                    <div style={{marginBottom:8}}>
+                      {hasMealPhotos && (
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                          {Object.entries(parsedMealPhotos).map(([meal, src])=>(
+                            <div key={meal} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                              <button onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                                <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt={meal}/>
+                              </button>
+                              <span style={{fontSize:10,fontWeight:700,color:C.sub}}>{MEAL_LABELS[meal]||meal}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {hasPlainPhotos && (
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {plainPhotos.map((src, i)=>(
+                            <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                              <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {nutrition.meals.map(meal=>(
                   <div key={meal.key} style={{background:C.white,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,border:`1.5px solid ${C.greenMid}`}}>
                     <div style={{width:46,height:46,borderRadius:13,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{meal.emoji}</div>

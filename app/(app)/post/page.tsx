@@ -28,7 +28,7 @@ const iStyle = {
   boxSizing: "border-box" as const,
 };
 
-type Exercise = { name: string; sets: string; reps: string; weight: string };
+type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[] };
 type FoodItem = { name: string; calories: string };
 type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
@@ -70,6 +70,7 @@ export default function PostPage() {
   const [water, setWater] = useState("");
   const [nutNotes, setNutNotes] = useState("");
   const [nutPhoto, setNutPhoto] = useState<string | null>(null);
+  const [mealPhotos, setMealPhotos] = useState<Record<string, string>>({});
 
   // Wellness state
   const [wellnessType, setWellnessType] = useState("Yoga");
@@ -128,24 +129,44 @@ export default function PostPage() {
         if (woPhoto) {
           woPhotoUrl = await uploadPhoto(woPhoto, 'activity', `${user.id}/workout-${Date.now()}.jpg`);
         }
+        // Normalize exercises: ensure weights array is stored
+        const normalizedExercises = exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: (ex.weights || [])[0] || ex.weight || '',
+          weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
+        }));
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'workout',
           workout_type: woType || null,
           workout_duration_min: woDuration ? parseInt(woDuration) : null,
           workout_calories: woCalories ? parseInt(woCalories) : null,
-          exercises: exercises.length > 0 ? exercises : null,
+          exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
           cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
           notes: woNotes || null,
           photo_url: woPhotoUrl,
         });
         error = res.error;
       } else if (logTab === 'nutrition') {
-        // Upload nutrition photo if present
+        // Upload per-meal photos
+        const uploadedMealPhotos: Record<string, string> = {};
+        for (const [meal, dataUrl] of Object.entries(mealPhotos)) {
+          if (dataUrl) {
+            const url = await uploadPhoto(dataUrl, 'activity', `${user.id}/nutrition-${meal.toLowerCase()}-${Date.now()}.jpg`);
+            if (url) uploadedMealPhotos[meal] = url;
+          }
+        }
+        // Also upload legacy single photo if set
         let nutPhotoUrl: string | null = null;
         if (nutPhoto) {
           nutPhotoUrl = await uploadPhoto(nutPhoto, 'activity', `${user.id}/nutrition-${Date.now()}.jpg`);
         }
+        // Store meal photos as JSON string, or single URL for backward compat
+        const photoUrlToStore = Object.keys(uploadedMealPhotos).length > 0
+          ? JSON.stringify(uploadedMealPhotos)
+          : nutPhotoUrl;
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'nutrition',
@@ -157,7 +178,7 @@ export default function PostPage() {
           fat_g: fat ? parseFloat(fat) : null,
           water_oz: water ? parseFloat(water) : null,
           notes: nutNotes || null,
-          photo_url: nutPhotoUrl,
+          photo_url: photoUrlToStore,
         });
         error = res.error;
       } else if (logTab === 'wellness') {
@@ -431,7 +452,7 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
-                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "" }])}
+                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""] }])}
                     style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
                     + Add Row
                   </button>
@@ -439,20 +460,56 @@ export default function PostPage() {
                 {exercises.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet — click + Add Row</div>
                 ) : (<>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 80px 36px", gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 1fr 36px", gap: 8, marginBottom: 8 }}>
                     {["Exercise", "Sets", "Reps", "Weight", ""].map(h => (
                       <span key={h} style={{ fontSize: 10, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>{h}</span>
                     ))}
                   </div>
-                  {exercises.map((ex, i) => (
-                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 80px 36px", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  {exercises.map((ex, i) => {
+                    const numSets = parseInt(ex.sets) || 1;
+                    const isMultiSet = numSets > 1;
+                    return (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 1fr 36px", gap: 8, marginBottom: 8, alignItems: "start" }}>
                       <input style={iStyle} placeholder="Name" value={ex.name} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                      <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, sets: e.target.value } : x))} />
+                      <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => {
+                        const newSets = e.target.value;
+                        const n = parseInt(newSets) || 1;
+                        setExercises(exs => exs.map((x, j) => {
+                          if (j !== i) return x;
+                          const existingWeights = x.weights || [];
+                          const firstW = existingWeights[0] || x.weight || '';
+                          const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? firstW);
+                          return { ...x, sets: newSets, weights: newWeights };
+                        }));
+                      }} />
                       <input style={iStyle} type="text" inputMode="numeric" value={ex.reps} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, reps: e.target.value } : x))} />
-                      <input style={iStyle} placeholder="lbs" value={ex.weight} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, weight: e.target.value } : x))} />
+                      {/* Weight column — single or per-set */}
+                      {isMultiSet ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {Array.from({ length: numSets }).map((_, s) => (
+                            <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ fontSize: 10, color: C.sub, fontWeight: 700, width: 36, flexShrink: 0 }}>S{s+1}:</span>
+                              <input
+                                style={{ ...iStyle, padding: "5px 8px", fontSize: 12 }}
+                                placeholder="lbs"
+                                value={(ex.weights || [])[s] ?? ''}
+                                onChange={e => setExercises(exs => exs.map((x, j) => {
+                                  if (j !== i) return x;
+                                  const ws = [...(x.weights || Array(numSets).fill(''))];
+                                  ws[s] = e.target.value;
+                                  return { ...x, weights: ws };
+                                }))}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <input style={iStyle} placeholder="lbs" value={(ex.weights || [])[0] ?? ex.weight ?? ''} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, weight: e.target.value, weights: [e.target.value] } : x))} />
+                      )}
                       <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 18, cursor: "pointer" }}>×</button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </>)}
               </div>
 
@@ -547,22 +604,44 @@ export default function PostPage() {
                 <input style={iStyle} placeholder="e.g. 80 oz or 2L" value={water} onChange={e => setWater(e.target.value)} />
               </div>
 
-              {/* Notes & Photo */}
+              {/* Per-Meal Photos */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes & Photo</div>
-                <textarea rows={3} style={{ ...iStyle, resize: "none", marginBottom: 14 }} placeholder="Meal notes..." value={nutNotes} onChange={e => setNutNotes(e.target.value)} />
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>📷 Meal Photos</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>Add a photo for the selected meal type ({mealType})</div>
                 <label style={{ display: "block", cursor: "pointer" }}>
-                  {nutPhoto ? (
-                    <img src={nutPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
+                  {mealPhotos[mealType] ? (
+                    <div style={{ position: "relative" }}>
+                      <img src={mealPhotos[mealType]} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
+                      <button
+                        onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[mealType]; return n; }); }}
+                        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>×</button>
+                    </div>
                   ) : (
-                    <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "20px 0", textAlign: "center", background: C.greenLight }}>
-                      <div style={{ fontSize: 28, marginBottom: 6 }}>🍱</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Meal photos go to nutrition gallery only</div>
-                      <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Private — not shared to feed</div>
+                    <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "16px 0", textAlign: "center", background: C.greenLight }}>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>📷</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add {mealType} photo</div>
                     </div>
                   )}
-                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setNutPhoto)} />
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, (url) => setMealPhotos(p => ({ ...p, [mealType]: url })))} />
                 </label>
+                {/* Show thumbnails of other meal photos already added */}
+                {Object.entries(mealPhotos).filter(([k]) => k !== mealType).length > 0 && (
+                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {Object.entries(mealPhotos).filter(([k]) => k !== mealType).map(([meal, src]) => (
+                      <div key={meal} style={{ position: "relative" }}>
+                        <img src={src} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10 }} alt={meal} />
+                        <div style={{ position: "absolute", bottom: 2, left: 2, right: 2, background: "rgba(0,0,0,0.5)", borderRadius: 4, textAlign: "center", fontSize: 9, color: "#fff", fontWeight: 700 }}>{meal.slice(0,4)}</div>
+                        <button onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[meal]; return n; }); }} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", padding: 0 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Notes & Photo */}
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes</div>
+                <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="Meal notes..." value={nutNotes} onChange={e => setNutNotes(e.target.value)} />
               </div>
 
               <SaveErrorBanner />
