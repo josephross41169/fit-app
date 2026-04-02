@@ -605,6 +605,7 @@ export default function FeedPage() {
   const { user } = useAuth();
   const [posts, setPosts] = useState(INITIAL_POSTS);
   const [dbPosts, setDbPosts] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedTab, setFeedTab] = useState<"foryou" | "following">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
@@ -676,6 +677,19 @@ export default function FeedPage() {
     }
     loadFollowingFeed();
   }, [feedTab, user]);
+
+  // Load activity logs for sidebar
+  useEffect(() => {
+    async function loadActivityFeed() {
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('*, users:user_id(id, username, full_name, avatar_url)')
+        .order('logged_at', { ascending: false })
+        .limit(20);
+      if (data && data.length > 0) setActivityLogs(data);
+    }
+    loadActivityFeed();
+  }, []);
 
   // Search users
   useEffect(() => {
@@ -755,13 +769,52 @@ export default function FeedPage() {
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
 
+  const sidebarActivityPosts = activityLogs.map((log: any) => ({
+    id: log.id,
+    user: log.users?.full_name || log.users?.username || 'User',
+    username: log.users?.username || 'user',
+    avatar: log.users?.avatar_url && log.users.avatar_url.startsWith('http')
+      ? log.users.avatar_url
+      : (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
+    time: (() => {
+      const d = new Date(log.logged_at || log.created_at);
+      const diff = Date.now() - d.getTime();
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+      return d.toLocaleDateString();
+    })(),
+    workout: log.log_type === 'workout' ? {
+      type: log.workout_type || 'Workout',
+      duration: log.workout_duration_min,
+      calories: log.workout_calories,
+      exercises: log.exercises || [],
+      notes: log.notes,
+    } : null,
+    nutrition: log.log_type === 'nutrition' ? {
+      meal: log.meal_type || 'Meal',
+      calories: log.calories_total,
+      protein: log.protein_g,
+      carbs: log.carbs_g,
+      fat: log.fat_g,
+      water: log.water_oz,
+      notes: log.notes,
+    } : null,
+    wellness: log.log_type === 'wellness' ? {
+      type: log.wellness_type || 'Wellness',
+      duration: log.wellness_duration_min,
+      mood: log.mood,
+      notes: log.notes,
+    } : null,
+  }));
+
   // On mobile: interleave posts + activity blocks so both are visible
   // On desktop: keep two-column layout
+  const mobileActivityItems = sidebarActivityPosts.length > 0 ? sidebarActivityPosts : activityPosts;
   const mobileItems: Array<{ type: "post"; data: Post } | { type: "activity"; data: Post } | { type: "suggested"; data: typeof SUGGESTED_USERS[0] }> = [];
-  const maxLen = Math.max(displayPosts.length, activityPosts.length);
+  const maxLen = Math.max(displayPosts.length, mobileActivityItems.length);
   for (let i = 0; i < maxLen; i++) {
-    if (displayPosts[i]) mobileItems.push({ type: "post", data: displayPosts[i] });
-    if (activityPosts[i]) mobileItems.push({ type: "activity", data: activityPosts[i] });
+    if (displayPosts[i]) mobileItems.push({ type: "post", data: displayPosts[i] as Post });
+    if (mobileActivityItems[i]) mobileItems.push({ type: "activity", data: mobileActivityItems[i] as Post });
   }
   SUGGESTED_USERS.forEach(u => mobileItems.push({ type: "suggested", data: u }));
 
@@ -934,9 +987,14 @@ export default function FeedPage() {
             <div style={{ fontSize:12,color:C.darkSub }}>Workouts, nutrition & wellness</div>
           </div>
           <div style={{ padding:"0 12px" }}>
-            {activityPosts.map(post => (
-              <SideUserBlock key={post.id} post={post} />
-            ))}
+            {sidebarActivityPosts.length > 0
+              ? sidebarActivityPosts.map((post: any) => (
+                  <SideUserBlock key={post.id} post={post} />
+                ))
+              : activityPosts.map(post => (
+                  <SideUserBlock key={post.id} post={post} />
+                ))
+            }
             <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
               <div>
                 <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>Suggested For You</div>

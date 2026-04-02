@@ -752,20 +752,26 @@ export default function GroupPage() {
 
   async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !currentUser || !group._dbId) return;
+    if (!file || !group._dbId) return;
     setBannerUploading(true);
     try {
-      const ext = file.name.split('.').pop();
+      const ext = file.name.split('.').pop() || 'jpg';
       const path = `groups/${group._dbId}/banner.${ext}`;
       const { error: uploadError } = await supabase.storage.from('activity').upload(path, file, { upsert: true });
-      if (uploadError) { console.error(uploadError); return; }
+      if (uploadError) {
+        console.error('Banner upload error:', uploadError);
+        setBannerUploading(false);
+        return;
+      }
       const { data: { publicUrl } } = supabase.storage.from('activity').getPublicUrl(path);
       await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_group_banner', payload: { groupId: group._dbId, bannerUrl: publicUrl, userId: currentUser.id } }),
+        body: JSON.stringify({ action: 'update_group_banner', payload: { groupId: group._dbId, bannerUrl: publicUrl, userId: currentUser?.id || null } }),
       });
       await loadGroupData();
+    } catch (err) {
+      console.error('Banner upload failed:', err);
     } finally {
       setBannerUploading(false);
     }
@@ -978,13 +984,13 @@ export default function GroupPage() {
         <div style={{ position:"absolute", top:20, right:20, background:catColor, borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:800, color:"#fff" }}>
           {group.emoji} {group.category}
         </div>
-        {isOwnerDB && (
+        {(isOwnerDB || (dbGroup && currentUser)) && (
           <button onClick={() => document.getElementById('banner-upload')?.click()} style={{ position:"absolute", bottom:24, right:20, background:"rgba(0,0,0,0.5)", border:"1.5px solid rgba(255,255,255,0.4)", borderRadius:10, color:"#fff", fontSize:12, fontWeight:700, padding:"7px 14px", cursor:"pointer", backdropFilter:"blur(4px)" }}>
             📷 Change Photo
           </button>
         )}
         <input id="banner-upload" type="file" accept="image/*" style={{ display:"none" }} onChange={handleBannerUpload} />
-        <div style={{ position:"absolute", bottom:24, left:28, right:isOwnerDB?160:28 }}>
+        <div style={{ position:"absolute", bottom:24, left:28, right:(isOwnerDB || (dbGroup && currentUser))?160:28 }}>
           <div style={{ fontWeight:900, fontSize:26, color:"#fff", textShadow:"0 2px 8px rgba(0,0,0,0.5)", marginBottom:8 }}>{group.name}</div>
           <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
