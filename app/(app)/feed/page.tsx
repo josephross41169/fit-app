@@ -5,12 +5,12 @@ import { useAuth } from "@/lib/auth";
 import FollowButton from "@/components/FollowButton";
 
 const C = {
-  blue:"#16A34A", greenLight:"#F0FDF4", greenMid:"#BBF7D0",
+  blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
   gold:"#F5A623", goldLight:"#FFFBEE",
-  text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F0FDF4",
-  green:"#52C97A", greenLight:"#F0FBF5",
+  text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
+  green:"#52C97A",
   // Dark sidebar palette
-  dark:"#0F1117", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];

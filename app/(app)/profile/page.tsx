@@ -6,9 +6,9 @@ import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const C = {
-  blue:"#16A34A", greenLight:"#F0FDF4", greenMid:"#BBF7D0",
+  blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
   gold:"#F5A623", goldLight:"#FFFBEE",
-  text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F0FDF4",
+  text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
 };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -686,6 +686,9 @@ export default function ProfilePage() {
   const [bannerPosition, setBannerPosition] = useState(50); // 0-100, default center
   const [bannerHovered, setBannerHovered] = useState(false);
   const [dragState, setDragState] = useState<{ startY: number; startPos: number } | null>(null);
+  const [avatarRepositionMode, setAvatarRepositionMode] = useState(false);
+  const [avatarPosition, setAvatarPosition] = useState(50);
+  const [avatarDragState, setAvatarDragState] = useState<{startY:number;startPos:number}|null>(null);
   const [brands,setBrands] = useState([{emoji:"👟",name:"New Balance"},{emoji:"👕",name:"Gym Shark"},{emoji:"🎧",name:"AirPods"}]);
 
   // ── Crop state ──
@@ -728,6 +731,14 @@ export default function ProfilePage() {
       // Also check Supabase profile for saved banner_position
       if ((user as any)?.profile?.banner_position !== undefined && (user as any)?.profile?.banner_position !== null) {
         setBannerPosition((user as any).profile.banner_position);
+      }
+      // Load saved avatar position
+      try {
+        const savedAvatarPos = localStorage.getItem(`avatar_position_${user.id}`);
+        if (savedAvatarPos !== null) setAvatarPosition(parseFloat(savedAvatarPos));
+      } catch {}
+      if ((user as any)?.profile?.avatar_position !== undefined && (user as any)?.profile?.avatar_position !== null) {
+        setAvatarPosition((user as any).profile.avatar_position);
       }
     }
   }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
@@ -950,6 +961,25 @@ export default function ProfilePage() {
     const dy = e.touches[0].clientY - dragState.startY;
     const newPos = Math.max(0, Math.min(100, dragState.startPos - dy / 3));
     setBannerPosition(newPos);
+  }
+
+  function handleAvatarMouseDown(e: React.MouseEvent) {
+    if (!avatarRepositionMode) return;
+    e.preventDefault();
+    setAvatarDragState({ startY: e.clientY, startPos: avatarPosition });
+  }
+  function handleAvatarMouseMove(e: React.MouseEvent) {
+    if (!avatarDragState || !avatarRepositionMode) return;
+    const dy = e.clientY - avatarDragState.startY;
+    const newPos = Math.max(0, Math.min(100, avatarDragState.startPos - dy / 2));
+    setAvatarPosition(newPos);
+  }
+  function handleAvatarMouseUp() { setAvatarDragState(null); }
+  async function saveAvatarPosition() {
+    if (!user) return;
+    try { localStorage.setItem(`avatar_position_${user.id}`, String(avatarPosition)); } catch {}
+    supabase.from('users').update({ avatar_position: avatarPosition } as any).eq('id', user!.id).then(() => {});
+    setAvatarRepositionMode(false);
   }
 
   function addHighlight(e:React.ChangeEvent<HTMLInputElement>) {
@@ -1245,13 +1275,40 @@ export default function ProfilePage() {
         <div className="profile-header-wrap" style={{display:"flex",gap:28,alignItems:"flex-start",flexWrap:"wrap",marginBottom:36}}>
           {/* Avatar */}
           <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,flexShrink:0}}>
-            <label style={{position:"relative",cursor:"pointer",display:"block"}}>
+            <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
+              onMouseDown={handleAvatarMouseDown}
+              onMouseMove={handleAvatarMouseMove}
+              onMouseUp={handleAvatarMouseUp}
+              onMouseLeave={handleAvatarMouseUp}
+            >
               {profileImg
-                ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"block"}} alt="Profile"/>
-                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(124,58,237,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
-              <div style={{position:"absolute",bottom:8,right:8,width:30,height:30,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>📷</div>
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
-            </label>
+                ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(22,163,74,0.25)",display:"block",pointerEvents:"none"}} alt="Profile"/>
+                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(22,163,74,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
+              {/* Camera button — show when not in reposition mode */}
+              {!avatarRepositionMode && (
+                <label style={{position:"absolute",bottom:8,right:8,width:30,height:30,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>
+                  📷
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+                </label>
+              )}
+              {/* Reposition button — show when image exists and not in reposition mode */}
+              {profileImg && !avatarRepositionMode && user && (
+                <button onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
+                  style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
+                  <span style={{fontSize:11}}>↕</span>
+                  <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
+                </button>
+              )}
+              {/* Reposition mode controls */}
+              {avatarRepositionMode && (
+                <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,borderRadius:"50%",background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",padding:"8px",zIndex:10,pointerEvents:"none"}}>
+                  <div style={{display:"flex",gap:6,pointerEvents:"all"}}>
+                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#16A34A",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
+                    <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(false);setAvatarDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
               <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>

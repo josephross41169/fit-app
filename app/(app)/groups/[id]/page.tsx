@@ -4,9 +4,9 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 const C = {
-  blue:"#16A34A", blueLight:"#F0FDF4", blueMid:"#BBF7D0",
-  gold:"#F5A623", text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F0FDF4",
-  dark:"#0F1117", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
+  gold:"#F5A623", text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
+  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
 };
 
 const CATEGORY_COLORS: Record<string,string> = {
@@ -262,6 +262,7 @@ export default function GroupPage() {
   const [dbMembers, setDbMembers] = useState<any[]>([]);
   const [dbLeaderboard, setDbLeaderboard] = useState<any[]>([]);
   const [isMemberDB, setIsMemberDB] = useState(false);
+  const [isOwnerDB, setIsOwnerDB] = useState(false);
   const [joinedChallengeIdsDB, setJoinedChallengeIdsDB] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -344,6 +345,7 @@ export default function GroupPage() {
         setIsMemberDB(data.is_member || false);
         setJoined(data.is_member || false);
         setJoinedChallengeIdsDB(data.joined_challenge_ids || []);
+        if (data.group && user) setIsOwnerDB(data.group.created_by === user.id);
 
         // Init challenge scores from joined challenges
         const scores: Record<string, number> = {};
@@ -450,6 +452,7 @@ export default function GroupPage() {
     ? dbLeaderboard.map((e: any, i: number) => ({
         rank: i + 1,
         avatar: (e.user?.full_name || e.user?.username || 'U').slice(0,2).toUpperCase(),
+        avatarUrl: e.user?.avatar_url || null,
         name: e.user?.full_name || e.user?.username || 'Unknown',
         username: e.user?.username || null,
         score: `${e.score} ${e.metric_label || ''}`,
@@ -662,22 +665,29 @@ export default function GroupPage() {
   // ── Submit note ──
   async function submitNote() {
     if (!noteText.trim()) return;
+    const newLocal = { id: String(Date.now()), user:"You", avatar:(currentUser?.email||'Y').slice(0,2).toUpperCase(), time:"Just now", category:noteCategory, content:noteText, likes:0 };
     if (currentUser && group._dbId) {
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: noteText, category: noteCategory } }),
-      });
-      const data = await res.json();
-      if (data.note) {
-        const n = data.note;
-        setDbNotes(prev => [{
-          id: n.id, user: { full_name: n.user?.full_name, username: n.user?.username },
-          created_at: n.created_at, category: n.category, content: n.content, likes_count: 0,
-        }, ...prev]);
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: noteText, category: noteCategory } }),
+        });
+        const data = await res.json();
+        if (data.note) {
+          const n = data.note;
+          setDbNotes(prev => [{
+            id: n.id, user: { full_name: n.user?.full_name, username: n.user?.username },
+            created_at: n.created_at, category: n.category, content: n.content, likes_count: 0,
+          }, ...prev]);
+        } else {
+          setLocalNotes(prev => [...prev, newLocal]);
+        }
+      } catch {
+        setLocalNotes(prev => [...prev, newLocal]);
       }
     } else {
-      setLocalNotes(prev => [...prev, { id: String(Date.now()), user:"You", avatar:"JB", time:"Just now", category:noteCategory, content:noteText, likes:0 }]);
+      setLocalNotes(prev => [...prev, newLocal]);
     }
     setNoteText("");
   }
@@ -926,12 +936,12 @@ export default function GroupPage() {
       {/* ── Delete Confirm Modal ── */}
       {deleteConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1001, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#fff", borderRadius:20, padding:"28px 24px", maxWidth:380, width:"100%", textAlign:"center" }}>
+          <div style={{ background:"#1A1A1A", borderRadius:20, padding:"28px 24px", maxWidth:380, width:"100%", textAlign:"center", border:"1px solid #2A2A2A" }}>
             <div style={{ fontSize:36, marginBottom:12 }}>🗑️</div>
-            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:8 }}>Delete this group?</div>
-            <div style={{ fontSize:13, color:C.sub, marginBottom:20 }}>This will permanently delete the group and all its posts, events, and challenges. This cannot be undone.</div>
+            <div style={{ fontWeight:900, fontSize:18, color:"#F0F0F0", marginBottom:8 }}>Delete this group?</div>
+            <div style={{ fontSize:13, color:"#9CA3AF", marginBottom:20 }}>This will permanently delete the group and all its posts, events, and challenges. This cannot be undone.</div>
             <div style={{ display:"flex", gap:10 }}>
-              <button onClick={() => setDeleteConfirm(false)} style={{ flex:1, padding:"12px", borderRadius:12, border:`1.5px solid ${C.blueMid}`, background:"transparent", color:C.sub, fontWeight:700, cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => setDeleteConfirm(false)} style={{ flex:1, padding:"12px", borderRadius:12, border:`1.5px solid #2A3A2A`, background:"transparent", color:"#9CA3AF", fontWeight:700, cursor:"pointer" }}>Cancel</button>
               <button onClick={handleDeleteGroup} disabled={deleting} style={{ flex:1, padding:"12px", borderRadius:12, border:"none", background:"#EF4444", color:"#fff", fontWeight:800, cursor:"pointer", opacity:deleting?0.7:1 }}>
                 {deleting ? "Deleting..." : "Delete"}
               </button>
@@ -955,13 +965,13 @@ export default function GroupPage() {
         <div style={{ position:"absolute", top:20, right:20, background:catColor, borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:800, color:"#fff" }}>
           {group.emoji} {group.category}
         </div>
-        {group._isOwner && (
+        {isOwnerDB && (
           <button onClick={() => document.getElementById('banner-upload')?.click()} style={{ position:"absolute", bottom:24, right:20, background:"rgba(0,0,0,0.5)", border:"1.5px solid rgba(255,255,255,0.4)", borderRadius:10, color:"#fff", fontSize:12, fontWeight:700, padding:"7px 14px", cursor:"pointer", backdropFilter:"blur(4px)" }}>
             📷 Change Photo
           </button>
         )}
         <input id="banner-upload" type="file" accept="image/*" style={{ display:"none" }} onChange={handleBannerUpload} />
-        <div style={{ position:"absolute", bottom:24, left:28, right:group._isOwner?160:28 }}>
+        <div style={{ position:"absolute", bottom:24, left:28, right:isOwnerDB?160:28 }}>
           <div style={{ fontWeight:900, fontSize:26, color:"#fff", textShadow:"0 2px 8px rgba(0,0,0,0.5)", marginBottom:8 }}>{group.name}</div>
           <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
@@ -998,7 +1008,7 @@ export default function GroupPage() {
               <button onClick={() => setShowMoreMenu(p => !p)} style={{ padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>···</button>
               {showMoreMenu && (
                 <div style={{ position:"absolute", top:"110%", right:0, background:"#fff", borderRadius:12, border:`1.5px solid ${C.blueMid}`, boxShadow:"0 8px 32px rgba(0,0,0,0.12)", zIndex:200, minWidth:160, overflow:"hidden" }}>
-                  {group._isOwner && (
+                  {isOwnerDB && (
                     <button onClick={() => { setDeleteConfirm(true); setShowMoreMenu(false); }}
                       style={{ width:"100%", padding:"13px 18px", background:"none", border:"none", color:"#EF4444", fontWeight:700, fontSize:14, cursor:"pointer", textAlign:"left" }}>
                       🗑️ Delete Group
@@ -1161,11 +1171,11 @@ export default function GroupPage() {
                     {leaderboardGroups[0][1].entries.map((entry:any) => (
                       <div key={`${entry.challengeId}-${entry.rank}`} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
                         onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
-                        <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
+                        <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#1A2A1A", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                           {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                         </div>
-                        <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
-                          {entry.avatar}
+                        <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                          {(entry as any).avatarUrl ? <img src={(entry as any).avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
                         </div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
@@ -1190,11 +1200,11 @@ export default function GroupPage() {
                       {challengeGroup.entries.map((entry:any) => (
                         <div key={`${challengeKey}-${entry.rank}`} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
                           onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
-                          <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
+                          <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#1A2A1A", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                             {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                           </div>
-                          <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
-                            {entry.avatar}
+                          <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                            {(entry as any).avatarUrl ? <img src={(entry as any).avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
                           </div>
                           <div style={{ flex:1 }}>
                             <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
