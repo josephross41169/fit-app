@@ -72,9 +72,8 @@ export async function GET(req: NextRequest) {
           .eq('group_id', gid)
           .order('event_date', { ascending: true }),
         admin.from('challenges')
-          .select('*')
+          .select('*, challenge_participants(user_id, score, users(full_name, username, avatar_url))')
           .eq('group_id', gid)
-          .eq('is_active', true)
           .order('created_at', { ascending: false }),
         admin.from('community_notes')
           .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)')

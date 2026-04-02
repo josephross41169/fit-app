@@ -869,6 +869,21 @@ export default function ProfilePage() {
     setSocialLoading(false);
   }
 
+  // ── Completed challenges (auto-badges) ──
+  const [completedChallenges, setCompletedChallenges] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('challenge_participants')
+      .select('*, challenges(name, emoji, group_id, groups(name))')
+      .eq('user_id', user.id)
+      .gt('score', 0)
+      .then(({ data }) => {
+        if (data) setCompletedChallenges(data);
+      });
+  }, [user?.id]);
+
   // ── Badge state ──
   const [earnedBadges,setEarnedBadges] = useState<string[]>([]);
 
@@ -1410,29 +1425,68 @@ export default function ProfilePage() {
             {/* Badges & Awards */}
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
-              {earnedBadges.length === 0 ? (
+              {earnedBadges.length === 0 && completedChallenges.length === 0 ? (
                 <div style={{textAlign:"center",padding:"28px 16px",background:C.greenLight,borderRadius:16,marginBottom:16}}>
                   <div style={{fontSize:36,marginBottom:8}}>🏆</div>
                   <div style={{fontSize:14,fontWeight:700,color:C.sub,lineHeight:1.5}}>Complete fitness milestones to earn badges</div>
                 </div>
               ) : (
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-                  {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b => (
-                    <div key={b.id} style={{
-                      borderRadius:16,
-                      padding:"14px 8px",
-                      textAlign:"center",
-                      border:"1.5px solid #F5A623",
-                      background:C.goldLight,
-                      boxShadow:"0 0 12px rgba(245,166,35,0.35)",
-                      transition:"all 0.2s",
-                    }}>
-                      <div style={{fontSize:26,marginBottom:4}}>{b.emoji}</div>
-                      <div style={{fontWeight:800,fontSize:11,color:C.text,lineHeight:1.3}}>{b.label}</div>
-                      <div style={{fontSize:10,color:C.sub,marginTop:3,lineHeight:1.3}}>{b.desc}</div>
+                <>
+                  {earnedBadges.length > 0 && (
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                      {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b => (
+                        <div key={b.id} style={{
+                          borderRadius:16,
+                          padding:"14px 8px",
+                          textAlign:"center",
+                          border:"1.5px solid #F5A623",
+                          background:C.goldLight,
+                          boxShadow:"0 0 12px rgba(245,166,35,0.35)",
+                          transition:"all 0.2s",
+                        }}>
+                          <div style={{fontSize:26,marginBottom:4}}>{b.emoji}</div>
+                          <div style={{fontWeight:800,fontSize:11,color:C.text,lineHeight:1.3}}>{b.label}</div>
+                          <div style={{fontSize:10,color:C.sub,marginTop:3,lineHeight:1.3}}>{b.desc}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                  {/* Challenge Completion Badges */}
+                  {completedChallenges.length > 0 && (
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:11,fontWeight:800,color:"#92400E",textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏆 Challenge Completions</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {completedChallenges.map((cp: any, i: number) => {
+                          const ch = cp.challenges;
+                          if (!ch) return null;
+                          const groupName = ch.groups?.name || '';
+                          return (
+                            <div key={i} style={{
+                              borderRadius:16,
+                              padding:"12px 14px",
+                              display:"flex",
+                              alignItems:"center",
+                              gap:12,
+                              border:"2px solid #F5A623",
+                              background:"linear-gradient(135deg,#FFFBEE,#FEF3C7)",
+                              boxShadow:"0 2px 8px rgba(245,166,35,0.2)",
+                            }}>
+                              <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#F5A623,#FFD700)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
+                                {ch.emoji || '🏆'}
+                              </div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontWeight:800,fontSize:13,color:"#92400E"}}>{ch.name}</div>
+                                {groupName && <div style={{fontSize:10,color:"#B45309",marginTop:1}}>📍 {groupName}</div>}
+                                <div style={{fontSize:11,color:"#F5A623",fontWeight:700,marginTop:2}}>Score: {cp.score}</div>
+                              </div>
+                              <div style={{fontSize:18}}>✨</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement

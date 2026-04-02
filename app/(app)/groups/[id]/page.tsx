@@ -1224,60 +1224,114 @@ export default function GroupPage() {
                   </button>
                 </div>
               )}
-              {displayChallenges.length === 0 && (
-                <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
-                  <div style={{ fontSize:24, marginBottom:6 }}>⚡</div>
-                  <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No active challenges</div>
-                  <div style={{ fontSize:12, color:C.sub }}>Create the first challenge for this group!</div>
-                </div>
-              )}
-              {displayChallenges.map((ch:any) => {
-                const isJoined = joinedChallenges[ch.id] || joinedChallengeIdsDB.includes(ch.id);
-                const diff = ch.difficulty || ch.difficulty;
-                const deadline = ch.deadline ? new Date(ch.deadline).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : ch.deadline;
-                return (
-                  <div key={ch.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:16, overflow:"hidden" }}>
-                    <div style={{ background:`linear-gradient(135deg,${catColor}22,${catColor}11)`, padding:"16px 20px", borderBottom:`1px solid ${C.blueMid}` }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ width:52, height:52, borderRadius:14, background:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
-                          {ch.emoji || '🏆'}
-                        </div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                            <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{ch.name}</span>
-                            {diff && <span style={{ background:(DIFFICULTY_COLORS[diff]||catColor)+"22", color:DIFFICULTY_COLORS[diff]||catColor, fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99, border:`1px solid ${(DIFFICULTY_COLORS[diff]||catColor)}44` }}>{diff}</span>}
+              {(() => {
+                const now = new Date();
+                const activeChallenges = displayChallenges.filter((ch: any) =>
+                  ch.is_active !== false && (!ch.deadline || new Date(ch.deadline) > now)
+                );
+                const completedChallenges = displayChallenges.filter((ch: any) =>
+                  ch.is_active === false || (ch.deadline && new Date(ch.deadline) <= now)
+                );
+
+                const renderChallengeCard = (ch: any, isCompleted = false) => {
+                  const isJoined = joinedChallenges[ch.id] || joinedChallengeIdsDB.includes(ch.id);
+                  const diff = ch.difficulty;
+                  const deadline = ch.deadline ? new Date(ch.deadline).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : null;
+                  const topParticipants = Array.isArray(ch.challenge_participants)
+                    ? [...ch.challenge_participants].sort((a: any, b: any) => (b.score||0) - (a.score||0)).slice(0, 3)
+                    : [];
+
+                  return (
+                    <div key={ch.id} style={{ background:isCompleted?"linear-gradient(135deg,#FFFBEE,#FEF3C7)":C.white, borderRadius:18, border:`2px solid ${isCompleted?"#F5A623":C.blueMid}`, marginBottom:16, overflow:"hidden" }}>
+                      <div style={{ background:isCompleted?`linear-gradient(135deg,#F5A623,#FFD700)`:`linear-gradient(135deg,${catColor}22,${catColor}11)`, padding:"16px 20px", borderBottom:`1px solid ${isCompleted?"#F5A623":C.blueMid}` }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                          <div style={{ width:52, height:52, borderRadius:14, background:isCompleted?`linear-gradient(135deg,#F5A623,#FFD700)`:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
+                            {ch.emoji || '🏆'}
                           </div>
-                          <div style={{ fontSize:12, color:C.sub }}>
-                            👥 {ch.participant_count || ch.participants || 0} participating
-                            {deadline && <span> · 📅 Ends {deadline}</span>}
+                          <div style={{ flex:1 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                              <span style={{ fontWeight:900, fontSize:16, color:isCompleted?"#92400E":C.text }}>{ch.name}</span>
+                              {diff && <span style={{ background:(DIFFICULTY_COLORS[diff]||catColor)+"22", color:DIFFICULTY_COLORS[diff]||catColor, fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99, border:`1px solid ${(DIFFICULTY_COLORS[diff]||catColor)}44` }}>{diff}</span>}
+                              {isCompleted && <span style={{ background:"#F5A623", color:"#fff", fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99 }}>✓ Ended</span>}
+                            </div>
+                            <div style={{ fontSize:12, color:isCompleted?"#92400E":C.sub }}>
+                              👥 {ch.participant_count || ch.participants || 0} participating
+                              {deadline && <span> · 📅 {isCompleted?"Ended":"Ends"} {deadline}</span>}
+                            </div>
+                            {ch.metric_label && <div style={{ fontSize:11, color:isCompleted?"#B45309":catColor, fontWeight:700, marginTop:2 }}>📊 Tracking: {ch.metric_label}{ch.metric_unit ? ` (${ch.metric_unit})` : ''}</div>}
                           </div>
-                          {ch.metric_label && <div style={{ fontSize:11, color:catColor, fontWeight:700, marginTop:2 }}>📊 Tracking: {ch.metric_label}{ch.metric_unit ? ` (${ch.metric_unit})` : ''}</div>}
                         </div>
                       </div>
-                    </div>
-                    <div style={{ padding:"14px 20px" }}>
-                      <p style={{ fontSize:13, color:C.sub, lineHeight:1.6, marginBottom:14 }}>{ch.description || ch.desc}</p>
-                      <div style={{ display:"flex", gap:8 }}>
-                        <button onClick={() => handleJoinChallenge(ch)}
-                          style={{ flex:1, padding:"10px", borderRadius:12, border:"none", background:isJoined?"#F0FDF4":`linear-gradient(135deg,${catColor},${catColor}CC)`, color:isJoined?catColor:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>
-                          {isJoined ? `✓ Joined — ${ch.emoji || '🏆'} Challenge Accepted!` : "Accept Challenge"}
-                        </button>
-                        {isJoined && (
-                          <button onClick={() => setLogProgressChallenge(ch)}
-                            style={{ padding:"10px 16px", borderRadius:12, border:`2px solid ${catColor}`, background:"transparent", color:catColor, fontWeight:800, fontSize:13, cursor:"pointer" }}>
-                            Log Progress
-                          </button>
+                      <div style={{ padding:"14px 20px" }}>
+                        <p style={{ fontSize:13, color:C.sub, lineHeight:1.6, marginBottom:14 }}>{ch.description || ch.desc}</p>
+                        {/* Hall of Fame for completed */}
+                        {isCompleted && topParticipants.length > 0 && (
+                          <div style={{ marginBottom:14 }}>
+                            <div style={{ fontSize:11, fontWeight:800, color:"#92400E", textTransform:"uppercase", letterSpacing:0.8, marginBottom:8 }}>🏅 Top Finishers</div>
+                            {topParticipants.map((p: any, idx: number) => (
+                              <div key={p.user_id || idx} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                                <span style={{ fontSize:14 }}>{["🥇","🥈","🥉"][idx]||"🎖️"}</span>
+                                <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,#F5A623,#FFD700)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900, color:"#fff", overflow:"hidden", flexShrink:0 }}>
+                                  {p.users?.avatar_url ? <img src={p.users.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (p.users?.full_name||p.users?.username||'?')[0]}
+                                </div>
+                                <span style={{ fontSize:13, fontWeight:700, color:C.text, flex:1 }}>{p.users?.full_name || p.users?.username || 'Member'}</span>
+                                <span style={{ fontSize:12, fontWeight:800, color:"#F5A623" }}>{p.score} {ch.metric_unit||'pts'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!isCompleted && (
+                          <div style={{ display:"flex", gap:8 }}>
+                            <button onClick={() => handleJoinChallenge(ch)}
+                              style={{ flex:1, padding:"10px", borderRadius:12, border:"none", background:isJoined?"#F0FDF4":`linear-gradient(135deg,${catColor},${catColor}CC)`, color:isJoined?catColor:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>
+                              {isJoined ? `✓ Joined — ${ch.emoji || '🏆'} Challenge Accepted!` : "Accept Challenge"}
+                            </button>
+                            {isJoined && (
+                              <button onClick={() => setLogProgressChallenge(ch)}
+                                style={{ padding:"10px 16px", borderRadius:12, border:`2px solid ${catColor}`, background:"transparent", color:catColor, fontWeight:800, fontSize:13, cursor:"pointer" }}>
+                                Log Progress
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {!isCompleted && isJoined && challengeScores[ch.id] !== undefined && (
+                          <div style={{ marginTop:8, fontSize:12, color:C.sub }}>
+                            Your score: <strong style={{ color:catColor }}>{challengeScores[ch.id]}</strong> {ch.metric_unit || ''}
+                          </div>
                         )}
                       </div>
-                      {isJoined && challengeScores[ch.id] !== undefined && (
-                        <div style={{ marginTop:8, fontSize:12, color:C.sub }}>
-                          Your score: <strong style={{ color:catColor }}>{challengeScores[ch.id]}</strong> {ch.metric_unit || ''}
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  );
+                };
+
+                return (
+                  <>
+                    {activeChallenges.length === 0 && completedChallenges.length === 0 && (
+                      <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
+                        <div style={{ fontSize:24, marginBottom:6 }}>⚡</div>
+                        <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No challenges yet</div>
+                        <div style={{ fontSize:12, color:C.sub }}>Create the first challenge for this group!</div>
+                      </div>
+                    )}
+                    {activeChallenges.length > 0 && (
+                      <div>
+                        <div style={{ fontWeight:800, fontSize:14, color:C.text, marginBottom:12, display:"flex", alignItems:"center", gap:8 }}>
+                          ⚡ Active Challenges <span style={{ background:`${catColor}22`, color:catColor, fontSize:11, padding:"2px 8px", borderRadius:99 }}>{activeChallenges.length}</span>
+                        </div>
+                        {activeChallenges.map((ch: any) => renderChallengeCard(ch, false))}
+                      </div>
+                    )}
+                    {completedChallenges.length > 0 && (
+                      <div style={{ marginTop: activeChallenges.length > 0 ? 20 : 0 }}>
+                        <div style={{ fontWeight:800, fontSize:14, color:"#92400E", marginBottom:12, display:"flex", alignItems:"center", gap:8 }}>
+                          🏅 Completed Challenges <span style={{ background:"#FEF3C7", color:"#F5A623", fontSize:11, padding:"2px 8px", borderRadius:99, border:"1px solid #F5A623" }}>{completedChallenges.length}</span>
+                        </div>
+                        {completedChallenges.map((ch: any) => renderChallengeCard(ch, true))}
+                      </div>
+                    )}
+                  </>
                 );
-              })}
+              })()}
             </div>
           )}
 
