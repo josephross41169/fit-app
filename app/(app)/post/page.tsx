@@ -761,7 +761,7 @@ export default function PostPage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Location</label>
-                <input style={iStyle} placeholder="Add location..." value={location} onChange={e => setLocation(e.target.value)} />
+                <input style={iStyle} placeholder="📍 Add location (e.g. Las Vegas, NV)" value={location} onChange={e => setLocation(e.target.value)} />
               </div>
             </div>
 

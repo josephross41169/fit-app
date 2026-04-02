@@ -664,32 +664,45 @@ export default function GroupPage() {
 
   // ── Submit note ──
   async function submitNote() {
-    if (!noteText.trim()) return;
-    const newLocal = { id: String(Date.now()), user:"You", avatar:(currentUser?.email||'Y').slice(0,2).toUpperCase(), time:"Just now", category:noteCategory, content:noteText, likes:0 };
+    const text = noteText.trim();
+    if (!text) return;
+    // ALWAYS add locally first for instant feedback
+    const localId = String(Date.now());
+    const newLocal = {
+      id: localId,
+      user: "You",
+      avatar: (currentUser?.email || currentUser?.user_metadata?.full_name || 'Y').slice(0,2).toUpperCase(),
+      time: "Just now",
+      category: noteCategory,
+      content: text,
+      likes: 0
+    };
+    setLocalNotes(prev => [...prev, newLocal]);
+    setNoteText(""); // Clear immediately
+
+    // Try to persist to DB in background
     if (currentUser && group._dbId) {
       try {
         const res = await fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: noteText, category: noteCategory } }),
+          body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: text, category: noteCategory } }),
         });
         const data = await res.json();
         if (data.note) {
+          // Replace local note with DB note
           const n = data.note;
+          setLocalNotes(prev => prev.filter(ln => ln.id !== localId));
           setDbNotes(prev => [{
-            id: n.id, user: { full_name: n.user?.full_name, username: n.user?.username },
+            id: n.id,
+            user: { full_name: n.user?.full_name, username: n.user?.username },
             created_at: n.created_at, category: n.category, content: n.content, likes_count: 0,
           }, ...prev]);
-        } else {
-          setLocalNotes(prev => [...prev, newLocal]);
         }
       } catch {
-        setLocalNotes(prev => [...prev, newLocal]);
+        // Keep the local note
       }
-    } else {
-      setLocalNotes(prev => [...prev, newLocal]);
     }
-    setNoteText("");
   }
 
   function togglePostLike(postId: string, baseLikes: number) {

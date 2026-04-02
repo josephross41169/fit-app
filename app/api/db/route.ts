@@ -105,6 +105,19 @@ export async function GET(req: NextRequest) {
         joinedChallengeIds = (cpRows || []).map((r: any) => r.challenge_id);
       }
 
+      // Auto-lock expired challenges
+      const nowIso = new Date().toISOString();
+      const expiredChallenges = (challengesRes.data || []).filter((ch: any) =>
+        ch.is_active && ch.deadline && ch.deadline < nowIso
+      );
+      if (expiredChallenges.length > 0) {
+        await Promise.all(expiredChallenges.map((ch: any) =>
+          admin.from('challenges').update({ is_active: false }).eq('id', ch.id)
+        ));
+        // Update local data
+        expiredChallenges.forEach((ch: any) => { ch.is_active = false; });
+      }
+
       return NextResponse.json({
         group: groupData,
         posts: postsRes.data || [],
@@ -165,6 +178,19 @@ export async function GET(req: NextRequest) {
           time: new Date(c.created_at).toLocaleTimeString(),
         })),
       });
+    }
+
+    // ── Get local posts by city ────────────────────────────────────────────
+    if (action === 'get_local_posts') {
+      const city = searchParams.get('city') || 'Las Vegas';
+      const cityKey = city.split(',')[0].trim();
+      const { data } = await admin
+        .from('posts')
+        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+        .ilike('location', `%${cityKey}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      return NextResponse.json({ posts: data || [] });
     }
 
     return NextResponse.json({ error: 'Unknown GET action' }, { status: 400 });

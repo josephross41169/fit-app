@@ -667,6 +667,7 @@ export default function ProfilePage() {
     name: "",
     username: "",
     bio: "",
+    city: "",
   });
 
   // Sync profile state from user data
@@ -676,6 +677,7 @@ export default function ProfilePage() {
         name: user.profile.full_name || "",
         username: user.profile.username || "",
         bio: user.profile.bio || "",
+        city: (user.profile as any).city || "",
       });
     }
   }, [user]);
@@ -887,11 +889,22 @@ export default function ProfilePage() {
     if (!user) return;
     supabase
       .from('challenge_participants')
-      .select('*, challenges(name, emoji, group_id, groups(name))')
+      .select('*, challenges(name, emoji, group_id, deadline, is_active, groups(name))')
       .eq('user_id', user.id)
       .gt('score', 0)
       .then(({ data }) => {
-        if (data) setCompletedChallenges(data);
+        if (data) {
+          const now = new Date();
+          const completed = data.filter((cp: any) => {
+            const ch = cp.challenges;
+            if (!ch) return false;
+            // Only show if deadline has passed OR is_active is false
+            if (ch.deadline && new Date(ch.deadline) <= now) return true;
+            if (ch.is_active === false) return true;
+            return false;
+          });
+          setCompletedChallenges(completed);
+        }
       });
   }, [user?.id]);
 
@@ -1222,16 +1235,23 @@ export default function ProfilePage() {
       {/* Edit Profile Modal */}
       {editProfile && (
         <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div style={{background:C.white,borderRadius:28,padding:32,width:"100%",maxWidth:440,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+          <div style={{background:C.white,borderRadius:28,padding:32,width:"100%",maxWidth:440,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:20}}>Edit Profile</div>
             <input style={inputStyle} value={profile.name} onChange={e=>setProfile(p=>({...p,name:e.target.value}))} placeholder="Full Name"/>
             <input style={inputStyle} value={profile.username} onChange={e=>setProfile(p=>({...p,username:e.target.value}))} placeholder="Username"/>
             <textarea style={{...inputStyle,resize:"none"}} rows={3} value={profile.bio} onChange={e=>setProfile(p=>({...p,bio:e.target.value}))} placeholder="Bio"/>
+            <input style={inputStyle} value={profile.city} onChange={e=>setProfile(p=>({...p,city:e.target.value}))} placeholder="City (e.g. Las Vegas, NV)"/>
+            {(user?.profile as any)?.account_type === 'business' && (
+              <>
+                <input style={inputStyle} value={(user?.profile as any)?.business_name || ''} readOnly placeholder="Business Name" />
+                <input style={inputStyle} value={(user?.profile as any)?.business_website || ''} readOnly placeholder="Website URL" />
+              </>
+            )}
             <div style={{display:"flex",gap:12,marginTop:8}}>
               <button onClick={()=>setEditProfile(false)} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
               <button onClick={async()=>{
                 if(!user)return;
-                await supabase.from('users').update({full_name:profile.name,username:profile.username,bio:profile.bio}).eq('id',user.id);
+                await supabase.from('users').update({full_name:profile.name,username:profile.username,bio:profile.bio,city:profile.city} as any).eq('id',user.id);
                 await refreshProfile();
                 setEditProfile(false);
               }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
@@ -1312,6 +1332,22 @@ export default function ProfilePage() {
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
               <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>
+              {profile.city && (
+                <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>
+              )}
+              {(user?.profile as any)?.account_type === 'business' && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
+                  <span style={{ background: "#1A2A1A", color: "#16A34A", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
+                    🏢 {(user?.profile as any)?.business_type || 'Business'}
+                  </span>
+                  {(user?.profile as any)?.business_website && (
+                    <a href={(user?.profile as any)?.business_website} target="_blank" rel="noopener noreferrer"
+                      style={{ background: "#1A2A1A", color: "#16A34A", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
+                      🔗 Website
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

@@ -264,7 +264,8 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LOCAL TAB
 // ─────────────────────────────────────────────────────────────────────────────
-function LocalTab() {
+function LocalTab({ userCity, localPosts, onChangeCity }: { userCity: string; localPosts: any[]; onChangeCity: () => void }) {
+  const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
   return (
     <div className="discover-layout" style={{ display:"flex", gap:48, alignItems:"flex-start", maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px" }}>
 
@@ -274,15 +275,15 @@ function LocalTab() {
         <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
           <div style={{ fontSize:36 }}>📍</div>
           <div>
-            <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Las Vegas, NV</div>
-            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Showing fitness content near you · {LOCAL_POSTS.length} posts this week</div>
+            <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>{userCity}</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Showing fitness content near you · {postsToShow.length} posts this week</div>
           </div>
-          <button style={{ marginLeft:"auto",background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.4)",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,padding:"7px 14px",cursor:"pointer",flexShrink:0 }}>
+          <button onClick={onChangeCity} style={{ marginLeft:"auto",background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.4)",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,padding:"7px 14px",cursor:"pointer",flexShrink:0 }}>
             Change City
           </button>
         </div>
 
-        {LOCAL_POSTS.map(post => <DiscoverPost key={post.id} post={post} liked={false} />)}
+        {postsToShow.map((post: any) => <DiscoverPost key={post.id} post={post} liked={false} />)}
       </div>
 
       {/* RIGHT: Local events sidebar */}
@@ -389,6 +390,32 @@ export default function DiscoverPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimeout = useRef<any>(null);
 
+  // City-based local feed
+  const [userCity, setUserCity] = useState("Las Vegas, NV");
+  const [localPosts, setLocalPosts] = useState<any[]>([]);
+  const [showChangeCityOverlay, setShowChangeCityOverlay] = useState(false);
+  const [newCityInput, setNewCityInput] = useState("");
+
+  useEffect(() => {
+    async function loadLocalPosts() {
+      const { data: { user } } = await supabase.auth.getUser();
+      let city = userCity;
+      if (user) {
+        const { data: profile } = await supabase.from('users').select('city').eq('id', user.id).single();
+        if ((profile as any)?.city) { city = (profile as any).city; setUserCity((profile as any).city); }
+      }
+      const { data } = await supabase
+        .from('posts')
+        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+        .ilike('location', `%${city.split(',')[0]}%`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (data && data.length > 0) setLocalPosts(data);
+    }
+    loadLocalPosts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
     clearTimeout(searchTimeout.current);
@@ -492,7 +519,30 @@ export default function DiscoverPage() {
       </div>
 
       {/* ── Tab content ── */}
-      {tab === "local" ? <LocalTab /> : <WorldTab />}
+      {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} /> : <WorldTab />}
+
+      {/* ── Change City Overlay ── */}
+      {showChangeCityOverlay && (
+        <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}
+          onClick={() => setShowChangeCityOverlay(false)}>
+          <div style={{ background:"#1A2E1E",borderRadius:20,padding:28,width:"100%",maxWidth:380,border:"2px solid #2A4A30" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:16 }}>📍 Change City</div>
+            <input
+              value={newCityInput}
+              onChange={e => setNewCityInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && newCityInput.trim()) { setUserCity(newCityInput.trim()); setLocalPosts([]); setShowChangeCityOverlay(false); } }}
+              placeholder="e.g. Los Angeles, CA"
+              style={{ width:"100%",padding:"12px 16px",borderRadius:12,border:"1.5px solid #2A4A30",background:"#1E3522",fontSize:15,color:"#E2E8F0",outline:"none",boxSizing:"border-box",marginBottom:16 }}
+              autoFocus
+            />
+            <div style={{ display:"flex",gap:12 }}>
+              <button onClick={() => setShowChangeCityOverlay(false)} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"1.5px solid #2A4A30",background:"transparent",color:"#9CA3AF",fontWeight:700,fontSize:14,cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => { if (newCityInput.trim()) { setUserCity(newCityInput.trim()); setLocalPosts([]); setShowChangeCityOverlay(false); } }} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>Update</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
