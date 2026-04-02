@@ -778,8 +778,9 @@ export default function ProfilePage() {
 
         const byDate = new Map<string, any[]>();
         data.forEach((log: any) => {
+          // Use local date string to correctly bucket by calendar day in user's timezone
           const d = new Date(log.logged_at);
-          const key = `${d.getMonth() + 1}.${d.getDate()}`;
+          const key = d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); // e.g. "04/02/2026"
           if (!byDate.has(key)) byDate.set(key, []);
           byDate.get(key)!.push(log);
         });
@@ -787,9 +788,16 @@ export default function ProfilePage() {
         const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
         const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
-          const [month, day] = dateKey.split('.').map(Number);
-          const date = new Date(new Date().getFullYear(), month - 1, day);
+          // dateKey is now "MM/DD/YYYY"
+          const [month, day, year] = dateKey.split('/').map(Number);
+          const date = new Date(year, month - 1, day);
           const dayName = DAY_NAMES[date.getDay()];
+          // Build a human-friendly label: "Today", "Yesterday", or "Mon 3/31"
+          const today = new Date();
+          const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+          const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+          const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+          const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
 
           const workoutLog = logs.find((l: any) => l.log_type === 'workout');
           const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
@@ -832,15 +840,19 @@ export default function ProfilePage() {
 
           return {
             id: dateKey,
-            label: dayName,
-            emoji: workout ? '💪' : '🌅',
+            label: friendlyLabel,
+            emoji: workout ? '💪' : (nutrition ? '🥗' : '🌅'),
             workout,
             nutrition,
             _workoutLogId: workoutLog?.id || null,
             _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
             photo_url: workoutLog?.photo_url || nutritionLogs[0]?.photo_url || null,
+            _date: date.getTime(), // for sorting
           };
         });
+
+        // Sort newest first so today's card is always at the top
+        days.sort((a: any, b: any) => b._date - a._date);
 
         setRealDays(days);
       } catch (e) {
