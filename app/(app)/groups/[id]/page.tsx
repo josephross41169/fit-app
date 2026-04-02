@@ -279,6 +279,10 @@ export default function GroupPage() {
   const [eventComments, setEventComments] = useState<Record<string,{user:string;text:string;time:string}[]>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string,string>>({});
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
+  const [shareCopied, setShareCopied] = useState(false);
+  const [postComments, setPostComments] = useState<Record<string, {user:string; avatar:string; text:string; time:string}[]>>({});
+  const [postCommentInputs, setPostCommentInputs] = useState<Record<string,string>>({});
+  const [expandedPostComments, setExpandedPostComments] = useState<Record<string,boolean>>({});
   const [noteLikes, setNoteLikes] = useState<Record<string,number>>({});
 
   // ── Post form state ──
@@ -407,6 +411,7 @@ export default function GroupPage() {
   const allPosts = dbPosts.map((p: any) => ({
     id: p.id, user: p.user?.full_name || p.user?.username || 'Unknown',
     avatar: (p.user?.full_name || p.user?.username || 'U').slice(0,2).toUpperCase(),
+    avatarUrl: p.user?.avatar_url || null,
     time: new Date(p.created_at).toLocaleDateString(), content: p.content, likes: p.likes_count || 0, photo: p.media_url || null,
   }));
 
@@ -428,6 +433,7 @@ export default function GroupPage() {
     ? dbMembers.map((m: any, i: number) => ({
         rank: i + 1,
         avatar: (m.user?.full_name || m.user?.username || 'U').slice(0,2).toUpperCase(),
+        avatarUrl: m.user?.avatar_url || null,
         name: m.user?.full_name || m.user?.username || 'Unknown',
         role: m.role === 'owner' ? 'Organizer' : m.role === 'moderator' ? 'Moderator' : 'Member',
         points: 0,
@@ -619,6 +625,27 @@ export default function GroupPage() {
   function togglePostLike(postId: string, baseLikes: number) {
     setLikedPosts(p => ({ ...p, [postId]: !p[postId] }));
     setPostLikes(p => ({ ...p, [postId]: likedPosts[postId] ? baseLikes : baseLikes + 1 }));
+  }
+
+  function shareGroup() {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      });
+    }
+  }
+
+  function submitPostComment(postId: string) {
+    const text = postCommentInputs[postId]?.trim();
+    if (!text) return;
+    const initials = (currentUser?.email || 'Y').slice(0, 2).toUpperCase();
+    setPostComments(prev => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), { user: 'You', avatar: initials, text, time: 'Just now' }],
+    }));
+    setPostCommentInputs(prev => ({ ...prev, [postId]: '' }));
   }
 
   return (
@@ -825,7 +852,9 @@ export default function GroupPage() {
             <button onClick={handleJoinGroup} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
               {joining ? "Joining..." : joined ? "✓ Joined" : "Join Group"}
             </button>
-            <button style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>Share</button>
+            <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(22,163,74,0.1)` : C.white, border:`2px solid ${shareCopied ? "#16A34A" : C.blueMid}`, color:shareCopied ? "#16A34A" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
+              {shareCopied ? "✓ Copied!" : "Share"}
+            </button>
             <button style={{ padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>···</button>
           </div>
 
@@ -892,8 +921,8 @@ export default function GroupPage() {
               {displayPosts.map((post:any) => (
                 <div key={post.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:18, overflow:"hidden" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px 10px" }}>
-                    <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
-                      {post.avatar}
+                    <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                      {post.avatarUrl ? <img src={post.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : post.avatar}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{post.user}</div>
@@ -907,12 +936,43 @@ export default function GroupPage() {
                   )}
                   <div style={{ padding:"10px 18px 14px" }}>
                     <p style={{ fontSize:14, color:C.text, lineHeight:1.65, margin:"0 0 10px" }}>{post.content}</p>
-                    <button onClick={() => togglePostLike(post.id, post.likes || post.likes_count || 0)} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                      <svg viewBox="0 0 24 24" fill={likedPosts[post.id]?"#FF6B6B":"none"} stroke={likedPosts[post.id]?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                      </svg>
-                      <span style={{ fontSize:13, fontWeight:700, color:likedPosts[post.id]?"#FF6B6B":C.sub }}>{(postLikes[post.id] ?? (post.likes || post.likes_count || 0)).toLocaleString()}</span>
-                    </button>
+                    <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                      <button onClick={() => togglePostLike(post.id, post.likes || post.likes_count || 0)} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                        <svg viewBox="0 0 24 24" fill={likedPosts[post.id]?"#FF6B6B":"none"} stroke={likedPosts[post.id]?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                        <span style={{ fontSize:13, fontWeight:700, color:likedPosts[post.id]?"#FF6B6B":C.sub }}>{(postLikes[post.id] ?? (post.likes || post.likes_count || 0)).toLocaleString()}</span>
+                      </button>
+                      <button onClick={() => setExpandedPostComments(p => ({...p, [post.id]: !p[post.id]}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span style={{ fontSize:13, fontWeight:700, color:C.sub }}>{(postComments[post.id]||[]).length}</span>
+                      </button>
+                    </div>
+                    {expandedPostComments[post.id] && (
+                      <div style={{ marginTop:12, borderTop:`1px solid ${C.blueMid}`, paddingTop:12 }}>
+                        {(postComments[post.id]||[]).map((c,i) => (
+                          <div key={i} style={{ display:"flex", gap:8, marginBottom:8 }}>
+                            <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:900, color:"#fff", flexShrink:0 }}>{c.avatar}</div>
+                            <div style={{ flex:1, background:C.blueLight, borderRadius:12, padding:"7px 10px" }}>
+                              <span style={{ fontSize:11, fontWeight:800, color:C.text }}>{c.user} </span>
+                              <span style={{ fontSize:12, color:C.sub }}>{c.text}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                          <input
+                            value={postCommentInputs[post.id]||''}
+                            onChange={e => setPostCommentInputs(p => ({...p,[post.id]:e.target.value}))}
+                            onKeyDown={e => e.key==='Enter' && submitPostComment(post.id)}
+                            placeholder="Write a comment..."
+                            style={{ flex:1, background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:20, padding:"7px 14px", fontSize:12, color:C.text, outline:"none", fontFamily:"inherit" }}
+                          />
+                          <button onClick={() => submitPostComment(post.id)} style={{ padding:"7px 14px", borderRadius:20, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>Post</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1114,7 +1174,7 @@ export default function GroupPage() {
                 <div key={i} onClick={() => router.push(`/profile/${m.name.toLowerCase().replace(/\s/g,"_")}`)}
                   style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
                   <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0 }}>{m.avatar}</div>
+                  <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
                     <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
@@ -1162,8 +1222,8 @@ export default function GroupPage() {
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
               >
                 <div style={{ width:12, fontSize:10, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0 }}>
-                  {m.avatar}
+                <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
