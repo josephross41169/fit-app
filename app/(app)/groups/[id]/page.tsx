@@ -355,6 +355,19 @@ export default function GroupPage() {
         const lbRes = await fetch(`/api/db?${lbParams}`);
         const lbData = await lbRes.json();
         setDbLeaderboard(lbData.leaderboard || []);
+
+        // Load event comments
+        if (data.events?.length > 0) {
+          const commentMap: Record<string, any[]> = {};
+          await Promise.all((data.events as any[]).map(async (ev: any) => {
+            try {
+              const cRes = await fetch(`/api/db?action=get_event_comments&eventId=${ev.id}`);
+              const cData = await cRes.json();
+              if (cData.comments?.length > 0) commentMap[ev.id] = cData.comments;
+            } catch {}
+          }));
+          if (Object.keys(commentMap).length > 0) setEventComments(commentMap);
+        }
       }
     } catch {
       // Fall through to mock data
@@ -442,8 +455,29 @@ export default function GroupPage() {
         score: `${e.score} ${e.metric_label || ''}`,
         metric: e.metric_label || '',
         value: `${e.score} pts`,
+        challengeId: e.challenge_id || null,
+        challengeName: e.challenge?.name || e.metric_label || 'Challenge',
+        challengeEmoji: e.challenge?.emoji || '🏆',
       }))
     : (mockGroup?.leaderboard || []);
+
+  // Group leaderboard entries by challengeId
+  const leaderboardByChallengeMap = displayLeaderboard.reduce((acc: Record<string, {name:string;emoji:string;entries:any[]}>, entry: any) => {
+    const key = entry.challengeId || 'general';
+    if (!acc[key]) {
+      acc[key] = { name: entry.challengeName || 'Challenge', emoji: entry.challengeEmoji || '🏆', entries: [] };
+    }
+    acc[key].entries.push(entry);
+    return acc;
+  }, {} as Record<string, {name:string;emoji:string;entries:any[]}>);
+
+  // Re-rank within each challenge group
+  Object.values(leaderboardByChallengeMap).forEach((group: any) => {
+    group.entries.sort((a: any, b: any) => b.score - a.score);
+    group.entries.forEach((e: any, i: number) => { e.rank = i + 1; });
+  });
+
+  const leaderboardGroups = Object.entries(leaderboardByChallengeMap);
   const displayMembers = dbMembers.length > 0
     ? dbMembers.map((m: any, i: number) => ({
         rank: i + 1,
@@ -458,18 +492,19 @@ export default function GroupPage() {
     : (mockGroup?.members_list || []);
 
   // ── Event helpers ──
-  function addEventComment(eventId: string) {
+  async function addEventComment(eventId: string) {
     const text = commentInputs[eventId]?.trim();
     if (!text) return;
+    // Optimistic update
     setEventComments(prev => ({ ...prev, [eventId]: [...(prev[eventId] || []), { user:"You", avatar: (currentUser?.email || 'Y').slice(0,2).toUpperCase(), text, time:"Just now" }] }));
     setCommentInputs(prev => ({ ...prev, [eventId]: "" }));
-    // Persist in background
+    // Persist
     if (currentUser) {
       fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'add_event_comment', payload: { eventId, userId: currentUser.id, text } }),
-      }).catch(() => {});
+      }).catch(console.error);
     }
   }
 
@@ -1109,38 +1144,72 @@ export default function GroupPage() {
           {/* ── LEADERBOARD ── */}
           {tab==="leaderboard" && (
             <div>
-              <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, overflow:"hidden", marginBottom:16 }}>
-                <div style={{ background:`linear-gradient(135deg,${catColor},${catColor}CC)`, padding:"16px 20px" }}>
-                  <div style={{ fontWeight:900, fontSize:16, color:"#fff" }}>🏆 {group.name} Leaderboard</div>
-                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>Updated in real-time · Based on challenge scores</div>
+              {displayLeaderboard.length === 0 ? (
+                <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"24px", textAlign:"center" }}>
+                  <div style={{ fontSize:24, marginBottom:8 }}>🏆</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No leaderboard entries yet</div>
+                  <div style={{ fontSize:12, color:C.sub }}>Join a challenge to get ranked!</div>
                 </div>
-                {displayLeaderboard.length === 0 && (
-                  <div style={{ padding:"24px", textAlign:"center", color:C.sub, fontSize:13 }}>
-                    No leaderboard entries yet. Join a challenge to get ranked!
+              ) : leaderboardGroups.length === 1 ? (
+                // Single challenge — show flat list
+                <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, overflow:"hidden", marginBottom:16 }}>
+                  <div style={{ background:`linear-gradient(135deg,${catColor},${catColor}CC)`, padding:"16px 20px" }}>
+                    <div style={{ fontWeight:900, fontSize:16, color:"#fff" }}>🏆 {group.name} Leaderboard</div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>Updated in real-time · Based on challenge scores</div>
                   </div>
-                )}
-                <div style={{ padding:"8px 0" }}>
-                  {displayLeaderboard.map((entry:any) => (
-                    <div key={entry.rank} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
-                      onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
-                      <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
-                        {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
+                  <div style={{ padding:"8px 0" }}>
+                    {leaderboardGroups[0][1].entries.map((entry:any) => (
+                      <div key={`${entry.challengeId}-${entry.rank}`} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
+                        onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
+                        <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
+                          {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
+                        </div>
+                        <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
+                          {entry.avatar}
+                        </div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
+                          <div style={{ fontSize:11, color:C.sub, marginTop:2 }}>{entry.score}</div>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontWeight:900, fontSize:14, color:catColor }}>{entry.value}</div>
+                          <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{entry.metric}</div>
+                        </div>
                       </div>
-                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
-                        {entry.avatar}
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
-                        <div style={{ fontSize:11, color:C.sub, marginTop:2 }}>{entry.score}</div>
-                      </div>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontWeight:900, fontSize:14, color:catColor }}>{entry.value}</div>
-                        <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{entry.metric}</div>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                // Multiple challenges — show per-challenge sections
+                leaderboardGroups.map(([challengeKey, challengeGroup]: [string, any]) => (
+                  <div key={challengeKey} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, overflow:"hidden", marginBottom:16 }}>
+                    <div style={{ background:`linear-gradient(135deg,${catColor},${catColor}CC)`, padding:"14px 20px" }}>
+                      <div style={{ fontWeight:900, fontSize:15, color:"#fff" }}>{challengeGroup.emoji} {challengeGroup.name}</div>
+                    </div>
+                    <div style={{ padding:"8px 0" }}>
+                      {challengeGroup.entries.map((entry:any) => (
+                        <div key={`${challengeKey}-${entry.rank}`} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
+                          onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
+                          <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#F0FDF4", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
+                            {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
+                          </div>
+                          <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0 }}>
+                            {entry.avatar}
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
+                            <div style={{ fontSize:11, color:C.sub, marginTop:2 }}>{entry.score}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontWeight:900, fontSize:14, color:catColor }}>{entry.value}</div>
+                            <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{entry.metric}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 

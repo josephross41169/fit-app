@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
 
       let query = admin
         .from('leaderboard_entries')
-        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url)')
+        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url), challenge:challenges(id,name,emoji,metric_label)')
         .eq('group_id', groupId)
         .order('score', { ascending: false })
         .limit(50);
