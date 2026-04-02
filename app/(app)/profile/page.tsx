@@ -682,6 +682,10 @@ export default function ProfilePage() {
   const [bannerImg,setBanner] = useState<string|null>(null);
   const [profileImg,setAvatar]= useState<string|null>(null);
   const [editProfile,setEditProfile] = useState(false);
+  const [repositionMode, setRepositionMode] = useState(false);
+  const [bannerPosition, setBannerPosition] = useState(50); // 0-100, default center
+  const [bannerHovered, setBannerHovered] = useState(false);
+  const [dragState, setDragState] = useState<{ startY: number; startPos: number } | null>(null);
   const [brands,setBrands] = useState([{emoji:"👟",name:"New Balance"},{emoji:"👕",name:"Gym Shark"},{emoji:"🎧",name:"AirPods"}]);
 
   // ── Crop state ──
@@ -715,7 +719,18 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user?.profile?.avatar_url) setAvatar(user.profile.avatar_url);
     if (user?.profile?.banner_url) setBanner(user.profile.banner_url);
-  }, [user?.profile?.avatar_url, user?.profile?.banner_url]);
+    if (user?.id) {
+      // Load saved banner position
+      try {
+        const savedPos = localStorage.getItem(`banner_position_${user.id}`);
+        if (savedPos !== null) setBannerPosition(parseFloat(savedPos));
+      } catch {}
+      // Also check Supabase profile for saved banner_position
+      if ((user as any)?.profile?.banner_position !== undefined && (user as any)?.profile?.banner_position !== null) {
+        setBannerPosition((user as any).profile.banner_position);
+      }
+    }
+  }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
   const [showAllPhotos,setShowAllPhotos] = useState(false);
   const [photoFilter,setPhotoFilter] = useState<"all"|"workout"|"nutrition"|"wellness">("all");
 
@@ -887,6 +902,39 @@ export default function ProfilePage() {
       }
     };
     r.readAsDataURL(f); e.target.value="";
+  }
+
+  async function saveBannerPosition() {
+    if (!user) return;
+    try { localStorage.setItem(`banner_position_${user.id}`, String(bannerPosition)); } catch {}
+    // Try to save to Supabase (banner_position column may or may not exist)
+    supabase.from('users').update({ banner_position: bannerPosition } as any).eq('id', user.id).then(() => {});
+    setRepositionMode(false);
+  }
+
+  function handleBannerMouseDown(e: React.MouseEvent) {
+    if (!repositionMode) return;
+    e.preventDefault();
+    setDragState({ startY: e.clientY, startPos: bannerPosition });
+  }
+
+  function handleBannerMouseMove(e: React.MouseEvent) {
+    if (!dragState || !repositionMode) return;
+    const dy = e.clientY - dragState.startY;
+    // Moving up (negative dy) should move position up (smaller percentage)
+    const newPos = Math.max(0, Math.min(100, dragState.startPos - dy / 3));
+    setBannerPosition(newPos);
+  }
+
+  function handleBannerMouseUp() {
+    setDragState(null);
+  }
+
+  function handleBannerTouchMove(e: React.TouchEvent) {
+    if (!dragState || !repositionMode) return;
+    const dy = e.touches[0].clientY - dragState.startY;
+    const newPos = Math.max(0, Math.min(100, dragState.startPos - dy / 3));
+    setBannerPosition(newPos);
   }
 
   function addHighlight(e:React.ChangeEvent<HTMLInputElement>) {
@@ -1197,16 +1245,49 @@ export default function ProfilePage() {
 
           {/* Banner + stats */}
           <div className="profile-banner-block" style={{flex:1,minWidth:260}}>
-            <div className="profile-banner-label" style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.blue},#BBF7D0)`,border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div
+              className="profile-banner-label"
+              style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.blue},#BBF7D0)`,border:`2px solid ${repositionMode?"#F5A623":C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
+              onMouseEnter={()=>setBannerHovered(true)}
+              onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
+              onMouseDown={handleBannerMouseDown}
+              onMouseMove={handleBannerMouseMove}
+              onMouseUp={handleBannerMouseUp}
+              onTouchStart={e=>{ if(!repositionMode)return; setDragState({startY:e.touches[0].clientY,startPos:bannerPosition}); }}
+              onTouchMove={handleBannerTouchMove}
+              onTouchEnd={()=>setDragState(null)}
+            >
               {bannerImg
-                ? <img src={bannerImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Banner"/>
+                ? <img src={bannerImg} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transition:dragState?"none":"object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
+              {/* Reposition button — show on hover or when in reposition mode */}
+              {bannerImg && !repositionMode && (bannerHovered || true) && user && (
+                <button
+                  onClick={e=>{e.preventDefault();setRepositionMode(true);}}
+                  style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:6,zIndex:5}}
+                >
+                  <span style={{fontSize:12}}>↕</span>
+                  <span style={{color:"#fff",fontSize:11,fontWeight:700}}>Reposition</span>
+                </button>
+              )}
+              {/* Reposition mode controls */}
+              {repositionMode && (
+                <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",zIndex:10,pointerEvents:"none"}}>
+                  <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"4px 14px",color:"#fff",fontSize:11,fontWeight:700}}>↕ Drag to reposition</div>
+                  <div style={{display:"flex",gap:8,pointerEvents:"all"}}>
+                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#16A34A",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
+                    <button onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(false);setDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Done</button>
+                  </div>
+                </div>
+              )}
               {/* Always-visible camera button overlay for banner */}
-              <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
-                <span style={{fontSize:16}}>📷</span>
-                <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
-                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
-              </label>
+              {!repositionMode && (
+                <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
+                  <span style={{fontSize:16}}>📷</span>
+                  <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
+                </label>
+              )}
             </div>
 
             <div className="profile-stats-bio">
