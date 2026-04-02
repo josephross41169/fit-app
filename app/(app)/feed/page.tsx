@@ -335,8 +335,10 @@ function SideUserBlock({ post }: { post: Post }) {
     <div style={{ background:C.darkCard, borderRadius:18, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:16 }}>
       {/* User header */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
-          {post.avatar}
+        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
+          {(post as any).avatarUrl
+            ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+            : post.avatar}
         </div>
         <div>
           <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{post.user}</div>
@@ -769,43 +771,74 @@ export default function FeedPage() {
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
 
-  const sidebarActivityPosts = activityLogs.map((log: any) => ({
-    id: log.id,
-    user: log.users?.full_name || log.users?.username || 'User',
-    username: log.users?.username || 'user',
-    avatar: log.users?.avatar_url && log.users.avatar_url.startsWith('http')
-      ? log.users.avatar_url
-      : (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
-    time: (() => {
-      const d = new Date(log.logged_at || log.created_at);
-      const diff = Date.now() - d.getTime();
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-      return d.toLocaleDateString();
-    })(),
-    workout: log.log_type === 'workout' ? {
-      type: log.workout_type || 'Workout',
-      duration: log.workout_duration_min,
-      calories: log.workout_calories,
-      exercises: log.exercises || [],
-      notes: log.notes,
-    } : null,
-    nutrition: log.log_type === 'nutrition' ? {
-      meal: log.meal_type || 'Meal',
-      calories: log.calories_total,
-      protein: log.protein_g,
-      carbs: log.carbs_g,
-      fat: log.fat_g,
-      water: log.water_oz,
-      notes: log.notes,
-    } : null,
-    wellness: log.log_type === 'wellness' ? {
-      type: log.wellness_type || 'Wellness',
-      duration: log.wellness_duration_min,
-      mood: log.mood,
-      notes: log.notes,
-    } : null,
-  }));
+  // Group activity logs by user + calendar day so multiple nutrition logs become one card
+  const sidebarActivityPosts = (() => {
+    const grouped = new Map<string, any>();
+    activityLogs.forEach((log: any) => {
+      const userId = log.user_id || 'unknown';
+      const dayKey = new Date(log.logged_at || log.created_at).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      const key = `${userId}__${dayKey}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          id: key,
+          user: log.users?.full_name || log.users?.username || 'User',
+          username: log.users?.username || 'user',
+          avatarUrl: log.users?.avatar_url || null,
+          avatar: (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
+          time: (() => {
+            const d = new Date(log.logged_at || log.created_at);
+            const diff = Date.now() - d.getTime();
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+            return d.toLocaleDateString();
+          })(),
+          _workoutLogs: [] as any[],
+          _nutritionLogs: [] as any[],
+          _wellnessLogs: [] as any[],
+        });
+      }
+      const entry = grouped.get(key);
+      if (log.log_type === 'workout') entry._workoutLogs.push(log);
+      if (log.log_type === 'nutrition') entry._nutritionLogs.push(log);
+      if (log.log_type === 'wellness') entry._wellnessLogs.push(log);
+    });
+
+    return Array.from(grouped.values()).map((entry: any) => {
+      const wl = entry._workoutLogs[0];
+      const nls = entry._nutritionLogs;
+      const wels = entry._wellnessLogs;
+
+      const workout = wl ? {
+        type: wl.workout_type || 'Workout',
+        duration: wl.workout_duration_min ? `${wl.workout_duration_min} min` : '—',
+        calories: wl.workout_calories || 0,
+        exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—' })) : [],
+        cardio: [],
+        notes: wl.notes,
+      } : null;
+
+      const nutrition = nls.length > 0 ? {
+        calories: Math.round(nls.reduce((s: number, l: any) => s + (l.calories_total || 0), 0)),
+        protein:  Math.round(nls.reduce((s: number, l: any) => s + (l.protein_g || 0), 0)),
+        carbs:    Math.round(nls.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0)),
+        fat:      Math.round(nls.reduce((s: number, l: any) => s + (l.fat_g || 0), 0)),
+        sugar: 0,
+        meals: nls.map((l: any) => ({
+          key: l.meal_type || 'Meal',
+          emoji: '🍽️',
+          name: Array.isArray(l.food_items) && l.food_items.length > 0 ? l.food_items.map((f: any) => f.name).join(', ') : (l.notes || 'Logged meal'),
+          cal: l.calories_total || 0,
+        })),
+        photoUrls: nls.map((l: any) => l.photo_url).filter(Boolean),
+      } : null;
+
+      const wellness = wels.length > 0 ? {
+        entries: wels.map((l: any) => ({ activity: l.wellness_type || 'Wellness', emoji: '🌿', notes: l.notes || '' })),
+      } : null;
+
+      return { ...entry, workout, nutrition, wellness };
+    });
+  })();
 
   // On mobile: interleave posts + activity blocks so both are visible
   // On desktop: keep two-column layout
