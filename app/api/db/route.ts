@@ -299,6 +299,7 @@ export async function POST(req: NextRequest) {
         tags: tags || [],
         member_count: 1,
         created_by: userId,
+        creator_id: userId,
         slug,
       }).select().single();
 
