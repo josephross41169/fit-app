@@ -264,8 +264,29 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LOCAL TAB
 // ─────────────────────────────────────────────────────────────────────────────
-function LocalTab({ userCity, localPosts, onChangeCity }: { userCity: string; localPosts: any[]; onChangeCity: () => void }) {
+function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: any[]; onChangeCity: () => void; dbEvents: any[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
   const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
+
+  // Merge real DB events with mock events — real ones first
+  const allEvents = [
+    ...dbEvents.map((e: any) => {
+      const d = e.event_date ? new Date(e.event_date) : null;
+      return {
+        id: `db-${e.id}`,
+        name: e.name,
+        venue: e.location || (e.groups?.name ? `${e.groups.name}` : 'Online'),
+        day: d ? d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase() : '—',
+        date: d ? String(d.getDate()) : '—',
+        emoji: e.emoji || e.groups?.emoji || '📅',
+        category: e.groups?.category || 'Event',
+        price: e.price || 'Free',
+        time: d ? d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '',
+        isReal: true,
+      };
+    }),
+    ...LOCAL_EVENTS.map(e => ({ ...e, id: String(e.id), isReal: false })),
+  ];
+  const eventsToShow = showAllEvents ? allEvents : allEvents.slice(0, 6);
   const [showHostModal, setShowHostModal] = useState(false);
   const [hostForm, setHostForm] = useState({ name: '', date: '', time: '', location: '', description: '', price: 'Free', contact: '' });
   const [hostSubmitted, setHostSubmitted] = useState(false);
@@ -306,11 +327,17 @@ function LocalTab({ userCity, localPosts, onChangeCity }: { userCity: string; lo
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>📅 Local Events This Week</div>
               <div style={{ fontSize:11,color:C.darkSub }}>Las Vegas · Mar 27–30</div>
             </div>
-            <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#4ADE80",padding:0 }}>See all</button>
+            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#4ADE80",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
           </div>
         </div>
 
-        {LOCAL_EVENTS.map(event => <EventCard key={event.id} event={event} />)}
+        {eventsToShow.map((event: any) => <EventCard key={event.id} event={event} />)}
+        {allEvents.length > 6 && (
+          <button onClick={() => setShowAllEvents(!showAllEvents)}
+            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#4ADE80",marginBottom:8,textAlign:"center" }}>
+            {showAllEvents ? "Show less ▲" : `See all ${allEvents.length} events ▼`}
+          </button>
+        )}
 
         {/* Submit event CTA */}
         <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #16A34A`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
@@ -464,6 +491,22 @@ export default function DiscoverPage() {
   const [showChangeCityOverlay, setShowChangeCityOverlay] = useState(false);
   const [newCityInput, setNewCityInput] = useState("");
 
+  // Real events from DB
+  const [dbEvents, setDbEvents] = useState<any[]>([]);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+
+  useEffect(() => {
+    async function loadEvents() {
+      const { data } = await supabase
+        .from('group_events')
+        .select('*, groups(name, category, emoji)')
+        .order('event_date', { ascending: true })
+        .limit(50);
+      if (data && data.length > 0) setDbEvents(data);
+    }
+    loadEvents();
+  }, []);
+
   useEffect(() => {
     async function loadLocalPosts() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -587,7 +630,7 @@ export default function DiscoverPage() {
       </div>
 
       {/* ── Tab content ── */}
-      {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} /> : <WorldTab />}
+      {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} dbEvents={dbEvents} showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} /> : <WorldTab />}
 
       {/* ── Change City Overlay ── */}
       {showChangeCityOverlay && (

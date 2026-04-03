@@ -758,7 +758,7 @@ export default function FeedPage() {
         comments: (p.comments || []).map((c: any) => ({
           id: c.id,
           user: c.users?.full_name || c.users?.username || "User",
-          avatar: (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+          avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
           text: c.content || "",
           time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         })),
