@@ -711,13 +711,32 @@ export default function ProfilePage() {
   const [highlights,setHighlights] = useState<string[]>([]);
   const [highlightLb,setHighlightLb] = useState<string|null>(null);
 
-  // Load persisted highlights from localStorage on mount
+  // Load persisted highlights — Supabase first, localStorage fallback
   useEffect(() => {
     if (!user) return;
-    try {
-      const saved = localStorage.getItem(`fit_highlights_${user.id}`);
-      if (saved) setHighlights(JSON.parse(saved));
-    } catch {}
+    async function loadHighlights() {
+      try {
+        // Try Supabase first (persists across devices)
+        const { data } = await supabase.from('users').select('highlights').eq('id', user!.id).single();
+        if (data?.highlights && Array.isArray(data.highlights) && data.highlights.length > 0) {
+          setHighlights(data.highlights);
+          return;
+        }
+      } catch {}
+      // Fall back to localStorage
+      try {
+        const saved = localStorage.getItem(`fit_highlights_${user!.id}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setHighlights(parsed);
+          // Migrate to Supabase
+          if (parsed.length > 0) {
+            supabase.from('users').update({ highlights: parsed } as any).eq('id', user!.id).catch(() => {});
+          }
+        }
+      } catch {}
+    }
+    loadHighlights();
   }, [user?.id]);
 
   // Load avatar/banner from profile
@@ -1012,19 +1031,16 @@ export default function ProfilePage() {
     const r = new FileReader();
     r.onload = async ev => {
       const dataUrl = ev.target!.result as string;
-      let url = dataUrl; // show preview immediately
-      setHighlights(h => {
-        const next = [...h, url];
-        if (user) { try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {} }
-        return next;
-      });
+      // Show base64 preview immediately
+      setHighlights(h => [...h, dataUrl]);
       if (user) {
         const publicUrl = await uploadPhoto(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
         if (publicUrl) {
-          // Replace the base64 preview with the real URL
           setHighlights(h => {
             const next = h.map(u => u === dataUrl ? publicUrl : u);
-            try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
+            // Save to both Supabase and localStorage
+            supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
+            try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
             return next;
           });
         }
@@ -1038,7 +1054,8 @@ export default function ProfilePage() {
     setHighlights(h => {
       const next = h.filter((_,i) => i !== idx);
       if (user) {
-        try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
+        supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
+        try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
       }
       return next;
     });
@@ -1545,13 +1562,13 @@ export default function ProfilePage() {
                           padding:"14px 8px",
                           textAlign:"center",
                           border:"1.5px solid #F5A623",
-                          background:C.goldLight,
-                          boxShadow:"0 0 12px rgba(245,166,35,0.35)",
+                          background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
+                          boxShadow:"0 0 16px rgba(245,166,35,0.4)",
                           transition:"all 0.2s",
                         }}>
                           <div style={{fontSize:26,marginBottom:4}}>{b.emoji}</div>
-                          <div style={{fontWeight:800,fontSize:11,color:C.text,lineHeight:1.3}}>{b.label}</div>
-                          <div style={{fontSize:10,color:C.sub,marginTop:3,lineHeight:1.3}}>{b.desc}</div>
+                          <div style={{fontWeight:800,fontSize:11,color:"#FFD700",lineHeight:1.3}}>{b.label}</div>
+                          <div style={{fontSize:10,color:"#B8860B",marginTop:3,lineHeight:1.3}}>{b.desc}</div>
                         </div>
                       ))}
                     </div>
@@ -1559,7 +1576,7 @@ export default function ProfilePage() {
                   {/* Challenge Completion Badges */}
                   {completedChallenges.length > 0 && (
                     <div style={{marginBottom:16}}>
-                      <div style={{fontSize:11,fontWeight:800,color:"#92400E",textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏆 Challenge Completions</div>
+                      <div style={{fontSize:11,fontWeight:800,color:"#F5A623",textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏆 Challenge Completions</div>
                       <div style={{display:"flex",flexDirection:"column",gap:8}}>
                         {completedChallenges.map((cp: any, i: number) => {
                           const ch = cp.challenges;
@@ -1573,15 +1590,15 @@ export default function ProfilePage() {
                               alignItems:"center",
                               gap:12,
                               border:"2px solid #F5A623",
-                              background:"linear-gradient(135deg,#FFFBEE,#FEF3C7)",
-                              boxShadow:"0 2px 8px rgba(245,166,35,0.2)",
+                              background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
+                              boxShadow:"0 2px 12px rgba(245,166,35,0.35)",
                             }}>
                               <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#F5A623,#FFD700)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
                                 {ch.emoji || '🏆'}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontWeight:800,fontSize:13,color:"#92400E"}}>{ch.name}</div>
-                                {groupName && <div style={{fontSize:10,color:"#B45309",marginTop:1}}>📍 {groupName}</div>}
+                                <div style={{fontWeight:800,fontSize:13,color:"#FFD700"}}>{ch.name}</div>
+                                {groupName && <div style={{fontSize:10,color:"#F5A623",marginTop:1}}>📍 {groupName}</div>}
                                 <div style={{fontSize:11,color:"#F5A623",fontWeight:700,marginTop:2}}>Score: {cp.score}</div>
                               </div>
                               <div style={{fontSize:18}}>✨</div>
