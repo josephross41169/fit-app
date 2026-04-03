@@ -266,6 +266,17 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function LocalTab({ userCity, localPosts, onChangeCity }: { userCity: string; localPosts: any[]; onChangeCity: () => void }) {
   const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
+  const [showHostModal, setShowHostModal] = useState(false);
+  const [hostForm, setHostForm] = useState({ name: '', date: '', time: '', location: '', description: '', price: 'Free', contact: '' });
+  const [hostSubmitted, setHostSubmitted] = useState(false);
+
+  function handleHostSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    // In production this would POST to an API — for now show success
+    setHostSubmitted(true);
+    setTimeout(() => { setShowHostModal(false); setHostSubmitted(false); setHostForm({ name:'', date:'', time:'', location:'', description:'', price:'Free', contact:'' }); }, 2500);
+  }
+
   return (
     <div className="discover-layout" style={{ display:"flex", gap:48, alignItems:"flex-start", maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px" }}>
 
@@ -302,15 +313,72 @@ function LocalTab({ userCity, localPosts, onChangeCity }: { userCity: string; lo
         {LOCAL_EVENTS.map(event => <EventCard key={event.id} event={event} />)}
 
         {/* Submit event CTA */}
-        <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed rgba(124,58,237,0.4)`,textAlign:"center",cursor:"pointer",transition:"border-color 0.15s" }}
-          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#16A34A"}
-          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(124,58,237,0.4)"}
+        <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #16A34A`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
+          onClick={() => setShowHostModal(true)}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#1A2A1A"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background=C.darkCard; }}
         >
           <div style={{ fontSize:22,marginBottom:5 }}>➕</div>
           <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",marginBottom:3 }}>Host an Event</div>
           <div style={{ fontSize:11,color:C.darkSub }}>Submit your local fitness event for free</div>
         </div>
       </div>
+
+      {/* Host an Event Modal */}
+      {showHostModal && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={() => setShowHostModal(false)}>
+          <div style={{ background:"#1A1D2E",borderRadius:24,border:"1px solid #2A2D3E",width:"100%",maxWidth:480,padding:28,maxHeight:"90vh",overflowY:"auto" }} onClick={e => e.stopPropagation()}>
+            {hostSubmitted ? (
+              <div style={{ textAlign:"center",padding:"32px 0" }}>
+                <div style={{ fontSize:56,marginBottom:12 }}>🎉</div>
+                <div style={{ fontWeight:900,fontSize:20,color:"#16A34A",marginBottom:8 }}>Event Submitted!</div>
+                <div style={{ fontSize:14,color:"#8892A4" }}>We'll review and post your event to the local feed.</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:20 }}>📅 Host a Local Event</div>
+                <form onSubmit={handleHostSubmit}>
+                  {[
+                    { label:"Event Name *", key:"name", placeholder:"e.g. Saturday Morning 5K" },
+                    { label:"Location *", key:"location", placeholder:"e.g. Red Rock Canyon, Las Vegas" },
+                    { label:"Price", key:"price", placeholder:"Free" },
+                    { label:"Contact / Sign-up Link", key:"contact", placeholder:"Email or URL" },
+                  ].map(f => (
+                    <div key={f.key} style={{ marginBottom:12 }}>
+                      <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>{f.label}</label>
+                      <input value={(hostForm as any)[f.key]} onChange={e => setHostForm(p => ({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                        style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",boxSizing:"border-box" as any }} />
+                    </div>
+                  ))}
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12 }}>
+                    <div>
+                      <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>Date *</label>
+                      <input type="date" value={hostForm.date} onChange={e => setHostForm(p=>({...p,date:e.target.value}))} required
+                        style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",boxSizing:"border-box" as any }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>Time</label>
+                      <input type="time" value={hostForm.time} onChange={e => setHostForm(p=>({...p,time:e.target.value}))}
+                        style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",boxSizing:"border-box" as any }} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom:16 }}>
+                    <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>Description</label>
+                    <textarea value={hostForm.description} onChange={e => setHostForm(p=>({...p,description:e.target.value}))} placeholder="What should attendees expect?" rows={3}
+                      style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box" as any }} />
+                  </div>
+                  <div style={{ display:"flex",gap:10 }}>
+                    <button type="button" onClick={() => setShowHostModal(false)} style={{ flex:1,padding:"11px",borderRadius:10,border:"1px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer" }}>Cancel</button>
+                    <button type="submit" disabled={!hostForm.name||!hostForm.location||!hostForm.date} style={{ flex:2,padding:"11px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#16A34A,#22C55E)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",opacity:(!hostForm.name||!hostForm.location||!hostForm.date)?0.5:1 }}>
+                      Submit Event 🎉
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -641,13 +641,13 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
     </div>
   );
   return (
-    <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+    <div style={{background:"#111811",borderRadius:22,padding:24,border:`1.5px solid #2A3A2A`,marginBottom:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontWeight:900,fontSize:17,color:C.text}}>{title}</div>
-        <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:C.greenLight,color:C.blue,border:"none",cursor:"pointer"}}>✏️ Edit</button>
+        <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.blue,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>
       </div>
       {items.map((item,i)=>(
-        <div key={i} style={{background:i%2===0?C.greenLight:C.goldLight,borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
+        <div key={i} style={{background:i%2===0?"#1A2A1A":"#141F14",borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12,border:"1px solid #2A3A2A"}}>
           {item.emoji && <span style={{fontSize:24,flexShrink:0}}>{item.emoji}</span>}
           <span style={{fontSize:14,fontWeight:700,color:C.text}}>{item.name || item.label || Object.values(item).filter((_,idx)=>idx>0).join(' ')}</span>
         </div>
