@@ -69,10 +69,10 @@ function SideNavItem({ tab, active }: { tab: typeof tabs[0]; active: boolean }) 
   return (
     <Link href={tab.href}
       className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-150 group"
-      style={{ background: active ? "#F0FDF4" : "transparent" }}>
+      style={{ background: active ? "#1A2A1A" : "transparent" }}>
       {tab.icon(active)}
       <span className="text-sm font-semibold hidden lg:block"
-        style={{ color: active ? "#16A34A" : "#6B7280" }}>
+        style={{ color: active ? "#16A34A" : "#9CA3AF" }}>
         {tab.label}
       </span>
     </Link>
@@ -85,8 +85,8 @@ export default function BottomNav() {
   return (
     <>
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t"
-        style={{ borderColor: "#BBF7D0" }}>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t"
+        style={{ background: "#0D0D0D", borderColor: "#2A3A2A" }}>
         <div className="flex items-center justify-around px-2 pb-safe">
           {tabs.map((tab) => {
             const active = pathname === tab.href;
@@ -107,8 +107,8 @@ export default function BottomNav() {
       </nav>
 
       {/* Desktop sidebar */}
-      <nav className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 bg-white border-r py-6 px-3 w-16 lg:w-56"
-        style={{ borderColor: "#BBF7D0" }}>
+      <nav className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r py-6 px-3 w-16 lg:w-56"
+        style={{ background: "#0D0D0D", borderColor: "#2A3A2A" }}>
         {/* Logo */}
         <div className="mb-8 px-4">
           <span className="text-2xl font-black hidden lg:block" style={{ color: "#16A34A" }}>FIT ⚡</span>

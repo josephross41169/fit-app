@@ -13,8 +13,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [user, loading, router]);
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid #BBF7D0", borderTopColor: "#16A34A", animation: "spin 0.8s linear infinite" }} />
+    <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid #2A3A2A", borderTopColor: "#16A34A", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   );
@@ -22,7 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F0FDF4" }}>
+    <div style={{ minHeight: "100vh", background: "#0D0D0D" }}>
       <BottomNav />
       <main className="pb-20 md:pb-0 md:pl-16 lg:pl-56">{children}</main>
     </div>
