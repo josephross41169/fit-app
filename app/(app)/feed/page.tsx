@@ -609,7 +609,7 @@ export default function FeedPage() {
   const [dbPosts, setDbPosts] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
-  const [feedTab, setFeedTab] = useState<"foryou" | "following">("foryou");
+  const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
   // Search
@@ -619,7 +619,6 @@ export default function FeedPage() {
   const searchTimeout = useRef<any>(null);
   // Notifications
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [showNotifs, setShowNotifs] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -900,34 +899,6 @@ export default function FeedPage() {
               </div>
             )}
           </div>
-          {/* Notifications bell */}
-          <div style={{position:"relative",flexShrink:0}}>
-            <button onClick={async()=>{setShowNotifs(s=>!s);if(!showNotifs&&user){await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mark_notifications_read',payload:{userId:user.id}})});setNotifications(p=>p.map(n=>({...n,read:true})));} }} style={{background:"none",border:"none",cursor:"pointer",position:"relative",padding:4}}>
-              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:24,height:24}}>
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-              {unreadCount > 0 && <div style={{position:"absolute",top:-2,right:-2,minWidth:16,height:16,borderRadius:8,background:"#FF6B6B",border:`2px solid ${C.white}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",padding:"0 3px"}}>{unreadCount>9?"9+":unreadCount}</div>}
-            </button>
-            {showNotifs && (
-              <div style={{position:"absolute",right:0,top:"calc(100% + 8px)",width:320,background:C.white,borderRadius:20,border:`1.5px solid ${C.greenMid}`,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",zIndex:200,overflow:"hidden",maxHeight:400,overflowY:"auto"}}>
-                <div style={{padding:"14px 18px 10px",fontWeight:900,fontSize:15,color:C.text,borderBottom:`1px solid ${C.greenLight}`}}>🔔 Notifications</div>
-                {notifications.length===0 ? <div style={{padding:"24px",textAlign:"center",color:C.sub,fontSize:13}}>No notifications yet</div>
-                : notifications.map(n=>(
-                  <div key={n.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:n.read?"transparent":"#F0FDF4",borderBottom:`1px solid ${C.greenLight}`,cursor:"pointer"}}
-                    onClick={()=>setShowNotifs(false)}>
-                    <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
-                      {n.from_user?.avatar_url?<img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(n.from_user?.full_name||"?")[0]?.toUpperCase()}
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,color:C.text,lineHeight:1.4}}>{n.body}</div>
-                      <div style={{fontSize:11,color:C.sub,marginTop:2}}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
-                    </div>
-                    {!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:C.blue,flexShrink:0}}/>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
         {/* Feed tabs */}
         <div style={{ display:"flex",gap:4,padding:"0 28px 10px" }}>
@@ -945,6 +916,24 @@ export default function FeedPage() {
               {t.label}
             </button>
           ))}
+          <button key="notifications" onClick={async () => {
+            setFeedTab("notifications");
+            if (user) {
+              await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_notifications_read', payload:{ userId: user.id }}) });
+              setNotifications(p => p.map(n => ({...n, read: true})));
+            }
+          }} style={{
+            padding:"8px 20px", borderRadius:99, border:"none", cursor:"pointer",
+            fontWeight:800, fontSize:13,
+            background: feedTab==="notifications" ? "#16A34A" : "transparent",
+            color: feedTab==="notifications" ? "#fff" : "#6B7280",
+            transition:"all 0.15s",
+            position:"relative",
+          }}>
+            🔔{unreadCount > 0 && feedTab !== "notifications" && (
+              <span style={{position:"absolute",top:2,right:2,minWidth:14,height:14,borderRadius:7,background:"#FF6B6B",fontSize:8,fontWeight:900,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{unreadCount > 9 ? "9+" : unreadCount}</span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -954,7 +943,29 @@ export default function FeedPage() {
         {/* LEFT: Social feed (desktop only) */}
         <div className="feed-main feed-desktop-only">
           <div style={{ height:1,background:C.greenMid,marginBottom:20 }}/>
-          {feedTab === "following" ? (
+          {feedTab === "notifications" ? (
+            <div style={{ padding:"16px 20px", maxWidth:600 }}>
+              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
+              {notifications.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
+                  <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
+                  <div style={{ fontWeight:700, fontSize:15 }}>No notifications yet</div>
+                  <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
+                </div>
+              ) : notifications.map(n => (
+                <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
+                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
+                    <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
+                  </div>
+                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#16A34A",flexShrink:0}}/>}
+                </div>
+              ))}
+            </div>
+          ) : feedTab === "following" ? (
             loadingFollowing ? (
               <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
                 <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
@@ -1066,7 +1077,29 @@ export default function FeedPage() {
       {/* ── Mobile: interleaved single-column feed ── */}
       <div className="feed-mobile-only" style={{ padding:"0 12px" }}>
         <div style={{ height:1,background:C.greenMid,margin:"12px 0 16px" }}/>
-        {feedTab === "following" ? (
+        {feedTab === "notifications" ? (
+          <div style={{ padding:"16px 4px", maxWidth:600 }}>
+            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
+            {notifications.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
+                <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
+                <div style={{ fontWeight:700, fontSize:15 }}>No notifications yet</div>
+                <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
+              </div>
+            ) : notifications.map(n => (
+              <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
+                  <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
+                </div>
+                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#16A34A",flexShrink:0}}/>}
+              </div>
+            ))}
+          </div>
+        ) : feedTab === "following" ? (
           loadingFollowing ? (
             <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
               <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>

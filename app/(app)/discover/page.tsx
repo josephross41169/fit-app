@@ -272,7 +272,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
     ...dbEvents.map((e: any) => {
       const d = e.event_date ? new Date(e.event_date) : null;
       return {
-        id: `db-${e.id}`,
+        id: e.id,
         name: e.name,
         venue: e.location || (e.groups?.name ? `${e.groups.name}` : 'Online'),
         day: d ? d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase() : '—',

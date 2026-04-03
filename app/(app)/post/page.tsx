@@ -7,17 +7,17 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const C = {
   blue: "#16A34A",
-  greenLight: "#F0FDF4",
-  greenMid: "#BBF7D0",
+  greenLight: "#1A2A1A",
+  greenMid: "#2A3A2A",
   gold: "#F5A623",
-  text: "#1A2B3C",
-  sub: "#5A7A8A",
-  white: "#FFFFFF",
-  bg: "#F0FDF4",
+  text: "#F0F0F0",
+  sub: "#9CA3AF",
+  white: "#1A1A1A",
+  bg: "#0D0D0D",
 };
 
 const iStyle = {
-  background: C.greenLight,
+  background: "#111111",
   border: `1.5px solid ${C.greenMid}`,
   borderRadius: 10,
   padding: "9px 12px",

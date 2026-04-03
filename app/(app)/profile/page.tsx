@@ -1333,9 +1333,16 @@ export default function ProfilePage() {
               {profileImg
                 ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(22,163,74,0.25)",display:"block",pointerEvents:"none"}} alt="Profile"/>
                 : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(22,163,74,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
-              {/* Camera button — show when not in reposition mode */}
+              {/* When no image, make whole circle a label */}
+              {!profileImg && !avatarRepositionMode && (
+                <label style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+                  <span style={{fontSize:13}}>📷</span>
+                </label>
+              )}
+              {/* Camera button always visible at bottom right when not repositioning */}
               {!avatarRepositionMode && (
-                <label style={{position:"absolute",bottom:8,right:8,width:30,height:30,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>
+                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#16A34A",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
