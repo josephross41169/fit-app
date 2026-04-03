@@ -1430,21 +1430,24 @@ export default function ProfilePage() {
             <div className="profile-stats-bio">
             <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>
 
-            <div style={{background:C.white,borderRadius:18,padding:"14px 18px",display:"flex",justifyContent:"center",gap:40,border:`1.5px solid ${C.greenMid}`,marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:14,borderRadius:16,overflow:"hidden",border:"1px solid #2A3A2A"}}>
               {[
                 {l:"Followers",v:user?.profile?.followers_count??0,onClick:()=>openSocialModal("followers")},
                 {l:"Following",v:user?.profile?.following_count??0,onClick:()=>openSocialModal("following")},
-              ].map(s=>(
-                <div key={s.l} onClick={s.onClick} style={{textAlign:"center",cursor:s.onClick?"pointer":"default",borderRadius:12,padding:"4px 0",transition:"background 0.15s"}}
-                  onMouseEnter={e=>{if(s.onClick)(e.currentTarget as HTMLDivElement).style.background=C.greenLight}}
-                  onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background="transparent"}}>
-                  <div style={{fontSize:22,fontWeight:900,color:C.blue}}>{s.v}</div>
-                  <div style={{fontSize:11,color:C.sub,marginTop:2}}>{s.l}</div>
+              ].map((s,i)=>(
+                <div key={s.l} onClick={s.onClick}
+                  style={{flex:1,textAlign:"center",cursor:"pointer",padding:"14px 10px",background:"#111811",transition:"background 0.15s",position:"relative",borderLeft:i>0?"1px solid #2A3A2A":"none"}}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.background="#1A2A1A"}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background="#111811"}}>
+                  <div style={{fontSize:26,fontWeight:900,color:C.blue,lineHeight:1,letterSpacing:-1}}>{s.v.toLocaleString()}</div>
+                  <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
                 </div>
               ))}
             </div>
 
-            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`2px solid ${C.blue}`,background:C.white,color:C.blue,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.blue}`,background:"#111811",color:C.blue,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
+              onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#1A2A1A"}}
+              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="#111811"}}>
               ✏️ Edit Profile
             </button>
             </div>{/* end profile-stats-bio */}
