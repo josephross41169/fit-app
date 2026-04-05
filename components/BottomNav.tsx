@@ -124,25 +124,28 @@ export default function BottomNav() {
   const { user } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
 
-  // Count unread messages — messages sent by others that arrived after the last
-  // time the user opened messages. We track this via read_at being null and
-  // sender_id != current user, across all their conversations.
   useEffect(() => {
     if (!user) { setUnreadMessages(0); return; }
 
+    // Clear badge immediately when on messages page
+    if (pathname === '/messages') {
+      setUnreadMessages(0);
+      return;
+    }
+
+    let cancelled = false;
+
     async function fetchUnread() {
       try {
-        // Get all conversations this user is in
         const { data: parts } = await supabase
           .from('conversation_participants')
           .select('conversation_id')
           .eq('user_id', user!.id);
 
+        if (cancelled) return;
         if (!parts || parts.length === 0) { setUnreadMessages(0); return; }
 
         const convIds = parts.map((p: any) => p.conversation_id);
-
-        // Count messages not sent by this user that have no read_at
         const { count } = await supabase
           .from('messages')
           .select('id', { count: 'exact', head: true })
@@ -150,33 +153,30 @@ export default function BottomNav() {
           .neq('sender_id', user!.id)
           .is('read_at', null);
 
-        setUnreadMessages(count || 0);
+        if (!cancelled) setUnreadMessages(count || 0);
       } catch {
-        setUnreadMessages(0);
+        // Never crash the nav — silently stay at 0
+        if (!cancelled) setUnreadMessages(0);
       }
     }
 
     fetchUnread();
-
-    // Poll every 15s for new messages
     const interval = setInterval(fetchUnread, 15000);
 
-    // Also subscribe to realtime inserts on messages table
-    const channel = supabase
-      .channel('nav-message-badge')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-        fetchUnread();
-      })
-      .subscribe();
-
-    // Clear badge when user is on the messages page
-    if (pathname === '/messages') {
-      setUnreadMessages(0);
-    }
+    // Realtime — wrapped in try/catch so a missing table never crashes nav
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel(`nav-msg-${user.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
+          () => { fetchUnread(); })
+        .subscribe();
+    } catch { /* realtime not available yet */ }
 
     return () => {
+      cancelled = true;
       clearInterval(interval);
-      channel.unsubscribe();
+      try { channel?.unsubscribe(); } catch {}
     };
   }, [user, pathname]);
 
