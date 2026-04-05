@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -49,6 +49,7 @@ export default function PostPage() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const submittingRef = useRef(false); // hard lock — prevents double-submit even with rapid clicks
 
   // Workout state
   const [woType, setWoType] = useState("");
@@ -114,6 +115,8 @@ export default function PostPage() {
       setSaveError("You must be logged in. Please refresh and sign in again.");
       return;
     }
+    if (submittingRef.current || loading || saved) return;
+    submittingRef.current = true;
     setLoading(true);
     setSaveError(null);
 
@@ -205,9 +208,11 @@ export default function PostPage() {
 
     setLoading(false);
     if (error) {
+      submittingRef.current = false; // allow retry on error
       setSaveError(error.message || "Something went wrong. Please try again.");
     } else {
       setSaved(true);
+      // ref stays true — log saved, no retry needed
     }
   }
 
@@ -218,7 +223,8 @@ export default function PostPage() {
       setSaveError("You must be logged in. Please refresh and sign in again.");
       return;
     }
-    if (loading || posted) return; // prevent double submit
+    if (submittingRef.current || loading || posted) return; // hard lock — ref fires before state re-render
+    submittingRef.current = true;
     setLoading(true);
     setSaveError(null);
 
@@ -226,6 +232,7 @@ export default function PostPage() {
     if (!profileOk) {
       setSaveError("Could not verify your profile. Please refresh and try again.");
       setLoading(false);
+      submittingRef.current = false;
       return;
     }
 
@@ -251,6 +258,7 @@ export default function PostPage() {
       });
       setLoading(false);
       if (error) {
+        submittingRef.current = false;
         setSaveError(error.message || "Something went wrong. Please try again.");
       } else {
         // ── Auto-award post badges ──────────────────────────────────────────
@@ -265,9 +273,11 @@ export default function PostPage() {
           }
         } catch {}
         setPosted(true);
+        // ref stays true — post is done, we never want another submit
       }
     } catch (e: any) {
       setLoading(false);
+      submittingRef.current = false;
       setSaveError(e?.message || "Network error. Check your connection and try again.");
     }
   }

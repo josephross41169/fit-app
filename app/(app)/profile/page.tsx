@@ -900,6 +900,14 @@ export default function ProfilePage() {
                   sets: parseInt(e.sets) || 0,
                   reps: parseInt(e.reps) || 0,
                   weight: e.weight || '—',
+                  weights: Array.isArray(e.weights) ? e.weights : [],
+                }))
+              : [],
+            cardio: Array.isArray(workoutLog.cardio)
+              ? workoutLog.cardio.map((c: any) => ({
+                  type: c.type || 'Cardio',
+                  duration: c.duration || '—',
+                  distance: c.distance || '',
                 }))
               : [],
           } : null;

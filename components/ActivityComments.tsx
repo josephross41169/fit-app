@@ -56,24 +56,38 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
   async function submitComment() {
     if (!text.trim() || !user || posting) return;
     setPosting(true);
+
+    const content = text.trim();
+    setText(""); // clear input immediately
+
+    // Optimistic: show comment right away before server responds
+    const optimisticComment: Comment = {
+      id: `optimistic-${Date.now()}`,
+      content,
+      created_at: new Date().toISOString(),
+      commenter: {
+        id: user.id,
+        username: (user as any)?.profile?.username || (user as any)?.user_metadata?.username || "you",
+        full_name: (user as any)?.profile?.full_name || (user as any)?.user_metadata?.full_name || "You",
+        avatar_url: (user as any)?.profile?.avatar_url || null,
+      },
+    };
+    setComments(prev => [...prev, optimisticComment]);
+
     const res = await fetch('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'post_activity_comment',
-        payload: {
-          cardId,
-          commenterId: user.id,
-          content: text.trim(),
-          cardOwnerId,
-        },
+        payload: { cardId, commenterId: user.id, content, cardOwnerId },
       }),
     });
     const json = await res.json();
     if (json.comment) {
-      setComments(prev => [...prev, json.comment]);
-      setText("");
+      // Replace optimistic with real server comment (gets real id, real timestamp)
+      setComments(prev => prev.map(c => c.id === optimisticComment.id ? json.comment : c));
     }
+    // If server failed, leave the optimistic comment rather than vanishing it — user sees it
     setPosting(false);
   }
 
