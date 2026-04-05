@@ -327,10 +327,32 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
   );
 }
 
+// ── DARK SIDEBAR: Badge definitions ──────────────────────────────────────────
+const BADGE_DEFS: Record<string, { emoji: string; label: string }> = {
+  "first-workout": { emoji: "🏋️", label: "First Workout" },
+  "7day-streak": { emoji: "🔥", label: "7 Day Streak" },
+  "30day-streak": { emoji: "💪", label: "30 Day Streak" },
+  "90day-streak": { emoji: "🦁", label: "90 Day Grind" },
+  "first-5k": { emoji: "🏃", label: "First 5K" },
+  "marathon": { emoji: "🏅", label: "Marathon" },
+  "weight-lost-10": { emoji: "⚡", label: "10 lbs Down" },
+  "weight-lost-25": { emoji: "🌟", label: "25 lbs Down" },
+  "weight-lost-50": { emoji: "👑", label: "50 lbs Down" },
+  "macro-week": { emoji: "🥗", label: "Macro Week" },
+  "protein-streak": { emoji: "🥩", label: "Protein Streak" },
+  "hydration-week": { emoji: "💧", label: "Hydration Week" },
+  "zen-week": { emoji: "🧘", label: "Zen Week" },
+  "zero-alcohol": { emoji: "🌿", label: "Sober Streak" },
+  "sleep-champion": { emoji: "😴", label: "Sleep Champion" },
+  "community-100": { emoji: "🤝", label: "Community 100" },
+  "personal-trainer": { emoji: "🎓", label: "Personal Trainer" },
+};
+
 // ── DARK SIDEBAR: One user's full activity block ──────────────────────────────
-function SideUserBlock({ post }: { post: Post }) {
+function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: string[] }) {
   const hasActivity = post.workout || post.nutrition || post.wellness;
   if (!hasActivity) return null;
+  const displayBadges = userBadges.slice(0, 4);
   return (
     <div style={{ background:C.darkCard, borderRadius:18, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:16 }}>
       {/* User header */}
@@ -346,12 +368,34 @@ function SideUserBlock({ post }: { post: Post }) {
         </div>
         <div style={{ marginLeft:"auto",fontSize:11,color:C.darkSub }}>{post.time}</div>
       </div>
-      {/* Cards */}
+      {/* Activity cards */}
       <div style={{ padding:"12px 14px 4px" }}>
         {post.workout && <SideWorkout workout={post.workout} />}
         {post.nutrition && <SideNutrition nutrition={post.nutrition} />}
         {post.wellness && <SideWellness wellness={post.wellness} />}
       </div>
+      {/* Badges */}
+      {displayBadges.length > 0 && (
+        <div style={{ padding:"8px 14px 12px", borderTop:`1px solid ${C.darkBorder}` }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.darkSub, textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Badges</div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {displayBadges.map(badgeId => {
+              const def = BADGE_DEFS[badgeId] || { emoji: "🏆", label: badgeId };
+              return (
+                <div key={badgeId} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(245,166,35,0.12)", border:"1px solid rgba(245,166,35,0.3)", borderRadius:99, padding:"4px 10px" }}>
+                  <span style={{ fontSize:12 }}>{def.emoji}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:"#F5A623" }}>{def.label}</span>
+                </div>
+              );
+            })}
+            {userBadges.length > 4 && (
+              <div style={{ display:"flex", alignItems:"center", background:"rgba(245,166,35,0.08)", border:"1px solid rgba(245,166,35,0.2)", borderRadius:99, padding:"4px 10px" }}>
+                <span style={{ fontSize:11, fontWeight:700, color:"#F5A623" }}>+{userBadges.length - 4} more</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -608,6 +652,7 @@ export default function FeedPage() {
   const [posts, setPosts] = useState(INITIAL_POSTS);
   const [dbPosts, setDbPosts] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [userBadgeMap, setUserBadgeMap] = useState<Record<string, string[]>>({});
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
@@ -687,7 +732,25 @@ export default function FeedPage() {
         .select('*, users:user_id(id, username, full_name, avatar_url)')
         .order('logged_at', { ascending: false })
         .limit(20);
-      if (data && data.length > 0) setActivityLogs(data);
+      if (data && data.length > 0) {
+        setActivityLogs(data);
+        // Load badges for users in the feed
+        const userIds = [...new Set(data.map((l: any) => l.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: badgeData } = await supabase
+            .from('badges')
+            .select('user_id, badge_id')
+            .in('user_id', userIds);
+          if (badgeData) {
+            const map: Record<string, string[]> = {};
+            badgeData.forEach((b: any) => {
+              if (!map[b.user_id]) map[b.user_id] = [];
+              map[b.user_id].push(b.badge_id);
+            });
+            setUserBadgeMap(map);
+          }
+        }
+      }
     }
     loadActivityFeed();
   }, []);
@@ -780,6 +843,7 @@ export default function FeedPage() {
       if (!grouped.has(key)) {
         grouped.set(key, {
           id: key,
+          _userId: userId,
           user: log.users?.full_name || log.users?.username || 'User',
           username: log.users?.username || 'user',
           avatarUrl: log.users?.avatar_url || null,
@@ -812,7 +876,11 @@ export default function FeedPage() {
         duration: wl.workout_duration_min ? `${wl.workout_duration_min} min` : '—',
         calories: wl.workout_calories || 0,
         exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—' })) : [],
-        cardio: [],
+        cardio: Array.isArray(wl.cardio) ? wl.cardio.map((c: any) => ({
+          type: c.type || 'Cardio',
+          duration: c.duration || '—',
+          distance: c.distance || '',
+        })) : [],
         notes: wl.notes,
       } : null;
 
@@ -1033,10 +1101,10 @@ export default function FeedPage() {
           <div style={{ padding:"0 12px" }}>
             {sidebarActivityPosts.length > 0
               ? sidebarActivityPosts.map((post: any) => (
-                  <SideUserBlock key={post.id} post={post} />
+                  <SideUserBlock key={post.id} post={post} userBadges={userBadgeMap[post._userId] || []} />
                 ))
               : activityPosts.map(post => (
-                  <SideUserBlock key={post.id} post={post} />
+                  <SideUserBlock key={post.id} post={post} userBadges={[]} />
                 ))
             }
             <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
