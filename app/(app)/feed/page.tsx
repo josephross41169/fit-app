@@ -1108,6 +1108,58 @@ export default function FeedPage() {
                 </div>
               ) : (
                 <>
+                  {/* ── New Members panel — top of For You feed ── */}
+                  {newMembers.length > 0 && (
+                    <div style={{ background:C.darkCard, borderRadius:24, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:24 }}>
+                      <div style={{ padding:"14px 18px 10px", borderBottom:`1px solid ${C.darkBorder}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div>
+                          <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👋 New Members</div>
+                          <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>Recently joined · your city first</div>
+                        </div>
+                      </div>
+                      <div style={{ padding:"6px 12px 10px" }}>
+                        {newMembers.map((member: any, i: number) => {
+                          const name = member.full_name || member.username || "User";
+                          const ini = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                          const userCity = (user as any)?.profile?.city?.split(",")[0]?.trim()?.toLowerCase() || "";
+                          const memberCity = member.city?.split(",")[0]?.trim()?.toLowerCase() || "";
+                          const isLocal = userCity && memberCity && memberCity.includes(userCity);
+                          const joined = (() => {
+                            const diff = Date.now() - new Date(member.created_at).getTime();
+                            if (diff < 3600000) return "just now";
+                            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                            if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+                            return new Date(member.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                          })();
+                          return (
+                            <div key={member.id}
+                              onClick={() => window.location.href = `/profile/${member.username}`}
+                              style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 8px", borderRadius:14, cursor:"pointer", transition:"background 0.15s", marginBottom:2 }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "#1E2A1E")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                            >
+                              <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
+                              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #16A34A" : "2px solid #2A2D3E" }}>
+                                {member.avatar_url
+                                  ? <img src={member.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                  : ini}
+                              </div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                  <span style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
+                                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#16A34A", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
+                                </div>
+                                <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
+                                <div style={{ fontSize:10, color:"#10B981", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
+                              </div>
+                              <FollowButton targetUserId={member.id} size="sm" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {displayPosts.length === 0 && (
                     <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
                       👋 No posts yet. Share something to the feed to see it here!
@@ -1119,60 +1171,6 @@ export default function FeedPage() {
                 </>
               )}
             </>
-          )}
-
-          {/* ── New Members panel — below the posts ── */}
-          {newMembers.length > 0 && feedTab === "foryou" && (
-            <div style={{ background:C.darkCard, borderRadius:24, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginTop:24, marginBottom:24 }}>
-              <div style={{ padding:"16px 18px 12px", borderBottom:`1px solid ${C.darkBorder}` }}>
-                <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0" }}>👋 New Members</div>
-                <div style={{ fontSize:12, color:C.darkSub, marginTop:2 }}>Recently joined · your city first</div>
-              </div>
-              <div style={{ padding:"8px 12px 12px" }}>
-                {newMembers.map((member: any, i: number) => {
-                  const name = member.full_name || member.username || "User";
-                  const ini = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-                  const userCity = (user as any)?.profile?.city?.split(",")[0]?.trim()?.toLowerCase() || "";
-                  const memberCity = member.city?.split(",")[0]?.trim()?.toLowerCase() || "";
-                  const isLocal = userCity && memberCity && memberCity.includes(userCity);
-                  const joined = (() => {
-                    const diff = Date.now() - new Date(member.created_at).getTime();
-                    if (diff < 3600000) return "just now";
-                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-                    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-                    return new Date(member.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                  })();
-                  return (
-                    <div key={member.id}
-                      onClick={() => window.location.href = `/profile/${member.username}`}
-                      style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 8px", borderRadius:14, cursor:"pointer", transition:"background 0.15s", marginBottom:2 }}
-                      onMouseEnter={e => (e.currentTarget.style.background = "#1E2A1E")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                    >
-                      {/* Rank */}
-                      <div style={{ width:18, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
-                      {/* Avatar */}
-                      <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #16A34A" : "2px solid transparent" }}>
-                        {member.avatar_url
-                          ? <img src={member.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          : ini}
-                      </div>
-                      {/* Info */}
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
-                          {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#16A34A", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
-                        </div>
-                        <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}</div>
-                        <div style={{ fontSize:10, color:"#10B981", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
-                      </div>
-                      {/* Follow button */}
-                      <FollowButton targetUserId={member.id} size="sm" />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           )}
         </div>
 
