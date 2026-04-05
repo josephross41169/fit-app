@@ -180,6 +180,18 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // ── Get activity comments ──────────────────────────────────────────────
+    if (action === 'get_activity_comments') {
+      const cardId = searchParams.get('cardId');
+      if (!cardId) return NextResponse.json({ comments: [] });
+      const { data } = await admin
+        .from('activity_comments')
+        .select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url)')
+        .eq('activity_card_id', cardId)
+        .order('created_at', { ascending: true });
+      return NextResponse.json({ comments: data || [] });
+    }
+
     // ── Get local posts by city ────────────────────────────────────────────
     if (action === 'get_local_posts') {
       const city = searchParams.get('city') || 'Las Vegas';
@@ -261,6 +273,37 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ message: data });
+    }
+
+    // ── Post activity comment ──────────────────────────────────────────────
+    if (action === 'post_activity_comment') {
+      const { cardId, commenterId, content, cardOwnerId } = payload;
+      if (!cardId || !commenterId || !content) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      const { data, error } = await admin.from('activity_comments').insert({
+        activity_card_id: cardId,
+        commenter_id: commenterId,
+        content,
+      }).select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url)').single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Notify the card owner if it's someone else's activity
+      if (cardOwnerId && cardOwnerId !== commenterId) {
+        const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
+        const name = commenter?.full_name || commenter?.username || 'Someone';
+        await admin.from('notifications').insert({
+          user_id: cardOwnerId,
+          from_user_id: commenterId,
+          type: 'activity_comment',
+          reference_id: cardId,
+          body: `${name} commented on your activity: "${content.slice(0, 60)}${content.length > 60 ? '...' : ''}"`,
+          read: false,
+        }).catch(() => {}); // don't fail if notifications table isn't ready yet
+      }
+
+      return NextResponse.json({ comment: data });
     }
 
     // ── Create notification ────────────────────────────────────────────────

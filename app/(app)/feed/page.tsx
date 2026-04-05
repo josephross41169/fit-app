@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import FollowButton from "@/components/FollowButton";
+import ActivityComments from "@/components/ActivityComments";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -396,6 +397,8 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           </div>
         </div>
       )}
+      {/* Comments */}
+      <ActivityComments cardId={post.id as string} cardOwnerId={post._userId as string} />
     </div>
   );
 }
@@ -1228,6 +1231,7 @@ export default function FeedPage() {
                     {item.data.nutrition && <SideNutrition nutrition={item.data.nutrition} />}
                     {item.data.wellness && <SideWellness wellness={item.data.wellness} />}
                   </div>
+                  <ActivityComments cardId={item.data.id as string} cardOwnerId={(item.data as any)._userId as string} />
                 </div>
               </div>
             );
