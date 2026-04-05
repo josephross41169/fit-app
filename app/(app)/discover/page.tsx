@@ -95,15 +95,17 @@ function DiscoverPost({ post, liked: initLiked }: { post: any; liked: boolean })
   const [likes, setLikes] = useState(post.likes ?? post.likes_count ?? 0);
   const router = useRouter();
 
-  // Normalize fields — handle both mock data and real DB posts
-  const displayName  = post.user  || post.user?.full_name  || post.users?.full_name  || post.users?.username || "User";
-  const displayHandle = post.username || post.users?.username || "user";
-  const displayAvatar = post.avatar || null;
-  const avatarUrl = post.users?.avatar_url || null;
-  const avatarIni = displayName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
-  const photoSrc  = post.photo  || post.media_url  || null;
-  const tags: string[] = Array.isArray(post.tags) ? post.tags : [];
-  const caption   = post.caption || "";
+  // Normalize fields — handle both mock data shapes and real DB posts
+  // DB posts: post.user = joined users row (object), post.users = same via alternate join key
+  const userObj = (post.user && typeof post.user === 'object') ? post.user : (post.users || null);
+  const displayName   = (typeof post.user === 'string' ? post.user : null) || userObj?.full_name || userObj?.username || "User";
+  const displayHandle = post.username || userObj?.username || "user";
+  const displayAvatar = (typeof post.avatar === 'string' && !post.avatar.startsWith('http')) ? post.avatar : null;
+  const avatarUrl     = userObj?.avatar_url || (typeof post.avatar === 'string' && post.avatar.startsWith('http') ? post.avatar : null);
+  const avatarIni     = displayName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
+  const photoSrc      = post.photo || post.media_url || null;
+  const tags: string[]= Array.isArray(post.tags) ? post.tags : [];
+  const caption       = post.caption || "";
 
   return (
     <div style={{ background:C.white,borderRadius:20,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 24px rgba(124,58,237,0.09)",marginBottom:28,overflow:"hidden" }}>
