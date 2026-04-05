@@ -94,7 +94,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [nutrition,setNutrition] = useState<Nutrition|null>(day.nutrition as Nutrition|null);
   const [wellness,setWellness]   = useState<Wellness|null>((day as any).wellness as Wellness | null ?? null);
   // edit buffers
-  const [woBuf,setWoBuf]   = useState<Workout>(() => workout ? {...workout} : {type:"",duration:"",calories:0,exercises:[],cardio:[]});
+  const [woBuf,setWoBuf]   = useState<Workout>(() => workout ? {...workout, cardio: (workout as any).cardio || [], exercises: workout.exercises || []} : {type:"",duration:"",calories:0,exercises:[],cardio:[]});
   const [nutBuf,setNutBuf] = useState<Nutrition>(nutrition ?? {calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});
   const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
   const [showAllBadges, setShowAllBadges] = useState(false);
@@ -325,7 +325,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>🏃 Cardio</span>
                   <button onClick={()=>setWoBuf(w=>({...w,cardio:[...w.cardio,{...emptyCardio}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.blue,border:`1.5px solid ${C.blue}`,cursor:"pointer"}}>+ Add Cardio</button>
                 </div>
-                {woBuf.cardio.map((c,i)=>(
+                {(woBuf.cardio || []).map((c,i)=>(
                   <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
                     <input style={iStyle} placeholder="Type (e.g. Running, Cycling)" value={c.type} onChange={e=>setWoBuf(w=>({...w,cardio:w.cardio.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))}/>
                     <input style={iStyle} placeholder="Duration" value={c.duration} onChange={e=>setWoBuf(w=>({...w,cardio:w.cardio.map((x,j)=>j===i?{...x,duration:e.target.value}:x)}))}/>
@@ -333,7 +333,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     <button onClick={()=>setWoBuf(w=>({...w,cardio:w.cardio.filter((_,j)=>j!==i)}))} style={{width:34,height:34,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
                   </div>
                 ))}
-                {woBuf.cardio.length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>No cardio logged — click + Add Cardio above</div>}
+                {(woBuf.cardio || []).length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>No cardio logged — click + Add Cardio above</div>}
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditWo(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
