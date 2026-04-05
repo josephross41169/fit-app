@@ -1,7 +1,11 @@
-﻿"use client";
+"use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 
+// ── Nav tab definitions ───────────────────────────────────────────────────────
 const tabs = [
   {
     href: "/feed", label: "Feed",
@@ -33,7 +37,6 @@ const tabs = [
       </div>
     )
   },
-
   {
     href: "/messages", label: "Messages",
     icon: (active: boolean) => (
@@ -64,23 +67,123 @@ const tabs = [
   },
 ];
 
-// Sidebar nav item for desktop
-function SideNavItem({ tab, active }: { tab: typeof tabs[0]; active: boolean }) {
+// ── Badge component ───────────────────────────────────────────────────────────
+function Badge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <div style={{
+      position: "absolute",
+      top: -3, right: -3,
+      minWidth: 16, height: 16,
+      borderRadius: 8,
+      background: "#EF4444",
+      color: "#fff",
+      fontSize: 9,
+      fontWeight: 900,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0 3px",
+      border: "2px solid #0D0D0D",
+      lineHeight: 1,
+      zIndex: 10,
+    }}>
+      {count > 99 ? "99+" : count}
+    </div>
+  );
+}
+
+// ── Desktop sidebar nav item ──────────────────────────────────────────────────
+function SideNavItem({ tab, active, badge }: { tab: typeof tabs[0]; active: boolean; badge?: number }) {
   return (
     <Link href={tab.href}
       className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-150 group"
-      style={{ background: active ? "#1A2A1A" : "transparent" }}>
-      {tab.icon(active)}
+      style={{ background: active ? "#1A2A1A" : "transparent", position: "relative" }}>
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        {tab.icon(active)}
+        {badge ? <Badge count={badge} /> : null}
+      </div>
       <span className="text-sm font-semibold hidden lg:block"
         style={{ color: active ? "#16A34A" : "#9CA3AF" }}>
         {tab.label}
       </span>
+      {/* Show count inline on desktop expanded sidebar */}
+      {badge ? (
+        <span className="hidden lg:flex ml-auto text-xs font-bold px-2 py-0.5 rounded-full"
+          style={{ background: "#EF4444", color: "#fff", fontSize: 10 }}>
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
 
+// ── Main BottomNav ────────────────────────────────────────────────────────────
 export default function BottomNav() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // Count unread messages — messages sent by others that arrived after the last
+  // time the user opened messages. We track this via read_at being null and
+  // sender_id != current user, across all their conversations.
+  useEffect(() => {
+    if (!user) { setUnreadMessages(0); return; }
+
+    async function fetchUnread() {
+      try {
+        // Get all conversations this user is in
+        const { data: parts } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', user!.id);
+
+        if (!parts || parts.length === 0) { setUnreadMessages(0); return; }
+
+        const convIds = parts.map((p: any) => p.conversation_id);
+
+        // Count messages not sent by this user that have no read_at
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .in('conversation_id', convIds)
+          .neq('sender_id', user!.id)
+          .is('read_at', null);
+
+        setUnreadMessages(count || 0);
+      } catch {
+        setUnreadMessages(0);
+      }
+    }
+
+    fetchUnread();
+
+    // Poll every 15s for new messages
+    const interval = setInterval(fetchUnread, 15000);
+
+    // Also subscribe to realtime inserts on messages table
+    const channel = supabase
+      .channel('nav-message-badge')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        fetchUnread();
+      })
+      .subscribe();
+
+    // Clear badge when user is on the messages page
+    if (pathname === '/messages') {
+      setUnreadMessages(0);
+    }
+
+    return () => {
+      clearInterval(interval);
+      channel.unsubscribe();
+    };
+  }, [user, pathname]);
+
+  const getBadge = (href: string) => {
+    if (href === '/messages') return unreadMessages;
+    return 0;
+  };
 
   return (
     <>
@@ -90,10 +193,15 @@ export default function BottomNav() {
         <div className="flex items-center justify-around px-2 pb-safe">
           {tabs.map((tab) => {
             const active = pathname === tab.href;
+            const badge = getBadge(tab.href);
             return (
               <Link key={tab.href} href={tab.href}
-                className="flex flex-col items-center gap-0.5 py-2 px-3 min-w-[44px]">
-                {tab.icon(active)}
+                className="flex flex-col items-center gap-0.5 py-2 px-3 min-w-[44px]"
+                style={{ position: "relative" }}>
+                <div style={{ position: "relative" }}>
+                  {tab.icon(active)}
+                  {badge > 0 && <Badge count={badge} />}
+                </div>
                 {tab.href !== "/post" && (
                   <span className="text-xs font-medium"
                     style={{ color: active ? "#16A34A" : "#6B7280" }}>
@@ -117,7 +225,7 @@ export default function BottomNav() {
 
         <div className="flex flex-col gap-1">
           {tabs.map((tab) => (
-            <SideNavItem key={tab.href} tab={tab} active={pathname === tab.href} />
+            <SideNavItem key={tab.href} tab={tab} active={pathname === tab.href} badge={getBadge(tab.href)} />
           ))}
         </div>
       </nav>
