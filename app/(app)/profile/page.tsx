@@ -298,6 +298,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         <div style={{width:34,height:34,borderRadius:"50%",background:C.greenLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
           <svg viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
         </div>
+        {photos.length > 0 && (
+          <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.greenMid}`}}>
+            <img src={photos[0]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+          </div>
+        )}
         {onDelete && (
           <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
             {!confirmDel
@@ -325,7 +330,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
             {photos.map((src,i)=>(
               <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.greenMid}`}}>
-                <img onClick={()=>setLb(src)} src={src} style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt=""/>
+                <img onClick={()=>setLb(src)} src={src} style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
                 <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>
               </div>
             ))}
@@ -770,8 +775,12 @@ export default function ProfilePage() {
         // Try Supabase first (persists across devices)
         const { data } = await supabase.from('users').select('highlights').eq('id', user!.id).single();
         if (data?.highlights && Array.isArray(data.highlights) && data.highlights.length > 0) {
-          setHighlights(data.highlights);
-          return;
+          // Filter to only valid URLs (not base64 blobs which may be truncated)
+          const validUrls = data.highlights.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
+          if (validUrls.length > 0) {
+            setHighlights(validUrls);
+            return;
+          }
         }
       } catch {}
       // Fall back to localStorage
@@ -779,10 +788,11 @@ export default function ProfilePage() {
         const saved = localStorage.getItem(`fit_highlights_${user!.id}`);
         if (saved) {
           const parsed = JSON.parse(saved);
-          setHighlights(parsed);
-          // Migrate to Supabase
-          if (parsed.length > 0) {
-            supabase.from('users').update({ highlights: parsed } as any).eq('id', user!.id).catch(() => {});
+          const validUrls = parsed.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
+          setHighlights(validUrls);
+          // Migrate valid URLs to Supabase
+          if (validUrls.length > 0) {
+            supabase.from('users').update({ highlights: validUrls } as any).eq('id', user!.id).catch(() => {});
           }
         }
       } catch {}
@@ -1098,12 +1108,13 @@ export default function ProfilePage() {
       setHighlights(h => [...h, dataUrl]);
       if (user) {
         const publicUrl = await uploadPhoto(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
-        if (publicUrl) {
+        if (publicUrl && publicUrl.startsWith('http')) {
           setHighlights(h => {
-            const next = h.map(u => u === dataUrl ? publicUrl : u);
-            // Save to both Supabase and localStorage
-            supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
-            try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
+            const next = h.map(u => u === dataUrl ? publicUrl : u).filter(u => u.startsWith('http') || u.startsWith('data:'));
+            // Only save proper http URLs to Supabase
+            const httpOnly = next.filter(u => u.startsWith('http'));
+            supabase.from('users').update({ highlights: httpOnly } as any).eq('id', user!.id).catch(() => {});
+            try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(httpOnly)); } catch {}
             return next;
           });
         }
@@ -1540,7 +1551,7 @@ export default function ProfilePage() {
                   if (src) {
                     return (
                       <div key={i} className="highlight-slot" style={{position:"relative",aspectRatio:"1",borderRadius:12,overflow:"hidden",cursor:"pointer"}}>
-                        <img onClick={()=>setHighlightLb(src)} src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                        <img onClick={()=>setHighlightLb(src)} src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                         <button
                           className="highlight-remove"
                           onClick={()=>removeHighlight(i)}
