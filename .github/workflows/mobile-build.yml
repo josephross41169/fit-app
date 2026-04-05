@@ -1,9 +1,7 @@
 name: Mobile Build
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch: # manual trigger only — remove this comment and add push trigger when signing keys are configured
 
 jobs:
   build-android:
