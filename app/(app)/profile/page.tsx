@@ -193,19 +193,28 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [editWell,setEditWell] = useState(false);
   const [photos,setPhotos]   = useState<string[]>([]);
   const [lb,setLb]           = useState<string|null>(null);
-  const [workout,setWorkout]     = useState<Workout|null>(day.workout ? {...day.workout as Workout, cardio:[]} : null);
+  const [workout,setWorkout]     = useState<Workout|null>(day.workout ? {...day.workout as Workout, cardio:(day.workout as any).cardio || []} : null);
   const [nutrition,setNutrition] = useState<Nutrition|null>(day.nutrition as Nutrition|null);
   const [wellness,setWellness]   = useState<Wellness|null>((day as any).wellness as Wellness | null ?? null);
   // edit buffers
-  const [woBuf,setWoBuf]   = useState<Workout>(workout ?? {type:"",duration:"",calories:0,exercises:[],cardio:[]});
+  const [woBuf,setWoBuf]   = useState<Workout>(() => workout ? {...workout} : {type:"",duration:"",calories:0,exercises:[],cardio:[]});
   const [nutBuf,setNutBuf] = useState<Nutrition>(nutrition ?? {calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});
   const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
   const [showAllBadges, setShowAllBadges] = useState(false);
-  const [m,d] = day.id.split(".").map(Number);
+  const parts = day.id.split("/");
+  const m = parseInt(parts[0]) || 1;
+  const d = parseInt(parts[1]) || 1;
 
   // Load existing photo from DB on mount
   useEffect(() => {
-    if ((day as any).photo_url) setPhotos([(day as any).photo_url]);
+    const allPhotos: string[] = [];
+    if ((day as any).photo_url) allPhotos.push((day as any).photo_url);
+    // Also load all nutrition photos
+    const nutPhotos: string[] = ((day as any).nutrition?.photoUrls || []).filter(Boolean);
+    nutPhotos.forEach((url: string) => {
+      if (!allPhotos.includes(url)) allPhotos.push(url);
+    });
+    if (allPhotos.length > 0) setPhotos(allPhotos);
   }, []);
 
   function onFiles(e:React.ChangeEvent<HTMLInputElement>) {
@@ -256,7 +265,20 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       }).eq('id', nutritionLogIds[0]);
     }
   }
-  function saveWellness()  { setWellness(wellBuf.entries.length ? {...wellBuf} : null); setEditWell(false); }
+  async function saveWellness() {
+    const newWellness = wellBuf.entries.length ? {...wellBuf} : null;
+    setWellness(newWellness);
+    setEditWell(false);
+    // If we have existing wellness log IDs, update them
+    // Otherwise we can only update local state (new logs are inserted on post page)
+    if (wellnessLogIds && wellnessLogIds.length > 0 && wellBuf.entries.length > 0) {
+      // Update the first wellness log with the first entry's data
+      await supabase.from('activity_logs').update({
+        wellness_type: wellBuf.entries[0]?.activity || null,
+        notes: wellBuf.entries[0]?.notes || null,
+      }).eq('id', wellnessLogIds[0]).catch(() => {});
+    }
+  }
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
@@ -1548,21 +1570,6 @@ export default function ProfilePage() {
           {/* CENTER */}
           <div>
             <div style={{fontWeight:900,fontSize:20,color:C.text,marginBottom:16}}>Activity Log</div>
-            {/* Badge milestone cards in timeline */}
-            {earnedBadges.length > 0 && (
-              <div style={{marginBottom:16}}>
-                {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b=>(
-                  <div key={b.id} style={{background:`linear-gradient(135deg,${C.gold}22,${C.goldLight})`,border:`2px solid ${C.gold}`,borderRadius:20,padding:"16px 20px",marginBottom:12,display:"flex",alignItems:"center",gap:14}}>
-                    <div style={{width:52,height:52,borderRadius:16,background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>{b.emoji}</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:900,fontSize:15,color:C.text}}>🏆 {b.label}</div>
-                      <div style={{fontSize:12,color:C.sub,marginTop:2}}>{b.desc}</div>
-                    </div>
-                    <div style={{fontSize:11,color:C.gold,fontWeight:700}}>Milestone!</div>
-                  </div>
-                ))}
-              </div>
-            )}
             {loadingLogs ? (
               <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
                 <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}}/>
