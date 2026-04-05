@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { BADGES } from "@/lib/badges";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
