@@ -89,41 +89,57 @@ const SUGGESTED_ACCOUNTS = [
 // COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DiscoverPost({ post, liked: initLiked }: { post: typeof LOCAL_POSTS[0]; liked: boolean }) {
+function DiscoverPost({ post, liked: initLiked }: { post: any; liked: boolean }) {
   const [liked, setLiked] = useState(initLiked);
-  const [likes, setLikes] = useState(post.likes);
+  // Support both mock (post.likes) and real DB (post.likes_count)
+  const [likes, setLikes] = useState(post.likes ?? post.likes_count ?? 0);
   const router = useRouter();
+
+  // Normalize fields — handle both mock data and real DB posts
+  const displayName  = post.user  || post.user?.full_name  || post.users?.full_name  || post.users?.username || "User";
+  const displayHandle = post.username || post.users?.username || "user";
+  const displayAvatar = post.avatar || null;
+  const avatarUrl = post.users?.avatar_url || null;
+  const avatarIni = displayName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
+  const photoSrc  = post.photo  || post.media_url  || null;
+  const tags: string[] = Array.isArray(post.tags) ? post.tags : [];
+  const caption   = post.caption || "";
+
   return (
     <div style={{ background:C.white,borderRadius:20,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 24px rgba(124,58,237,0.09)",marginBottom:28,overflow:"hidden" }}>
-      {/* Header — clicking avatar/name → profile */}
+      {/* Header */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
-        <div onClick={() => router.push(`/profile/${post.username}`)} style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer" }}>
-          {post.avatar}
+        <div onClick={() => router.push(`/profile/${displayHandle}`)} style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
+          {avatarUrl
+            ? <img src={avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display="none"}}/>
+            : (displayAvatar || avatarIni)}
         </div>
-        <div style={{ flex:1,cursor:"pointer" }} onClick={() => router.push(`/profile/${post.username}`)}>
-          <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</div>
-          <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
+        <div style={{ flex:1,cursor:"pointer" }} onClick={() => router.push(`/profile/${displayHandle}`)}>
+          <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{displayName}</div>
+          <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} · {post.time || ""}</div>
         </div>
         <button style={{ padding:"6px 16px",borderRadius:20,background:C.greenLight,border:`1.5px solid ${C.blue}`,color:C.blue,fontWeight:800,fontSize:12,cursor:"pointer" }}>
           + Follow
         </button>
       </div>
 
-      {/* Big photo area — clicking → post detail */}
+      {/* Photo */}
       <div onClick={() => router.push(`/post/${post.id}`)} style={{ width:"100%",aspectRatio:"4/3",background:"#111",overflow:"hidden",position:"relative",cursor:"pointer" }}>
-        {post.photo
-          ? <img src={post.photo} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
+        {photoSrc
+          ? <img src={photoSrc} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
           : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📷</div>
         }
+        {tags.length > 0 && (
         <div style={{ position:"absolute",bottom:14,left:18,display:"flex",gap:8,flexWrap:"wrap" }}>
-          {post.tags.map(t => (
+          {tags.map(t => (
             <span key={t} style={{ background:"rgba(0,0,0,0.52)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,backdropFilter:"blur(6px)" }}>{t}</span>
           ))}
         </div>
+        )}
       </div>
 
       {/* Caption */}
-      <div style={{ padding:"12px 18px 8px",fontSize:14,color:C.text,lineHeight:1.65 }}>{post.caption}</div>
+      {caption && <div style={{ padding:"12px 18px 8px",fontSize:14,color:C.text,lineHeight:1.65 }}>{caption}</div>}
 
       {/* Actions */}
       <div style={{ padding:"8px 18px 14px",display:"flex",alignItems:"center",gap:20,borderTop:`1px solid ${C.greenLight}`,marginTop:4 }}>
