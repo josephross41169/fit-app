@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -345,6 +345,33 @@ export default function UserProfilePage() {
   const [brands, setBrands]         = useState<any[]>([]);
   const [highlightLb, setHighlightLb] = useState<string|null>(null);
 
+  // ── Followers / Following modal ──────────────────────────────────────────
+  const [socialModal, setSocialModal] = useState<"followers"|"following"|null>(null);
+  const [socialList, setSocialList]   = useState<any[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+
+  const openSocialModal = useCallback(async (type: "followers"|"following", profileId: string) => {
+    setSocialModal(type);
+    setSocialLoading(true);
+    setSocialList([]);
+    try {
+      if (type === "followers") {
+        const { data } = await supabase
+          .from('follows')
+          .select('follower_id, users!follows_follower_id_fkey(id,username,full_name,avatar_url)')
+          .eq('following_id', profileId);
+        setSocialList((data || []).map((r: any) => r.users).filter(Boolean));
+      } else {
+        const { data } = await supabase
+          .from('follows')
+          .select('following_id, users!follows_following_id_fkey(id,username,full_name,avatar_url)')
+          .eq('follower_id', profileId);
+        setSocialList((data || []).map((r: any) => r.users).filter(Boolean));
+      }
+    } catch {}
+    setSocialLoading(false);
+  }, []);
+
   const HIGHLIGHT_SLOTS = 9;
   const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -495,6 +522,51 @@ export default function UserProfilePage() {
 
       {highlightLb && <Lightbox src={highlightLb} onClose={()=>setHighlightLb(null)}/>}
 
+      {/* ── Followers / Following Modal ── */}
+      {socialModal && (
+        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setSocialModal(null)}>
+          <div style={{background:C.white,borderRadius:24,width:"100%",maxWidth:420,maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`2px solid ${C.greenMid}`}} onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px 16px",borderBottom:`1.5px solid ${C.greenMid}`}}>
+              <div style={{fontWeight:900,fontSize:18,color:C.text}}>{socialModal==="followers"?"Followers":"Following"}</div>
+              <button onClick={()=>setSocialModal(null)} style={{background:"none",border:"none",color:C.sub,fontSize:26,cursor:"pointer",lineHeight:1,padding:"0 4px"}}>×</button>
+            </div>
+            {/* List */}
+            <div style={{overflowY:"auto",flex:1,padding:"12px 16px"}}>
+              {socialLoading ? (
+                <div style={{display:"flex",justifyContent:"center",padding:40}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",border:`3px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite"}}/>
+                </div>
+              ) : socialList.length === 0 ? (
+                <div style={{textAlign:"center",padding:40,color:C.sub,fontSize:14}}>No {socialModal} yet</div>
+              ) : (
+                socialList.map((u:any) => {
+                  const ini = u.full_name?.split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase() || '??';
+                  return (
+                    <div key={u.id}
+                      onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}
+                      style={{display:"flex",alignItems:"center",gap:14,padding:"12px 10px",borderRadius:16,cursor:"pointer",transition:"background 0.15s",marginBottom:4}}
+                      onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
+                      onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
+                    >
+                      <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
+                        {u.avatar_url
+                          ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                          : ini}
+                      </div>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:15,color:C.text}}>{u.full_name}</div>
+                        <div style={{fontSize:13,color:C.sub}}>@{u.username}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Banner ── */}
       <div style={{height:220,background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#4ADE80)`,position:"relative",flexShrink:0}}>
         {profile.banner_url && (
@@ -534,16 +606,20 @@ export default function UserProfilePage() {
           {profile.city && <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>}
           {profile.bio && <p style={{fontSize:14,color:C.sub,marginTop:6,lineHeight:1.55}}>{profile.bio}</p>}
 
-          {/* Followers / Following pill bar */}
+          {/* Followers / Following pill bar — clickable */}
           <div style={{display:"flex",alignItems:"stretch",gap:0,marginTop:12,borderRadius:16,overflow:"hidden",border:`1px solid ${C.greenMid}`,maxWidth:320}}>
             {[
-              {l:"Followers",v:profile.followers_count??0},
-              {l:"Following",v:profile.following_count??0},
+              {l:"Followers",v:profile.followers_count??0,type:"followers" as const},
+              {l:"Following",v:profile.following_count??0,type:"following" as const},
             ].map((s,i)=>(
-              <div key={s.l} style={{flex:1,textAlign:"center",padding:"12px 10px",background:"#111811",borderLeft:i>0?`1px solid ${C.greenMid}`:"none"}}>
+              <button key={s.l} onClick={()=>openSocialModal(s.type, profile.id)}
+                style={{flex:1,textAlign:"center",padding:"12px 10px",background:"#111811",borderLeft:i>0?`1px solid ${C.greenMid}`:"none",border:"none",cursor:"pointer",transition:"background 0.15s"}}
+                onMouseEnter={e=>(e.currentTarget.style.background="#1A2A1A")}
+                onMouseLeave={e=>(e.currentTarget.style.background="#111811")}
+              >
                 <div style={{fontSize:22,fontWeight:900,color:C.blue,lineHeight:1}}>{(s.v||0).toLocaleString()}</div>
                 <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
