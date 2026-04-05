@@ -183,8 +183,8 @@ const emptyCardio:CardioEntry  = {type:"",duration:"",distance:""};
 const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; onDelete?: ()=>void };
-function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; earnedBadges?: string[] };
+function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, earnedBadges = []}:DayCardProps) {
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
   const [nut,setNut]         = useState(false);
@@ -195,11 +195,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
   const [lb,setLb]           = useState<string|null>(null);
   const [workout,setWorkout]     = useState<Workout|null>(day.workout ? {...day.workout as Workout, cardio:[]} : null);
   const [nutrition,setNutrition] = useState<Nutrition|null>(day.nutrition as Nutrition|null);
-  const [wellness,setWellness]   = useState<Wellness|null>(null);
+  const [wellness,setWellness]   = useState<Wellness|null>((day as any).wellness as Wellness | null ?? null);
   // edit buffers
   const [woBuf,setWoBuf]   = useState<Workout>(workout ?? {type:"",duration:"",calories:0,exercises:[],cardio:[]});
   const [nutBuf,setNutBuf] = useState<Nutrition>(nutrition ?? {calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});
   const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
+  const [showAllBadges, setShowAllBadges] = useState(false);
   const [m,d] = day.id.split(".").map(Number);
 
   // Load existing photo from DB on mount
@@ -600,16 +601,44 @@ function DayCard({day, workoutLogId, nutritionLogIds, onDelete}:DayCardProps) {
                   <div style={{flex:1}}>
                     <div style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</div>
                     {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:2}}>{e.notes}</div>}
+                    {(e as any).photo_url && (
+                      <button onClick={()=>setLb((e as any).photo_url)} style={{ padding:0, border:`2px solid #2A3A2A`, borderRadius:10, overflow:"hidden", cursor:"pointer", background:"none", flexShrink:0, marginTop:6 }}>
+                        <img src={(e as any).photo_url} style={{ width:60, height:60, objectFit:"cover", display:"block" }} alt=""/>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div style={{marginTop:12,textAlign:"center"}}>
-            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{fontSize:13,fontWeight:700,padding:"8px 20px",borderRadius:20,border:`1.5px dashed #52C97A`,background:"#F0FBF5",color:"#2E8B57",cursor:"pointer"}}>
-              🌿 + Log Wellness (optional)
-            </button>
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#0D1A0D",border:`2px solid #2A3A2A`,marginTop:16}}>
+            <div style={{fontSize:34,marginBottom:8}}>🌿</div>
+            <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No wellness logged</div>
+            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#16A34A,#4ADE80)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
+          </div>
+        )}
+        {/* ── BADGES ── */}
+        {earnedBadges.length > 0 && (
+          <div style={{ marginTop:16, paddingTop:14, borderTop:`1px solid ${C.greenMid}` }}>
+            <div style={{ fontSize:11, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>🏆 Badges</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {(showAllBadges ? earnedBadges : earnedBadges.slice(0, 3)).map(badgeId => {
+                const badge = BADGES.find(b => b.id === badgeId);
+                if (!badge) return null;
+                return (
+                  <div key={badgeId} style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(245,166,35,0.12)", border:"1.5px solid rgba(245,166,35,0.35)", borderRadius:99, padding:"5px 12px" }}>
+                    <span style={{ fontSize:14 }}>{badge.emoji}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:"#F5A623" }}>{badge.label}</span>
+                  </div>
+                );
+              })}
+              {earnedBadges.length > 3 && (
+                <button onClick={() => setShowAllBadges(s => !s)} style={{ display:"flex", alignItems:"center", background:"rgba(245,166,35,0.08)", border:"1.5px dashed rgba(245,166,35,0.3)", borderRadius:99, padding:"5px 12px", cursor:"pointer", fontFamily:"inherit" }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#F5A623" }}>{showAllBadges ? "Show less" : `+${earnedBadges.length - 3} more`}</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>}
@@ -820,6 +849,7 @@ export default function ProfilePage() {
 
           const workoutLog = logs.find((l: any) => l.log_type === 'workout');
           const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
+          const wellnessLogs = logs.filter((l: any) => l.log_type === 'wellness');
 
           const workout = workoutLog ? {
             type: workoutLog.workout_type || 'Workout',
@@ -857,15 +887,26 @@ export default function ProfilePage() {
             })),
           } : null;
 
+          const wellness = wellnessLogs.length > 0 ? {
+            entries: wellnessLogs.map((l: any) => ({
+              emoji: l.wellness_emoji || '🌿',
+              activity: l.wellness_type || l.notes || 'Wellness',
+              notes: l.notes || '',
+              photo_url: l.photo_url || null,
+            })),
+          } : null;
+
           return {
             id: dateKey,
             label: friendlyLabel,
-            emoji: workout ? '💪' : (nutrition ? '🥗' : '🌅'),
+            emoji: workout ? '💪' : (nutrition ? '🥗' : (wellness ? '🌿' : '🌅')),
             workout,
             nutrition,
+            wellness,
             _workoutLogId: workoutLog?.id || null,
             _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
-            photo_url: workoutLog?.photo_url || nutritionLogs[0]?.photo_url || null,
+            _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
+            photo_url: workoutLog?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
             _date: date.getTime(), // for sorting
           };
         });
@@ -1537,10 +1578,12 @@ export default function ProfilePage() {
                     day={day as any}
                     workoutLogId={(day as any)._workoutLogId}
                     nutritionLogIds={(day as any)._nutritionLogIds}
+                    earnedBadges={earnedBadges}
                     onDelete={isReal ? async () => {
                       const wid = (day as any)._workoutLogId;
                       const nids: string[] = (day as any)._nutritionLogIds || [];
-                      const allIds = [...(wid ? [wid] : []), ...nids];
+                      const wids: string[] = (day as any)._wellnessLogIds || [];
+                      const allIds = [...(wid ? [wid] : []), ...nids, ...wids];
                       if (allIds.length > 0) {
                         await supabase.from('activity_logs').delete().in('id', allIds);
                       }

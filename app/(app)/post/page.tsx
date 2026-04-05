@@ -77,6 +77,7 @@ export default function PostPage() {
   const [wellnessDuration, setWellnessDuration] = useState("");
   const [wellnessNotes, setWellnessNotes] = useState("");
   const [mood, setMood] = useState("");
+  const [wellnessPhotoUrl, setWellnessPhotoUrl] = useState<string | null>(null);
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
@@ -182,6 +183,11 @@ export default function PostPage() {
         });
         error = res.error;
       } else if (logTab === 'wellness') {
+        // Upload wellness photo if present
+        let wellnessUploadedUrl: string | null = null;
+        if (wellnessPhotoUrl) {
+          wellnessUploadedUrl = await uploadPhoto(wellnessPhotoUrl, 'activity', `${user.id}/wellness-${Date.now()}.jpg`);
+        }
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'wellness',
@@ -189,6 +195,7 @@ export default function PostPage() {
           wellness_duration_min: wellnessDuration ? parseInt(wellnessDuration) : null,
           mood: mood || null,
           notes: wellnessNotes || null,
+          photo_url: wellnessUploadedUrl || null,
         });
         error = res.error;
       }
@@ -687,6 +694,37 @@ export default function PostPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              {/* Wellness photo upload */}
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ marginTop:0 }}>
+                  <label style={{ fontSize:11, fontWeight:700, color:C.sub, display:"block", marginBottom:6, textTransform:"uppercase", letterSpacing:0.8 }}>Photo (optional)</label>
+                  {wellnessPhotoUrl ? (
+                    <div style={{ position:"relative", display:"inline-block" }}>
+                      <img src={wellnessPhotoUrl} style={{ width:100, height:100, objectFit:"cover", borderRadius:12, border:`2px solid #2A3A2A` }} alt=""/>
+                      <button onClick={() => setWellnessPhotoUrl(null)} style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.7)", border:"none", color:"#fff", fontSize:12, cursor:"pointer" }}>×</button>
+                    </div>
+                  ) : (
+                    <label style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 16px", borderRadius:12, border:`1.5px dashed #2A3A2A`, background:"#111", cursor:"pointer" }}>
+                      <span style={{ fontSize:16 }}>📷</span>
+                      <span style={{ fontSize:13, color:C.sub }}>Add photo</span>
+                      <input type="file" accept="image/*" style={{ display:"none" }} onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        const { uploadPhoto } = await import('@/lib/uploadPhoto');
+                        const reader = new FileReader();
+                        reader.onload = async (ev) => {
+                          const dataUrl = ev.target!.result as string;
+                          const path = `wellness/${Date.now()}.jpg`;
+                          const url = await uploadPhoto(dataUrl, 'activity', path);
+                          if (url) setWellnessPhotoUrl(url);
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = "";
+                      }}/>
+                    </label>
+                  )}
                 </div>
               </div>
 
