@@ -80,6 +80,7 @@ const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
 // ── Day Card ──────────────────────────────────────────────────────────────────
 type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; earnedBadges?: string[] };
 function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, earnedBadges = []}:DayCardProps) {
+  const { user } = useAuth();
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
   const [nut,setNut]         = useState(false);
@@ -139,39 +140,92 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   async function saveWorkout() {
     setWorkout({...woBuf});
     setEditWo(false);
+    // Normalize exercises: ensure weights array stored properly
+    const normalizedExercises = (woBuf.exercises || []).map((ex: any) => ({
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      weight: (ex.weights || [])[0] || ex.weight || '',
+      weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
+    }));
+    const cardioData = (woBuf.cardio || []).length > 0 ? woBuf.cardio : null;
     if (workoutLogId) {
+      // Update existing log — save ALL fields including cardio
       await supabase.from('activity_logs').update({
-        workout_type: woBuf.type,
-        workout_duration_min: parseInt(woBuf.duration) || null,
-        workout_calories: woBuf.calories,
-        exercises: woBuf.exercises,
+        workout_type: woBuf.type || null,
+        workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
+        workout_calories: woBuf.calories || null,
+        exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
+        cardio: cardioData,
       }).eq('id', workoutLogId);
+    } else if (user) {
+      // No existing log for this day — insert a new one so it persists after refresh
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        log_type: 'workout',
+        is_public: true,
+        logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
+        workout_type: woBuf.type || null,
+        workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
+        workout_calories: woBuf.calories || null,
+        exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
+        cardio: cardioData,
+      }).catch(() => {});
     }
   }
+
   async function saveNutrition() {
     setNutrition({...nutBuf});
     setEditNut(false);
     if (nutritionLogIds && nutritionLogIds.length > 0) {
+      // Update existing log — save ALL macro fields
       await supabase.from('activity_logs').update({
-        calories_total: nutBuf.calories,
-        protein_g: nutBuf.protein,
-        carbs_g: nutBuf.carbs,
-        fat_g: nutBuf.fat,
+        calories_total: nutBuf.calories || null,
+        protein_g: nutBuf.protein || null,
+        carbs_g: nutBuf.carbs || null,
+        fat_g: nutBuf.fat || null,
+        // Persist meals as food_items so they survive refresh
+        food_items: nutBuf.meals && nutBuf.meals.length > 0
+          ? nutBuf.meals.map((m: any) => ({ name: m.key || m.name || 'Meal', calories: m.cal || 0 }))
+          : null,
       }).eq('id', nutritionLogIds[0]);
+    } else if (user) {
+      // No existing log — insert so it persists
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        log_type: 'nutrition',
+        is_public: true,
+        logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
+        calories_total: nutBuf.calories || null,
+        protein_g: nutBuf.protein || null,
+        carbs_g: nutBuf.carbs || null,
+        fat_g: nutBuf.fat || null,
+      }).catch(() => {});
     }
   }
+
   async function saveWellness() {
     const newWellness = wellBuf.entries.length ? {...wellBuf} : null;
     setWellness(newWellness);
     setEditWell(false);
-    // If we have existing wellness log IDs, update them
-    // Otherwise we can only update local state (new logs are inserted on post page)
     if (wellnessLogIds && wellnessLogIds.length > 0 && wellBuf.entries.length > 0) {
-      // Update the first wellness log with the first entry's data
+      // Update existing — save type, emoji, and notes
       await supabase.from('activity_logs').update({
         wellness_type: wellBuf.entries[0]?.activity || null,
+        wellness_emoji: wellBuf.entries[0]?.emoji || null,
         notes: wellBuf.entries[0]?.notes || null,
       }).eq('id', wellnessLogIds[0]).catch(() => {});
+    } else if (user && wellBuf.entries.length > 0) {
+      // No existing log — insert so it persists
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        log_type: 'wellness',
+        is_public: true,
+        logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
+        wellness_type: wellBuf.entries[0]?.activity || null,
+        wellness_emoji: wellBuf.entries[0]?.emoji || null,
+        notes: wellBuf.entries[0]?.notes || null,
+      }).catch(() => {});
     }
   }
 
