@@ -227,7 +227,7 @@ function ReadOnlyDayCard({day}:{day:any}) {
               </>)}
               {/* Cardio */}
               {workout.cardio && workout.cardio.length > 0 && (
-                <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.greenMid}`}}>
+                <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.greenMid}` : "none"}}>
                   <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.greenMid}`}}>
                     {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}

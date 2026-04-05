@@ -404,26 +404,29 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               <button onClick={()=>{setWoBuf({...workout});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</button>
             </div>
             <div style={{background:C.greenLight,padding:"12px 16px"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
-                {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
-              </div>
-              {workout.exercises.map((ex,i)=>{
-                const wsArr: string[] = (ex as any).weights && Array.isArray((ex as any).weights) ? (ex as any).weights : [];
-                const weightDisplay = wsArr.length > 1
-                  ? wsArr.join(' / ') + ' lbs'
-                  : (wsArr[0] || ex.weight || '—');
-                return (
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
-                  <span style={{fontSize:14,fontWeight:600,color:C.text}}>{ex.name}</span>
-                  <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.sets}</span>
-                  <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.reps}</span>
-                  <span style={{fontSize:13,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
+              {/* Exercises — only show table if there are exercises */}
+              {workout.exercises && workout.exercises.length > 0 && (<>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
+                  {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                 </div>
-                );
-              })}
-              {/* Cardio display */}
-              {workout.cardio && workout.cardio.length > 0 && (<>
-                <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.greenMid}`}}>
+                {workout.exercises.map((ex,i)=>{
+                  const wsArr: string[] = (ex as any).weights && Array.isArray((ex as any).weights) ? (ex as any).weights : [];
+                  const weightDisplay = wsArr.length > 1
+                    ? wsArr.join(' / ') + ' lbs'
+                    : (wsArr[0] || ex.weight || '—');
+                  return (
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
+                    <span style={{fontSize:14,fontWeight:600,color:C.text}}>{ex.name}</span>
+                    <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.sets}</span>
+                    <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.reps}</span>
+                    <span style={{fontSize:13,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
+                  </div>
+                  );
+                })}
+              </>)}
+              {/* Cardio — always shown when present, no separator if no exercises above */}
+              {workout.cardio && workout.cardio.length > 0 && (
+                <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.greenMid}` : "none"}}>
                   <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.greenMid}`}}>
                     {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
@@ -436,7 +439,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     </div>
                   ))}
                 </div>
-              </>)}
+              )}
+              {/* Fallback if somehow both are empty */}
+              {(!workout.exercises || workout.exercises.length === 0) && (!workout.cardio || workout.cardio.length === 0) && (
+                <div style={{textAlign:"center",padding:"12px 0",color:C.sub,fontSize:13}}>No exercises logged</div>
+              )}
             </div>
           </div>
         ) : (
