@@ -816,7 +816,7 @@ export default function FeedPage() {
         time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
-        photos: p.media_url ? [p.media_url] : [],
+        photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
         caption: p.caption || "",
         likes: p.likes_count || 0,
         liked: p._liked || false,
@@ -1055,11 +1055,11 @@ export default function FeedPage() {
                   id: p.id,
                   user: p.users?.full_name || p.users?.username || "User",
                   username: p.users?.username || "user",
-                  avatar: (p.users?.full_name || p.users?.username || "U").slice(0,2).toUpperCase(),
-                  time: new Date(p.created_at).toLocaleDateString(),
+                  avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
+                  time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                   dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                  photos: p.media_url ? [p.media_url] : [],
+                  photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
                   caption: p.caption || "",
                   likes: p.likes_count || 0,
                   liked: false,
@@ -1067,8 +1067,9 @@ export default function FeedPage() {
                   workout: null,
                   nutrition: null,
                   wellness: null,
+                  _ownerId: p.user_id,
                 };
-                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} />;
+                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} />;
               })
             )
           ) : (
@@ -1188,11 +1189,11 @@ export default function FeedPage() {
                 id: p.id,
                 user: p.users?.full_name || p.users?.username || "User",
                 username: p.users?.username || "user",
-                avatar: (p.users?.full_name || p.users?.username || "U").slice(0,2).toUpperCase(),
-                time: new Date(p.created_at).toLocaleDateString(),
+                avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
+                time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                 dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                photos: p.media_url ? [p.media_url] : [],
+                photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
                 caption: p.caption || "",
                 likes: p.likes_count || 0,
                 liked: false,
@@ -1200,8 +1201,9 @@ export default function FeedPage() {
                 workout: null,
                 nutrition: null,
                 wellness: null,
+                _ownerId: p.user_id,
               };
-              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} />;
+              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} />;
             })
           )
         ) : (

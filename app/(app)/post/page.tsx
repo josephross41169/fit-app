@@ -243,7 +243,7 @@ export default function PostPage() {
         user_id: user.id,
         caption: caption || null,
         media_url: mediaUrl,
-        media_urls: uploadedUrls.length > 1 ? uploadedUrls : null, // store all for carousel
+        media_urls: uploadedUrls.length > 1 ? uploadedUrls : null,
         media_type: mediaUrl ? 'image' : null,
         post_type: 'general' as any,
         location: location || null,
@@ -253,6 +253,17 @@ export default function PostPage() {
       if (error) {
         setSaveError(error.message || "Something went wrong. Please try again.");
       } else {
+        // ── Auto-award post badges ──────────────────────────────────────────
+        try {
+          const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+          const postCount = count || 1;
+          if (postCount === 1) {
+            await supabase.from('badges').insert({ user_id: user.id, badge_id: 'first-post' }).match({ user_id: user.id, badge_id: 'first-post' });
+          }
+          if (postCount >= 10) {
+            await supabase.from('badges').insert({ user_id: user.id, badge_id: '10-posts' }).match({ user_id: user.id, badge_id: '10-posts' });
+          }
+        } catch {}
         setPosted(true);
       }
     } catch (e: any) {
