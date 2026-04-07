@@ -5,21 +5,24 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
+const PURPLE = "#7C3AED";
+const PURPLE_BG = "rgba(124,58,237,0.15)";
+
 // ── Nav tab definitions ───────────────────────────────────────────────────────
 const tabs = [
   {
     href: "/feed", label: "Feed",
     icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? "#16A34A" : "none"} stroke={active ? "#16A34A" : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         <polyline points="9,22 9,12 15,12 15,22" />
       </svg>
     )
   },
   {
-    href: "/discover", label: "Discovery",
+    href: "/discover", label: "Discover",
     icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke={active ? "#16A34A" : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill="none" stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <circle cx="11" cy="11" r="8" />
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
@@ -29,7 +32,7 @@ const tabs = [
     href: "/post", label: "Post",
     icon: (_active: boolean) => (
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg -mt-3"
-        style={{ background: "linear-gradient(135deg, #16A34A, #22C55E)" }}>
+        style={{ background: `linear-gradient(135deg, ${PURPLE}, #A78BFA)` }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-6 h-6">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
@@ -38,9 +41,18 @@ const tabs = [
     )
   },
   {
+    href: "/notifications", label: "Alerts",
+    icon: (active: boolean) => (
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    )
+  },
+  {
     href: "/messages", label: "Messages",
     icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? "#16A34A" : "none"} stroke={active ? "#16A34A" : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     )
@@ -48,7 +60,7 @@ const tabs = [
   {
     href: "/connect", label: "Connect",
     icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? "#16A34A" : "none"} stroke={active ? "#16A34A" : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
         <circle cx="9" cy="7" r="4"/>
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -59,7 +71,7 @@ const tabs = [
   {
     href: "/profile", label: "Profile",
     icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? "#16A34A" : "none"} stroke={active ? "#16A34A" : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
         <circle cx="12" cy="7" r="4" />
       </svg>
@@ -98,16 +110,15 @@ function SideNavItem({ tab, active, badge }: { tab: typeof tabs[0]; active: bool
   return (
     <Link href={tab.href}
       className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-150 group"
-      style={{ background: active ? "#1A2A1A" : "transparent", position: "relative" }}>
+      style={{ background: active ? PURPLE_BG : "transparent", position: "relative" }}>
       <div style={{ position: "relative", flexShrink: 0 }}>
         {tab.icon(active)}
         {badge ? <Badge count={badge} /> : null}
       </div>
       <span className="text-sm font-semibold hidden lg:block"
-        style={{ color: active ? "#16A34A" : "#9CA3AF" }}>
+        style={{ color: active ? PURPLE : "#9CA3AF" }}>
         {tab.label}
       </span>
-      {/* Show count inline on desktop expanded sidebar */}
       {badge ? (
         <span className="hidden lg:flex ml-auto text-xs font-bold px-2 py-0.5 rounded-full"
           style={{ background: "#EF4444", color: "#fff", fontSize: 10 }}>
@@ -123,15 +134,12 @@ export default function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
+  // ── Unread messages badge ────────────────────────────────────────────────
   useEffect(() => {
     if (!user) { setUnreadMessages(0); return; }
-
-    // Clear badge immediately when on messages page
-    if (pathname === '/messages') {
-      setUnreadMessages(0);
-      return;
-    }
+    if (pathname === '/messages') { setUnreadMessages(0); return; }
 
     let cancelled = false;
 
@@ -155,7 +163,6 @@ export default function BottomNav() {
 
         if (!cancelled) setUnreadMessages(count || 0);
       } catch {
-        // Never crash the nav — silently stay at 0
         if (!cancelled) setUnreadMessages(0);
       }
     }
@@ -163,7 +170,6 @@ export default function BottomNav() {
     fetchUnread();
     const interval = setInterval(fetchUnread, 15000);
 
-    // Realtime — wrapped in try/catch so a missing table never crashes nav
     let channel: any = null;
     try {
       channel = supabase
@@ -180,8 +186,38 @@ export default function BottomNav() {
     };
   }, [user, pathname]);
 
+  // ── Unread notifications badge ───────────────────────────────────────────
+  useEffect(() => {
+    if (!user) { setUnreadNotifs(0); return; }
+    if (pathname === '/notifications') { setUnreadNotifs(0); return; }
+
+    let cancelled = false;
+
+    async function fetchUnreadNotifs() {
+      try {
+        const { count } = await supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('recipient_id', user!.id)
+          .is('read_at', null);
+        if (!cancelled) setUnreadNotifs(count || 0);
+      } catch {
+        if (!cancelled) setUnreadNotifs(0);
+      }
+    }
+
+    fetchUnreadNotifs();
+    const interval = setInterval(fetchUnreadNotifs, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user, pathname]);
+
   const getBadge = (href: string) => {
     if (href === '/messages') return unreadMessages;
+    if (href === '/notifications') return unreadNotifs;
     return 0;
   };
 
@@ -189,7 +225,7 @@ export default function BottomNav() {
     <>
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t"
-        style={{ background: "#0D0D0D", borderColor: "#2A3A2A" }}>
+        style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
         <div className="flex items-center justify-around px-2 pb-safe">
           {tabs.map((tab) => {
             const active = pathname === tab.href;
@@ -204,7 +240,7 @@ export default function BottomNav() {
                 </div>
                 {tab.href !== "/post" && (
                   <span className="text-xs font-medium"
-                    style={{ color: active ? "#16A34A" : "#6B7280" }}>
+                    style={{ color: active ? PURPLE : "#6B7280" }}>
                     {tab.label}
                   </span>
                 )}
@@ -216,11 +252,11 @@ export default function BottomNav() {
 
       {/* Desktop sidebar */}
       <nav className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r py-6 px-3 w-16 lg:w-56"
-        style={{ background: "#0D0D0D", borderColor: "#2A3A2A" }}>
+        style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
         {/* Logo */}
         <div className="mb-8 px-4">
-          <span className="text-2xl font-black hidden lg:block" style={{ color: "#16A34A" }}>FIT ⚡</span>
-          <span className="text-2xl font-black lg:hidden" style={{ color: "#16A34A" }}>F⚡</span>
+          <span className="text-2xl font-black hidden lg:block" style={{ color: PURPLE }}>FIT ⚡</span>
+          <span className="text-2xl font-black lg:hidden" style={{ color: PURPLE }}>F⚡</span>
         </div>
 
         <div className="flex flex-col gap-1">

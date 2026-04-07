@@ -14,7 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid #2A3A2A", borderTopColor: "#16A34A", animation: "spin 0.8s linear infinite" }} />
+      <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid #2D1B69", borderTopColor: "#7C3AED", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   );

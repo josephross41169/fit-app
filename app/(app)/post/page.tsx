@@ -6,9 +6,9 @@ import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const C = {
-  blue: "#16A34A",
-  greenLight: "#1A2A1A",
-  greenMid: "#2A3A2A",
+  blue: "#7C3AED",
+  greenLight: "#1A1228",
+  greenMid: "#2D1B69",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
@@ -488,7 +488,7 @@ export default function PostPage() {
   }
 
   const TAB_DEFS = [
-    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#16A34A" },
+    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#7C3AED" },
     { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#F59E0B" },
     { key: "wellness" as LogTab, icon: "🌿", label: "Wellness", color: "#7C3AED" },
   ];
@@ -531,7 +531,7 @@ export default function PostPage() {
           {(["log", "feed"] as MainMode[]).map(m => (
             <button key={m} onClick={() => setMainMode(m)} style={{
               flex: 1, padding: "11px 0", fontWeight: 800, fontSize: 13, border: "none", cursor: "pointer",
-              background: mainMode === m ? `linear-gradient(135deg,${C.blue},#22C55E)` : "transparent",
+              background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "transparent",
               color: mainMode === m ? "#fff" : C.sub, transition: "all 0.2s",
             }}>
               {m === "log" ? "📝 Log Activity" : "📸 Share to Feed"}
@@ -567,7 +567,7 @@ export default function PostPage() {
               <button key={m} onClick={() => setMainMode(m)} style={{
                 width: "100%", padding: "12px 14px", borderRadius: 14, border: "none", cursor: "pointer",
                 marginBottom: 6, textAlign: "left", fontWeight: 800, fontSize: 14,
-                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#22C55E)` : C.greenLight,
+                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : C.greenLight,
                 color: mainMode === m ? "#fff" : C.sub,
                 transition: "all 0.15s",
               }}>
@@ -733,7 +733,7 @@ export default function PostPage() {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
@@ -827,7 +827,7 @@ export default function PostPage() {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
@@ -904,7 +904,7 @@ export default function PostPage() {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
@@ -977,7 +977,7 @@ export default function PostPage() {
               </div>
             </div>
 
-            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#22C55E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
+            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
               {loading?"Posting...":"Post to Feed 🚀"}
             </button>
           </div>
@@ -987,3 +987,4 @@ export default function PostPage() {
     </div>
   );
 }
+

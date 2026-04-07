@@ -86,7 +86,7 @@ function AvatarCircle({ name, avatarUrl, size = 40 }: { name: string; avatarUrl?
   return (
     <div
       className="rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white text-sm"
-      style={{ width: size, height: size, background: "#16A34A" }}
+      style={{ width: size, height: size, background: "#7C3AED" }}
     >
       {initials(name)}
     </div>
@@ -351,7 +351,7 @@ export default function MessagesPage() {
           <button
             onClick={() => setShowNewModal(true)}
             className="text-sm font-semibold px-3 py-1.5 rounded-xl transition-all"
-            style={{ background: "#16A34A", color: "#fff" }}
+            style={{ background: "#7C3AED", color: "#fff" }}
           >
             + New
           </button>
@@ -376,8 +376,8 @@ export default function MessagesPage() {
                 onClick={() => selectConversation(conv)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all"
                 style={{
-                  background: activeConvId === conv.id ? "#1A2E1E" : "transparent",
-                  borderLeft: activeConvId === conv.id ? "3px solid #16A34A" : "3px solid transparent",
+                  background: activeConvId === conv.id ? "#1A1228" : "transparent",
+                  borderLeft: activeConvId === conv.id ? "3px solid #7C3AED" : "3px solid transparent",
                 }}
               >
                 <AvatarCircle
@@ -403,7 +403,7 @@ export default function MessagesPage() {
                     {conv.unread && (
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0 ml-1"
-                        style={{ background: "#16A34A" }}
+                        style={{ background: "#7C3AED" }}
                       />
                     )}
                   </div>
@@ -435,7 +435,7 @@ export default function MessagesPage() {
               <button
                 className="md:hidden mr-1"
                 onClick={() => setMobileShowThread(false)}
-                style={{ color: "#16A34A" }}
+                style={{ color: "#7C3AED" }}
               >
                 ←
               </button>
@@ -473,7 +473,7 @@ export default function MessagesPage() {
                     <div
                       className="max-w-xs lg:max-w-md rounded-2xl text-sm overflow-hidden"
                       style={{
-                        background: isMine ? "#16A34A" : "#1A2E1E",
+                        background: isMine ? "#7C3AED" : "#1A1228",
                         color: isMine ? "#fff" : "#E2E8F0",
                         borderBottomRightRadius: isMine ? 4 : undefined,
                         borderBottomLeftRadius: !isMine ? 4 : undefined,
@@ -538,8 +538,8 @@ export default function MessagesPage() {
                   onClick={() => fileInputRef.current?.click()}
                   className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    background: msgPhoto ? "#16A34A22" : "#1A1D2E",
-                    color: msgPhoto ? "#16A34A" : "#8892A4",
+                    background: msgPhoto ? "#7C3AED22" : "#1A1D2E",
+                    color: msgPhoto ? "#7C3AED" : "#8892A4",
                     border: "1px solid #2A2D3E",
                     fontSize: 16,
                     cursor: "pointer",
@@ -571,7 +571,7 @@ export default function MessagesPage() {
                   disabled={(!inputText.trim() && !msgPhoto) || msgUploading}
                   className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    background: (inputText.trim() || msgPhoto) && !msgUploading ? "#16A34A" : "#1A1D2E",
+                    background: (inputText.trim() || msgPhoto) && !msgUploading ? "#7C3AED" : "#1A1D2E",
                     color: (inputText.trim() || msgPhoto) && !msgUploading ? "#fff" : "#8892A4",
                   }}
                 >
@@ -666,7 +666,7 @@ export default function MessagesPage() {
                   onClick={() => openOrCreateConversation(u.id, u)}
                   className="w-full flex items-center gap-3 px-5 py-3 transition-all"
                   style={{ background: "transparent" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#16A34A22")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#7C3AED22")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <AvatarCircle name={u.full_name || u.username} avatarUrl={u.avatar_url} size={40} />
@@ -688,3 +688,4 @@ export default function MessagesPage() {
     </div>
   );
 }
+
