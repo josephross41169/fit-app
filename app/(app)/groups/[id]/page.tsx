@@ -388,7 +388,7 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
 
           {/* Member leaderboard */}
           <div style={{ padding: "16px 20px" }}>
-            <div style={{ fontWeight: 800, fontSize: 13, color: "#9CA3AF", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8, fontSize: 11 }}>
+            <div style={{ fontWeight: 800, fontSize: 11, color: "#9CA3AF", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>
               Member Contributions This Week
             </div>
 

@@ -932,7 +932,7 @@ export default function ConnectPage() {
             </div>
           )}
 
-          {tab === "joined" && tab !== "rivals" && (
+          {tab === "joined" && (
             <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
               <div style={{ fontSize:40 }}>✅</div>
               <div style={{ flex:1 }}>
