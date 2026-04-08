@@ -1,9 +1,10 @@
 ﻿"use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { EXERCISES } from "@/lib/exercises";
 
 const C = {
   blue: "#7C3AED",
@@ -28,11 +29,100 @@ const iStyle = {
   boxSizing: "border-box" as const,
 };
 
-type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[] };
+type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; notes?: string };
+type PrevSet = { weight: string; reps: string };
+type PrevSession = { date: string; sets: PrevSet[] };
 type FoodItem = { name: string; calories: string };
 type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
 type PostType = "Workout" | "Nutrition" | "Wellness" | "Achievement" | "Other";
+
+// ── Exercise Search Autocomplete Component ──────────────────────────────────
+function ExerciseSearchInput({
+  value,
+  onChange,
+  style,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  style: React.CSSProperties;
+}) {
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState<typeof EXERCISES>([]);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  function search(q: string) {
+    setQuery(q);
+    if (q.length < 2) { setResults([]); setOpen(false); return; }
+    const lower = q.toLowerCase();
+    const matches = EXERCISES.filter(e =>
+      e.name.toLowerCase().includes(lower) ||
+      e.category.toLowerCase().includes(lower) ||
+      e.muscles.some(m => m.toLowerCase().includes(lower))
+    ).slice(0, 8);
+    setResults(matches);
+    setOpen(matches.length > 0);
+  }
+
+  function select(name: string) {
+    setQuery(name);
+    onChange(name);
+    setResults([]);
+    setOpen(false);
+  }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', flex: 1 }}>
+      <input
+        style={style}
+        placeholder="Search exercise or muscle..."
+        value={query}
+        onChange={e => search(e.target.value)}
+        onFocus={() => query.length >= 2 && results.length > 0 && setOpen(true)}
+        onBlur={() => { if (query && query !== value) onChange(query); }}
+        autoComplete="off"
+      />
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+          background: '#1A1228', border: '1.5px solid #7C3AED', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(124,58,237,0.25)', overflow: 'hidden', marginTop: 4,
+        }}>
+          {results.map((ex, i) => (
+            <button
+              key={i}
+              onMouseDown={() => select(ex.name)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '10px 14px', border: 'none', background: 'transparent',
+                cursor: 'pointer', borderBottom: i < results.length - 1 ? '1px solid #2D1B69' : 'none',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0' }}>{ex.name}</div>
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>
+                {ex.category} · {ex.equipment} · {ex.muscles[0]}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const MOOD_EMOJIS = ["😤", "💪", "😊", "🧘", "😴"];
 const WELLNESS_TYPES = ["Yoga", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Walk", "Sleep", "Other"];
@@ -56,6 +146,7 @@ export default function PostPage() {
   const [woDuration, setWoDuration] = useState("");
   const [woCalories, setWoCalories] = useState("");
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [prevSessions, setPrevSessions] = useState<Record<string, PrevSession | null>>({});
   const [cardioType, setCardioType] = useState("");
   const [cardioDuration, setCardioDuration] = useState("");
   const [cardioDistance, setCardioDistance] = useState("");
@@ -110,6 +201,47 @@ export default function PostPage() {
     return true;
   }
 
+  // Fetch previous session data for an exercise name
+  const fetchPrevSession = useCallback(async (exerciseName: string) => {
+    if (!user || !exerciseName || prevSessions[exerciseName] !== undefined) return;
+    // Mark as loading (null = checked, no data)
+    setPrevSessions(ps => ({ ...ps, [exerciseName]: null }));
+    try {
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('exercises, logged_at')
+        .eq('user_id', user.id)
+        .eq('log_type', 'workout')
+        .not('exercises', 'is', null)
+        .order('logged_at', { ascending: false })
+        .limit(20);
+      if (!data) return;
+      // Find most recent log that has this exercise
+      for (const log of data) {
+        const exArray: any[] = log.exercises || [];
+        const match = exArray.find((e: any) =>
+          (e.name || '').toLowerCase() === exerciseName.toLowerCase()
+        );
+        if (match) {
+          const sets: PrevSet[] = [];
+          if (match.weights && Array.isArray(match.weights) && match.weights.length > 0) {
+            match.weights.forEach((w: string, idx: number) => {
+              sets.push({ weight: w || match.weight || '', reps: match.reps || '' });
+            });
+          } else {
+            const numSets = parseInt(match.sets) || 1;
+            for (let i = 0; i < numSets; i++) {
+              sets.push({ weight: match.weight || '', reps: match.reps || '' });
+            }
+          }
+          const dateStr = new Date(log.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          setPrevSessions(ps => ({ ...ps, [exerciseName]: { date: dateStr, sets } }));
+          return;
+        }
+      }
+    } catch {}
+  }, [user, prevSessions]);
+
   async function handleSave() {
     if (!user) {
       setSaveError("You must be logged in. Please refresh and sign in again.");
@@ -140,6 +272,7 @@ export default function PostPage() {
           reps: ex.reps,
           weight: (ex.weights || [])[0] || ex.weight || '',
           weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
+          notes: ex.notes || undefined,
         }));
         const res = await supabase.from('activity_logs').insert({
           ...base,
@@ -629,69 +762,120 @@ export default function PostPage() {
                 </div>
               </div>
 
-              {/* Exercises table */}
+              {/* Exercises table — with search autocomplete, increment buttons, prev session */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
                   <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""] }])}
                     style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
-                    + Add Row
+                    + Add Exercise
                   </button>
                 </div>
                 {exercises.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet — click + Add Row</div>
-                ) : (<>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 1fr 36px", gap: 8, marginBottom: 8 }}>
-                    {["Exercise", "Sets", "Reps", "Weight", ""].map(h => (
-                      <span key={h} style={{ fontSize: 10, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>{h}</span>
-                    ))}
-                  </div>
+                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet — click + Add Exercise</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {exercises.map((ex, i) => {
                     const numSets = parseInt(ex.sets) || 1;
-                    const isMultiSet = numSets > 1;
+                    const prev = prevSessions[ex.name];
                     return (
-                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 1fr 36px", gap: 8, marginBottom: 8, alignItems: "start" }}>
-                      <input style={iStyle} placeholder="Name" value={ex.name} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                      <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => {
-                        const newSets = e.target.value;
-                        const n = parseInt(newSets) || 1;
-                        setExercises(exs => exs.map((x, j) => {
-                          if (j !== i) return x;
-                          const existingWeights = x.weights || [];
-                          const firstW = existingWeights[0] || x.weight || '';
-                          const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? firstW);
-                          return { ...x, sets: newSets, weights: newWeights };
-                        }));
-                      }} />
-                      <input style={iStyle} type="text" inputMode="numeric" value={ex.reps} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, reps: e.target.value } : x))} />
-                      {/* Weight column — single or per-set */}
-                      {isMultiSet ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          {Array.from({ length: numSets }).map((_, s) => (
-                            <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <span style={{ fontSize: 10, color: C.sub, fontWeight: 700, width: 36, flexShrink: 0 }}>S{s+1}:</span>
+                    <div key={i} style={{ background: "#0D0D0D", borderRadius: 16, padding: 14, border: `1px solid ${C.greenMid}` }}>
+                      {/* Exercise name — search input */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                        <ExerciseSearchInput
+                          value={ex.name}
+                          style={iStyle}
+                          onChange={name => {
+                            setExercises(exs => exs.map((x, j) => j === i ? { ...x, name } : x));
+                            if (name.length >= 2) fetchPrevSession(name);
+                          }}
+                        />
+                        <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))}
+                          style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>×</button>
+                      </div>
+
+                      {/* Previous session reference */}
+                      {prev && (
+                        <div style={{ background: "#1A1228", borderRadius: 10, padding: "7px 12px", marginBottom: 10, fontSize: 12, color: "#A78BFA" }}>
+                          <span style={{ fontWeight: 700 }}>Last time ({prev.date}): </span>
+                          {prev.sets.map((s, si) => `${s.weight}lbs\u00d7${s.reps}`).join(' \u00b7 ')}
+                        </div>
+                      )}
+
+                      {/* Sets / Reps row */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Sets</label>
+                          <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => {
+                            const newSets = e.target.value;
+                            const n = parseInt(newSets) || 1;
+                            setExercises(exs => exs.map((x, j) => {
+                              if (j !== i) return x;
+                              const existingWeights = x.weights || [];
+                              const firstW = existingWeights[0] || x.weight || '';
+                              const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? firstW);
+                              return { ...x, sets: newSets, weights: newWeights };
+                            }));
+                          }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Reps</label>
+                          <input style={iStyle} type="text" inputMode="numeric" value={ex.reps} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, reps: e.target.value } : x))} />
+                        </div>
+                      </div>
+
+                      {/* Per-set weight with increment buttons */}
+                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Weight (lbs)</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {Array.from({ length: numSets }).map((_, s) => {
+                          function updateW(delta: number) {
+                            setExercises(exs => exs.map((x, j) => {
+                              if (j !== i) return x;
+                              const ws = [...(x.weights || Array(numSets).fill(''))];
+                              const current = parseFloat(ws[s] || '0') || 0;
+                              ws[s] = String(Math.max(0, current + delta));
+                              return { ...x, weights: ws, weight: ws[0] };
+                            }));
+                          }
+                          return (
+                            <div key={s} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 11, color: C.sub, fontWeight: 700, width: 28, flexShrink: 0 }}>S{s+1}</span>
                               <input
-                                style={{ ...iStyle, padding: "5px 8px", fontSize: 12 }}
-                                placeholder="lbs"
+                                style={{ ...iStyle, flex: 1, padding: "7px 10px", fontSize: 13 }}
+                                type="text" inputMode="decimal" placeholder="0"
                                 value={(ex.weights || [])[s] ?? ''}
                                 onChange={e => setExercises(exs => exs.map((x, j) => {
                                   if (j !== i) return x;
                                   const ws = [...(x.weights || Array(numSets).fill(''))];
                                   ws[s] = e.target.value;
-                                  return { ...x, weights: ws };
+                                  return { ...x, weights: ws, weight: ws[0] };
                                 }))}
                               />
+                              {[2.5, 5, 10].map(d => (
+                                <button key={d} onClick={() => updateW(d)}
+                                  style={{ fontSize: 11, fontWeight: 800, padding: "5px 8px", borderRadius: 8, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: C.blue, cursor: "pointer", flexShrink: 0 }}>
+                                  +{d}
+                                </button>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <input style={iStyle} placeholder="lbs" value={(ex.weights || [])[0] ?? ex.weight ?? ''} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, weight: e.target.value, weights: [e.target.value] } : x))} />
-                      )}
-                      <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 18, cursor: "pointer" }}>×</button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Notes per exercise */}
+                      <div style={{ marginTop: 10 }}>
+                        <input
+                          style={{ ...iStyle, fontSize: 12 }}
+                          placeholder="Notes (optional)"
+                          value={ex.notes || ''}
+                          onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, notes: e.target.value } : x))}
+                        />
+                      </div>
                     </div>
                     );
                   })}
-                </>)}
+                  </div>
+                )}
               </div>
 
               {/* Cardio */}
