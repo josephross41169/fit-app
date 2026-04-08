@@ -812,8 +812,9 @@ export default function PostPage() {
                             setExercises(exs => exs.map((x, j) => {
                               if (j !== i) return x;
                               const existingWeights = x.weights || [];
-                              const firstW = existingWeights[0] || x.weight || '';
-                              const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? firstW);
+                              // Find the last filled weight to use as default for new sets
+                              const lastFilledW = [...existingWeights].reverse().find(w => w !== '') || x.weight || '';
+                              const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? lastFilledW);
                               return { ...x, sets: newSets, weights: newWeights };
                             }));
                           }} />
@@ -832,8 +833,9 @@ export default function PostPage() {
                             setExercises(exs => exs.map((x, j) => {
                               if (j !== i) return x;
                               const ws = [...(x.weights || Array(numSets).fill(''))];
-                              const current = parseFloat(ws[s] || '0') || 0;
-                              ws[s] = String(Math.max(0, current + delta));
+                              // If this set is empty, start from the previous set's weight
+                              const base = parseFloat(ws[s] !== '' ? ws[s] : (s > 0 ? ws[s - 1] : '0') || '0') || 0;
+                              ws[s] = String(Math.max(0, base + delta));
                               return { ...x, weights: ws, weight: ws[0] };
                             }));
                           }
