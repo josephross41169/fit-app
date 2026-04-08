@@ -249,6 +249,241 @@ const NOTE_CATEGORY_COLORS: Record<string,string> = {
 const EMOJI_OPTIONS = ["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","📅","🎯"];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WEEKLY GROUP CHALLENGE COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WEEKLY_CHALLENGE_GOAL = 50;
+
+const MOCK_WEEKLY_MEMBERS = [
+  { name: "Jake Morrison",   avatar: "JM", workouts: 5, today: true  },
+  { name: "Mike Davis",      avatar: "MD", workouts: 4, today: false },
+  { name: "Sarah Chen",      avatar: "SC", workouts: 4, today: true  },
+  { name: "Diego Reyes",     avatar: "DR", workouts: 3, today: false },
+  { name: "Kayla Nguyen",    avatar: "KN", workouts: 3, today: true  },
+];
+
+function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; catColor: string }) {
+  const [showChallenge, setShowChallenge] = useState(true);
+  const [challengeSent, setChallengeSent] = useState(false);
+
+  // Derive totals from mock
+  const teamTotal = MOCK_WEEKLY_MEMBERS.reduce((s, m) => s + m.workouts, 0);
+  const progressPct = Math.min(100, Math.round((teamTotal / WEEKLY_CHALLENGE_GOAL) * 100));
+
+  // Days remaining (mock: it's Wednesday so 4 days left)
+  const daysRemaining = 4;
+
+  const pulse = `
+    @keyframes weeklyGlow {
+      0%   { box-shadow: 0 0 14px 2px #7C3AED44; }
+      50%  { box-shadow: 0 0 28px 8px #7C3AED77; }
+      100% { box-shadow: 0 0 14px 2px #7C3AED44; }
+    }
+    @keyframes progressFill {
+      0%   { opacity: 0.7; }
+      50%  { opacity: 1; }
+      100% { opacity: 0.7; }
+    }
+    @keyframes countUp {
+      from { transform: scale(0.85); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+  `;
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <style>{pulse}</style>
+
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontWeight: 900, fontSize: 16, color: "#F0F0F0", display: "flex", alignItems: "center", gap: 8 }}>
+          ⚔️ Weekly Challenge
+          <span style={{
+            background: "#7C3AED22", color: "#7C3AED",
+            fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 99,
+            border: "1px solid #7C3AED44",
+          }}>
+            {daysRemaining}d left
+          </span>
+        </div>
+        <button
+          onClick={() => setShowChallenge(s => !s)}
+          style={{
+            background: "transparent", border: "none",
+            color: "#9CA3AF", fontSize: 12, cursor: "pointer", fontWeight: 700,
+          }}
+        >
+          {showChallenge ? "Collapse ▲" : "Expand ▼"}
+        </button>
+      </div>
+
+      {showChallenge && (
+        <div style={{
+          background: "linear-gradient(135deg, #1A1230, #120A28)",
+          borderRadius: 20, border: "2px solid #7C3AED44",
+          overflow: "hidden",
+          animation: "weeklyGlow 3s ease-in-out infinite",
+        }}>
+
+          {/* Top card: team score + days remaining */}
+          <div style={{
+            background: "linear-gradient(135deg, #2D1B69, #1A0D3E)",
+            padding: "18px 20px",
+            display: "flex", alignItems: "center", gap: 16,
+          }}>
+            <div style={{ textAlign: "center", minWidth: 80 }}>
+              <div style={{ fontSize: 40, fontWeight: 900, color: "#fff", animation: "countUp 0.6s ease-out" }}>
+                {teamTotal}
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+                Team Workouts
+              </div>
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", fontWeight: 700 }}>
+                  Weekly Goal: {WEEKLY_CHALLENGE_GOAL} workouts
+                </span>
+                <span style={{ fontSize: 12, color: "#7C3AED", fontWeight: 800 }}>
+                  {progressPct}%
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div style={{ height: 12, background: "rgba(255,255,255,0.1)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${progressPct}%`,
+                  background: progressPct >= 100
+                    ? "linear-gradient(90deg, #10B981, #34D399)"
+                    : progressPct >= 60
+                    ? "linear-gradient(90deg, #7C3AED, #9D5CF0)"
+                    : "linear-gradient(90deg, #EF4444, #F87171)",
+                  borderRadius: 99,
+                  transition: "width 0.8s ease",
+                  animation: "progressFill 2s ease-in-out infinite",
+                }} />
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 5 }}>
+                {WEEKLY_CHALLENGE_GOAL - teamTotal > 0
+                  ? `${WEEKLY_CHALLENGE_GOAL - teamTotal} more to hit the goal 🎯`
+                  : "🏆 Goal smashed! Keep going!"}
+              </div>
+            </div>
+
+            {/* Days remaining badge */}
+            <div style={{
+              background: "rgba(255,255,255,0.1)", borderRadius: 14,
+              padding: "10px 14px", textAlign: "center", flexShrink: 0,
+              border: "1px solid rgba(255,255,255,0.15)",
+            }}>
+              <div style={{ fontSize: 24, fontWeight: 900, color: daysRemaining <= 2 ? "#EF4444" : "#fff" }}>
+                {daysRemaining}
+              </div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", fontWeight: 700, textTransform: "uppercase" }}>
+                days left
+              </div>
+            </div>
+          </div>
+
+          {/* Member leaderboard */}
+          <div style={{ padding: "16px 20px" }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: "#9CA3AF", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8, fontSize: 11 }}>
+              Member Contributions This Week
+            </div>
+
+            {MOCK_WEEKLY_MEMBERS.map((member, idx) => {
+              const memberPct = Math.round((member.workouts / WEEKLY_CHALLENGE_GOAL) * 100);
+              const rankColors = ["#FFD700", "#C0C0C0", "#CD7F32"];
+              const rankEmojis = ["🥇", "🥈", "🥉"];
+              return (
+                <div key={member.avatar} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 0",
+                  borderBottom: idx < MOCK_WEEKLY_MEMBERS.length - 1 ? "1px solid #2D1B6933" : "none",
+                }}>
+                  {/* Rank */}
+                  <div style={{ width: 28, textAlign: "center", flexShrink: 0 }}>
+                    {idx < 3
+                      ? <span style={{ fontSize: 16 }}>{rankEmojis[idx]}</span>
+                      : <span style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF" }}>#{idx + 1}</span>
+                    }
+                  </div>
+
+                  {/* Avatar */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: "50%",
+                    background: `linear-gradient(135deg, #7C3AED, #9D5CF0)`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0,
+                    border: member.today ? "2px solid #10B981" : "2px solid transparent",
+                    position: "relative",
+                  }}>
+                    {member.avatar}
+                    {member.today && (
+                      <div style={{
+                        position: "absolute", bottom: -2, right: -2,
+                        width: 12, height: 12, borderRadius: "50%",
+                        background: "#10B981", border: "2px solid #1A1230",
+                        boxShadow: "0 0 6px #10B981",
+                      }} />
+                    )}
+                  </div>
+
+                  {/* Name + bar */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#F0F0F0" }}>{member.name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: idx === 0 ? "#FFD700" : "#9CA3AF" }}>
+                        {member.workouts} workouts
+                      </span>
+                    </div>
+                    <div style={{ height: 5, background: "#2D1B6955", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${memberPct}%`,
+                        background: idx === 0
+                          ? "linear-gradient(90deg, #FFD700, #FBB040)"
+                          : idx < 3
+                          ? "linear-gradient(90deg, #7C3AED, #9D5CF0)"
+                          : "#7C3AED88",
+                        borderRadius: 99,
+                        transition: "width 0.6s ease",
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Challenge Another Group button */}
+          <div style={{ padding: "0 20px 20px", display: "flex", gap: 10 }}>
+            <button
+              onClick={() => setChallengeSent(s => !s)}
+              style={{
+                flex: 1,
+                padding: "12px",
+                borderRadius: 13, border: "none",
+                background: challengeSent
+                  ? "rgba(124,58,237,0.15)"
+                  : "linear-gradient(135deg, #7C3AED, #9D5CF0)",
+                color: challengeSent ? "#7C3AED" : "#fff",
+                fontWeight: 800, fontSize: 14, cursor: "pointer",
+                transition: "all 0.2s",
+                boxShadow: challengeSent ? "none" : "0 4px 18px #7C3AED55",
+              }}
+            >
+              {challengeSent ? "⚔️ Challenge Sent — Waiting for Response..." : "⚔️ Challenge Another Group"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function GroupPage() {
   const { id } = useParams<{ id:string }>();
   const router = useRouter();
@@ -1245,6 +1480,9 @@ export default function GroupPage() {
           {/* ── CHALLENGES ── */}
           {tab==="challenges" && (
             <div>
+              {/* ⚔️ Weekly Group Challenge Section */}
+              <WeeklyChallengeSection groupName={group.name} catColor={catColor} />
+
               {group._dbId && (
                 <div style={{ marginBottom:16, display:"flex", justifyContent:"flex-end" }}>
                   <button onClick={() => setShowChallengeModal(true)}
