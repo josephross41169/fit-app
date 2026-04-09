@@ -86,6 +86,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [confirmDel,setConfirmDel] = useState(false);
   const [nut,setNut]         = useState(false);
   const [woOpen,setWoOpen]   = useState(false);
+  const [wellOpen,setWellOpen] = useState(false);
   const [editWo,setEditWo]   = useState(false);
   const [editNut,setEditNut] = useState(false);
   const [editWell,setEditWell] = useState(false);
@@ -637,7 +638,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           </div>
         ) : wellness ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`,marginTop:16}}>
-            <div style={{background:`linear-gradient(135deg,#52C97A,#7AE0A0)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#52C97A,#7AE0A0)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:24}}>🌿</span>
                 <div>
@@ -645,9 +646,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   <div style={{fontSize:13,color:"rgba(255,255,255,0.85)"}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
                 </div>
               </div>
-              <button onClick={()=>{setWellBuf({...wellness});setEditWell(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</button>
-            </div>
-            <div style={{background:"#F0FBF5",padding:14,display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+            </button>
+            {wellOpen && <div style={{background:"#F0FBF5",padding:14,display:"flex",flexDirection:"column",gap:8}}>
               {wellness.entries.map((e,i)=>(
                 <div key={i} style={{background:C.white,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #C3EFD0"}}>
                   <div style={{width:44,height:44,borderRadius:13,background:"#E8F8EE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
@@ -662,7 +668,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
         ) : (
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#0D1A0D",border:`2px solid #2A3A2A`,marginTop:16}}>
