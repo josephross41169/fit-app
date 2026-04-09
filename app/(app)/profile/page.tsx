@@ -85,6 +85,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
   const [nut,setNut]         = useState(false);
+  const [woOpen,setWoOpen]   = useState(false);
   const [editWo,setEditWo]   = useState(false);
   const [editNut,setEditNut] = useState(false);
   const [editWell,setEditWell] = useState(false);
@@ -406,7 +407,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           </div>
         ) : workout ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`,marginBottom:20}}>
-            <div style={{background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>💪</span>
                 <div>
@@ -414,9 +415,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{workout.duration}  ·  {workout.calories} cal burned</div>
                 </div>
               </div>
-              <button onClick={()=>{setWoBuf({...workout});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</button>
-            </div>
-            <div style={{background:C.greenLight,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+            </button>
+            {woOpen && <div style={{background:C.greenLight,padding:"12px 16px"}}>
               {/* Exercises — only show table if there are exercises */}
               {workout.exercises && workout.exercises.length > 0 && (<>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
@@ -457,7 +463,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               {(!workout.exercises || workout.exercises.length === 0) && (!workout.cardio || workout.cardio.length === 0) && (
                 <div style={{textAlign:"center",padding:"12px 0",color:C.sub,fontSize:13}}>No exercises logged</div>
               )}
-            </div>
+            </div>}
           </div>
         ) : (
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.greenLight,border:`2px solid ${C.greenMid}`,marginBottom:20}}>
