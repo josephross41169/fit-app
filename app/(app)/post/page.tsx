@@ -36,6 +36,8 @@ type FoodItem = { name: string; calories: string };
 type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
 type PostType = "Workout" | "Nutrition" | "Wellness" | "Achievement" | "Other";
+type WorkoutTemplate = { id: string; name: string; exercises: Exercise[] };
+type PRResult = { exercise: string; weight: number; reps: number; isNew: boolean };
 
 // ── Exercise Search Autocomplete Component ──────────────────────────────────
 function ExerciseSearchInput({
@@ -153,6 +155,15 @@ export default function PostPage() {
   const [woNotes, setWoNotes] = useState("");
   const [woPhoto, setWoPhoto] = useState<string | null>(null);
 
+  // PR + Template state
+  const [newPRs, setNewPRs] = useState<PRResult[]>([]);
+  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+
   // Nutrition state
   const [mealType, setMealType] = useState("Breakfast");
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
@@ -241,6 +252,102 @@ export default function PostPage() {
       }
     } catch {}
   }, [user, prevSessions]);
+
+  // ── Fetch templates on first open ────────────────────────────────────────
+  const fetchTemplates = useCallback(async () => {
+    if (!user || templatesLoaded) return;
+    setTemplatesLoaded(true);
+    try {
+      const { data } = await supabase
+        .from('workout_templates')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (data) setTemplates(data as WorkoutTemplate[]);
+    } catch {}
+  }, [user, templatesLoaded]);
+
+  // Load template into workout form
+  function loadTemplate(tpl: WorkoutTemplate) {
+    setExercises(tpl.exercises.map(ex => ({
+      ...ex,
+      weights: ex.weights && ex.weights.length > 0 ? ex.weights : Array(parseInt(ex.sets) || 3).fill(ex.weight || ''),
+    })));
+    setTemplateDropdownOpen(false);
+  }
+
+  // Save current workout as template
+  async function saveTemplate() {
+    if (!user || !templateName.trim() || exercises.length === 0) return;
+    setTemplateSaving(true);
+    try {
+      const { data } = await supabase.from('workout_templates').insert({
+        user_id: user.id,
+        name: templateName.trim(),
+        exercises: exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: (ex.weights || [])[0] || ex.weight || '',
+          weights: ex.weights || [],
+          notes: ex.notes || undefined,
+        })),
+      }).select().single();
+      if (data) {
+        setTemplates(t => [data as WorkoutTemplate, ...t]);
+        setShowSaveTemplate(false);
+        setTemplateName('');
+      }
+    } catch {}
+    setTemplateSaving(false);
+  }
+
+  async function deleteTemplate(id: string) {
+    await supabase.from('workout_templates').delete().eq('id', id).eq('user_id', user!.id);
+    setTemplates(t => t.filter(x => x.id !== id));
+  }
+
+  // ── PR Detection — run after saving workout ───────────────────────────────
+  async function detectPRs(userId: string, savedExercises: Exercise[]): Promise<PRResult[]> {
+    if (!savedExercises || savedExercises.length === 0) return [];
+    const prs: PRResult[] = [];
+    for (const ex of savedExercises) {
+      if (!ex.name) continue;
+      // Find best set volume in this submission (weight × reps)
+      const reps = parseFloat(ex.reps) || 0;
+      const weights = ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''];
+      let bestWeight = 0;
+      for (const w of weights) {
+        const wNum = parseFloat(w) || 0;
+        if (wNum > bestWeight) bestWeight = wNum;
+      }
+      if (bestWeight <= 0 || reps <= 0) continue;
+      const newVolume = bestWeight * reps;
+      // Check existing PR for this exercise
+      const { data: existing } = await supabase
+        .from('personal_records')
+        .select('volume, weight, reps')
+        .eq('user_id', userId)
+        .eq('exercise_name', ex.name)
+        .order('volume', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const existingVolume = existing?.volume || 0;
+      if (newVolume > existingVolume) {
+        // New PR! Upsert (insert new record)
+        await supabase.from('personal_records').insert({
+          user_id: userId,
+          exercise_name: ex.name,
+          weight: bestWeight,
+          reps: reps,
+          volume: newVolume,
+          logged_at: new Date().toISOString(),
+        });
+        prs.push({ exercise: ex.name, weight: bestWeight, reps, isNew: !existing });
+      }
+    }
+    return prs;
+  }
 
   async function handleSave() {
     if (!user) {
@@ -346,6 +453,13 @@ export default function PostPage() {
     } else {
       // ── Auto-award activity badges ────────────────────────────────────────
       try { await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, exercises); } catch {}
+      // ── PR Detection (workout only) ───────────────────────────────────────
+      if (logTab === 'workout' && exercises.length > 0) {
+        try {
+          const detectedPRs = await detectPRs(user.id, exercises);
+          if (detectedPRs.length > 0) setNewPRs(detectedPRs);
+        } catch {}
+      }
       setSaved(true);
     }
   }
@@ -597,11 +711,26 @@ export default function PostPage() {
   );
 
   if (saved) {
-    setTimeout(() => router.push("/profile"), 1500);
+    setTimeout(() => router.push("/profile"), newPRs.length > 0 ? 3000 : 1500);
     return (
-      <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-        <div style={{ fontSize: 64 }}>✅</div>
-        <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Saved to Log!</div>
+      <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 24px" }}>
+        <div style={{ fontSize: 64 }}>{newPRs.length > 0 ? "🏆" : "✅"}</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>
+          {newPRs.length > 0 ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! 🔥` : "Saved to Log!"}
+        </div>
+        {newPRs.length > 0 && (
+          <div style={{ background: "#1A1228", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #F5A623" }}>
+            {newPRs.map((pr, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < newPRs.length - 1 ? "1px solid #2D1B69" : "none" }}>
+                <span style={{ fontSize: 22 }}>🏆</span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#F5A623" }}>{pr.exercise}</div>
+                  <div style={{ fontSize: 12, color: "#A78BFA" }}>{pr.weight}lbs × {pr.reps} reps{pr.isNew ? " — First PR!" : " — New Best!"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>{isPrivate ? "🔒 Saved privately" : "🌐 Visible on your profile"}</div>
         <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to your profile...</div>
       </div>
@@ -760,6 +889,68 @@ export default function PostPage() {
                     <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 450" value={woCalories} onChange={e => setWoCalories(e.target.value)} />
                   </div>
                 </div>
+              </div>
+
+              {/* Workout Templates */}
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>📋 Templates</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {/* Load template dropdown */}
+                  <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
+                    <button
+                      onClick={() => { fetchTemplates(); setTemplateDropdownOpen(o => !o); }}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                    >
+                      <span>📂 Load Template</span>
+                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
+                    </button>
+                    {templateDropdownOpen && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#1A1228", border: "1.5px solid #7C3AED", borderRadius: 12, boxShadow: "0 8px 32px rgba(124,58,237,0.25)", overflow: "hidden", marginTop: 4 }}>
+                        {templates.length === 0 ? (
+                          <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Save your first workout below!</div>
+                        ) : templates.map((tpl, i) => (
+                          <div key={tpl.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: i < templates.length - 1 ? "1px solid #2D1B69" : "none" }}>
+                            <button
+                              onMouseDown={() => loadTemplate(tpl)}
+                              style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0" }}>{tpl.name}</div>
+                              <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>
+                                {tpl.exercises.length} exercise{tpl.exercises.length !== 1 ? "s" : ""}
+                              </div>
+                            </button>
+                            <button
+                              onMouseDown={() => deleteTemplate(tpl.id)}
+                              style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 12, cursor: "pointer", flexShrink: 0, marginLeft: 8 }}
+                            >×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Save as template button */}
+                  <button
+                    onClick={() => setShowSaveTemplate(s => !s)}
+                    style={{ padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: C.sub, fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >💾 Save as Template</button>
+                </div>
+                {/* Template name input (shown when saving) */}
+                {showSaveTemplate && (
+                  <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      style={{ ...iStyle, flex: 1 }}
+                      placeholder="Template name (e.g. Push Day A)"
+                      value={templateName}
+                      onChange={e => setTemplateName(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && saveTemplate()}
+                    />
+                    <button
+                      onClick={saveTemplate}
+                      disabled={templateSaving || !templateName.trim() || exercises.length === 0}
+                      style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: templateSaving ? C.greenMid : C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", flexShrink: 0 }}
+                    >{templateSaving ? "..." : "Save"}</button>
+                  </div>
+                )}
               </div>
 
               {/* Exercises table — with search autocomplete, increment buttons, prev session */}
