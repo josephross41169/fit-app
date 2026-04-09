@@ -66,7 +66,7 @@ function Lightbox({src,onClose}:{src:string;onClose:()=>void}) {
   );
 }
 
-type Exercise   = {name:string;sets:number;reps:number;weight:string};
+type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[]};
 type CardioEntry = {type:string;duration:string;distance:string};
 type Meal        = {key:string;emoji:string;name:string;cal:number};
 type WellnessEntry = {emoji:string;activity:string;notes:string};
@@ -309,15 +309,73 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Exercises</span>
                   <button onClick={()=>setWoBuf(w=>({...w,exercises:[...w.exercises,{name:"",sets:3,reps:10,weight:""}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.blue,border:`1.5px solid ${C.blue}`,cursor:"pointer"}}>+ Add Exercise</button>
                 </div>
-                {woBuf.exercises.map((ex,i)=>(
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 80px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
-                    <input style={iStyle} placeholder="Exercise name" value={ex.name} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,name:e.target.value}:x)}))}/>
-                    <input style={iStyle} type="number" placeholder="Sets" value={ex.sets} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,sets:+e.target.value}:x)}))}/>
-                    <input style={iStyle} type="number" placeholder="Reps" value={ex.reps} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,reps:+e.target.value}:x)}))}/>
-                    <input style={iStyle} placeholder="Weight" value={ex.weight} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,weight:e.target.value}:x)}))}/>
-                    <button onClick={()=>setWoBuf(w=>({...w,exercises:w.exercises.filter((_,j)=>j!==i)}))} style={{width:34,height:34,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+                {woBuf.exercises.map((ex,i)=>{
+                  const numSets = ex.sets || 1;
+                  const weights: string[] = ex.weights && ex.weights.length === numSets
+                    ? ex.weights
+                    : Array.from({length: numSets}, (_,k) => (ex.weights?.[k] ?? ex.weight ?? ''));
+                  return (
+                  <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:12,marginBottom:10,border:`1px solid ${C.greenMid}`}}>
+                    {/* Name + remove */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <input style={{...iStyle,flex:1}} placeholder="Exercise name" value={ex.name} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,name:e.target.value}:x)}))}/>
+                      <button onClick={()=>setWoBuf(w=>({...w,exercises:w.exercises.filter((_,j)=>j!==i)}))} style={{width:32,height:32,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer",flexShrink:0}}>×</button>
+                    </div>
+                    {/* Sets / Reps */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:0.8}}>Sets</label>
+                        <input style={iStyle} type="number" value={ex.sets} onChange={e=>{
+                          const n = Math.max(1, +e.target.value);
+                          setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                            if(j!==i) return x;
+                            const ws = x.weights || Array(x.sets).fill(x.weight||'');
+                            const lastW = [...ws].reverse().find(v=>v!=='')||x.weight||'';
+                            const newWs = Array.from({length:n},(_,k)=>ws[k]??lastW);
+                            return {...x,sets:n,weights:newWs};
+                          })}));
+                        }}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:0.8}}>Reps</label>
+                        <input style={iStyle} type="number" value={ex.reps} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,reps:+e.target.value}:x)}))}/>
+                      </div>
+                    </div>
+                    {/* Per-set weight with increment buttons */}
+                    <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:0.8}}>Weight (lbs) per set</label>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {weights.map((_,s)=>(
+                        <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{fontSize:11,color:C.sub,fontWeight:700,width:26,flexShrink:0}}>S{s+1}</span>
+                          <input
+                            style={{...iStyle,flex:1,padding:"6px 8px",fontSize:13}}
+                            type="text" inputMode="decimal" placeholder="0"
+                            value={weights[s]}
+                            onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                              if(j!==i) return x;
+                              const ws=[...(x.weights||Array(numSets).fill(''))];
+                              ws[s]=e.target.value;
+                              return {...x,weights:ws,weight:ws[0]};
+                            })}))}
+                          />
+                          {[2.5,5,10].map(d=>(
+                            <button key={d} onClick={()=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                              if(j!==i) return x;
+                              const ws=[...(x.weights||Array(numSets).fill(''))];
+                              const base=parseFloat(ws[s]!==''?ws[s]:(s>0?ws[s-1]:'0')||'0')||0;
+                              ws[s]=String(Math.max(0,base+d));
+                              return {...x,weights:ws,weight:ws[0]};
+                            })})}
+                              style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,color:C.blue,cursor:"pointer",flexShrink:0}}>
+                              +{d}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {/* Cardio section inside workout editor */}
               <div style={{borderTop:`1px solid ${C.greenMid}`,paddingTop:12,marginTop:4}}>
