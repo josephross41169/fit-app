@@ -193,8 +193,6 @@ const MOCK_RIVAL_FEED = [
 ];
 
 function RivalsTab() {
-  const [hasRival] = useState(true); // flip to false to see "Find a Rival" state
-
   return (
     <div>
       <style>{`
@@ -203,144 +201,136 @@ function RivalsTab() {
           50%  { box-shadow: 0 0 24px 6px #7C3AED77; }
           100% { box-shadow: 0 0 12px 2px #7C3AED44; }
         }
+        @keyframes rivalStatusPulse {
+          0%   { opacity: 1; }
+          50%  { opacity: 0.4; }
+          100% { opacity: 1; }
+        }
       `}</style>
 
-      {/* Header banner */}
+      {/* Hero CTA */}
       <div style={{
         background: "linear-gradient(135deg, #2D1B69, #1A0D3E)",
-        borderRadius: 18, padding: "18px 22px", marginBottom: 24,
-        border: "1px solid #7C3AED44",
-        display: "flex", alignItems: "center", gap: 16,
+        borderRadius: 24, padding: "28px 24px", marginBottom: 24,
+        border: "1px solid #7C3AED55",
         animation: "rivalTabPulse 3s ease-in-out infinite",
+        position: "relative", overflow: "hidden",
       }}>
-        <div style={{ fontSize: 40 }}>⚔️</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 900, fontSize: 18, color: "#fff" }}>Rival System</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 3 }}>
-            Pick a rival. Track them. Beat them. Repeat.
+        <div style={{ position: "absolute", top: -40, right: -40, width: 150, height: 150, borderRadius: "50%", background: "radial-gradient(circle, #7C3AED1A 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+          <div style={{ fontSize: 44 }}>⚔️</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 900, fontSize: 20, color: "#fff" }}>Rival System</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 3 }}>
+              Pick a rival. Track them. Beat them. Repeat.
+            </div>
+          </div>
+          <div style={{
+            background: "#EF444422", border: "1px solid #EF444444",
+            borderRadius: 99, padding: "4px 12px",
+            fontSize: 11, fontWeight: 800, color: "#EF4444",
+            animation: "rivalStatusPulse 1.5s infinite",
+          }}>
+            🔴 ACTIVE
           </div>
         </div>
-        <button style={{
-          background: "rgba(124,58,237,0.25)", border: "1.5px solid #7C3AED88",
-          borderRadius: 10, color: "#fff", fontSize: 12, fontWeight: 700,
-          padding: "8px 16px", cursor: "pointer", flexShrink: 0,
-        }}>
-          Find Rivals
-        </button>
+
+        {/* Quick h2h summary */}
+        <div style={{ background: "rgba(0,0,0,0.35)", borderRadius: 16, padding: "16px 18px", marginBottom: 20, border: "1px solid rgba(124,58,237,0.2)" }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+            This Week
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ textAlign: "center", minWidth: 40 }}>
+              <div style={{ fontWeight: 900, fontSize: 24, color: "#7C3AED" }}>3</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>YOU</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ height: 10, background: "rgba(0,0,0,0.5)", borderRadius: 99, overflow: "hidden", display: "flex" }}>
+                <div style={{ width: "43%", background: "linear-gradient(90deg, #7C3AED, #9D5CF0)" }} />
+                <div style={{ flex: 1, background: "#EF4444", opacity: 0.8 }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                <span style={{ fontSize: 10, color: "#7C3AED", fontWeight: 700 }}>43%</span>
+                <span style={{ fontSize: 10, color: "#EF4444", fontWeight: 700 }}>57%</span>
+              </div>
+            </div>
+            <div style={{ textAlign: "center", minWidth: 40 }}>
+              <div style={{ fontWeight: 900, fontSize: 24, color: "#EF4444" }}>4</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>MARCUS</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 12, textAlign: "center", fontSize: 12, color: "#EF4444", fontWeight: 700 }}>
+            They logged today and you haven't 👀
+          </div>
+        </div>
+
+        {/* Open rivals page CTA */}
+        <a href="/rivals" style={{ textDecoration: "none", display: "block" }}>
+          <button style={{
+            width: "100%", padding: "14px", borderRadius: 14, border: "none",
+            background: "linear-gradient(135deg, #7C3AED, #9D5CF0)",
+            color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
+            boxShadow: "0 6px 24px #7C3AED55", letterSpacing: 0.3,
+          }}>
+            ⚔️ Open Full Rivals Page →
+          </button>
+        </a>
       </div>
 
-      {!hasRival ? (
-        /* ── No rival state ── */
-        <div style={{
-          textAlign: "center", padding: "48px 24px",
-          background: "#1A1A1A", borderRadius: 18,
-          border: "2px dashed #2D1B69",
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+        {[
+          { label: "Record", value: "3-2", color: "#10B981" },
+          { label: "Streak", value: "8🔥", color: "#F5A623" },
+          { label: "Win Rate", value: "60%", color: "#7C3AED" },
+        ].map((stat) => (
+          <div key={stat.label} style={{
+            background: "#1A1A1A", borderRadius: 14,
+            border: "1px solid #2D1B69", padding: "14px",
+            textAlign: "center",
+          }}>
+            <div style={{ fontWeight: 900, fontSize: 18, color: stat.color }}>{stat.value}</div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginTop: 2 }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent activity teaser */}
+      <div style={{ fontWeight: 800, fontSize: 13, color: "#9CA3AF", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>
+        📡 Recent Activity
+      </div>
+      {[
+        { emoji: "💪", text: "Marcus logged Leg Day — 14,800 lbs", time: "2h ago", color: "#EF4444" },
+        { emoji: "🏆", text: "Marcus hit a PR on Squat — 315 lbs", time: "5h ago", color: "#EF4444" },
+        { emoji: "😴", text: "Marcus hasn't logged in 2 days — you're ahead", time: "2d ago", color: "#10B981" },
+      ].map((item, i) => (
+        <div key={i} style={{
+          background: "#1A1A1A", borderRadius: 12,
+          border: `1px solid ${item.color}22`, padding: "12px 14px",
+          marginBottom: 8, display: "flex", alignItems: "center", gap: 12,
         }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>⚔️</div>
-          <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 8 }}>You have no rival yet</div>
-          <div style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 20 }}>
-            Find someone at your level and make every workout a battle.
-          </div>
-          <button style={{
-            padding: "12px 32px", borderRadius: 13, border: "none",
-            background: "linear-gradient(135deg, #7C3AED, #9D5CF0)",
-            color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer",
-            boxShadow: "0 4px 18px #7C3AED55",
-          }}>
-            ⚔️ Find a Rival
-          </button>
-        </div>
-      ) : (
-        <div>
-          {/* Rival card */}
-          <RivalCard rival={mockRival} />
-
-          {/* Recent rival activity feed */}
-          <div style={{ marginTop: 24 }}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-              📡 Rival Activity Feed
-              <span style={{
-                background: "#EF444422", color: "#EF4444",
-                fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99,
-                border: "1px solid #EF444444",
-              }}>LIVE</span>
-            </div>
-            {MOCK_RIVAL_FEED.map(item => (
-              <div key={item.id} style={{
-                background: "#1A1A1A", borderRadius: 14,
-                border: "1px solid #2D1B69", padding: "12px 16px",
-                marginBottom: 10, display: "flex", alignItems: "center", gap: 12,
-              }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: "50%",
-                  background: "linear-gradient(135deg, #7C3AED, #9D5CF0)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0,
-                }}>
-                  {item.avatar}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: "#F0F0F0" }}>
-                    <strong>{item.user}</strong> {item.action}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
-                    {item.emoji} {item.detail}
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: "#9CA3AF", flexShrink: 0 }}>{item.time}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Weekly head-to-head comparison bar */}
           <div style={{
-            marginTop: 24, background: "#1A1A1A", borderRadius: 18,
-            border: "1px solid #2D1B69", padding: "18px 20px",
-          }}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0", marginBottom: 14 }}>
-              📊 Weekly Head-to-Head
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ textAlign: "center", minWidth: 48 }}>
-                <div style={{ fontWeight: 900, fontSize: 22, color: "#7C3AED" }}>{mockRival.myWorkoutsThisWeek}</div>
-                <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700 }}>YOU</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  height: 14, background: "#0D0D0D",
-                  borderRadius: 99, overflow: "hidden",
-                  display: "flex",
-                }}>
-                  {/* My side */}
-                  <div style={{
-                    width: `${Math.round((mockRival.myWorkoutsThisWeek / (mockRival.myWorkoutsThisWeek + mockRival.workoutsThisWeek)) * 100)}%`,
-                    background: "linear-gradient(90deg, #7C3AED, #9D5CF0)",
-                    transition: "width 0.5s",
-                  }} />
-                  {/* Their side */}
-                  <div style={{
-                    flex: 1,
-                    background: "#EF4444",
-                    opacity: 0.7,
-                  }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                  <span style={{ fontSize: 10, color: "#7C3AED", fontWeight: 700 }}>
-                    {Math.round((mockRival.myWorkoutsThisWeek / (mockRival.myWorkoutsThisWeek + mockRival.workoutsThisWeek)) * 100)}%
-                  </span>
-                  <span style={{ fontSize: 10, color: "#EF4444", fontWeight: 700 }}>
-                    {Math.round((mockRival.workoutsThisWeek / (mockRival.myWorkoutsThisWeek + mockRival.workoutsThisWeek)) * 100)}%
-                  </span>
-                </div>
-              </div>
-              <div style={{ textAlign: "center", minWidth: 48 }}>
-                <div style={{ fontWeight: 900, fontSize: 22, color: "#EF4444" }}>{mockRival.workoutsThisWeek}</div>
-                <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700 }}>RIVAL</div>
-              </div>
-            </div>
-          </div>
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            background: `${item.color}15`, border: `1px solid ${item.color}33`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 16,
+          }}>{item.emoji}</div>
+          <div style={{ flex: 1, fontSize: 12, color: "#F0F0F0" }}>{item.text}</div>
+          <div style={{ fontSize: 10, color: "#6B7280", flexShrink: 0 }}>{item.time}</div>
         </div>
-      )}
+      ))}
+
+      <a href="/rivals" style={{ textDecoration: "none", display: "block", marginTop: 16 }}>
+        <div style={{
+          textAlign: "center", color: "#7C3AED", fontWeight: 800,
+          fontSize: 13, padding: "12px", borderRadius: 12,
+          border: "1px solid #7C3AED44", background: "rgba(124,58,237,0.08)",
+          cursor: "pointer",
+        }}>
+          View Full Battle Screen →
+        </div>
+      </a>
     </div>
   );
 }
