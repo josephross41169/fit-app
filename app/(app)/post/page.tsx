@@ -164,6 +164,10 @@ export default function PostPage() {
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
 
+  // Today's workout resume state
+  const [todayLog, setTodayLog] = useState<{ id: string; type: string } | null>(null);
+  const [todayLogId, setTodayLogId] = useState<string | null>(null);
+
   // Nutrition state
   const [mealType, setMealType] = useState("Breakfast");
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
@@ -266,6 +270,68 @@ export default function PostPage() {
       if (data) setTemplates(data as WorkoutTemplate[]);
     } catch {}
   }, [user, templatesLoaded]);
+
+  // ── Fetch today's workout log (for resume banner) ───────────────────────
+  const fetchTodayWorkout = useCallback(async () => {
+    if (!user || todayLog !== null) return;
+    try {
+      const today = new Date();
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+      const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('id, workout_type, exercises, workout_duration_min, workout_calories, notes, cardio')
+        .eq('user_id', user.id)
+        .eq('log_type', 'workout')
+        .gte('logged_at', start)
+        .lt('logged_at', end)
+        .order('logged_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (data) setTodayLog({ id: data.id, type: data.workout_type || 'Workout' });
+    } catch {}
+  }, [user, todayLog]);
+
+  // Resume today's workout — pre-loads all existing data into the form
+  async function resumeTodayWorkout() {
+    if (!user || !todayLog) return;
+    try {
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('id, workout_type, exercises, workout_duration_min, workout_calories, notes, cardio')
+        .eq('id', todayLog.id)
+        .single();
+      if (!data) return;
+      setTodayLogId(data.id);
+      setWoType(data.workout_type || '');
+      setWoDuration(data.workout_duration_min ? String(data.workout_duration_min) : '');
+      setWoCalories(data.workout_calories ? String(data.workout_calories) : '');
+      setWoNotes(data.notes || '');
+      // Restore exercises with per-set weights
+      const exs: Exercise[] = (data.exercises || []).map((ex: any) => ({
+        name: ex.name || '',
+        sets: String(ex.sets || 3),
+        reps: String(ex.reps || 10),
+        weight: ex.weight || '',
+        weights: Array.isArray(ex.weights) && ex.weights.length > 0
+          ? ex.weights
+          : Array(parseInt(String(ex.sets)) || 3).fill(ex.weight || ''),
+        notes: ex.notes || '',
+      }));
+      setExercises(exs);
+      // Restore cardio
+      if (data.cardio && data.cardio.length > 0) {
+        setCardioType(data.cardio[0].type || '');
+        setCardioDuration(data.cardio[0].duration || '');
+        setCardioDistance(data.cardio[0].distance || '');
+      }
+      setLogTab('workout');
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (user) fetchTodayWorkout();
+  }, [user, fetchTodayWorkout]);
 
   // Load template into workout form
   function loadTemplate(tpl: WorkoutTemplate) {
@@ -381,9 +447,7 @@ export default function PostPage() {
           weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
           notes: ex.notes || undefined,
         }));
-        const res = await supabase.from('activity_logs').insert({
-          ...base,
-          log_type: 'workout',
+        const workoutPayload = {
           workout_type: woType || null,
           workout_duration_min: woDuration ? parseInt(woDuration) : null,
           workout_calories: woCalories ? parseInt(woCalories) : null,
@@ -391,7 +455,11 @@ export default function PostPage() {
           cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
           notes: woNotes || null,
           photo_url: woPhotoUrl,
-        });
+        };
+        // If resuming today's log, update it instead of inserting a new one
+        const res = todayLogId
+          ? await supabase.from('activity_logs').update(workoutPayload).eq('id', todayLogId)
+          : await supabase.from('activity_logs').insert({ ...base, log_type: 'workout', ...workoutPayload });
         error = res.error;
       } else if (logTab === 'nutrition') {
         // Upload per-meal photos
@@ -873,6 +941,30 @@ export default function PostPage() {
           {/* ─── WORKOUT TAB ─── */}
           {logTab === "workout" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* ── Resume today's workout banner ── */}
+              {todayLog && !todayLogId && (
+                <div style={{ background: "linear-gradient(135deg, #1A1228, #2D1B69)", borderRadius: 18, padding: "14px 18px", border: `2px solid ${C.blue}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0" }}>⚡ Continue today's workout</div>
+                    <div style={{ fontSize: 12, color: "#A78BFA", marginTop: 3 }}>{todayLog.type} — already logged today. Add more exercises or update it.</div>
+                  </div>
+                  <button
+                    onClick={resumeTodayWorkout}
+                    style={{ padding: "9px 16px", borderRadius: 14, border: "none", background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>
+                    Continue →
+                  </button>
+                </div>
+              )}
+
+              {/* Resume mode indicator */}
+              {todayLogId && (
+                <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #16A34A", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>✏️ Editing today's {todayLog?.type || 'workout'} — save will update it</div>
+                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoDuration(''); setWoCalories(''); setWoNotes(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
+                </div>
+              )}
+
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💪 Workout Details</div>
                 <div style={{ marginBottom: 12 }}>
