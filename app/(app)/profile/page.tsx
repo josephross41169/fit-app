@@ -359,13 +359,18 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             })}))}
                           />
                           {[2.5,5,10].map(d=>(
-                            <button key={d} onClick={()=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
-                              if(j!==i) return x;
-                              const ws=[...(x.weights||Array(numSets).fill(''))];
-                              const base=parseFloat(ws[s]!==''?ws[s]:(s>0?ws[s-1]:'0')||'0')||0;
-                              ws[s]=String(Math.max(0,base+d));
-                              return {...x,weights:ws,weight:ws[0]};
-                            })})}
+                            <button key={d} onClick={()=>{
+                              setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                                if(j!==i) return x;
+                                const ws=[...(x.weights||Array(numSets).fill(''))];
+                                const cur=ws[s];
+                                const prev=s>0?ws[s-1]:'0';
+                                const base=parseFloat(cur!==''?cur:prev)||0;
+                                ws[s]=String(Math.max(0,base+d));
+                                return {...x,weights:ws,weight:ws[0]};
+                              })})
+                              );
+                            }}
                               style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,color:C.blue,cursor:"pointer",flexShrink:0}}>
                               +{d}
                             </button>
