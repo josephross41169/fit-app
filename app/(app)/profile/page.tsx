@@ -798,6 +798,7 @@ export default function ProfilePage() {
   // ── Highlights state ──
   const [highlights,setHighlights] = useState<string[]>([]);
   const [highlightLb,setHighlightLb] = useState<string|null>(null);
+  const [editingHighlights,setEditingHighlights] = useState(false);
 
   // Load persisted highlights — Supabase first, localStorage fallback
   useEffect(() => {
@@ -1171,6 +1172,7 @@ export default function ProfilePage() {
         supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
         try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
       }
+      if (next.length === 0) setTimeout(() => setEditingHighlights(false), 0);
       return next;
     });
   }
@@ -1583,7 +1585,14 @@ export default function ProfilePage() {
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
-                <button onClick={()=>setShowAllPhotos(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.greenLight,color:C.blue,border:`1.5px solid ${C.greenMid}`,cursor:"pointer"}}>📷 All Photos</button>
+                <div style={{display:"flex",gap:8}}>
+                  {highlights.length > 0 && (
+                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.blue:C.greenLight,color:editingHighlights?"#fff":C.blue,border:`1.5px solid ${C.greenMid}`,cursor:"pointer"}}>
+                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
+                    </button>
+                  )}
+                  <button onClick={()=>setShowAllPhotos(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.greenLight,color:C.blue,border:`1.5px solid ${C.greenMid}`,cursor:"pointer"}}>📷 All Photos</button>
+                </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
                 {Array.from({length:HIGHLIGHT_SLOTS}).map((_,i) => {
@@ -1591,11 +1600,11 @@ export default function ProfilePage() {
                   if (src) {
                     return (
                       <div key={i} className="highlight-slot" style={{position:"relative",aspectRatio:"1",borderRadius:12,overflow:"hidden",cursor:"pointer"}}>
-                        <img onClick={()=>setHighlightLb(src)} src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                        <img onClick={()=>{ if(!editingHighlights) setHighlightLb(src); }} src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                         <button
                           className="highlight-remove"
-                          onClick={()=>removeHighlight(i)}
-                          style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:14,lineHeight:"22px",textAlign:"center",cursor:"pointer",opacity:0,transition:"opacity 0.15s",padding:0}}>×</button>
+                          onClick={(e)=>{e.stopPropagation();removeHighlight(i);}}
+                          style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:14,lineHeight:"22px",textAlign:"center",cursor:"pointer",opacity:editingHighlights?1:0,transition:"opacity 0.15s",padding:0}}>×</button>
                       </div>
                     );
                   }
