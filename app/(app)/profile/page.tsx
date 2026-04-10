@@ -1152,10 +1152,12 @@ export default function ProfilePage() {
         if (publicUrl && publicUrl.startsWith('http')) {
           setHighlights(h => {
             const next = h.map(u => u === dataUrl ? publicUrl : u).filter(u => u.startsWith('http') || u.startsWith('data:'));
-            // Only save proper http URLs to Supabase
             const httpOnly = next.filter(u => u.startsWith('http'));
-            supabase.from('users').update({ highlights: httpOnly } as any).eq('id', user!.id).catch(() => {});
-            try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(httpOnly)); } catch {}
+            // persist outside render cycle
+            setTimeout(() => {
+              supabase.from('users').update({ highlights: httpOnly } as any).eq('id', user!.id).catch(() => {});
+              try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(httpOnly)); } catch {}
+            }, 0);
             return next;
           });
         }
@@ -1168,11 +1170,14 @@ export default function ProfilePage() {
   function removeHighlight(idx:number) {
     setHighlights(h => {
       const next = h.filter((_,i) => i !== idx);
-      if (user) {
-        supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
-        try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
-      }
-      if (next.length === 0) setTimeout(() => setEditingHighlights(false), 0);
+      // persist outside render cycle
+      setTimeout(() => {
+        if (user) {
+          supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
+          try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
+        }
+        if (next.length === 0) setEditingHighlights(false);
+      }, 0);
       return next;
     });
   }
