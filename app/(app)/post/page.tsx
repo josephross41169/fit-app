@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { EXERCISES } from "@/lib/exercises";
 import { FoodScanner, type ScannedFood } from "@/components/FoodScanner";
+import { FitbitConnect } from "@/components/FitbitConnect";
+import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 
 const C = {
   blue: "#7C3AED",
@@ -1129,6 +1131,9 @@ export default function PostPage() {
           {/* ─── WORKOUT TAB ─── */}
           {logTab === "workout" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* ── Fitbit Connect ── */}
+              <FitbitConnect />
 
               {/* ── Resume today's workout banner ── */}
               {todayLog && !todayLogId && (
