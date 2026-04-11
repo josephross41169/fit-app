@@ -46,15 +46,15 @@ export function FitbitConnect() {
   function handleConnect() {
     if (!user) return;
     
-    // Generate state (includes user ID + timestamp)
-    const state = `${user.id}_${Date.now()}_${Math.random()}`;
-    
     // Get OAuth URL
     const clientId = process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
     if (!clientId) {
-      console.error('Fitbit Client ID not configured');
+      alert('Fitbit integration is not yet configured. Please try again later.');
       return;
     }
+    
+    // Generate state (includes user ID + timestamp)
+    const state = `${user.id}_${Date.now()}_${Math.random()}`;
 
     const redirectUri = `${window.location.origin}/api/fitbit-callback`;
     const authUrl = getFitbitAuthURL(clientId, redirectUri, state);

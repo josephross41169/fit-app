@@ -26,11 +26,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if Fitbit is configured
+    if (!process.env.FITBIT_CLIENT_ID || !process.env.FITBIT_CLIENT_SECRET) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL || 'https://fit-app-ecru.vercel.app'}/post?fitbit_error=not_configured`
+      );
+    }
+
     // Exchange code for token
     const token = await exchangeFitbitCode(
       code,
-      process.env.FITBIT_CLIENT_ID || '',
-      process.env.FITBIT_CLIENT_SECRET || '',
+      process.env.FITBIT_CLIENT_ID,
+      process.env.FITBIT_CLIENT_SECRET,
       `${process.env.NEXT_PUBLIC_APP_URL || 'https://fit-app-ecru.vercel.app'}/api/fitbit-callback`
     );
 
