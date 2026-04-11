@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { EXERCISES } from "@/lib/exercises";
-import { FoodScanner, type ScannedFood } from "@/components/FoodScanner";
+
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 
@@ -1566,22 +1566,7 @@ export default function PostPage() {
                   </button>
                 </div>
 
-                {/* Food Scanner — scan photos to auto-extract nutrition */}
-                <div style={{ marginBottom: 16 }}>
-                  <FoodScanner 
-                    onFoodScanned={(food: ScannedFood) => {
-                      setFoodItems(f => [...f, {
-                        name: food.foodName,
-                        calories: String(food.calories),
-                        protein: String(food.protein),
-                        carbs: String(food.carbs),
-                        fat: String(food.fat),
-                        servingSize: food.servingSize,
-                        qty: '1',
-                      }]);
-                    }}
-                  />
-                </div>
+
 
                 {/* Food search */}
                 <FoodSearchInput
