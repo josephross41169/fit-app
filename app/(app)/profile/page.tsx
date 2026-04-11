@@ -425,25 +425,41 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </button>
             {woOpen && <div style={{background:C.greenLight,padding:"12px 16px"}}>
               {/* Exercises — only show table if there are exercises */}
-              {workout.exercises && workout.exercises.length > 0 && (<>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
-                  {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+              {workout.exercises && workout.exercises.length > 0 && (()=>{
+                const totalSets = workout.exercises.reduce((s,ex)=>s+(ex.sets||0),0);
+                const totalVol = workout.exercises.reduce((s,ex)=>{
+                  const w = parseFloat(String(ex.weight))||0;
+                  return s+(w*(ex.sets||0)*(ex.reps||0));
+                },0);
+                return (<>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
+                  {["Exercise","Sets","Reps","Weight","Volume"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                 </div>
                 {workout.exercises.map((ex,i)=>{
                   const wsArr: string[] = (ex as any).weights && Array.isArray((ex as any).weights) ? (ex as any).weights : [];
                   const weightDisplay = wsArr.length > 1
                     ? wsArr.join(' / ') + ' lbs'
                     : (wsArr[0] || ex.weight || '—');
+                  const exVol = (parseFloat(String(ex.weight))||0)*(ex.sets||0)*(ex.reps||0);
                   return (
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
                     <span style={{fontSize:14,fontWeight:600,color:C.text}}>{ex.name}</span>
                     <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.sets}</span>
                     <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.reps}</span>
                     <span style={{fontSize:13,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textAlign:"center"}}>{exVol>0?`${exVol>=1000?(exVol/1000).toFixed(1)+'k':exVol.toFixed(0)} lbs`:'—'}</span>
                   </div>
                   );
                 })}
-              </>)}
+                {/* Totals footer row */}
+                {totalVol > 0 && (
+                  <div style={{display:"flex",gap:16,padding:"10px 8px 4px",borderTop:`1px solid ${C.greenMid}`,marginTop:4,flexWrap:"wrap"}}>
+                    <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.text,fontWeight:800}}>{totalSets}</strong> total sets</span>
+                    <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.gold,fontWeight:800}}>📊 {totalVol>=1000?`${(totalVol/1000).toFixed(1)}k`:totalVol.toFixed(0)} lbs</strong> total volume</span>
+                  </div>
+                )}
+                </>);
+              })()}
               {/* Cardio — always shown when present, no separator if no exercises above */}
               {workout.cardio && workout.cardio.length > 0 && (
                 <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.greenMid}` : "none"}}>
@@ -528,6 +544,39 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
             </button>
             <div style={{background:C.greenLight,padding:16}}>
+              {/* Macro progress vs goals (if goals set) */}
+              {(()=>{
+                let goals: any = null;
+                try { goals = (user as any)?.profile?.nutrition_goals || null; } catch {}
+                if (!goals) return null;
+                const rows = [
+                  {label:"Calories",val:nutrition.calories,goal:goals.calories||0,unit:"kcal",color:C.gold},
+                  {label:"Protein",val:nutrition.protein,goal:goals.protein||0,unit:"g",color:"#3B82F6"},
+                  {label:"Carbs",val:nutrition.carbs,goal:goals.carbs||0,unit:"g",color:"#16A34A"},
+                  {label:"Fat",val:nutrition.fat,goal:goals.fat||0,unit:"g",color:"#C084FC"},
+                ];
+                return (
+                  <div style={{marginBottom:16,display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>📊 vs Daily Goal</div>
+                    {rows.filter(r=>r.goal>0).map(r=>{
+                      const pct = Math.min((r.val/r.goal)*100,100);
+                      const over = r.val > r.goal;
+                      const barColor = over ? "#EF4444" : pct >= 90 ? "#16A34A" : r.color;
+                      return (
+                        <div key={r.label}>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,color:C.sub,marginBottom:3}}>
+                            <span>{r.label}</span>
+                            <span style={{color:over?"#EF4444":C.text}}>{r.val}{r.unit} / {r.goal}{r.unit} {over?"🔴 over":"✅"}</span>
+                          </div>
+                          <div style={{height:6,borderRadius:3,background:C.greenMid,overflow:"hidden"}}>
+                            <div style={{height:"100%",borderRadius:3,background:barColor,width:`${pct}%`,transition:"width 0.4s"}}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:nut?20:0}}>
                 {[{label:"Calories",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000},{label:"Protein",val:nutrition.protein,unit:"g",color:"#3B82F6",max:250},{label:"Carbs",val:nutrition.carbs,unit:"g",color:C.blue,max:300},{label:"Fat",val:nutrition.fat,unit:"g",color:"#4ADE80",max:100}].map(mc=>(
                   <div key={mc.label} style={{background:C.white,borderRadius:14,padding:"12px 6px",textAlign:"center",border:`1.5px solid ${C.greenMid}`}}>

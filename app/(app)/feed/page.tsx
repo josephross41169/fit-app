@@ -190,27 +190,48 @@ function StoryViewer({ story, onClose }: { story: typeof INITIAL_STORIES[0] & { 
 // ── DARK SIDEBAR: Workout Card ────────────────────────────────────────────────
 function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const [open, setOpen] = useState(false);
+  const exercises = workout.exercises || [];
+  const cardio = workout.cardio || [];
+  const totalSets = exercises.reduce((s, ex) => s + (ex.sets || 0), 0);
+  const totalVol = exercises.reduce((s, ex) => {
+    const w = parseFloat(String(ex.weight)) || 0;
+    return s + (w * (ex.sets || 0) * (ex.reps || 0));
+  }, 0);
+  const isPR = (workout as any).isPR;
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
       <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#16A34A,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:18 }}>💪</span>
-          <div>
-            <div style={{ fontWeight:800,fontSize:14,color:"#fff" }}>{workout.type}</div>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.8)" }}>{workout.duration} · {workout.calories} cal</div>
+        <div style={{ display:"flex",alignItems:"center",gap:10, flex:1, minWidth:0 }}>
+          <span style={{ fontSize:18, flexShrink:0 }}>💪</span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontWeight:800,fontSize:14,color:"#fff" }}>{workout.type}</span>
+              {isPR && <span style={{ fontSize:9, fontWeight:800, background:C.gold, color:"#000", borderRadius:99, padding:"1px 6px", flexShrink:0 }}>🏆 PR</span>}
+            </div>
+            <div style={{ fontSize:11,color:"rgba(255,255,255,0.8)" }}>
+              {workout.duration}{workout.calories > 0 ? ` · ${workout.calories} cal` : ''}
+              {totalSets > 0 && ` · ${totalSets} sets`}
+              {totalVol > 0 && ` · ${totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}k` : totalVol.toFixed(0)} lbs`}
+            </div>
           </div>
         </div>
         <div style={{ width:26,height:26,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
         </div>
       </button>
+      {/* Always-visible top-3 strip */}
+      {!open && exercises.length > 0 && (
+        <div style={{ background:"#1E2235", padding:"8px 14px", fontSize:11, color:C.darkSub, borderBottom:`1px solid ${C.darkBorder}` }}>
+          {exercises.slice(0,3).map(e=>e.name).filter(Boolean).join(' · ')}{exercises.length > 3 ? ` +${exercises.length-3}` : ''}
+        </div>
+      )}
       {open && (
         <div style={{ background:"#1E2235",padding:"10px 14px" }}>
-          {workout.exercises.length > 0 && (<>
+          {exercises.length > 0 && (<>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 42px 42px 72px",gap:5,paddingBottom:6,marginBottom:4,borderBottom:"1px solid #2A2D3E" }}>
               {["Exercise","Sets","Reps","Weight"].map(h => <span key={h} style={{ fontSize:9,fontWeight:800,color:C.darkSub,textTransform:"uppercase",letterSpacing:0.5 }}>{h}</span>)}
             </div>
-            {workout.exercises.map((ex,i) => (
+            {exercises.map((ex,i) => (
               <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 42px 42px 72px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                 <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{ex.name}</span>
                 <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.sets}</span>
@@ -218,11 +239,18 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
                 <span style={{ fontSize:12,fontWeight:800,color:C.gold,textAlign:"center" }}>{ex.weight}</span>
               </div>
             ))}
+            {/* Volume footer */}
+            {totalVol > 0 && (
+              <div style={{ display:"flex", justifyContent:"flex-end", gap:12, paddingTop:8, marginTop:4, borderTop:"1px solid #2A2D3E", fontSize:11 }}>
+                <span style={{ color:C.darkSub }}>{totalSets} sets total</span>
+                <span style={{ color:C.gold, fontWeight:800 }}>📊 {totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}k` : totalVol.toFixed(0)} lbs volume</span>
+              </div>
+            )}
           </>)}
-          {workout.cardio.length > 0 && (
-            <div style={{ marginTop:workout.exercises.length?10:0 }}>
+          {cardio.length > 0 && (
+            <div style={{ marginTop:exercises.length?10:0 }}>
               <div style={{ fontSize:10,fontWeight:800,color:C.darkSub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:6 }}>🏃 Cardio</div>
-              {workout.cardio.map((c,i) => (
+              {cardio.map((c,i) => (
                 <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 70px 70px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                   <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{c.type}</span>
                   <span style={{ fontSize:12,fontWeight:700,color:C.blue,textAlign:"center" }}>{c.duration}</span>
@@ -575,6 +603,90 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
             </button>
           </div>
         )}
+
+        {/* ── Workout Stats Strip ── */}
+        {post.workout && (() => {
+          const exercises = post.workout.exercises || [];
+          const cardio = post.workout.cardio || [];
+          const totalSets = exercises.reduce((s, ex) => s + (ex.sets || 0), 0);
+          const totalVol = exercises.reduce((s, ex) => {
+            const w = parseFloat(String(ex.weight)) || 0;
+            return s + (w * (ex.sets || 0) * (ex.reps || 0));
+          }, 0);
+          const top3 = exercises.slice(0, 3).map(e => e.name).filter(Boolean);
+          const hasCardio = cardio.length > 0;
+          const isPR = (post as any).isPR;
+          return (
+            <div style={{ margin:"10px 18px 0", borderRadius:14, border:`1.5px solid ${C.greenMid}`, background:C.greenLight, overflow:"hidden" }}>
+              {/* Header row */}
+              <div style={{ padding:"10px 14px 8px", display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:17 }}>🏋️</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:900, fontSize:14, color:C.text }}>{post.workout.type}</span>
+                    <span style={{ fontSize:12, color:C.sub }}>· {post.workout.duration}</span>
+                    {isPR && (
+                      <span style={{ fontSize:10, fontWeight:800, background:C.gold, color:"#000", borderRadius:99, padding:"2px 8px", flexShrink:0 }}>🏆 NEW PR</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Stats row */}
+              <div style={{ padding:"0 14px 8px", display:"flex", gap:14, flexWrap:"wrap" }}>
+                {totalSets > 0 && (
+                  <span style={{ fontSize:12, color:C.sub }}>
+                    <strong style={{ color:C.text, fontWeight:800 }}>{totalSets}</strong> sets
+                  </span>
+                )}
+                {totalVol > 0 && (
+                  <span style={{ fontSize:12, color:C.sub }}>
+                    <strong style={{ color:C.text, fontWeight:800 }}>{totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}k` : totalVol.toFixed(0)}</strong> lbs vol
+                  </span>
+                )}
+                {post.workout.calories > 0 && (
+                  <span style={{ fontSize:12, color:C.sub }}>
+                    <strong style={{ color:C.text, fontWeight:800 }}>{post.workout.calories}</strong> cal
+                  </span>
+                )}
+                {hasCardio && cardio.slice(0,2).map((c, i) => (
+                  <span key={i} style={{ fontSize:12, color:C.sub }}>
+                    🏃 {c.distance || c.duration}
+                  </span>
+                ))}
+              </div>
+              {/* Top exercises */}
+              {top3.length > 0 && (
+                <div style={{ padding:"0 14px 10px", fontSize:11, color:C.sub }}>
+                  {top3.join(' · ')}{exercises.length > 3 ? ` +${exercises.length - 3} more` : ''}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Nutrition Stats Strip ── */}
+        {post.nutrition && (() => {
+          const meals = post.nutrition.meals || [];
+          return (
+            <div style={{ margin:"10px 18px 0", borderRadius:14, border:`1.5px solid ${C.greenMid}`, background:C.greenLight, overflow:"hidden" }}>
+              <div style={{ padding:"10px 14px 8px", display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:17 }}>🥗</span>
+                <span style={{ fontWeight:900, fontSize:14, color:C.text }}>Nutrition Log</span>
+              </div>
+              <div style={{ padding:"0 14px 8px", display:"flex", gap:14, flexWrap:"wrap" }}>
+                <span style={{ fontSize:12, color:C.sub }}><strong style={{ color:C.text, fontWeight:800 }}>{post.nutrition.calories}</strong> cal</span>
+                <span style={{ fontSize:12, color:C.sub }}><strong style={{ color:C.text, fontWeight:800 }}>{post.nutrition.protein}g</strong> protein</span>
+                <span style={{ fontSize:12, color:C.sub }}><strong style={{ color:C.text, fontWeight:800 }}>{post.nutrition.carbs}g</strong> carbs</span>
+                <span style={{ fontSize:12, color:C.sub }}><strong style={{ color:C.text, fontWeight:800 }}>{post.nutrition.fat}g</strong> fat</span>
+              </div>
+              {meals.length > 0 && (
+                <div style={{ padding:"0 14px 10px", fontSize:11, color:C.sub }}>
+                  {meals.map(m => m.key).join(' · ')}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Actions */}
         <div style={{ padding:"12px 18px",display:"flex",alignItems:"center",gap:20,borderTop:`1px solid ${C.greenLight}`,marginTop:12 }}>
