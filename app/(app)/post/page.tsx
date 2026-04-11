@@ -1566,7 +1566,7 @@ export default function PostPage() {
                   </button>
                 </div>
 
-                {/* Food Scanner */}
+                {/* Food Scanner — scan photos to auto-extract nutrition */}
                 <div style={{ marginBottom: 16 }}>
                   <FoodScanner 
                     onFoodScanned={(food: ScannedFood) => {
