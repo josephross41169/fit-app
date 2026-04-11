@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
-import { FoodScanner, type ScannedFood } from "@/components/FoodScanner";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -506,29 +505,6 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   </div>
                 ))}
               </div>
-
-              {/* Food Scanner */}
-              <FoodScanner 
-                onFoodScanned={(food: ScannedFood) => {
-                  setNutBuf(n => ({
-                    ...n,
-                    calories: n.calories + food.calories,
-                    protein: n.protein + food.protein,
-                    carbs: n.carbs + food.carbs,
-                    fat: n.fat + food.fat,
-                    sugar: n.sugar + (food.fiber || 0), // use fiber as a stand-in for now
-                    meals: [
-                      ...n.meals,
-                      {
-                        key: food.servingSize.includes('serving') ? 'Meal' : food.servingSize,
-                        emoji: '📸',
-                        name: food.foodName,
-                        cal: food.calories,
-                      },
-                    ],
-                  }));
-                }}
-              />
 
               <div style={{borderTop:`1px solid ${C.greenMid}`,paddingTop:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

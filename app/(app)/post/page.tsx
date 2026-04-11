@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { EXERCISES } from "@/lib/exercises";
+import { FoodScanner, type ScannedFood } from "@/components/FoodScanner";
 
 const C = {
   blue: "#7C3AED",
@@ -33,7 +34,7 @@ type Exercise = { name: string; sets: string; reps: string; weight: string; weig
 type PrevSet = { weight: string; reps: string };
 type PrevSession = { date: string; sets: PrevSet[] };
 type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string };
-type NutritionGoals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number };
+type NutritionGoals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number; monthly_calories?: number; monthly_protein?: number; monthly_carbs?: number; monthly_fat?: number };
 type DailyTotals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number };
 type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
@@ -1441,8 +1442,8 @@ export default function PostPage() {
                   </div>
                   {showGoalsEditor ? (
                     <div>
-                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>Set your daily macro goals:</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>📅 Daily Macro Goals:</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                         {([
                           { l: 'Calories', k: 'calories' as keyof NutritionGoals, unit: 'kcal' },
                           { l: 'Protein', k: 'protein' as keyof NutritionGoals, unit: 'g' },
@@ -1461,6 +1462,28 @@ export default function PostPage() {
                           </div>
                         ))}
                       </div>
+
+                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${C.greenMid}` }}>📊 Monthly Macro Goals (optional):</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                        {([
+                          { l: 'Total Calories', k: 'monthly_calories' as keyof NutritionGoals, unit: 'kcal' },
+                          { l: 'Total Protein', k: 'monthly_protein' as keyof NutritionGoals, unit: 'g' },
+                          { l: 'Total Carbs', k: 'monthly_carbs' as keyof NutritionGoals, unit: 'g' },
+                          { l: 'Total Fat', k: 'monthly_fat' as keyof NutritionGoals, unit: 'g' },
+                        ] as { l: string; k: keyof NutritionGoals; unit: string }[]).map(f => (
+                          <div key={f.k}>
+                            <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{f.l} ({f.unit})</label>
+                            <input
+                              style={iStyle}
+                              type="text" inputMode="numeric"
+                              value={String(editGoals[f.k] || '')}
+                              onChange={e => setEditGoals(g => ({ ...g, [f.k]: parseFloat(e.target.value) || 0 }))}
+                              placeholder="optional"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
                       <button onClick={saveMacroGoals} style={{ width: '100%', padding: '10px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg,#7C3AED,#A78BFA)`, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
                         Save Goals
                       </button>
@@ -1537,6 +1560,24 @@ export default function PostPage() {
                     + Manual
                   </button>
                 </div>
+
+                {/* Food Scanner */}
+                <div style={{ marginBottom: 16 }}>
+                  <FoodScanner 
+                    onFoodScanned={(food: ScannedFood) => {
+                      setFoodItems(f => [...f, {
+                        name: food.foodName,
+                        calories: String(food.calories),
+                        protein: String(food.protein),
+                        carbs: String(food.carbs),
+                        fat: String(food.fat),
+                        servingSize: food.servingSize,
+                        qty: '1',
+                      }]);
+                    }}
+                  />
+                </div>
+
                 {/* Food search */}
                 <FoodSearchInput
                   onSelect={(food) => {
