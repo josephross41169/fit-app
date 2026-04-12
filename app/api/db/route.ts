@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Mark as dynamic to avoid static collection at build time
+export const dynamic = 'force-dynamic';
+
 // Service role — bypasses RLS for trusted server-side operations
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Guard against missing env at build time
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key-for-build';
+const admin = createClient(supabaseUrl, serviceKey);
 
 export async function GET(req: NextRequest) {
   try {

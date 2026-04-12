@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
+import WeightTracker from "@/components/WeightTracker";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -1789,6 +1790,9 @@ export default function ProfilePage() {
                 🏆 Report an Achievement
               </button>
             </div>
+
+            {/* Body Weight Tracker */}
+            {user && <WeightTracker userId={user.id} />}
 
             <EditableList title="Favorite Brands" items={brands} onSave={setBrands} emptyItem={{emoji:"👟",name:"New Brand"}}
               renderItem={(item,i,setList)=>(
