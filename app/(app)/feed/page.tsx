@@ -918,13 +918,17 @@ export default function FeedPage() {
         .limit(20);
       if (data && data.length > 0) {
         setActivityLogs(data);
-        // Load badges for users in the feed
+        // Load RECENT badges for users in the feed (earned in last 7 days only)
         const userIds = [...new Set(data.map((l: any) => l.user_id).filter(Boolean))];
         if (userIds.length > 0) {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
           const { data: badgeData } = await supabase
             .from('badges')
-            .select('user_id, badge_id')
-            .in('user_id', userIds);
+            .select('user_id, badge_id, created_at')
+            .in('user_id', userIds)
+            .gte('created_at', sevenDaysAgo.toISOString())
+            .eq('show_celebration', true);
           if (badgeData) {
             const map: Record<string, string[]> = {};
             badgeData.forEach((b: any) => {

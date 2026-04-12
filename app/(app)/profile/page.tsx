@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
 import WeightTracker from "@/components/WeightTracker";
+import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -1693,7 +1694,14 @@ export default function ProfilePage() {
                 <div style={{fontSize:14}}>Loading activity log...</div>
               </div>
             ) : (
-              (realDays.length > 0 ? realDays : DAYS).map(day => {
+              <>
+                {/* Workout Progress Graphs */}
+                {realDays.length > 0 && (
+                  <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.greenMid}`,marginBottom:20}}>
+                    <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id }))} />
+                  </div>
+                )}
+                {(realDays.length > 0 ? realDays : DAYS).map(day => {
                 const isReal = realDays.length > 0;
                 return (
                   <DayCard
@@ -1714,7 +1722,8 @@ export default function ProfilePage() {
                     } : undefined}
                   />
                 );
-              })
+              })}
+              </>
             )}
           </div>
 
