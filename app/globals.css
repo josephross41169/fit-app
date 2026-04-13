@@ -5,9 +5,9 @@
 :root {
   --bg: #0D0D0D;
   --card: #1A1A1A;
-  --primary: #16A34A;
-  --secondary: #22C55E;
-  --success: #16A34A;
+  --primary: #7C3AED;
+  --secondary: #A78BFA;
+  --success: #7C3AED;
   --text: #F0F0F0;
   --text-secondary: #9CA3AF;
   --border: #2A2A2A;
@@ -34,7 +34,7 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2A3A2A;
+  background: #4A3F6B;
   border-radius: 2px;
 }
 
