@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import RivalCard, { type Rival } from "@/components/RivalCard";
 
 const C = {
-  blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
+  blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
   green:"#52C97A",
@@ -336,15 +336,15 @@ function RivalsTab() {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "Running":      "#16A34A",
-  "Strength":     "#16A34A",
+  "Running":      "#7C3AED",
+  "Strength":     "#7C3AED",
   "Yoga":         "#52C97A",
   "HIIT":         "#EF4444",
   "Bodybuilding": "#F5A623",
   "Nutrition":    "#10B981",
   "Wellness":     "#4ADE80",
   "Calisthenics": "#06B6D4",
-  "General":      "#16A34A",
+  "General":      "#7C3AED",
 };
 
 // Normalize a DB group to display format
@@ -476,7 +476,7 @@ function GroupCard({ group, onJoin }: { group: any; onJoin?: (id: string) => voi
 
         <button
           onClick={handleJoin}
-          style={{ width:"100%", padding:"11px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:14, cursor:"pointer", transition:"all 0.15s", boxShadow:joined?"none":"0 4px 14px rgba(22,163,74,0.35)", opacity:joining?0.7:1 }}
+          style={{ width:"100%", padding:"11px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#7C3AED,#A78BFA)", color:joined?"#7C3AED":"#fff", fontWeight:800, fontSize:14, cursor:"pointer", transition:"all 0.15s", boxShadow:joined?"none":"0 4px 14px rgba(22,163,74,0.35)", opacity:joining?0.7:1 }}
         >
           {joining ? "Joining..." : joined ? "✓ Joined — View Group" : "Join Group"}
         </button>
@@ -534,7 +534,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {EMOJI_OPTIONS.map(em => (
                 <button key={em} type="button" onClick={() => setForm(f=>({...f,emoji:em}))}
-                  style={{ width:40, height:40, borderRadius:10, border:`2px solid ${form.emoji===em?"#16A34A":"#2A2D3E"}`, background:form.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  style={{ width:40, height:40, borderRadius:10, border:`2px solid ${form.emoji===em?"#7C3AED":"#2A2D3E"}`, background:form.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                   {em}
                 </button>
               ))}
@@ -589,7 +589,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
               <div style={{ fontSize:11, color:"#8892A4" }}>Members join from anywhere worldwide</div>
             </div>
             <button type="button" onClick={() => setForm(f=>({...f,is_online:!f.is_online}))}
-              style={{ width:44, height:24, borderRadius:12, background:form.is_online?"#16A34A":"#2A2D3E", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+              style={{ width:44, height:24, borderRadius:12, background:form.is_online?"#7C3AED":"#2A2D3E", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
               <div style={{ position:"absolute", top:2, left:form.is_online?22:2, width:20, height:20, borderRadius:10, background:"#fff", transition:"left 0.2s" }} />
             </button>
           </div>
@@ -602,7 +602,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
               Cancel
             </button>
             <button type="submit" disabled={submitting}
-              style={{ flex:2, padding:"11px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", opacity:submitting?0.7:1 }}>
+              style={{ flex:2, padding:"11px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", opacity:submitting?0.7:1 }}>
               {submitting ? "Creating..." : "Create Group 🚀"}
             </button>
           </div>
@@ -652,7 +652,7 @@ function NearbyPlaces() {
           placeholder="Enter zip code..." maxLength={5}
           style={{ flex:1, background:"#252A3D", border:`1px solid ${C.darkBorder}`, borderRadius:10, padding:"8px 12px", fontSize:12, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }} />
         <button onClick={() => zip.length===5 && setSubmitted(true)}
-          style={{ padding:"8px 14px", borderRadius:10, background:"linear-gradient(135deg,#16A34A,#22C55E)", border:"none", color:"#fff", fontWeight:800, fontSize:12, cursor:"pointer", opacity:zip.length===5?1:0.5 }}>
+          style={{ padding:"8px 14px", borderRadius:10, background:"linear-gradient(135deg,#7C3AED,#A78BFA)", border:"none", color:"#fff", fontWeight:800, fontSize:12, cursor:"pointer", opacity:zip.length===5?1:0.5 }}>
           Search
         </button>
       </div>
@@ -661,7 +661,7 @@ function NearbyPlaces() {
         <>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
             {["All",...PLACE_CATEGORIES].map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${activeCategory===cat?"#16A34A":C.darkBorder}`, background:activeCategory===cat?"rgba(22,163,74,0.2)":"transparent", color:activeCategory===cat?"#4ADE80":C.darkSub, fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
+              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${activeCategory===cat?"#7C3AED":C.darkBorder}`, background:activeCategory===cat?"rgba(22,163,74,0.2)":"transparent", color:activeCategory===cat?"#4ADE80":C.darkSub, fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
                 {cat}
               </button>
             ))}
@@ -671,9 +671,9 @@ function NearbyPlaces() {
               <div style={{ textAlign:"center", padding:"16px 0", color:C.darkSub, fontSize:12 }}>No {activeCategory} spots found near {zip}</div>
             ) : filtered.map((place, i) => (
               <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, cursor:"pointer", border:`1px solid transparent`, transition:"border-color 0.15s" }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#16A34A"}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#7C3AED"}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "transparent"}>
-                <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#16A34A,#22C55E)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{place.emoji}</div>
+                <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#7C3AED,#A78BFA)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{place.emoji}</div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, fontSize:12, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{place.name}</div>
                   <div style={{ fontSize:10, color:C.darkSub, marginTop:1 }}>{place.address}</div>
@@ -704,7 +704,7 @@ function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joi
   return (
     <div className="connect-sidebar" style={{ width:320, flexShrink:0, paddingTop:20, paddingBottom:20 }}>
       {/* Create a group CTA */}
-      <div style={{ background:`linear-gradient(135deg,#16A34A,#22C55E)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+      <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
         <div style={{ fontSize:32, marginBottom:8 }}>{effectiveTab==="local"?"📍":"🌍"}</div>
         <div style={{ fontWeight:900, fontSize:16, color:"#fff", marginBottom:6 }}>
           {effectiveTab==="local" ? "Start a Local Group" : "Create an Online Group"}
@@ -867,7 +867,7 @@ export default function ConnectPage() {
               style={{ background:"none", border:"none", outline:"none", fontSize:13, color:C.text, flex:1 }} />
           </div>
           <button onClick={() => setShowCreateModal(true)}
-            style={{ padding:"9px 18px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", flexShrink:0 }}>
+            style={{ padding:"9px 18px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", flexShrink:0 }}>
             + Create Group
           </button>
         </div>
@@ -902,7 +902,7 @@ export default function ConnectPage() {
 
           {/* Banner */}
           {tab !== "joined" && tab !== "rivals" && (
-            <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
               <div style={{ fontSize:40 }}>{tab==="local"?"📍":"🌍"}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>
@@ -923,7 +923,7 @@ export default function ConnectPage() {
           )}
 
           {tab === "joined" && (
-            <div style={{ background:"linear-gradient(135deg,#16A34A,#22C55E)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
               <div style={{ fontSize:40 }}>✅</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>My Groups</div>
@@ -972,3 +972,5 @@ export default function ConnectPage() {
     </div>
   );
 }
+
+

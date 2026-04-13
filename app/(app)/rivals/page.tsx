@@ -989,3 +989,4 @@ export default function RivalsPage() {
     </div>
   );
 }
+

@@ -9,7 +9,7 @@ import { computeTier } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
 
 const C = {
-  blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
+  blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
   green:"#52C97A",
@@ -204,7 +204,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const isPR = (workout as any).isPR;
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#16A34A,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10, flex:1, minWidth:0 }}>
           <span style={{ fontSize:18, flexShrink:0 }}>💪</span>
           <div style={{ flex:1, minWidth:0 }}>
@@ -274,7 +274,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
   const [open, setOpen] = useState(false);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#16A34A,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:18 }}>🥗</span>
           <div>
@@ -391,7 +391,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
       {/* User header */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
         <TierFrame tier={(post as any).tier || "default"} size={44}>
-          <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+          <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
             {(post as any).avatarUrl
               ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
               : post.avatar}
@@ -813,7 +813,7 @@ function NewMembersPanel({ members, currentUser }: { members: any[]; currentUser
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #16A34A" : "2px solid #2A2D3E" }}>
+              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
                 {member.avatar_url
                   ? <img src={member.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   : ini}
@@ -821,7 +821,7 @@ function NewMembersPanel({ members, currentUser }: { members: any[]; currentUser
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
-                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#16A34A", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
+                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#7C3AED", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
                 </div>
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
                 <div style={{ fontSize:10, color:"#10B981", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
@@ -1207,7 +1207,7 @@ export default function FeedPage() {
             <button key={t.key} onClick={() => setFeedTab(t.key as any)} style={{
               padding:"8px 20px",borderRadius:99,border:"none",cursor:"pointer",
               fontWeight:800,fontSize:13,
-              background:feedTab===t.key?"#16A34A":"transparent",
+              background:feedTab===t.key?"#7C3AED":"transparent",
               color:feedTab===t.key?"#fff":"#6B7280",
               transition:"all 0.15s",
             }}>
@@ -1223,7 +1223,7 @@ export default function FeedPage() {
           }} style={{
             padding:"8px 20px", borderRadius:99, border:"none", cursor:"pointer",
             fontWeight:800, fontSize:13,
-            background: feedTab==="notifications" ? "#16A34A" : "transparent",
+            background: feedTab==="notifications" ? "#7C3AED" : "transparent",
             color: feedTab==="notifications" ? "#fff" : "#6B7280",
             transition:"all 0.15s",
             position:"relative",
@@ -1252,21 +1252,21 @@ export default function FeedPage() {
                 </div>
               ) : notifications.map(n => (
                 <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                     {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
                     <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
                   </div>
-                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#16A34A",flexShrink:0}}/>}
+                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#7C3AED",flexShrink:0}}/>}
                 </div>
               ))}
             </div>
           ) : feedTab === "following" ? (
             loadingFollowing ? (
               <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #DDD6FE",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <p style={{ fontWeight:600 }}>Loading following feed…</p>
               </div>
@@ -1303,7 +1303,7 @@ export default function FeedPage() {
             <>
               {loadingFeed ? (
                 <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                  <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                  <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #DDD6FE",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
                   <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                   <p style={{ fontWeight:600 }}>Loading feed…</p>
                 </div>
@@ -1315,7 +1315,7 @@ export default function FeedPage() {
                   )}
 
                   {displayPosts.length === 0 && (
-                    <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
+                    <div style={{ background:"#F3F0FF",border:"1.5px solid #DDD6FE",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
                       👋 No posts yet. Share something to the feed to see it here!
                     </div>
                   )}
@@ -1353,11 +1353,11 @@ export default function FeedPage() {
             {SUGGESTED_USERS.map(u => (
               <div key={u.id} style={{ background:C.darkCard,borderRadius:18,border:`1px solid ${C.darkBorder}`,overflow:"hidden",marginBottom:16 }}>
                 <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#16A34A,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
+                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
                     <div style={{ fontSize:11,color:C.darkSub }}>@{u.username}</div>
-                    <div style={{ fontSize:10,color:"#16A34A",marginTop:1,fontWeight:600 }}>{u.specialty}</div>
+                    <div style={{ fontSize:10,color:"#7C3AED",marginTop:1,fontWeight:600 }}>{u.specialty}</div>
                   </div>
                   <div style={{ textAlign:"right",flexShrink:0 }}>
                     <div style={{ fontSize:13,fontWeight:900,color:"#E2E8F0" }}>{u.followers}</div>
@@ -1392,21 +1392,21 @@ export default function FeedPage() {
               </div>
             ) : notifications.map(n => (
               <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
-                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#16A34A,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                   {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
                   <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
                 </div>
-                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#16A34A",flexShrink:0}}/>}
+                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#7C3AED",flexShrink:0}}/>}
               </div>
             ))}
           </div>
         ) : feedTab === "following" ? (
           loadingFollowing ? (
             <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #BBF7D0",borderTopColor:"#16A34A",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #DDD6FE",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
               <p style={{ fontWeight:600 }}>Loading following feed…</p>
             </div>
           ) : followingPosts.length === 0 ? (
@@ -1441,7 +1441,7 @@ export default function FeedPage() {
         ) : (
         <>
         {dbPosts.length === 0 && !loadingFeed && (
-          <div style={{ background:"#F0FDF4",border:"1.5px solid #BBF7D0",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#16A34A",fontWeight:600 }}>
+          <div style={{ background:"#F3F0FF",border:"1.5px solid #DDD6FE",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
             👋 These are sample posts. Log a workout or share to feed to see real content!
           </div>
         )}
@@ -1454,7 +1454,7 @@ export default function FeedPage() {
               <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
                 <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
+                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
                     <div>
                       <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
                       <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
@@ -1478,7 +1478,7 @@ export default function FeedPage() {
                   <span style={{ fontSize:11,fontWeight:800,color:C.darkSub,letterSpacing:1,textTransform:"uppercase" }}>Suggested</span>
                 </div>
                 <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#16A34A,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
+                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
                     <div style={{ fontSize:11,color:C.darkSub }}>@{u.username} · {u.specialty}</div>
@@ -1501,3 +1501,5 @@ export default function FeedPage() {
     </div>
   );
 }
+
+

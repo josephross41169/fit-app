@@ -7,3 +7,4 @@ export default function TrackRedirect() {
   useEffect(() => { router.replace("/post"); }, [router]);
   return null;
 }
+

@@ -175,3 +175,4 @@ export function FoodScanner({ onFoodScanned }: FoodScannerProps) {
     </div>
   );
 }
+

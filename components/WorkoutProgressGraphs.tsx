@@ -25,7 +25,7 @@ type ExerciseStats = {
 };
 
 const C = {
-  blue: "#16A34A", greenLight: "#1A2A1A", greenMid: "#2A3A2A",
+  blue: "#7C3AED", greenLight: "#1A2A1A", greenMid: "#2A3A2A",
   gold: "#F5A623", goldLight: "#FFFBEE",
   text: "#F0F0F0", sub: "#9CA3AF", white: "#1A1A1A", bg: "#0D0D0D",
   purple: "#7C3AED", purpleLight: "#8B5CF6",
@@ -293,3 +293,5 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     </div>
   );
 }
+
+

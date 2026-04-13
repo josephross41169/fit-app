@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const G = "#16A34A";
-const GM = "#BBF7D0";
+const G = "#7C3AED";
+const GM = "#DDD6FE";
 const DARK_BG = "#0F1A12";
 const DARK_CARD = "#1A2E1E";
 const DARK_BORDER = "#2A4A30";
@@ -85,7 +85,7 @@ export default function LoginPage() {
 
           <button type="submit" disabled={loading} style={{
             width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #22C55E)`,
+            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #A78BFA)`,
             color: "#fff", fontWeight: 900, fontSize: 16,
             cursor: loading ? "not-allowed" : "pointer",
             transition: "all 0.2s",
@@ -102,3 +102,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+

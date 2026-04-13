@@ -188,3 +188,4 @@ export function FitbitActivityCard({ data }: { data: FitbitData }) {
     </div>
   );
 }
+

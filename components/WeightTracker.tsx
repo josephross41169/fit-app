@@ -421,3 +421,4 @@ export default function WeightTracker({ userId }: Props) {
     </div>
   );
 }
+

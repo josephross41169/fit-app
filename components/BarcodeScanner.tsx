@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 
 interface FoodData {
@@ -85,7 +85,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
       }
     } catch {
       setStatus("error");
-      setErrorMsg("Network error — check your connection.");
+      setErrorMsg("Network error � check your connection.");
       setScanned(false);
     }
   }, [scanned, stopCamera, onResult]);
@@ -126,7 +126,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
             const result = await reader.decodeFromCanvas(canvas);
             if (result) lookupBarcode(result.getText());
           } catch {
-            // no barcode yet — keep trying
+            // no barcode yet � keep trying
           }
         }, 300);
       } catch (err: unknown) {
@@ -152,7 +152,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
     setStatus("scanning");
     setScanned(false);
     setErrorMsg("");
-    // Re-mount by reloading — simplest approach
+    // Re-mount by reloading � simplest approach
     window.location.reload();
   };
 
@@ -192,7 +192,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
                 <div
                   className="absolute left-0 right-0 h-0.5 opacity-80"
                   style={{
-                    background: "linear-gradient(90deg, transparent, #16A34A, #22C55E, #16A34A, transparent)",
+                    background: "linear-gradient(90deg, transparent, #7C3AED, #A78BFA, #7C3AED, transparent)",
                     animation: "scanLine 2s ease-in-out infinite",
                     top: "0%",
                   }}
@@ -218,7 +218,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
               <div
                 className="w-12 h-12 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin mx-auto mb-4"
               />
-              <p className="font-bold text-gray-800 text-lg">Looking up product…</p>
+              <p className="font-bold text-gray-800 text-lg">Looking up product�</p>
               <p className="text-gray-500 text-sm mt-1">Checking Open Food Facts database</p>
             </div>
           </div>
@@ -228,7 +228,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
         {status === "notfound" && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
             <div className="bg-white rounded-3xl p-8 mx-6 text-center shadow-2xl">
-              <div className="text-4xl mb-3">🔍</div>
+              <div className="text-4xl mb-3">??</div>
               <p className="font-bold text-gray-800 text-lg">Product Not Found</p>
               <p className="text-gray-500 text-sm mt-1 mb-5">
                 This item isn&apos;t in the database yet.
@@ -236,7 +236,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
               <button
                 onClick={retry}
                 className="w-full py-3 rounded-2xl font-semibold text-white"
-                style={{ background: "#16A34A" }}
+                style={{ background: "#7C3AED" }}
               >
                 Scan Again
               </button>
@@ -248,13 +248,13 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
         {status === "error" && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
             <div className="bg-white rounded-3xl p-8 mx-6 text-center shadow-2xl">
-              <div className="text-4xl mb-3">📷</div>
+              <div className="text-4xl mb-3">??</div>
               <p className="font-bold text-gray-800 text-lg">Camera Error</p>
               <p className="text-gray-500 text-sm mt-1 mb-5">{errorMsg}</p>
               <button
                 onClick={() => { stopCamera(); onClose(); }}
                 className="w-full py-3 rounded-2xl font-semibold text-white"
-                style={{ background: "#16A34A" }}
+                style={{ background: "#7C3AED" }}
               >
                 Go Back
               </button>
@@ -267,7 +267,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
       {status === "scanning" && (
         <div className="bg-black px-6 py-5 text-center">
           <p className="text-gray-400 text-sm">Aim at the barcode on any food package</p>
-          <p className="text-gray-600 text-xs mt-1">Powered by Open Food Facts · 3M+ products</p>
+          <p className="text-gray-600 text-xs mt-1">Powered by Open Food Facts � 3M+ products</p>
         </div>
       )}
 
@@ -281,3 +281,5 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
     </div>
   );
 }
+
+

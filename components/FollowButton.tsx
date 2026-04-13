@@ -52,9 +52,9 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
         fontWeight: 800,
         fontSize,
         transition: "all 0.15s",
-        background: following ? "#F0FDF4" : "linear-gradient(135deg, #16A34A, #22C55E)",
-        color: following ? "#16A34A" : "#fff",
-        border: following ? "2px solid #BBF7D0" : "2px solid transparent",
+        background: following ? "#F3F0FF" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+        color: following ? "#7C3AED" : "#fff",
+        border: following ? "2px solid #DDD6FE" : "2px solid transparent",
         opacity: loading ? 0.7 : 1,
       }}
     >
@@ -62,3 +62,5 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
     </button>
   );
 }
+
+

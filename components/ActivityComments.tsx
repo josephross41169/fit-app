@@ -7,7 +7,7 @@ const C = {
   darkCard: "#1A1D2E",
   darkBorder: "#2A2D3E",
   darkSub: "#8892A4",
-  blue: "#16A34A",
+  blue: "#7C3AED",
   text: "#E2E8F0",
   sub: "#9CA3AF",
 };
@@ -138,7 +138,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
                   <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <div style={{
                       width: 30, height: 30, borderRadius: "50%",
-                      background: "linear-gradient(135deg,#16A34A,#4ADE80)",
+                      background: "linear-gradient(135deg,#7C3AED,#4ADE80)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden",
                     }}>
@@ -168,7 +168,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <div style={{
                 width: 28, height: 28, borderRadius: "50%",
-                background: "linear-gradient(135deg,#16A34A,#4ADE80)",
+                background: "linear-gradient(135deg,#7C3AED,#4ADE80)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden",
               }}>
@@ -218,3 +218,5 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
     </div>
   );
 }
+
+

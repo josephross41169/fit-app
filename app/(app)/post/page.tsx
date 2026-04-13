@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -44,7 +44,7 @@ type PostType = "Workout" | "Nutrition" | "Wellness" | "Achievement" | "Other";
 type WorkoutTemplate = { id: string; name: string; exercises: Exercise[] };
 type PRResult = { exercise: string; weight: number; reps: number; isNew: boolean };
 
-// ── Exercise Search Autocomplete Component ──────────────────────────────────
+// -- Exercise Search Autocomplete Component ----------------------------------
 function ExerciseSearchInput({
   value,
   onChange,
@@ -121,7 +121,7 @@ function ExerciseSearchInput({
             >
               <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0' }}>{ex.name}</div>
               <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>
-                {ex.category} · {ex.equipment} · {ex.muscles[0]}
+                {ex.category} � {ex.equipment} � {ex.muscles[0]}
               </div>
             </button>
           ))}
@@ -131,7 +131,7 @@ function ExerciseSearchInput({
   );
 }
 
-// ── Open Food Facts Search Component ───────────────────────────────────────
+// -- Open Food Facts Search Component ---------------------------------------
 type FoodSearchResult = {
   name: string;
   brand: string;
@@ -207,14 +207,14 @@ function FoodSearchInput({
             padding: "9px 12px 9px 38px", fontSize: 14, color: "#F0F0F0", outline: "none",
             width: "100%", boxSizing: "border-box" as const,
           }}
-          placeholder="🔍 Search food database (e.g. chicken breast, oats)..."
+          placeholder="?? Search food database (e.g. chicken breast, oats)..."
           value={query}
           onChange={e => search(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           autoComplete="off"
         />
         <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>
-          {searching ? '⏳' : '🔍'}
+          {searching ? '?' : '??'}
         </div>
       </div>
       {open && results.length > 0 && (
@@ -238,7 +238,7 @@ function FoodSearchInput({
                   <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0' }}>{food.name}</div>
                   {food.brand && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{food.brand}</div>}
                   <div style={{ fontSize: 11, color: '#A78BFA', marginTop: 2 }}>
-                    per {food.servingSize} · {food.protein}g P · {food.carbs}g C · {food.fat}g F
+                    per {food.servingSize} � {food.protein}g P � {food.carbs}g C � {food.fat}g F
                   </div>
                 </div>
                 <div style={{ fontWeight: 800, fontSize: 14, color: '#F5A623', flexShrink: 0, marginLeft: 12 }}>
@@ -253,7 +253,7 @@ function FoodSearchInput({
   );
 }
 
-const MOOD_EMOJIS = ["😤", "💪", "😊", "🧘", "😴"];
+const MOOD_EMOJIS = ["??", "??", "??", "??", "??"];
 const WELLNESS_TYPES = ["Yoga", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Walk", "Sleep", "Other"];
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
@@ -268,7 +268,7 @@ export default function PostPage() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const submittingRef = useRef(false); // hard lock — prevents double-submit even with rapid clicks
+  const submittingRef = useRef(false); // hard lock � prevents double-submit even with rapid clicks
 
   // Workout state
   const [woType, setWoType] = useState("");
@@ -390,7 +390,7 @@ export default function PostPage() {
     } catch {}
   }, [user, prevSessions]);
 
-  // ── Fetch templates on first open ────────────────────────────────────────
+  // -- Fetch templates on first open ----------------------------------------
   const fetchTemplates = useCallback(async () => {
     if (!user || templatesLoaded) return;
     setTemplatesLoaded(true);
@@ -404,7 +404,7 @@ export default function PostPage() {
     } catch {}
   }, [user, templatesLoaded]);
 
-  // ── Fetch today's workout log (for resume banner) ───────────────────────
+  // -- Fetch today's workout log (for resume banner) -----------------------
   const fetchTodayWorkout = useCallback(async () => {
     if (!user || todayLog !== null) return;
     try {
@@ -425,7 +425,7 @@ export default function PostPage() {
     } catch {}
   }, [user, todayLog]);
 
-  // Resume today's workout — pre-loads all existing data into the form
+  // Resume today's workout � pre-loads all existing data into the form
   async function resumeTodayWorkout() {
     if (!user || !todayLog) return;
     try {
@@ -466,7 +466,7 @@ export default function PostPage() {
     if (user) fetchTodayWorkout();
   }, [user, fetchTodayWorkout]);
 
-  // ── Fetch macro goals + today's nutrition totals ──────────────────────────
+  // -- Fetch macro goals + today's nutrition totals --------------------------
   const fetchMacroGoalsAndTotals = useCallback(async () => {
     if (!user || goalsLoaded) return;
     setGoalsLoaded(true);
@@ -554,13 +554,13 @@ export default function PostPage() {
     setTemplates(t => t.filter(x => x.id !== id));
   }
 
-  // ── PR Detection — run after saving workout ───────────────────────────────
+  // -- PR Detection � run after saving workout -------------------------------
   async function detectPRs(userId: string, savedExercises: Exercise[]): Promise<PRResult[]> {
     if (!savedExercises || savedExercises.length === 0) return [];
     const prs: PRResult[] = [];
     for (const ex of savedExercises) {
       if (!ex.name) continue;
-      // Find best set volume in this submission (weight × reps)
+      // Find best set volume in this submission (weight � reps)
       const reps = parseFloat(ex.reps) || 0;
       const weights = ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''];
       let bestWeight = 0;
@@ -606,7 +606,7 @@ export default function PostPage() {
     setLoading(true);
     setSaveError(null);
 
-    // Best-effort profile creation — never block the save
+    // Best-effort profile creation � never block the save
     await ensureProfile().catch(() => {});
 
     const base = { user_id: user.id, is_public: !isPrivate, logged_at: new Date().toISOString() };
@@ -709,9 +709,9 @@ export default function PostPage() {
       submittingRef.current = false;
       setSaveError(error.message || "Something went wrong. Please try again.");
     } else {
-      // ── Auto-award activity badges ────────────────────────────────────────
+      // -- Auto-award activity badges ----------------------------------------
       try { await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, exercises); } catch {}
-      // ── PR Detection (workout only) ───────────────────────────────────────
+      // -- PR Detection (workout only) ---------------------------------------
       if (logTab === 'workout' && exercises.length > 0) {
         try {
           const detectedPRs = await detectPRs(user.id, exercises);
@@ -722,7 +722,7 @@ export default function PostPage() {
     }
   }
 
-  // ── Badge auto-award engine ───────────────────────────────────────────────
+  // -- Badge auto-award engine -----------------------------------------------
   async function awardActivityBadges(
     userId: string,
     tab: LogTab,
@@ -751,7 +751,7 @@ export default function PostPage() {
     }
 
     if (tab === 'workout') {
-      // ── Total workouts ──────────────────────────────────────────────────
+      // -- Total workouts --------------------------------------------------
       const totalWorkouts = await countLogs({ log_type: 'workout' });
       if (totalWorkouts >= 1)   await award('first-workout');
       if (totalWorkouts >= 10)  await award('workouts-10');
@@ -760,7 +760,7 @@ export default function PostPage() {
       if (totalWorkouts >= 100) await award('centurion');
       if (totalWorkouts >= 500) await award('500-workouts');
 
-      // ── Running (cardio type contains "run" or workout type contains "run") ──
+      // -- Running (cardio type contains "run" or workout type contains "run") --
       const isRun = cType.toLowerCase().includes('run') || cType.toLowerCase().includes('jog') ||
                     woT.toLowerCase().includes('run') || woT.toLowerCase().includes('jog');
       if (isRun) {
@@ -784,7 +784,7 @@ export default function PostPage() {
         if (runCount >= 100) await award('runs-100');
       }
 
-      // ── Lifting (has exercises logged) ──────────────────────────────────
+      // -- Lifting (has exercises logged) ----------------------------------
       const hasLifts = exs && exs.length > 0;
       if (hasLifts) {
         const { data: liftLogs } = await supabase
@@ -804,7 +804,7 @@ export default function PostPage() {
     }
 
     if (tab === 'wellness') {
-      // ── Per-wellness-type streak badges ─────────────────────────────────
+      // -- Per-wellness-type streak badges ---------------------------------
       const wTypeLower = wType.toLowerCase();
 
       const { count: wCount } = await supabase
@@ -874,14 +874,14 @@ export default function PostPage() {
     }
   }
 
-  // uploadPhoto imported from @/lib/uploadPhoto — uses server-side API to bypass storage RLS
+  // uploadPhoto imported from @/lib/uploadPhoto � uses server-side API to bypass storage RLS
 
   async function handlePost() {
     if (!user) {
       setSaveError("You must be logged in. Please refresh and sign in again.");
       return;
     }
-    if (submittingRef.current || loading || posted) return; // hard lock — ref fires before state re-render
+    if (submittingRef.current || loading || posted) return; // hard lock � ref fires before state re-render
     submittingRef.current = true;
     setLoading(true);
     setSaveError(null);
@@ -919,7 +919,7 @@ export default function PostPage() {
         submittingRef.current = false;
         setSaveError(error.message || "Something went wrong. Please try again.");
       } else {
-        // ── Auto-award post badges ──────────────────────────────────────────
+        // -- Auto-award post badges ------------------------------------------
         try {
           const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
           const postCount = count || 1;
@@ -931,7 +931,7 @@ export default function PostPage() {
           }
         } catch {}
         setPosted(true);
-        // ref stays true — post is done, we never want another submit
+        // ref stays true � post is done, we never want another submit
       }
     } catch (e: any) {
       setLoading(false);
@@ -949,7 +949,7 @@ export default function PostPage() {
   const PrivacyToggle = () => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.white, borderRadius: 16, padding: "14px 18px", border: `2px solid ${C.greenMid}`, marginBottom: 4 }}>
       <div>
-        <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{isPrivate ? "🔒 Private" : "🌐 Public on Profile"}</div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{isPrivate ? "?? Private" : "?? Public on Profile"}</div>
         <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>
           {isPrivate ? "Only you can see this" : "Visible on your profile to followers"}
         </div>
@@ -972,24 +972,24 @@ export default function PostPage() {
     setTimeout(() => router.push("/profile"), newPRs.length > 0 ? 3000 : 1500);
     return (
       <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 24px" }}>
-        <div style={{ fontSize: 64 }}>{newPRs.length > 0 ? "🏆" : "✅"}</div>
+        <div style={{ fontSize: 64 }}>{newPRs.length > 0 ? "??" : "?"}</div>
         <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>
-          {newPRs.length > 0 ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! 🔥` : "Saved to Log!"}
+          {newPRs.length > 0 ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! ??` : "Saved to Log!"}
         </div>
         {newPRs.length > 0 && (
           <div style={{ background: "#1A1228", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #F5A623" }}>
             {newPRs.map((pr, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < newPRs.length - 1 ? "1px solid #2D1B69" : "none" }}>
-                <span style={{ fontSize: 22 }}>🏆</span>
+                <span style={{ fontSize: 22 }}>??</span>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#F5A623" }}>{pr.exercise}</div>
-                  <div style={{ fontSize: 12, color: "#A78BFA" }}>{pr.weight}lbs × {pr.reps} reps{pr.isNew ? " — First PR!" : " — New Best!"}</div>
+                  <div style={{ fontSize: 12, color: "#A78BFA" }}>{pr.weight}lbs � {pr.reps} reps{pr.isNew ? " � First PR!" : " � New Best!"}</div>
                 </div>
               </div>
             ))}
           </div>
         )}
-        <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>{isPrivate ? "🔒 Saved privately" : "🌐 Visible on your profile"}</div>
+        <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>{isPrivate ? "?? Saved privately" : "?? Visible on your profile"}</div>
         <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to your profile...</div>
       </div>
     );
@@ -999,18 +999,18 @@ export default function PostPage() {
     setTimeout(() => router.push("/feed"), 1500);
     return (
       <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-        <div style={{ fontSize: 64 }}>🚀</div>
+        <div style={{ fontSize: 64 }}>??</div>
         <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Posted to Feed!</div>
-        <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>🌐 Visible to your followers</div>
+        <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>?? Visible to your followers</div>
         <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to the feed...</div>
       </div>
     );
   }
 
   const TAB_DEFS = [
-    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#7C3AED" },
-    { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#F59E0B" },
-    { key: "wellness" as LogTab, icon: "🌿", label: "Wellness", color: "#7C3AED" },
+    { key: "workout" as LogTab, icon: "??", label: "Workout", color: "#7C3AED" },
+    { key: "nutrition" as LogTab, icon: "??", label: "Nutrition", color: "#F59E0B" },
+    { key: "wellness" as LogTab, icon: "??", label: "Wellness", color: "#7C3AED" },
   ];
 
   return (
@@ -1026,7 +1026,7 @@ export default function PostPage() {
             width: 220px;
             flex-shrink: 0;
             background: white;
-            border-right: 2px solid #BBF7D0;
+            border-right: 2px solid #DDD6FE;
             padding: 32px 16px;
             position: sticky;
             top: 0;
@@ -1045,7 +1045,7 @@ export default function PostPage() {
       {/* Mobile header */}
       <div className="post-mobile-header" style={{ background: C.white, borderBottom: `2px solid ${C.greenMid}`, padding: "20px 20px 0" }}>
         <div style={{ fontWeight: 900, fontSize: 22, color: C.text, marginBottom: 14 }}>
-          {mainMode === "log" ? "📝 Log Activity" : "📸 Share to Feed"}
+          {mainMode === "log" ? "?? Log Activity" : "?? Share to Feed"}
         </div>
         <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.greenMid}`, marginBottom: 10, background: C.greenLight }}>
           {(["log", "feed"] as MainMode[]).map(m => (
@@ -1054,7 +1054,7 @@ export default function PostPage() {
               background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "transparent",
               color: mainMode === m ? "#fff" : C.sub, transition: "all 0.2s",
             }}>
-              {m === "log" ? "📝 Log Activity" : "📸 Share to Feed"}
+              {m === "log" ? "?? Log Activity" : "?? Share to Feed"}
             </button>
           ))}
         </div>
@@ -1076,9 +1076,9 @@ export default function PostPage() {
 
       <div className="post-layout">
 
-        {/* ── Desktop sidebar ── */}
+        {/* -- Desktop sidebar -- */}
         <div className="post-sidebar">
-          <div style={{ fontWeight: 900, fontSize: 15, color: C.text, marginBottom: 24, letterSpacing: -0.3 }}>FIT ⚡</div>
+          <div style={{ fontWeight: 900, fontSize: 15, color: C.text, marginBottom: 24, letterSpacing: -0.3 }}>FIT ?</div>
 
           {/* Mode toggle */}
           <div style={{ marginBottom: 28 }}>
@@ -1091,12 +1091,12 @@ export default function PostPage() {
                 color: mainMode === m ? "#fff" : C.sub,
                 transition: "all 0.15s",
               }}>
-                {m === "log" ? "📝 Log Activity" : "📸 Share to Feed"}
+                {m === "log" ? "?? Log Activity" : "?? Share to Feed"}
               </button>
             ))}
           </div>
 
-          {/* Log sub-tabs — only when in log mode */}
+          {/* Log sub-tabs � only when in log mode */}
           {mainMode === "log" && (
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Activity Type</div>
@@ -1119,47 +1119,47 @@ export default function PostPage() {
           {/* Privacy note on sidebar */}
           <div style={{ marginTop: "auto", paddingTop: 24, borderTop: `1px solid ${C.greenMid}`, fontSize: 11, color: C.sub, lineHeight: 1.5 }}>
             {mainMode === "log"
-              ? "🌐 Public by default — visible on your profile. Toggle private per-entry."
-              : "🌐 Posted to your followers' feed."}
+              ? "?? Public by default � visible on your profile. Toggle private per-entry."
+              : "?? Posted to your followers' feed."}
           </div>
         </div>
 
-        {/* ── Main content ── */}
+        {/* -- Main content -- */}
         <div className="post-main" style={{ padding: "24px 20px" }}>
         {mainMode === "log" ? (<>
 
-          {/* ─── WORKOUT TAB ─── */}
+          {/* --- WORKOUT TAB --- */}
           {logTab === "workout" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-              {/* ── Fitbit Connect ── */}
+              {/* -- Fitbit Connect -- */}
               <FitbitConnect />
 
-              {/* ── Resume today's workout banner ── */}
+              {/* -- Resume today's workout banner -- */}
               {todayLog && !todayLogId && (
                 <div style={{ background: "linear-gradient(135deg, #1A1228, #2D1B69)", borderRadius: 18, padding: "14px 18px", border: `2px solid ${C.blue}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0" }}>⚡ Continue today's workout</div>
-                    <div style={{ fontSize: 12, color: "#A78BFA", marginTop: 3 }}>{todayLog.type} — already logged today. Add more exercises or update it.</div>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0" }}>? Continue today's workout</div>
+                    <div style={{ fontSize: 12, color: "#A78BFA", marginTop: 3 }}>{todayLog.type} � already logged today. Add more exercises or update it.</div>
                   </div>
                   <button
                     onClick={resumeTodayWorkout}
                     style={{ padding: "9px 16px", borderRadius: 14, border: "none", background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>
-                    Continue →
+                    Continue ?
                   </button>
                 </div>
               )}
 
               {/* Resume mode indicator */}
               {todayLogId && (
-                <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #16A34A", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>✏️ Editing today's {todayLog?.type || 'workout'} — save will update it</div>
+                <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>?? Editing today's {todayLog?.type || 'workout'} � save will update it</div>
                   <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoDuration(''); setWoCalories(''); setWoNotes(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
                 </div>
               )}
 
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💪 Workout Details</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>?? Workout Details</div>
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Workout Type</label>
                   <input style={iStyle} placeholder="e.g. Push Day, Leg Day, HIIT..." value={woType} onChange={e => setWoType(e.target.value)} />
@@ -1178,7 +1178,7 @@ export default function PostPage() {
 
               {/* Workout Templates */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>📋 Templates</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>?? Templates</div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {/* Load template dropdown */}
                   <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
@@ -1186,8 +1186,8 @@ export default function PostPage() {
                       onClick={() => { fetchTemplates(); setTemplateDropdownOpen(o => !o); }}
                       style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                     >
-                      <span>📂 Load Template</span>
-                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
+                      <span>?? Load Template</span>
+                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "?" : "?"}</span>
                     </button>
                     {templateDropdownOpen && (
                       <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#1A1228", border: "1.5px solid #7C3AED", borderRadius: 12, boxShadow: "0 8px 32px rgba(124,58,237,0.25)", overflow: "hidden", marginTop: 4 }}>
@@ -1207,7 +1207,7 @@ export default function PostPage() {
                             <button
                               onMouseDown={() => deleteTemplate(tpl.id)}
                               style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 12, cursor: "pointer", flexShrink: 0, marginLeft: 8 }}
-                            >×</button>
+                            >�</button>
                           </div>
                         ))}
                       </div>
@@ -1217,7 +1217,7 @@ export default function PostPage() {
                   <button
                     onClick={() => setShowSaveTemplate(s => !s)}
                     style={{ padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: C.sub, fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
-                  >💾 Save as Template</button>
+                  >?? Save as Template</button>
                 </div>
                 {/* Template name input (shown when saving) */}
                 {showSaveTemplate && (
@@ -1238,7 +1238,7 @@ export default function PostPage() {
                 )}
               </div>
 
-              {/* Exercises table — with search autocomplete, increment buttons, prev session */}
+              {/* Exercises table � with search autocomplete, increment buttons, prev session */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
@@ -1248,7 +1248,7 @@ export default function PostPage() {
                   </button>
                 </div>
                 {exercises.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet — click + Add Exercise</div>
+                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet � click + Add Exercise</div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {exercises.map((ex, i) => {
@@ -1256,7 +1256,7 @@ export default function PostPage() {
                     const prev = prevSessions[ex.name];
                     return (
                     <div key={i} style={{ background: "#0D0D0D", borderRadius: 16, padding: 14, border: `1px solid ${C.greenMid}` }}>
-                      {/* Exercise name — search input */}
+                      {/* Exercise name � search input */}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                         <ExerciseSearchInput
                           value={ex.name}
@@ -1267,7 +1267,7 @@ export default function PostPage() {
                           }}
                         />
                         <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))}
-                          style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>×</button>
+                          style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>�</button>
                       </div>
 
                       {/* Previous session reference */}
@@ -1358,7 +1358,7 @@ export default function PostPage() {
 
               {/* Cardio */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🏃 Cardio (optional)</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>?? Cardio (optional)</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
@@ -1384,8 +1384,8 @@ export default function PostPage() {
                     <img src={woPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
                   ) : (
                     <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "20px 0", textAlign: "center", background: C.greenLight }}>
-                      <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add photo — won't appear on feed</div>
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>??</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add photo � won't appear on feed</div>
                       <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Saved privately to your profile</div>
                     </div>
                   )}
@@ -1396,12 +1396,12 @@ export default function PostPage() {
               <SaveErrorBanner />
               <PrivacyToggle />
               <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save to Log"}
+                {loading ? "Saving..." : "?? Save to Log"}
               </button>
             </div>
           )}
 
-          {/* ─── NUTRITION TAB ─── */}
+          {/* --- NUTRITION TAB --- */}
           {logTab === "nutrition" && (() => {
             // Load goals on tab open
             if (!goalsLoaded && user) fetchMacroGoalsAndTotals();
@@ -1419,7 +1419,7 @@ export default function PostPage() {
 
             function MacroBar({ label, current, goal, color }: { label: string; current: number; goal: number; color: string }) {
               const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
-              const barColor = pct > 110 ? '#EF4444' : pct >= 80 ? '#22C55E' : '#F59E0B';
+              const barColor = pct > 110 ? '#EF4444' : pct >= 80 ? '#A78BFA' : '#F59E0B';
               return (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -1440,14 +1440,14 @@ export default function PostPage() {
               {macroGoals && (
                 <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>📊 Today's Progress</div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>?? Today's Progress</div>
                     <button onClick={() => setShowGoalsEditor(s => !s)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 20, border: `1.5px solid ${C.greenMid}`, background: 'transparent', color: C.sub, cursor: 'pointer', fontWeight: 700 }}>
-                      {showGoalsEditor ? '✕ Cancel' : '⚙️ Edit Goals'}
+                      {showGoalsEditor ? '? Cancel' : '?? Edit Goals'}
                     </button>
                   </div>
                   {showGoalsEditor ? (
                     <div>
-                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>📅 Daily Macro Goals:</div>
+                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>?? Daily Macro Goals:</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                         {([
                           { l: 'Calories', k: 'calories' as keyof NutritionGoals, unit: 'kcal' },
@@ -1468,7 +1468,7 @@ export default function PostPage() {
                         ))}
                       </div>
 
-                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${C.greenMid}` }}>📊 Monthly Macro Goals (optional):</div>
+                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${C.greenMid}` }}>?? Monthly Macro Goals (optional):</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                         {([
                           { l: 'Total Calories', k: 'monthly_calories' as keyof NutritionGoals, unit: 'kcal' },
@@ -1500,11 +1500,11 @@ export default function PostPage() {
                         const todayCal = (dailyTotals?.calories || 0) + autoCalories;
                         const goalCal = macroGoals.calories;
                         const pct = goalCal > 0 ? Math.min(100, Math.round((todayCal / goalCal) * 100)) : 0;
-                        const barColor = todayCal > goalCal * 1.1 ? '#EF4444' : todayCal >= goalCal * 0.8 ? '#22C55E' : '#F59E0B';
+                        const barColor = todayCal > goalCal * 1.1 ? '#EF4444' : todayCal >= goalCal * 0.8 ? '#A78BFA' : '#F59E0B';
                         return (
                           <div style={{ marginBottom: 14 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0' }}>🔥 Calories</span>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0' }}>?? Calories</span>
                               <span style={{ fontSize: 13, color: barColor, fontWeight: 800 }}>{Math.round(todayCal)} / {goalCal} kcal</span>
                             </div>
                             <div style={{ background: '#2D1B69', borderRadius: 8, height: 12, overflow: 'hidden' }}>
@@ -1513,9 +1513,9 @@ export default function PostPage() {
                           </div>
                         );
                       })()}
-                      <MacroBar label="🥩 Protein" current={Math.round((dailyTotals?.protein || 0) + autoProtein)} goal={macroGoals.protein} color="#7C3AED" />
-                      <MacroBar label="🌾 Carbs" current={Math.round((dailyTotals?.carbs || 0) + autoCarbs)} goal={macroGoals.carbs} color="#F59E0B" />
-                      <MacroBar label="🥑 Fat" current={Math.round((dailyTotals?.fat || 0) + autoFat)} goal={macroGoals.fat} color="#A78BFA" />
+                      <MacroBar label="?? Protein" current={Math.round((dailyTotals?.protein || 0) + autoProtein)} goal={macroGoals.protein} color="#7C3AED" />
+                      <MacroBar label="?? Carbs" current={Math.round((dailyTotals?.carbs || 0) + autoCarbs)} goal={macroGoals.carbs} color="#F59E0B" />
+                      <MacroBar label="?? Fat" current={Math.round((dailyTotals?.fat || 0) + autoFat)} goal={macroGoals.fat} color="#A78BFA" />
                       {/* Water progress */}
                       {(() => {
                         const todayWater = (dailyTotals?.water_oz || 0) + (parseFloat(water) || 0);
@@ -1524,7 +1524,7 @@ export default function PostPage() {
                         return (
                           <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: '#F0F0F0' }}>💧 Water</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#F0F0F0' }}>?? Water</span>
                               <span style={{ fontSize: 12, color: '#38BDF8', fontWeight: 700 }}>{Math.round(todayWater)}oz / {goalWater}oz</span>
                             </div>
                             <div style={{ background: '#2D1B69', borderRadius: 6, height: 8, overflow: 'hidden' }}>
@@ -1544,12 +1544,12 @@ export default function PostPage() {
                   onClick={() => { setShowGoalsEditor(true); setMacroGoals({ calories: 2500, protein: 180, carbs: 250, fat: 70, water_oz: 100 }); }}
                   style={{ background: C.white, borderRadius: 22, padding: '14px 20px', border: `2px dashed ${C.blue}`, color: C.blue, fontWeight: 700, fontSize: 14, cursor: 'pointer', textAlign: 'left' as const, display: 'block', width: '100%' }}
                 >
-                  ⚙️ Set daily macro goals → see progress bars
+                  ?? Set daily macro goals ? see progress bars
                 </button>
               )}
 
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🥗 Meal Details</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>?? Meal Details</div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Meal Type</label>
                 <select style={iStyle} value={mealType} onChange={e => setMealType(e.target.value)}>
                   {MEAL_TYPES.map(m => <option key={m}>{m}</option>)}
@@ -1604,7 +1604,7 @@ export default function PostPage() {
                             onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, calories: e.target.value } : x))}
                           />
                           <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))}
-                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>×</button>
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>�</button>
                         </div>
                         {/* Macro detail row */}
                         {(item.protein || item.carbs || item.fat) && (
@@ -1646,7 +1646,7 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>Total Macros</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>
-                  {autoCalories > 0 ? '✅ Auto-calculated from food items above — override below if needed' : 'Fill in manually or use food search above'}
+                  {autoCalories > 0 ? '? Auto-calculated from food items above � override below if needed' : 'Fill in manually or use food search above'}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                   {[{ l: "Protein (g)", v: displayProtein, s: setProtein }, { l: "Carbs (g)", v: displayCarbs, s: setCarbs }, { l: "Fat (g)", v: displayFat, s: setFat }].map(f => (
@@ -1658,7 +1658,7 @@ export default function PostPage() {
                 </div>
 
                 {/* Water tracking */}
-                <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>💧 Water Intake</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>?? Water Intake</label>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
                   <input style={{ ...iStyle, maxWidth: 100 }} placeholder="oz" value={water} onChange={e => setWater(e.target.value)} />
                   {[8, 16, 32].map(oz => (
@@ -1674,7 +1674,7 @@ export default function PostPage() {
 
               {/* Per-Meal Photos */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>📷 Meal Photos</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>?? Meal Photos</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>Add a photo for the selected meal type ({mealType})</div>
                 <label style={{ display: "block", cursor: "pointer" }}>
                   {mealPhotos[mealType] ? (
@@ -1682,11 +1682,11 @@ export default function PostPage() {
                       <img src={mealPhotos[mealType]} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
                       <button
                         onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[mealType]; return n; }); }}
-                        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>×</button>
+                        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>�</button>
                     </div>
                   ) : (
                     <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "16px 0", textAlign: "center", background: C.greenLight }}>
-                      <div style={{ fontSize: 22, marginBottom: 4 }}>📷</div>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>??</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add {mealType} photo</div>
                     </div>
                   )}
@@ -1699,7 +1699,7 @@ export default function PostPage() {
                       <div key={meal} style={{ position: "relative" }}>
                         <img src={src} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10 }} alt={meal} />
                         <div style={{ position: "absolute", bottom: 2, left: 2, right: 2, background: "rgba(0,0,0,0.5)", borderRadius: 4, textAlign: "center", fontSize: 9, color: "#fff", fontWeight: 700 }}>{meal.slice(0,4)}</div>
-                        <button onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[meal]; return n; }); }} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", padding: 0 }}>×</button>
+                        <button onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[meal]; return n; }); }} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", padding: 0 }}>�</button>
                       </div>
                     ))}
                   </div>
@@ -1721,17 +1721,17 @@ export default function PostPage() {
                 if (autoFat > 0) setFat(String(Math.round(autoFat)));
                 handleSave();
               }} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save to Log"}
+                {loading ? "Saving..." : "?? Save to Log"}
               </button>
             </div>
             );
           })()}
 
-          {/* ─── WELLNESS TAB ─── */}
+          {/* --- WELLNESS TAB --- */}
           {logTab === "wellness" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🌿 Wellness Activity</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>?? Wellness Activity</div>
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity Type</label>
                   <select style={iStyle} value={wellnessType} onChange={e => setWellnessType(e.target.value)}>
@@ -1772,11 +1772,11 @@ export default function PostPage() {
                   {wellnessPhotoUrl ? (
                     <div style={{ position:"relative", display:"inline-block" }}>
                       <img src={wellnessPhotoUrl} style={{ width:100, height:100, objectFit:"cover", borderRadius:12, border:`2px solid #2A3A2A` }} alt=""/>
-                      <button onClick={() => setWellnessPhotoUrl(null)} style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.7)", border:"none", color:"#fff", fontSize:12, cursor:"pointer" }}>×</button>
+                      <button onClick={() => setWellnessPhotoUrl(null)} style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.7)", border:"none", color:"#fff", fontSize:12, cursor:"pointer" }}>�</button>
                     </div>
                   ) : (
                     <label style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 16px", borderRadius:12, border:`1.5px dashed #2A3A2A`, background:"#111", cursor:"pointer" }}>
-                      <span style={{ fontSize:16 }}>📷</span>
+                      <span style={{ fontSize:16 }}>??</span>
                       <span style={{ fontSize:13, color:C.sub }}>Add photo</span>
                       <input type="file" accept="image/*" style={{ display:"none" }} onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
@@ -1799,17 +1799,17 @@ export default function PostPage() {
               <SaveErrorBanner />
               <PrivacyToggle />
               <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save to Log"}
+                {loading ? "Saving..." : "?? Save to Log"}
               </button>
             </div>
           )}
 
         </>) : (
 
-          /* ─── SHARE TO FEED ─── */
+          /* --- SHARE TO FEED --- */
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-            {/* ── Carousel photo area ── */}
+            {/* -- Carousel photo area -- */}
             {feedPhotos.length > 0 ? (
               <div style={{ position:"relative",borderRadius:22,overflow:"hidden",background:"#000",aspectRatio:"1/1" }}>
                 <img src={feedPhotos[carouselIdx]} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} alt="" />
@@ -1822,17 +1822,17 @@ export default function PostPage() {
                   </div>
                 )}
                 {/* Prev/Next */}
-                {carouselIdx > 0 && <button onClick={()=>setCarouselIdx(i=>i-1)} style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>‹</button>}
-                {carouselIdx < feedPhotos.length-1 && <button onClick={()=>setCarouselIdx(i=>i+1)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>›</button>}
+                {carouselIdx > 0 && <button onClick={()=>setCarouselIdx(i=>i-1)} style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>�</button>}
+                {carouselIdx < feedPhotos.length-1 && <button onClick={()=>setCarouselIdx(i=>i+1)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>�</button>}
                 {/* Remove current */}
-                <button onClick={()=>{ setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); setCarouselIdx(Math.min(carouselIdx,n.length-1)); return n; }); }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
+                <button onClick={()=>{ setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); setCarouselIdx(Math.min(carouselIdx,n.length-1)); return n; }); }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>�</button>
               </div>
             ) : (
               <label style={{ display:"block",cursor:"pointer" }}>
                 <div style={{ border:`2px dashed ${C.greenMid}`,borderRadius:22,aspectRatio:"1/1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:C.greenLight,gap:12 }}>
-                  <div style={{ fontSize:56 }}>📸</div>
+                  <div style={{ fontSize:56 }}>??</div>
                   <div style={{ fontSize:17,fontWeight:800,color:C.blue }}>Add Photos or Videos</div>
-                  <div style={{ fontSize:13,color:C.sub }}>Tap to upload • Select multiple</div>
+                  <div style={{ fontSize:13,color:C.sub }}>Tap to upload � Select multiple</div>
                 </div>
                 <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
                   const files = Array.from(e.target.files||[]);
@@ -1845,7 +1845,7 @@ export default function PostPage() {
             {/* Add more button when photos exist */}
             {feedPhotos.length > 0 && (
               <label style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:16,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,cursor:"pointer",justifyContent:"center" }}>
-                <span style={{ fontSize:16 }}>➕</span>
+                <span style={{ fontSize:16 }}>?</span>
                 <span style={{ fontWeight:700,fontSize:13,color:C.blue }}>Add more ({feedPhotos.length} photo{feedPhotos.length!==1?"s":""})</span>
                 <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
                   const files = Array.from(e.target.files||[]);
@@ -1859,7 +1859,7 @@ export default function PostPage() {
             <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}`, display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Caption</label>
-                <textarea rows={4} style={{ ...iStyle, resize: "none" }} placeholder="Share what you crushed today... 💪" value={caption} onChange={e => setCaption(e.target.value)} />
+                <textarea rows={4} style={{ ...iStyle, resize: "none" }} placeholder="Share what you crushed today... ??" value={caption} onChange={e => setCaption(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Tag People</label>
@@ -1867,12 +1867,12 @@ export default function PostPage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Location</label>
-                <input style={iStyle} placeholder="📍 Add location (e.g. Las Vegas, NV)" value={location} onChange={e => setLocation(e.target.value)} />
+                <input style={iStyle} placeholder="?? Add location (e.g. Las Vegas, NV)" value={location} onChange={e => setLocation(e.target.value)} />
               </div>
             </div>
 
             <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
-              {loading?"Posting...":"Post to Feed 🚀"}
+              {loading?"Posting...":"Post to Feed ??"}
             </button>
           </div>
         )}
@@ -1881,4 +1881,6 @@ export default function PostPage() {
     </div>
   );
 }
+
+
 

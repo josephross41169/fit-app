@@ -12,7 +12,7 @@ import { computeTier, getTierInfo } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
 
 const C = {
-  blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
+  purple:"#7C3AED", purpleLight:"#F3F0FF", purpleMid:"#DDD6FE",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
 };
@@ -79,7 +79,7 @@ type Workout    = {type:string;duration:string;calories:number;exercises:Exercis
 type Nutrition  = {calories:number;protein:number;carbs:number;fat:number;sugar:number;meals:Meal[]};
 type Wellness   = {entries:WellnessEntry[]};
 
-const iStyle = {background:C.greenLight,border:`1.5px solid ${C.greenMid}`,borderRadius:10,padding:"7px 10px",fontSize:13,color:C.text,outline:"none",width:"100%",boxSizing:"border-box" as const};
+const iStyle = {background:C.purpleLight,border:`1.5px solid ${C.purpleMid}`,borderRadius:10,padding:"7px 10px",fontSize:13,color:C.text,outline:"none",width:"100%",boxSizing:"border-box" as const};
 const emptyCardio:CardioEntry  = {type:"",duration:"",distance:""};
 const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
 
@@ -239,10 +239,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div style={{background:C.white,borderRadius:22,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}}>
+    <div style={{background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}}>
 
       {/* HEADER */}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?C.greenLight:C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?C.purpleLight:C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,${C.gold},#FFD700)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(245,166,35,0.3)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
@@ -252,11 +252,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${workout.duration}  ·  🔥 ${workout.calories} cal`:"😴 Rest day"}</div>
           {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
         </div>
-        <div style={{width:34,height:34,borderRadius:"50%",background:C.greenLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
-          <svg viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
+        <div style={{width:34,height:34,borderRadius:"50%",background:C.purpleLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
         </div>
         {photos.length > 0 && (
-          <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.greenMid}`}}>
+          <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.purpleMid}`}}>
             <img src={photos[0]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
           </div>
         )}
@@ -266,7 +266,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               ? <button onClick={()=>setConfirmDel(true)} style={{width:34,height:34,borderRadius:"50%",background:"#FEE2E2",border:"none",color:"#EF4444",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
               : <div style={{display:"flex",gap:6,alignItems:"center"}}>
                   <button onClick={()=>onDelete()} style={{padding:"5px 10px",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer"}}>Delete</button>
-                  <button onClick={()=>setConfirmDel(false)} style={{padding:"5px 10px",borderRadius:10,border:`1px solid ${C.greenMid}`,background:C.greenLight,color:C.sub,fontWeight:800,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                  <button onClick={()=>setConfirmDel(false)} style={{padding:"5px 10px",borderRadius:10,border:`1px solid ${C.purpleMid}`,background:C.purpleLight,color:C.sub,fontWeight:800,fontSize:12,cursor:"pointer"}}>Cancel</button>
                 </div>
             }
           </div>
@@ -274,26 +274,26 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       </button>
 
       {/* BODY */}
-      {open && <div style={{padding:"24px 24px 28px",borderTop:`2px solid ${C.greenMid}`}}>
+      {open && <div style={{padding:"24px 24px 28px",borderTop:`2px solid ${C.purpleMid}`}}>
 
         {/* Photos */}
         <div style={{marginBottom:24}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Photos</span>
-            <label style={{fontSize:13,fontWeight:700,padding:"6px 16px",borderRadius:20,background:C.greenLight,color:C.blue,cursor:"pointer"}}>
+            <label style={{fontSize:13,fontWeight:700,padding:"6px 16px",borderRadius:20,background:C.purpleLight,color:C.purple,cursor:"pointer"}}>
               📷 Add Photos<input type="file" accept="image/*" multiple style={{display:"none"}} onChange={onFiles}/>
             </label>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
             {photos.map((src,i)=>(
-              <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.greenMid}`}}>
+              <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
                 <img onClick={()=>setLb(src)} src={src} style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
                 <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>
               </div>
             ))}
-            <label style={{width:108,height:108,borderRadius:16,border:`2px dashed ${C.greenMid}`,background:C.greenLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:4}}>
-              <span style={{fontSize:28,color:C.blue}}>+</span>
-              <span style={{fontSize:12,fontWeight:600,color:C.blue}}>Add</span>
+            <label style={{width:108,height:108,borderRadius:16,border:`2px dashed ${C.purpleMid}`,background:C.purpleLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:4}}>
+              <span style={{fontSize:28,color:C.purple}}>+</span>
+              <span style={{fontSize:12,fontWeight:600,color:C.purple}}>Add</span>
               <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={onFiles}/>
             </label>
           </div>
@@ -301,20 +301,20 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
         {/* ── WORKOUT ── */}
         {editWo ? (
-          <div style={{borderRadius:18,border:`2px solid ${C.blue}`,marginBottom:20,overflow:"hidden"}}>
-            <div style={{background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{borderRadius:18,border:`2px solid ${C.purple}`,marginBottom:20,overflow:"hidden"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Workout</span>
             </div>
-            <div style={{background:C.greenLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:C.purpleLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                 <div><label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>WORKOUT TYPE</label><input style={iStyle} value={woBuf.type} onChange={e=>setWoBuf(w=>({...w,type:e.target.value}))}/></div>
                 <div><label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>DURATION</label><input style={iStyle} value={woBuf.duration} onChange={e=>setWoBuf(w=>({...w,duration:e.target.value}))}/></div>
                 <div><label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>CALORIES BURNED</label><input style={iStyle} type="number" value={woBuf.calories} onChange={e=>setWoBuf(w=>({...w,calories:+e.target.value}))}/></div>
               </div>
-              <div style={{borderTop:`1px solid ${C.greenMid}`,paddingTop:12,marginTop:4}}>
+              <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12,marginTop:4}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Exercises</span>
-                  <button onClick={()=>setWoBuf(w=>({...w,exercises:[...w.exercises,{name:"",sets:3,reps:10,weight:""}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.blue,border:`1.5px solid ${C.blue}`,cursor:"pointer"}}>+ Add Exercise</button>
+                  <button onClick={()=>setWoBuf(w=>({...w,exercises:[...w.exercises,{name:"",sets:3,reps:10,weight:""}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.purple,border:`1.5px solid ${C.purple}`,cursor:"pointer"}}>+ Add Exercise</button>
                 </div>
                 {woBuf.exercises.map((ex,i)=>{
                   const numSets = ex.sets || 1;
@@ -322,7 +322,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     ? ex.weights
                     : Array.from({length: numSets}, (_,k) => (ex.weights?.[k] ?? ex.weight ?? ''));
                   return (
-                  <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:12,marginBottom:10,border:`1px solid ${C.greenMid}`}}>
+                  <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:12,marginBottom:10,border:`1px solid ${C.purpleMid}`}}>
                     {/* Name + remove */}
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                       <input style={{...iStyle,flex:1}} placeholder="Exercise name" value={ex.name} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,name:e.target.value}:x)}))}/>
@@ -378,7 +378,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                               })})
                               );
                             }}
-                              style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,color:C.blue,cursor:"pointer",flexShrink:0}}>
+                              style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.purpleMid}`,background:C.purpleLight,color:C.purple,cursor:"pointer",flexShrink:0}}>
                               +{d}
                             </button>
                           ))}
@@ -390,10 +390,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 })}
               </div>
               {/* Cardio section inside workout editor */}
-              <div style={{borderTop:`1px solid ${C.greenMid}`,paddingTop:12,marginTop:4}}>
+              <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12,marginTop:4}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>🏃 Cardio</span>
-                  <button onClick={()=>setWoBuf(w=>({...w,cardio:[...w.cardio,{...emptyCardio}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.blue,border:`1.5px solid ${C.blue}`,cursor:"pointer"}}>+ Add Cardio</button>
+                  <button onClick={()=>setWoBuf(w=>({...w,cardio:[...w.cardio,{...emptyCardio}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.purple,border:`1.5px solid ${C.purple}`,cursor:"pointer"}}>+ Add Cardio</button>
                 </div>
                 {(woBuf.cardio || []).map((c,i)=>(
                   <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
@@ -406,14 +406,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 {(woBuf.cardio || []).length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>No cardio logged — click + Add Cardio above</div>}
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
-                <button onClick={()=>setEditWo(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
+                <button onClick={()=>setEditWo(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
               </div>
             </div>
           </div>
         ) : workout ? (
-          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`,marginBottom:20}}>
-            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>💪</span>
                 <div>
@@ -428,7 +428,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 </div>
               </div>
             </button>
-            {woOpen && <div style={{background:C.greenLight,padding:"12px 16px"}}>
+            {woOpen && <div style={{background:C.purpleLight,padding:"12px 16px"}}>
               {/* Exercises — only show table if there are exercises */}
               {workout.exercises && workout.exercises.length > 0 && (()=>{
                 const totalSets = workout.exercises.reduce((s,ex)=>s+(ex.sets||0),0);
@@ -437,7 +437,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   return s+(w*(ex.sets||0)*(ex.reps||0));
                 },0);
                 return (<>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.greenMid}`}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
                   {["Exercise","Sets","Reps","Weight","Volume"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                 </div>
                 {workout.exercises.map((ex,i)=>{
@@ -447,10 +447,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     : (wsArr[0] || ex.weight || '—');
                   const exVol = (parseFloat(String(ex.weight))||0)*(ex.sets||0)*(ex.reps||0);
                   return (
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
                     <span style={{fontSize:14,fontWeight:600,color:C.text}}>{ex.name}</span>
-                    <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.sets}</span>
-                    <span style={{fontSize:16,fontWeight:900,color:C.blue,textAlign:"center"}}>{ex.reps}</span>
+                    <span style={{fontSize:16,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
+                    <span style={{fontSize:16,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
                     <span style={{fontSize:13,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
                     <span style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textAlign:"center"}}>{exVol>0?`${exVol>=1000?(exVol/1000).toFixed(1)+'k':exVol.toFixed(0)} lbs`:'—'}</span>
                   </div>
@@ -458,7 +458,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 })}
                 {/* Totals footer row */}
                 {totalVol > 0 && (
-                  <div style={{display:"flex",gap:16,padding:"10px 8px 4px",borderTop:`1px solid ${C.greenMid}`,marginTop:4,flexWrap:"wrap"}}>
+                  <div style={{display:"flex",gap:16,padding:"10px 8px 4px",borderTop:`1px solid ${C.purpleMid}`,marginTop:4,flexWrap:"wrap"}}>
                     <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.text,fontWeight:800}}>{totalSets}</strong> total sets</span>
                     <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.gold,fontWeight:800}}>📊 {totalVol>=1000?`${(totalVol/1000).toFixed(1)}k`:totalVol.toFixed(0)} lbs</strong> total volume</span>
                   </div>
@@ -467,15 +467,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               })()}
               {/* Cardio — always shown when present, no separator if no exercises above */}
               {workout.cardio && workout.cardio.length > 0 && (
-                <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.greenMid}` : "none"}}>
+                <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
                   <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.greenMid}`}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
                     {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                   </div>
                   {workout.cardio.map((c,i)=>(
-                    <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
+                    <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
                       <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:C.blue,textAlign:"center"}}>{c.duration}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
                       <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
                     </div>
                   ))}
@@ -488,20 +488,20 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>}
           </div>
         ) : (
-          <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.greenLight,border:`2px solid ${C.greenMid}`,marginBottom:20}}>
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.purpleLight,border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
             <div style={{fontSize:34,marginBottom:8}}>😴</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No workout logged</div>
-            <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>
+            <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>
           </div>
         )}
 
         {/* ── NUTRITION ── */}
         {editNut ? (
-          <div style={{borderRadius:18,border:`2px solid ${C.blue}`,overflow:"hidden"}}>
-            <div style={{background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"14px 20px"}}>
+          <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"14px 20px"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Nutrition</span>
             </div>
-            <div style={{background:C.greenLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:C.purpleLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
                 {[{l:"Calories",k:"calories"},{l:"Protein (g)",k:"protein"},{l:"Carbs (g)",k:"carbs"},{l:"Fat (g)",k:"fat"},{l:"Sugar (g)",k:"sugar"}].map(f=>(
                   <div key={f.k}>
@@ -511,10 +511,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 ))}
               </div>
 
-              <div style={{borderTop:`1px solid ${C.greenMid}`,paddingTop:12}}>
+              <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Meals</span>
-                  <button onClick={()=>setNutBuf(n=>({...n,meals:[...n.meals,{key:"Snack",emoji:"🍎",name:"",cal:0}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.blue,border:`1.5px solid ${C.blue}`,cursor:"pointer"}}>+ Add Meal</button>
+                  <button onClick={()=>setNutBuf(n=>({...n,meals:[...n.meals,{key:"Snack",emoji:"🍎",name:"",cal:0}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.purple,border:`1.5px solid ${C.purple}`,cursor:"pointer"}}>+ Add Meal</button>
                 </div>
                 {nutBuf.meals.map((meal,i)=>(
                   <div key={i} style={{display:"grid",gridTemplateColumns:"50px 90px 1fr 80px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
@@ -527,14 +527,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 ))}
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
-                <button onClick={()=>setEditNut(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
+                <button onClick={()=>setEditNut(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
               </div>
             </div>
           </div>
         ) : nutrition ? (
-          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`}}>
-            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
+            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>🥗</span>
                 <div>
@@ -549,7 +549,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 </div>
               </div>
             </button>
-            <div style={{background:C.greenLight,padding:16}}>
+            <div style={{background:C.purpleLight,padding:16}}>
               {/* Macro progress vs goals (if goals set) */}
               {(()=>{
                 let goals: any = null;
@@ -558,7 +558,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 const rows = [
                   {label:"Calories",val:nutrition.calories,goal:goals.calories||0,unit:"kcal",color:C.gold},
                   {label:"Protein",val:nutrition.protein,goal:goals.protein||0,unit:"g",color:"#3B82F6"},
-                  {label:"Carbs",val:nutrition.carbs,goal:goals.carbs||0,unit:"g",color:"#16A34A"},
+                  {label:"Carbs",val:nutrition.carbs,goal:goals.carbs||0,unit:"g",color:"#7C3AED"},
                   {label:"Fat",val:nutrition.fat,goal:goals.fat||0,unit:"g",color:"#C084FC"},
                 ];
                 return (
@@ -567,14 +567,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     {rows.filter(r=>r.goal>0).map(r=>{
                       const pct = Math.min((r.val/r.goal)*100,100);
                       const over = r.val > r.goal;
-                      const barColor = over ? "#EF4444" : pct >= 90 ? "#16A34A" : r.color;
+                      const barColor = over ? "#EF4444" : pct >= 90 ? "#7C3AED" : r.color;
                       return (
                         <div key={r.label}>
                           <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,color:C.sub,marginBottom:3}}>
                             <span>{r.label}</span>
                             <span style={{color:over?"#EF4444":C.text}}>{r.val}{r.unit} / {r.goal}{r.unit} {over?"🔴 over":"✅"}</span>
                           </div>
-                          <div style={{height:6,borderRadius:3,background:C.greenMid,overflow:"hidden"}}>
+                          <div style={{height:6,borderRadius:3,background:C.purpleMid,overflow:"hidden"}}>
                             <div style={{height:"100%",borderRadius:3,background:barColor,width:`${pct}%`,transition:"width 0.4s"}}/>
                           </div>
                         </div>
@@ -584,11 +584,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 );
               })()}
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:nut?20:0}}>
-                {[{label:"Calories",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000},{label:"Protein",val:nutrition.protein,unit:"g",color:"#3B82F6",max:250},{label:"Carbs",val:nutrition.carbs,unit:"g",color:C.blue,max:300},{label:"Fat",val:nutrition.fat,unit:"g",color:"#4ADE80",max:100}].map(mc=>(
-                  <div key={mc.label} style={{background:C.white,borderRadius:14,padding:"12px 6px",textAlign:"center",border:`1.5px solid ${C.greenMid}`}}>
+                {[{label:"Calories",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000},{label:"Protein",val:nutrition.protein,unit:"g",color:"#3B82F6",max:250},{label:"Carbs",val:nutrition.carbs,unit:"g",color:C.purple,max:300},{label:"Fat",val:nutrition.fat,unit:"g",color:"#4ADE80",max:100}].map(mc=>(
+                  <div key={mc.label} style={{background:C.white,borderRadius:14,padding:"12px 6px",textAlign:"center",border:`1.5px solid ${C.purpleMid}`}}>
                     <div style={{fontSize:20,fontWeight:900,color:mc.color}}>{mc.val}</div>
                     <div style={{fontSize:11,color:C.sub}}>{mc.unit}</div>
-                    <div style={{height:5,borderRadius:3,background:C.greenMid,margin:"6px 0 4px",overflow:"hidden"}}>
+                    <div style={{height:5,borderRadius:3,background:C.purpleMid,margin:"6px 0 4px",overflow:"hidden"}}>
                       <div style={{height:"100%",borderRadius:3,background:mc.color,width:`${Math.min((mc.val/mc.max)*100,100)}%`}}/>
                     </div>
                     <div style={{fontSize:11,fontWeight:700,color:C.sub}}>{mc.label}</div>
@@ -622,7 +622,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
                           {Object.entries(parsedMealPhotos).map(([meal, src])=>(
                             <div key={meal} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                              <button onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                              <button onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
                                 <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt={meal}/>
                               </button>
                               <span style={{fontSize:10,fontWeight:700,color:C.sub}}>{MEAL_LABELS[meal]||meal}</span>
@@ -633,7 +633,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                       {hasPlainPhotos && (
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {plainPhotos.map((src, i)=>(
-                            <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                            <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
                               <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
                             </button>
                           ))}
@@ -643,8 +643,8 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   );
                 })()}
                 {nutrition.meals.map(meal=>(
-                  <div key={meal.key} style={{background:C.white,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,border:`1.5px solid ${C.greenMid}`}}>
-                    <div style={{width:46,height:46,borderRadius:13,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{meal.emoji}</div>
+                  <div key={meal.key} style={{background:C.white,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,border:`1.5px solid ${C.purpleMid}`}}>
+                    <div style={{width:46,height:46,borderRadius:13,background:C.purpleLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{meal.emoji}</div>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
                         <span style={{fontWeight:800,fontSize:15,color:C.text}}>{meal.key}</span>
@@ -658,23 +658,23 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : (
-          <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.greenLight,border:`2px solid ${C.greenMid}`}}>
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.purpleLight,border:`2px solid ${C.purpleMid}`}}>
             <div style={{fontSize:34,marginBottom:8}}>🥗</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No nutrition logged</div>
-            <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>
+            <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>
           </div>
         )}
 
         {/* ── WELLNESS ── */}
         {editWell ? (
-          <div style={{borderRadius:18,border:`2px solid ${C.blue}`,overflow:"hidden",marginTop:16}}>
-            <div style={{background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"14px 20px"}}>
+          <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden",marginTop:16}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"14px 20px"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Wellness</span>
             </div>
-            <div style={{background:C.greenLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:C.purpleLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                 <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Activities</span>
-                <button onClick={()=>setWellBuf(w=>({entries:[...w.entries,{...emptyWellness}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.blue,border:`1.5px solid ${C.blue}`,cursor:"pointer"}}>+ Add Activity</button>
+                <button onClick={()=>setWellBuf(w=>({entries:[...w.entries,{...emptyWellness}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.white,color:C.purple,border:`1.5px solid ${C.purple}`,cursor:"pointer"}}>+ Add Activity</button>
               </div>
               {wellBuf.entries.map((e,i)=>(
                 <div key={i} style={{display:"grid",gridTemplateColumns:"50px 1fr 1fr 36px",gap:8,alignItems:"center"}}>
@@ -686,13 +686,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               ))}
               {wellBuf.entries.length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>Add wellness activities like meditation, cold plunge, sauna, stretching...</div>}
               <div style={{display:"flex",gap:10,marginTop:4}}>
-                <button onClick={()=>setEditWell(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+                <button onClick={()=>setEditWell(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
               </div>
             </div>
           </div>
         ) : wellness ? (
-          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`,marginTop:16}}>
+          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginTop:16}}>
             <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#52C97A,#7AE0A0)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:24}}>🌿</span>
@@ -729,12 +729,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#0D1A0D",border:`2px solid #2A3A2A`,marginTop:16}}>
             <div style={{fontSize:34,marginBottom:8}}>🌿</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No wellness logged</div>
-            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#16A34A,#4ADE80)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
+            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#4ADE80)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
           </div>
         )}
         {/* ── BADGES ── */}
         {earnedBadges.length > 0 && (
-          <div style={{ marginTop:16, paddingTop:14, borderTop:`1px solid ${C.greenMid}` }}>
+          <div style={{ marginTop:16, paddingTop:14, borderTop:`1px solid ${C.purpleMid}` }}>
             <div style={{ fontSize:11, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>🏆 Badges</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
               {(showAllBadges ? earnedBadges : earnedBadges.slice(0, 3)).map(badgeId => {
@@ -771,15 +771,15 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
   const [editing,setEditing] = useState(false);
   const [list,setList]       = useState(items);
   if (editing) return (
-    <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.blue}`,marginBottom:20}}>
+    <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purple}`,marginBottom:20}}>
       <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>{title}</div>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         {list.map((item,i)=>renderItem(item,i,setList))}
       </div>
-      <button onClick={()=>setList(l=>[...l,{...emptyItem}])} style={{width:"100%",padding:"9px 0",borderRadius:12,border:`2px dashed ${C.greenMid}`,background:C.greenLight,color:C.blue,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12}}>+ Add</button>
+      <button onClick={()=>setList(l=>[...l,{...emptyItem}])} style={{width:"100%",padding:"9px 0",borderRadius:12,border:`2px dashed ${C.purpleMid}`,background:C.purpleLight,color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12}}>+ Add</button>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>setEditing(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-        <button onClick={()=>{onSave(list);setEditing(false);}} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+        <button onClick={()=>setEditing(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+        <button onClick={()=>{onSave(list);setEditing(false);}} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
       </div>
     </div>
   );
@@ -787,7 +787,7 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
     <div style={{background:"#111811",borderRadius:22,padding:24,border:`1.5px solid #2A3A2A`,marginBottom:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontWeight:900,fontSize:17,color:C.text}}>{title}</div>
-        <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.blue,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>
+        <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.purple,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>
       </div>
       {items.map((item,i)=>(
         <div key={i} style={{background:i%2===0?"#1A2A1A":"#141F14",borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12,border:"1px solid #2A3A2A"}}>
@@ -1278,7 +1278,7 @@ export default function ProfilePage() {
     setTimeout(() => setBadgeToast(null), 3000);
   }
 
-  const inputStyle = {width:"100%",background:C.greenLight,border:`1.5px solid ${C.greenMid}`,borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box" as const,marginBottom:10};
+  const inputStyle = {width:"100%",background:C.purpleLight,border:`1.5px solid ${C.purpleMid}`,borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box" as const,marginBottom:10};
 
   const manualBadges = BADGES.filter(b => b.manual);
   const HIGHLIGHT_SLOTS = 9;
@@ -1314,7 +1314,7 @@ export default function ProfilePage() {
               <div style={{fontWeight:900,fontSize:18,color:C.text}}>Choose a Highlight</div>
               <div style={{fontSize:12,color:C.sub,marginTop:2}}>Tap any photo to add it to highlights</div>
             </div>
-            <button onClick={()=>setShowHighlightPicker(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:C.greenLight,color:C.text,fontSize:20,cursor:"pointer"}}>×</button>
+            <button onClick={()=>setShowHighlightPicker(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:C.purpleLight,color:C.text,fontSize:20,cursor:"pointer"}}>×</button>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 20px 32px"}} onClick={e=>e.stopPropagation()}>
             {feedPhotos.length === 0 ? (
@@ -1337,7 +1337,7 @@ export default function ProfilePage() {
                         return next;
                       });
                       setShowHighlightPicker(false);
-                    }} style={{padding:0,border:`3px solid ${alreadyAdded?C.blue:C.greenMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"none",aspectRatio:"1",position:"relative"}}>
+                    }} style={{padding:0,border:`3px solid ${alreadyAdded?C.purple:C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"none",aspectRatio:"1",position:"relative"}}>
                       <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
                       {alreadyAdded && (
                         <div style={{position:"absolute",inset:0,background:"rgba(22,163,74,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1350,9 +1350,9 @@ export default function ProfilePage() {
               </div>
             )}
             {/* Also allow uploading from camera roll */}
-            <label style={{display:"flex",alignItems:"center",gap:10,marginTop:20,padding:"14px 16px",borderRadius:16,border:`1.5px dashed ${C.greenMid}`,background:C.greenLight,cursor:"pointer",justifyContent:"center"}}>
+            <label style={{display:"flex",alignItems:"center",gap:10,marginTop:20,padding:"14px 16px",borderRadius:16,border:`1.5px dashed ${C.purpleMid}`,background:C.purpleLight,cursor:"pointer",justifyContent:"center"}}>
               <span style={{fontSize:20}}>📷</span>
-              <span style={{fontWeight:700,fontSize:14,color:C.blue}}>Upload from camera roll</span>
+              <span style={{fontWeight:700,fontSize:14,color:C.purple}}>Upload from camera roll</span>
               <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
                 const f=e.target.files?.[0]; if(!f) return;
                 const r=new FileReader();
@@ -1378,14 +1378,14 @@ export default function ProfilePage() {
       {socialModal && (
         <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setSocialModal(null)}>
           <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:440,maxHeight:"75vh",overflow:"hidden",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px",borderBottom:`2px solid ${C.greenMid}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px",borderBottom:`2px solid ${C.purpleMid}`}}>
               <div style={{fontWeight:900,fontSize:18,color:C.text}}>{socialModal==="followers"?"👥 Followers":"➡️ Following"}</div>
-              <button onClick={()=>setSocialModal(null)} style={{width:34,height:34,borderRadius:"50%",border:"none",background:C.greenLight,color:C.sub,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+              <button onClick={()=>setSocialModal(null)} style={{width:34,height:34,borderRadius:"50%",border:"none",background:C.purpleLight,color:C.sub,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"12px 16px"}}>
               {socialLoading ? (
                 <div style={{textAlign:"center",padding:"32px 0",color:C.sub}}>
-                  <div style={{width:32,height:32,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite",margin:"0 auto 10px"}}/>
+                  <div style={{width:32,height:32,borderRadius:"50%",border:`4px solid ${C.purpleMid}`,borderTopColor:C.purple,animation:"spin 0.8s linear infinite",margin:"0 auto 10px"}}/>
                   <div style={{fontSize:13}}>Loading...</div>
                 </div>
               ) : socialList.length === 0 ? (
@@ -1397,10 +1397,10 @@ export default function ProfilePage() {
               ) : (
                 socialList.map(u=>(
                   <div key={u.id} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 8px",borderRadius:16,cursor:"pointer",transition:"background 0.15s"}}
-                    onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
+                    onMouseEnter={e=>(e.currentTarget.style.background=C.purpleLight)}
                     onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
                     onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
-                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
+                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
                       {u.avatar_url ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
@@ -1418,7 +1418,7 @@ export default function ProfilePage() {
 
       {/* ── Toast ── */}
       {badgeToast && (
-        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(124,58,237,0.35)",pointerEvents:"none"}}>
+        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(124,58,237,0.35)",pointerEvents:"none"}}>
           {badgeToast}
         </div>
       )}
@@ -1435,7 +1435,7 @@ export default function ProfilePage() {
                 const sel = selectedBadge === b.id;
                 return (
                   <button key={b.id} onClick={()=>setSelectedBadge(b.id)}
-                    style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,border:`2px solid ${sel?C.blue:C.greenMid}`,background:sel?C.greenLight:C.white,cursor:"pointer",textAlign:"left",opacity:earned?0.55:1}}>
+                    style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,border:`2px solid ${sel?C.purple:C.purpleMid}`,background:sel?C.purpleLight:C.white,cursor:"pointer",textAlign:"left",opacity:earned?0.55:1}}>
                     <span style={{fontSize:28,flexShrink:0}}>{b.emoji}</span>
                     <div style={{flex:1}}>
                       <div style={{fontWeight:800,fontSize:14,color:C.text,display:"flex",alignItems:"center",gap:8}}>
@@ -1444,7 +1444,7 @@ export default function ProfilePage() {
                       </div>
                       <div style={{fontSize:12,color:C.sub,marginTop:2}}>{b.desc}</div>
                     </div>
-                    <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.blue:C.greenMid}`,background:sel?C.blue:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.purple:C.purpleMid}`,background:sel?C.purple:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                       {sel && <div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
                     </div>
                   </button>
@@ -1453,11 +1453,11 @@ export default function ProfilePage() {
             </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:12,fontWeight:700,color:C.sub,display:"block",marginBottom:6}}>Tell us about it (optional)</label>
-              <textarea value={badgeNote} onChange={e=>setBadgeNote(e.target.value)} rows={3} placeholder="Share your story..." style={{width:"100%",background:C.greenLight,border:`1.5px solid ${C.greenMid}`,borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",resize:"none",boxSizing:"border-box"}}/>
+              <textarea value={badgeNote} onChange={e=>setBadgeNote(e.target.value)} rows={3} placeholder="Share your story..." style={{width:"100%",background:C.purpleLight,border:`1.5px solid ${C.purpleMid}`,borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",resize:"none",boxSizing:"border-box"}}/>
             </div>
             <div style={{display:"flex",gap:12}}>
-              <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-              <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.blue},#4ADE80)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+              <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+              <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#4ADE80)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
             </div>
           </div>
         </div>
@@ -1479,13 +1479,13 @@ export default function ProfilePage() {
               </>
             )}
             <div style={{display:"flex",gap:12,marginTop:8}}>
-              <button onClick={()=>setEditProfile(false)} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+              <button onClick={()=>setEditProfile(false)} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
               <button onClick={async()=>{
                 if(!user)return;
                 await supabase.from('users').update({full_name:profile.name,username:profile.username,bio:profile.bio,city:profile.city} as any).eq('id',user.id);
                 await refreshProfile();
                 setEditProfile(false);
-              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
             </div>
           </div>
         </div>
@@ -1499,7 +1499,7 @@ export default function ProfilePage() {
         <div style={{position:"fixed",inset:0,zIndex:9997,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{background:C.white,borderRadius:"0 0 24px 24px",padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
             <div style={{fontWeight:900,fontSize:20,color:C.text}}>📸 All Photos</div>
-            <button onClick={()=>setShowAllPhotos(false)} style={{width:38,height:38,borderRadius:"50%",border:"none",background:C.greenLight,color:C.text,fontSize:22,cursor:"pointer",lineHeight:"38px",textAlign:"center"}}>×</button>
+            <button onClick={()=>setShowAllPhotos(false)} style={{width:38,height:38,borderRadius:"50%",border:"none",background:C.purpleLight,color:C.text,fontSize:22,cursor:"pointer",lineHeight:"38px",textAlign:"center"}}>×</button>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 24px 32px"}}>
             {feedPhotos.length===0 ? (
@@ -1510,7 +1510,7 @@ export default function ProfilePage() {
             ) : (
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                 {feedPhotos.map((src,idx)=>(
-                  <button key={idx} onClick={()=>setHighlightLb(src)} style={{padding:0,border:`2px solid ${C.greenMid}`,borderRadius:14,overflow:"hidden",cursor:"pointer",background:"none",aspectRatio:"1"}}>
+                  <button key={idx} onClick={()=>setHighlightLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:"pointer",background:"none",aspectRatio:"1"}}>
                     <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
                   </button>
                 ))}
@@ -1535,7 +1535,7 @@ export default function ProfilePage() {
               <TierFrame tier={userTier} size={150}>
               {profileImg
                 ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
@@ -1546,7 +1546,7 @@ export default function ProfilePage() {
               )}
               {/* Camera button always visible at bottom right when not repositioning */}
               {!avatarRepositionMode && (
-                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#16A34A",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
@@ -1563,7 +1563,7 @@ export default function ProfilePage() {
               {avatarRepositionMode && (
                 <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,borderRadius:"50%",background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",padding:"8px",zIndex:10,pointerEvents:"none"}}>
                   <div style={{display:"flex",gap:6,pointerEvents:"all"}}>
-                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#16A34A",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
+                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
                     <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(false);setAvatarDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Cancel</button>
                   </div>
                 </div>
@@ -1595,12 +1595,12 @@ export default function ProfilePage() {
               )}
               {(user?.profile as any)?.account_type === 'business' && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
-                  <span style={{ background: "#1A2A1A", color: "#16A34A", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
+                  <span style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
                     🏢 {(user?.profile as any)?.business_type || 'Business'}
                   </span>
                   {(user?.profile as any)?.business_website && (
                     <a href={(user?.profile as any)?.business_website} target="_blank" rel="noopener noreferrer"
-                      style={{ background: "#1A2A1A", color: "#16A34A", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
+                      style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
                       🔗 Website
                     </a>
                   )}
@@ -1613,7 +1613,7 @@ export default function ProfilePage() {
           <div className="profile-banner-block" style={{flex:1,minWidth:260}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.blue},#BBF7D0)`,border:`2px solid ${repositionMode?"#F5A623":C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
+              style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
@@ -1641,7 +1641,7 @@ export default function ProfilePage() {
                 <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",zIndex:10,pointerEvents:"none"}}>
                   <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"4px 14px",color:"#fff",fontSize:11,fontWeight:700}}>↕ Drag to reposition</div>
                   <div style={{display:"flex",gap:8,pointerEvents:"all"}}>
-                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#16A34A",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
+                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
                     <button onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(false);setDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Done</button>
                   </div>
                 </div>
@@ -1668,13 +1668,13 @@ export default function ProfilePage() {
                   style={{flex:1,textAlign:"center",cursor:"pointer",padding:"14px 10px",background:"#111811",transition:"background 0.15s",position:"relative",borderLeft:i>0?"1px solid #2A3A2A":"none"}}
                   onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.background="#1A2A1A"}}
                   onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background="#111811"}}>
-                  <div style={{fontSize:26,fontWeight:900,color:C.blue,lineHeight:1,letterSpacing:-1}}>{s.v.toLocaleString()}</div>
+                  <div style={{fontSize:26,fontWeight:900,color:C.purple,lineHeight:1,letterSpacing:-1}}>{s.v.toLocaleString()}</div>
                   <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
                 </div>
               ))}
             </div>
 
-            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.blue}`,background:"#111811",color:C.blue,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
+            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:"#111811",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
               onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#1A2A1A"}}
               onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="#111811"}}>
               ✏️ Edit Profile
@@ -1688,16 +1688,16 @@ export default function ProfilePage() {
 
           {/* LEFT — Highlights */}
           <div>
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
                 <div style={{display:"flex",gap:8}}>
                   {highlights.length > 0 && (
-                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.blue:C.greenLight,color:editingHighlights?"#fff":C.blue,border:`1.5px solid ${C.greenMid}`,cursor:"pointer"}}>
+                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:C.purpleLight,color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
                       {editingHighlights ? "✓ Done" : "✏️ Edit"}
                     </button>
                   )}
-                  <button onClick={()=>setShowAllPhotos(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.greenLight,color:C.blue,border:`1.5px solid ${C.greenMid}`,cursor:"pointer"}}>📷 All Photos</button>
+                  <button onClick={()=>setShowAllPhotos(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:C.purpleLight,color:C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>📷 All Photos</button>
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
@@ -1716,14 +1716,14 @@ export default function ProfilePage() {
                   }
                   if (i === highlights.length) {
                     return (
-                      <button key={i} onClick={()=>setShowHighlightPicker(true)} style={{aspectRatio:"1",borderRadius:12,border:`2px dashed ${C.greenMid}`,background:C.greenLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:2,padding:0}}>
-                        <span style={{fontSize:22,color:C.blue,lineHeight:1}}>+</span>
+                      <button key={i} onClick={()=>setShowHighlightPicker(true)} style={{aspectRatio:"1",borderRadius:12,border:`2px dashed ${C.purpleMid}`,background:C.purpleLight,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:2,padding:0}}>
+                        <span style={{fontSize:22,color:C.purple,lineHeight:1}}>+</span>
                         <span style={{fontSize:9,color:C.sub,fontWeight:600}}>Add</span>
                       </button>
                     );
                   }
                   return (
-                    <div key={i} style={{aspectRatio:"1",borderRadius:12,background:`${C.greenMid}55`,border:`1px solid ${C.greenMid}`}}/>
+                    <div key={i} style={{aspectRatio:"1",borderRadius:12,background:`${C.purpleMid}55`,border:`1px solid ${C.purpleMid}`}}/>
                   );
                 })}
               </div>
@@ -1738,7 +1738,7 @@ export default function ProfilePage() {
             <div style={{fontWeight:900,fontSize:20,color:C.text,marginBottom:16}}>Activity Log</div>
             {loadingLogs ? (
               <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
-                <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}}/>
+                <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.purpleMid}`,borderTopColor:C.purple,animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}}/>
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <div style={{fontSize:14}}>Loading activity log...</div>
               </div>
@@ -1746,7 +1746,7 @@ export default function ProfilePage() {
               <>
                 {/* Workout Progress Graphs */}
                 {realDays.length > 0 && (
-                  <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.greenMid}`,marginBottom:20}}>
+                  <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.purpleMid}`,marginBottom:20}}>
                     <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id }))} />
                   </div>
                 )}
@@ -1779,10 +1779,10 @@ export default function ProfilePage() {
           {/* RIGHT */}
           <div>
             {/* Badges & Awards */}
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
               {earnedBadges.length === 0 && completedChallenges.length === 0 ? (
-                <div style={{textAlign:"center",padding:"28px 16px",background:C.greenLight,borderRadius:16,marginBottom:16}}>
+                <div style={{textAlign:"center",padding:"28px 16px",background:C.purpleLight,borderRadius:16,marginBottom:16}}>
                   <div style={{fontSize:36,marginBottom:8}}>🏆</div>
                   <div style={{fontSize:14,fontWeight:700,color:C.sub,lineHeight:1.5}}>Complete fitness milestones to earn badges</div>
                 </div>
@@ -1844,7 +1844,7 @@ export default function ProfilePage() {
                   )}
                 </>
               )}
-              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
+              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement
               </button>
             </div>
@@ -1855,13 +1855,13 @@ export default function ProfilePage() {
             <EditableList title="Favorite Brands" items={brands} onSave={setBrands} emptyItem={{emoji:"👟",name:"New Brand"}}
               renderItem={(item,i,setList)=>(
                 <div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <input style={{width:48,borderRadius:10,border:`1.5px solid ${C.greenMid}`,padding:"8px 4px",textAlign:"center",fontSize:18,outline:"none",background:C.greenLight}} value={item.emoji} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,emoji:e.target.value}:x))}/>
-                  <input style={{flex:1,borderRadius:10,border:`1.5px solid ${C.greenMid}`,padding:"8px 12px",fontSize:14,color:C.text,outline:"none",background:C.greenLight}} value={item.name} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,name:e.target.value}:x))}/>
+                  <input style={{width:48,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 4px",textAlign:"center",fontSize:18,outline:"none",background:C.purpleLight}} value={item.emoji} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,emoji:e.target.value}:x))}/>
+                  <input style={{flex:1,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 12px",fontSize:14,color:C.text,outline:"none",background:C.purpleLight}} value={item.name} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,name:e.target.value}:x))}/>
                   <button onClick={()=>setList(l=>l.filter((_:any,j:number)=>j!==i))} style={{width:28,height:28,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer"}}>×</button>
                 </div>
               )}/>
 
-            <button style={{width:"100%",padding:"14px 0",borderRadius:16,border:`2px solid ${C.greenMid}`,background:C.white,color:C.sub,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+            <button style={{width:"100%",padding:"14px 0",borderRadius:16,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,fontSize:14,cursor:"pointer"}}>
               Sign Out
             </button>
           </div>
@@ -1870,3 +1870,6 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+
+

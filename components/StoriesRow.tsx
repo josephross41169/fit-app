@@ -1,11 +1,11 @@
-﻿"use client";
+"use client";
 import { mockStories } from "@/lib/mockData";
 
 function getInitials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
-const colors = ["#16A34A", "#22C55E", "#52C97A", "#6B9FFF", "#FF6B9D", "#9B6BFF"];
+const colors = ["#7C3AED", "#A78BFA", "#52C97A", "#6B9FFF", "#FF6B9D", "#9B6BFF"];
 
 export default function StoriesRow() {
   return (
@@ -16,8 +16,8 @@ export default function StoriesRow() {
           {/* Avatar ring */}
           <div className="p-0.5 rounded-full"
             style={{ background: story.isYou
-              ? "linear-gradient(135deg, #16A34A, #22C55E)"
-              : "linear-gradient(135deg, #16A34A, #22C55E)" }}>
+              ? "linear-gradient(135deg, #7C3AED, #A78BFA)"
+              : "linear-gradient(135deg, #7C3AED, #A78BFA)" }}>
             <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white p-0.5">
               <div className="w-full h-full rounded-full flex items-center justify-center font-bold text-white text-sm"
                 style={{ background: colors[i % colors.length] }}>
@@ -26,7 +26,7 @@ export default function StoriesRow() {
             </div>
           </div>
           <span className="text-xs font-medium max-w-[56px] truncate"
-            style={{ color: story.isYou ? "#16A34A" : "#6B7280" }}>
+            style={{ color: story.isYou ? "#7C3AED" : "#6B7280" }}>
             {story.isYou ? "Add Story" : story.username}
           </span>
         </button>
@@ -34,3 +34,5 @@ export default function StoriesRow() {
     </div>
   );
 }
+
+
