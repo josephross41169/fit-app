@@ -257,7 +257,7 @@ export default function WeightTracker({ userId }: Props) {
             <div style={{ background: "#111827", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
               <div style={{
                 fontSize: 22, fontWeight: 900,
-                color: change === null ? C.sub : change < 0 ? "#4ADE80" : change > 0 ? "#EF4444" : C.sub,
+                color: change === null ? C.sub : change < 0 ? "#7C3AED" : change > 0 ? "#EF4444" : C.sub,
               }}>
                 {change === null ? "—" : `${change > 0 ? "+" : ""}${change}`}
               </div>
@@ -273,7 +273,7 @@ export default function WeightTracker({ userId }: Props) {
             )}
             {minW !== null && (
               <div style={{ background: "#111827", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#4ADE80" }}>{minW}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#7C3AED" }}>{minW}</div>
                 <div style={{ fontSize: 10, color: C.sub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Lowest</div>
               </div>
             )}

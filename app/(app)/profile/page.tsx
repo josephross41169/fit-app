@@ -302,7 +302,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         {/* ── WORKOUT ── */}
         {editWo ? (
           <div style={{borderRadius:18,border:`2px solid ${C.purple}`,marginBottom:20,overflow:"hidden"}}>
-            <div style={{background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Workout</span>
             </div>
             <div style={{background:C.purpleLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -407,13 +407,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditWo(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
+                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
               </div>
             </div>
           </div>
         ) : workout ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
-            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>💪</span>
                 <div>
@@ -491,14 +491,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.purpleLight,border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
             <div style={{fontSize:34,marginBottom:8}}>😴</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No workout logged</div>
-            <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>
+            <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>
           </div>
         )}
 
         {/* ── NUTRITION ── */}
         {editNut ? (
           <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden"}}>
-            <div style={{background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"14px 20px"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"14px 20px"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Nutrition</span>
             </div>
             <div style={{background:C.purpleLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -528,13 +528,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditNut(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
+                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
               </div>
             </div>
           </div>
         ) : nutrition ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
-            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>🥗</span>
                 <div>
@@ -661,14 +661,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:C.purpleLight,border:`2px solid ${C.purpleMid}`}}>
             <div style={{fontSize:34,marginBottom:8}}>🥗</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No nutrition logged</div>
-            <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>
+            <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>
           </div>
         )}
 
         {/* ── WELLNESS ── */}
         {editWell ? (
           <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden",marginTop:16}}>
-            <div style={{background:`linear-gradient(135deg,${C.purple},#4ADE80)`,padding:"14px 20px"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"14px 20px"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Wellness</span>
             </div>
             <div style={{background:C.purpleLight,padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -687,13 +687,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               {wellBuf.entries.length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>Add wellness activities like meditation, cold plunge, sauna, stretching...</div>}
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditWell(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
               </div>
             </div>
           </div>
         ) : wellness ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginTop:16}}>
-            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#52C97A,#7AE0A0)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:24}}>🌿</span>
                 <div>
@@ -708,10 +708,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 </div>
               </div>
             </button>
-            {wellOpen && <div style={{background:"#F0FBF5",padding:14,display:"flex",flexDirection:"column",gap:8}}>
+            {wellOpen && <div style={{background:"#F5F3FF",padding:14,display:"flex",flexDirection:"column",gap:8}}>
               {wellness.entries.map((e,i)=>(
-                <div key={i} style={{background:C.white,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #C3EFD0"}}>
-                  <div style={{width:44,height:44,borderRadius:13,background:"#E8F8EE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
+                <div key={i} style={{background:C.white,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #DDD6FE"}}>
+                  <div style={{width:44,height:44,borderRadius:13,background:"#F5F3FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
                   <div style={{flex:1}}>
                     <div style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</div>
                     {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:2}}>{e.notes}</div>}
@@ -726,10 +726,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>}
           </div>
         ) : (
-          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#0D1A0D",border:`2px solid #2A3A2A`,marginTop:16}}>
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#FAF5FF",border:`2px solid #DDD6FE`,marginTop:16}}>
             <div style={{fontSize:34,marginBottom:8}}>🌿</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No wellness logged</div>
-            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#4ADE80)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
+            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
           </div>
         )}
         {/* ── BADGES ── */}
@@ -1122,6 +1122,7 @@ export default function ProfilePage() {
   const [selectedBadge,setSelectedBadge] = useState<string>("");
   const [badgeNote,setBadgeNote] = useState("");
   const [badgeToast,setBadgeToast] = useState<string|null>(null);
+  const [showAllBadgesModal,setShowAllBadgesModal] = useState(false);
 
   // 🏆 Tier state — computed from activity logs
   const [userTier, setUserTier] = useState<Tier>("default");
@@ -1400,7 +1401,7 @@ export default function ProfilePage() {
                     onMouseEnter={e=>(e.currentTarget.style.background=C.purpleLight)}
                     onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
                     onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
-                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
+                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
                       {u.avatar_url ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
@@ -1418,7 +1419,7 @@ export default function ProfilePage() {
 
       {/* ── Toast ── */}
       {badgeToast && (
-        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(124,58,237,0.35)",pointerEvents:"none"}}>
+        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(124,58,237,0.35)",pointerEvents:"none"}}>
           {badgeToast}
         </div>
       )}
@@ -1457,7 +1458,74 @@ export default function ProfilePage() {
             </div>
             <div style={{display:"flex",gap:12}}>
               <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-              <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#4ADE80)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+              <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#A78BFA)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── All Badges Modal ── */}
+      {showAllBadgesModal && (
+        <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:560,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 28px",borderBottom:`2px solid ${C.purpleMid}`}}>
+              <div>
+                <div style={{fontWeight:900,fontSize:20,color:C.text}}>🏆 All Badges</div>
+                <div style={{fontSize:12,color:C.sub,marginTop:2}}>You have earned {earnedBadges.length + completedChallenges.length} badge{earnedBadges.length + completedChallenges.length === 1 ? "" : "s"}</div>
+              </div>
+              <button onClick={()=>setShowAllBadgesModal(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:C.purpleLight,color:C.text,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
+              {earnedBadges.length === 0 && completedChallenges.length === 0 ? (
+                <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
+                  <div style={{fontSize:40,marginBottom:12}}>🏆</div>
+                  <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No badges earned yet</div>
+                  <div style={{fontSize:13}}>Complete fitness milestones to earn badges and unlock achievements</div>
+                </div>
+              ) : (
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
+                  {/* Earned badges grid */}
+                  {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b => (
+                    <div key={b.id} style={{
+                      borderRadius:16,
+                      padding:"16px 10px",
+                      textAlign:"center",
+                      border:"1.5px solid #F5A623",
+                      background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
+                      boxShadow:"0 0 16px rgba(245,166,35,0.4)",
+                      transition:"all 0.2s",
+                    }}>
+                      <div style={{fontSize:32,marginBottom:6}}>{b.emoji}</div>
+                      <div style={{fontWeight:800,fontSize:12,color:"#FFD700",lineHeight:1.3,marginBottom:4}}>{b.label}</div>
+                      <div style={{fontSize:10,color:"#B8860B",lineHeight:1.3}}>{b.desc}</div>
+                    </div>
+                  ))}
+                  {/* Challenge completion badges in grid */}
+                  {completedChallenges.map((cp: any, i: number) => {
+                    const ch = cp.challenges;
+                    if (!ch) return null;
+                    return (
+                      <div key={`challenge-${i}`} style={{
+                        borderRadius:16,
+                        padding:"16px 10px",
+                        textAlign:"center",
+                        border:"1.5px solid #F5A623",
+                        background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
+                        boxShadow:"0 0 16px rgba(245,166,35,0.4)",
+                        transition:"all 0.2s",
+                        display:"flex",
+                        flexDirection:"column",
+                        alignItems:"center",
+                        justifyContent:"center",
+                      }}>
+                        <div style={{fontSize:32,marginBottom:6}}>{ch.emoji || '🏆'}</div>
+                        <div style={{fontWeight:800,fontSize:11,color:"#FFD700",lineHeight:1.3,marginBottom:4}}>{ch.name}</div>
+                        <div style={{fontSize:9,color:"#F5A623",lineHeight:1.3}}>Score: {cp.score}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1485,7 +1553,7 @@ export default function ProfilePage() {
                 await supabase.from('users').update({full_name:profile.name,username:profile.username,bio:profile.bio,city:profile.city} as any).eq('id',user.id);
                 await refreshProfile();
                 setEditProfile(false);
-              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
             </div>
           </div>
         </div>
@@ -1535,7 +1603,7 @@ export default function ProfilePage() {
               <TierFrame tier={userTier} size={150}>
               {profileImg
                 ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
@@ -1674,9 +1742,9 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:"#111811",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
-              onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#1A2A1A"}}
-              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="#111811"}}>
+            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:"#F5F3FF",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
+              onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
+              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="#F5F3FF"}}>
               ✏️ Edit Profile
             </button>
             </div>{/* end profile-stats-bio */}
@@ -1788,63 +1856,48 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <>
-                  {earnedBadges.length > 0 && (
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-                      {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b => (
-                        <div key={b.id} style={{
-                          borderRadius:16,
-                          padding:"14px 8px",
+                  {/* Preview grid - show only first 4-6 badges */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                    {BADGES.filter(b=>earnedBadges.includes(b.id)).slice(0,6).map(b => (
+                      <div key={b.id} style={{
+                        borderRadius:14,
+                        padding:"12px 6px",
+                        textAlign:"center",
+                        border:"1.5px solid #F5A623",
+                        background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
+                        boxShadow:"0 0 12px rgba(245,166,35,0.3)",
+                      }}>
+                        <div style={{fontSize:22,marginBottom:3}}>{b.emoji}</div>
+                        <div style={{fontWeight:800,fontSize:10,color:"#FFD700",lineHeight:1.2}}>{b.label}</div>
+                      </div>
+                    ))}
+                    {completedChallenges.slice(0, Math.max(0, 6 - earnedBadges.length)).map((cp: any, i: number) => {
+                      const ch = cp.challenges;
+                      if (!ch) return null;
+                      return (
+                        <div key={`challenge-${i}`} style={{
+                          borderRadius:14,
+                          padding:"12px 6px",
                           textAlign:"center",
                           border:"1.5px solid #F5A623",
                           background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
-                          boxShadow:"0 0 16px rgba(245,166,35,0.4)",
-                          transition:"all 0.2s",
+                          boxShadow:"0 0 12px rgba(245,166,35,0.3)",
                         }}>
-                          <div style={{fontSize:26,marginBottom:4}}>{b.emoji}</div>
-                          <div style={{fontWeight:800,fontSize:11,color:"#FFD700",lineHeight:1.3}}>{b.label}</div>
-                          <div style={{fontSize:10,color:"#B8860B",marginTop:3,lineHeight:1.3}}>{b.desc}</div>
+                          <div style={{fontSize:22,marginBottom:3}}>{ch.emoji || '🏆'}</div>
+                          <div style={{fontWeight:800,fontSize:10,color:"#FFD700",lineHeight:1.2}}>Challenge</div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Challenge Completion Badges */}
-                  {completedChallenges.length > 0 && (
-                    <div style={{marginBottom:16}}>
-                      <div style={{fontSize:11,fontWeight:800,color:"#F5A623",textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏆 Challenge Completions</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        {completedChallenges.map((cp: any, i: number) => {
-                          const ch = cp.challenges;
-                          if (!ch) return null;
-                          const groupName = ch.groups?.name || '';
-                          return (
-                            <div key={i} style={{
-                              borderRadius:16,
-                              padding:"12px 14px",
-                              display:"flex",
-                              alignItems:"center",
-                              gap:12,
-                              border:"2px solid #F5A623",
-                              background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
-                              boxShadow:"0 2px 12px rgba(245,166,35,0.35)",
-                            }}>
-                              <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#F5A623,#FFD700)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
-                                {ch.emoji || '🏆'}
-                              </div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontWeight:800,fontSize:13,color:"#FFD700"}}>{ch.name}</div>
-                                {groupName && <div style={{fontSize:10,color:"#F5A623",marginTop:1}}>📍 {groupName}</div>}
-                                <div style={{fontSize:11,color:"#F5A623",fontWeight:700,marginTop:2}}>Score: {cp.score}</div>
-                              </div>
-                              <div style={{fontSize:18}}>✨</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                      );
+                    })}
+                  </div>
+                  {/* View all button if there are more than 6 badges */}
+                  {(earnedBadges.length + completedChallenges.length) > 6 && (
+                    <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:C.purpleLight,color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                      👀 View all {earnedBadges.length + completedChallenges.length} badges
+                    </button>
                   )}
                 </>
               )}
-              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
+              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement
               </button>
             </div>
