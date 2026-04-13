@@ -4,6 +4,9 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import FollowButton from "@/components/FollowButton";
 import ActivityComments from "@/components/ActivityComments";
+import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
+import { computeTier } from "@/lib/tiers";
+import type { Tier } from "@/lib/tiers";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -24,6 +27,7 @@ type Post = {
   user: string;
   username: string;
   avatar: string;
+  tier?: Tier;
   time: string;
   dateShort: string;
   dayLabel: string;
@@ -386,13 +390,18 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
     <div style={{ background:C.darkCard, borderRadius:18, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:16 }}>
       {/* User header */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-          {(post as any).avatarUrl
-            ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-            : post.avatar}
-        </div>
-        <div>
-          <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{post.user}</div>
+        <TierFrame tier={(post as any).tier || "default"} size={44}>
+          <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+            {(post as any).avatarUrl
+              ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+              : post.avatar}
+          </div>
+        </TierFrame>
+        <div style={{ flex:1,minWidth:0 }}>
+          <div style={{ display:"flex",alignItems:"center",gap:5,flexWrap:"wrap" }}>
+            <span style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{post.user}</span>
+            <TierBadgeChip tier={(post as any).tier || "default"} small />
+          </div>
           <div style={{ fontSize:11,color:C.darkSub }}>@{post.username}</div>
         </div>
         <div style={{ marginLeft:"auto",fontSize:11,color:C.darkSub }}>{post.time}</div>
@@ -518,13 +527,20 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
 
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
-          <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
-            {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-              ? <img src={post.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-              : post.avatar}
+          <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
+            <TierFrame tier={post.tier || "default"} size={46}>
+              <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+                {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
+                  ? <img src={post.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                  : post.avatar}
+              </div>
+            </TierFrame>
           </div>
           <div style={{ flex:1,cursor:"pointer" }} onClick={() => window.location.href=`/profile/${post.username}`}>
-            <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</div>
+            <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
+              <span style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</span>
+              <TierBadgeChip tier={post.tier || "default"} small />
+            </div>
             <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
           </div>
           <div style={{ width:50,height:50,borderRadius:13,background:`linear-gradient(135deg,${C.gold},#FFD700)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(245,166,35,0.3)" }}>
@@ -854,7 +870,7 @@ export default function FeedPage() {
     async function loadFeed() {
       const { data } = await supabase
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url), comments (id, content, created_at, users (id, username, full_name, avatar_url))`)
+        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -1022,6 +1038,7 @@ export default function FeedPage() {
         id: p.id,
         user: p.users?.full_name || p.users?.username || "User",
         username: p.users?.username || "user",
+        tier: (p.users?.tier as Tier) || computeTier(p.users?.logs_last_28_days || 0, 0),
         avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
         time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,

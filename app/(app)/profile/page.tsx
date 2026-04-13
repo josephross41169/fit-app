@@ -7,6 +7,9 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
+import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
+import { computeTier, getTierInfo } from "@/lib/tiers";
+import type { Tier } from "@/lib/tiers";
 
 const C = {
   blue:"#16A34A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -1120,6 +1123,32 @@ export default function ProfilePage() {
   const [badgeNote,setBadgeNote] = useState("");
   const [badgeToast,setBadgeToast] = useState<string|null>(null);
 
+  // 🏆 Tier state — computed from activity logs
+  const [userTier, setUserTier] = useState<Tier>("default");
+  const [tierInfo, setTierInfo] = useState(getTierInfo(0, 0));
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadTier() {
+      // Count logs in last 28 days
+      const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from('activity_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .gte('logged_at', since);
+      const logsCount = count || 0;
+      const info = getTierInfo(logsCount, 0);
+      setTierInfo(info);
+      setUserTier(info.tier);
+      // Persist tier back to DB for feed to pick up
+      if (user) {
+        supabase.from('users').update({ tier: info.tier, logs_last_28_days: logsCount } as any).eq('id', user.id).catch(() => {});
+      }
+    }
+    loadTier();
+  }, [user?.id, realDays.length]);
+
   // uploadPhoto imported from @/lib/uploadPhoto — server-side, bypasses RLS
 
   // Adjust to fit — uploads directly, photo is displayed with object-fit:cover
@@ -1503,9 +1532,11 @@ export default function ProfilePage() {
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
             >
+              <TierFrame tier={userTier} size={150}>
               {profileImg
-                ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,border:`5px solid ${C.blue}`,boxShadow:"0 8px 24px rgba(22,163,74,0.25)",display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`5px solid ${C.white}`,boxShadow:"0 8px 24px rgba(22,163,74,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:C.white}}>{profile.name[0]}</div>}
+                ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+              </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
                 <label style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1540,9 +1571,27 @@ export default function ProfilePage() {
             </div>
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
-              <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:4,flexWrap:"wrap"}}>
+                <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>
+                <TierBadgeChip tier={userTier} />
+              </div>
               {profile.city && (
                 <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>
+              )}
+              {/* Tier progress bar */}
+              {userTier !== "untouchable" && tierInfo.nextTier && (
+                <div style={{marginTop:10,padding:"8px 14px",background:"rgba(0,0,0,0.3)",borderRadius:12,border:"1px solid rgba(255,255,255,0.06)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                    <span style={{fontSize:10,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.5}}>Tier Progress</span>
+                    <span style={{fontSize:10,fontWeight:700,color:C.sub}}>{tierInfo.nextDescription}</span>
+                  </div>
+                  <div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:2,background:"#7C3AED",width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
+                  </div>
+                </div>
+              )}
+              {userTier === "untouchable" && (
+                <div style={{marginTop:8,fontSize:11,color:"#E879F9",fontWeight:700,letterSpacing:0.5}}>Untouchable — MAX TIER</div>
               )}
               {(user?.profile as any)?.account_type === 'business' && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
