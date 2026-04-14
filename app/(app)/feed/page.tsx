@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import FollowButton from "@/components/FollowButton";
 import ActivityComments from "@/components/ActivityComments";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
-import { computeTier } from "@/lib/tiers";
+import { computeTier, TIER_COLORS } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
 
 const C = {
@@ -523,7 +523,13 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         </div>
       )}
 
-      <div style={{ background:C.white, borderRadius:20, border:`2px solid ${C.greenMid}`, boxShadow:"0 4px 24px rgba(124,58,237,0.10)", marginBottom:24, overflow:"hidden" }}>
+      {/* Tier skin: border + glow based on user's tier */}
+      <div style={{
+        background: C.white,
+        border: `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : C.greenMid}`,
+        boxShadow: post.tier && post.tier !== "default" ? `0 4px 24px ${TIER_COLORS[post.tier as Tier]?.glow}` : "0 4px 24px rgba(124,58,237,0.10)",
+        borderRadius: 20, marginBottom: 24, overflow: "hidden" as const,
+      }}>
 
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
@@ -541,6 +547,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
               <span style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</span>
               <TierBadgeChip tier={post.tier || "default"} small />
             </div>
+            <TierTitle tier={post.tier || "default"} />
             <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
           </div>
           <div style={{ width:50,height:50,borderRadius:13,background:`linear-gradient(135deg,${C.gold},#FFD700)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(245,166,35,0.3)" }}>
@@ -856,6 +863,7 @@ export default function FeedPage() {
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  const [viewingStory, setViewingStory] = useState<typeof INITIAL_STORIES[0] | null>(null);
   // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -1232,6 +1240,34 @@ export default function FeedPage() {
               <span style={{position:"absolute",top:2,right:2,minWidth:14,height:14,borderRadius:7,background:"#FF6B6B",fontSize:8,fontWeight:900,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{unreadCount > 9 ? "9+" : unreadCount}</span>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* ── Story Viewer overlay ── */}
+      {viewingStory && <StoryViewer story={viewingStory} onClose={() => setViewingStory(null)} />}
+
+      {/* ── Stories Row (visible on all views) ── */}
+      <div style={{ padding:"12px 0 0", borderBottom:`1px solid ${C.greenMid}`, overflowX:"auto" }}>
+        <div style={{ display:"flex", gap:16, padding:"4px 24px 14px", minWidth:"max-content" }}>
+          {INITIAL_STORIES.map(story => {
+            const tier: Tier = "default"; // stories use default tier frame (users could earn tiers shown here in future)
+            return (
+              <button
+                key={story.id}
+                onClick={() => !story.isYou && setViewingStory(story)}
+                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0 }}
+              >
+                <TierFrame tier={tier} size={60}>
+                  <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${story.hasNew ? C.blue : "#2D2D2D"}, ${story.hasNew ? "#4ADE80" : "#1A1A1A"})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:900, color:"#fff" }}>
+                    {story.isYou ? "＋" : story.username[0].toUpperCase()}
+                  </div>
+                </TierFrame>
+                <span style={{ fontSize:11, fontWeight:600, color: story.hasNew ? C.text : C.sub, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {story.isYou ? "You" : story.username}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

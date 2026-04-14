@@ -1639,6 +1639,7 @@ export default function ProfilePage() {
             </div>
             <div style={{textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
+              <TierTitle tier={userTier} />
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:4,flexWrap:"wrap"}}>
                 <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>
                 <TierBadgeChip tier={userTier} />
