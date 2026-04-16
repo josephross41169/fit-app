@@ -281,7 +281,7 @@ function RivalsTab() {
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "Record", value: "3-2", color: "#10B981" },
+          { label: "Record", value: "3-2", color: "#7C3AED" },
           { label: "Streak", value: "8🔥", color: "#F5A623" },
           { label: "Win Rate", value: "60%", color: "#7C3AED" },
         ].map((stat) => (
@@ -303,7 +303,7 @@ function RivalsTab() {
       {[
         { emoji: "💪", text: "Marcus logged Leg Day — 14,800 lbs", time: "2h ago", color: "#EF4444" },
         { emoji: "🏆", text: "Marcus hit a PR on Squat — 315 lbs", time: "5h ago", color: "#EF4444" },
-        { emoji: "😴", text: "Marcus hasn't logged in 2 days — you're ahead", time: "2d ago", color: "#10B981" },
+        { emoji: "😴", text: "Marcus hasn't logged in 2 days — you're ahead", time: "2d ago", color: "#7C3AED" },
       ].map((item, i) => (
         <div key={i} style={{
           background: "#1A1A1A", borderRadius: 12,
@@ -341,9 +341,9 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Yoga":         "#52C97A",
   "HIIT":         "#EF4444",
   "Bodybuilding": "#F5A623",
-  "Nutrition":    "#10B981",
+  "Nutrition":    "#7C3AED",
   "Wellness":     "#4ADE80",
-  "Calisthenics": "#06B6D4",
+  "Calisthenics": "#7C3AED",
   "General":      "#7C3AED",
 };
 

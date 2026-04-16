@@ -831,7 +831,7 @@ function NewMembersPanel({ members, currentUser }: { members: any[]; currentUser
                   {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#7C3AED", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
                 </div>
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
-                <div style={{ fontSize:10, color:"#10B981", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
+                <div style={{ fontSize:10, color:"#7C3AED", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
               </div>
               <FollowButton targetUserId={member.id} size="sm" />
             </div>

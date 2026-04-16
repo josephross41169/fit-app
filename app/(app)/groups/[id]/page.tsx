@@ -11,7 +11,7 @@ const C = {
 
 const CATEGORY_COLORS: Record<string,string> = {
   "Running":"#16A34A","Strength":"#16A34A","Yoga":"#52C97A","HIIT":"#EF4444",
-  "Bodybuilding":"#F5A623","Nutrition":"#10B981","Wellness":"#22C55E","Calisthenics":"#06B6D4",
+  "Bodybuilding":"#F5A623","Nutrition":"#7C3AED","Wellness":"#22C55E","Calisthenics":"#7C3AED",
   "General":"#16A34A",
 };
 
@@ -241,10 +241,10 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
 }
 
 const DIFFICULTY_COLORS: Record<string,string> = {
-  "Beginner":"#10B981", "Medium":"#16A34A", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#16A34A",
+  "Beginner":"#7C3AED", "Medium":"#16A34A", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#16A34A",
 };
 const NOTE_CATEGORY_COLORS: Record<string,string> = {
-  "Workout":"#16A34A", "Recipe":"#10B981", "Mindset":"#16A34A", "General":"#F5A623", "Tip":"#06B6D4",
+  "Workout":"#16A34A", "Recipe":"#7C3AED", "Mindset":"#16A34A", "General":"#F5A623", "Tip":"#7C3AED",
 };
 const EMOJI_OPTIONS = ["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","📅","🎯"];
 
@@ -355,7 +355,7 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                   height: "100%",
                   width: `${progressPct}%`,
                   background: progressPct >= 100
-                    ? "linear-gradient(90deg, #10B981, #34D399)"
+                    ? "linear-gradient(90deg, #7C3AED, #34D399)"
                     : progressPct >= 60
                     ? "linear-gradient(90deg, #7C3AED, #9D5CF0)"
                     : "linear-gradient(90deg, #EF4444, #F87171)",
@@ -416,7 +416,7 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                     background: `linear-gradient(135deg, #7C3AED, #9D5CF0)`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0,
-                    border: member.today ? "2px solid #10B981" : "2px solid transparent",
+                    border: member.today ? "2px solid #7C3AED" : "2px solid transparent",
                     position: "relative",
                   }}>
                     {member.avatar}
@@ -424,8 +424,8 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                       <div style={{
                         position: "absolute", bottom: -2, right: -2,
                         width: 12, height: 12, borderRadius: "50%",
-                        background: "#10B981", border: "2px solid #1A1230",
-                        boxShadow: "0 0 6px #10B981",
+                        background: "#7C3AED", border: "2px solid #1A1230",
+                        boxShadow: "0 0 6px #7C3AED",
                       }} />
                     )}
                   </div>

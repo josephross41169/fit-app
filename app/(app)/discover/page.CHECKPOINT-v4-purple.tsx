@@ -227,7 +227,7 @@ function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0
       <div style={{ flex:1,minWidth:0 }}>
         <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.name}</div>
         <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.specialty}</div>
-        <div style={{ fontSize:10,color:"#10B981",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
+        <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
       </div>
       <button onClick={() => setFollowing(f=>!f)} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
         {following ? "Following" : "+ Follow"}
@@ -250,7 +250,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
         <div style={{ fontSize:10,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.specialty}</div>
         <div style={{ fontSize:10,color:C.darkSub,marginTop:2 }}>
           <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers ·
-          <span style={{ color:"#10B981",fontWeight:700 }}> {account.mutual} mutual</span>
+          <span style={{ color:"#7C3AED",fontWeight:700 }}> {account.mutual} mutual</span>
         </div>
       </div>
       <button onClick={() => setFollowing(f=>!f)} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>

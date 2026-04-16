@@ -164,9 +164,9 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Yoga":         "#52C97A",
   "HIIT":         "#EF4444",
   "Bodybuilding": "#F5A623",
-  "Nutrition":    "#10B981",
+  "Nutrition":    "#7C3AED",
   "Wellness":     "#4ADE80",
-  "Calisthenics": "#06B6D4",
+  "Calisthenics": "#7C3AED",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

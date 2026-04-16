@@ -102,7 +102,7 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
         <div style={{
           position: "absolute", top: -40, right: -40,
           width: 160, height: 160, borderRadius: "50%",
-          background: imWinning ? "#10B98108" : tied ? "#7C3AED08" : "#EF444408",
+          background: imWinning ? "#7C3AED08" : tied ? "#7C3AED08" : "#EF444408",
           pointerEvents: "none",
         }} />
 
@@ -268,10 +268,10 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           display: "flex", gap: 10, marginBottom: 16,
         }}>
           <div style={{
-            flex: 1, background: "#0A1F14", border: "1px solid #10B98133",
+            flex: 1, background: "#0A1F14", border: "1px solid #7C3AED33",
             borderRadius: 12, padding: "10px", textAlign: "center",
           }}>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#10B981" }}>{rival.record.wins}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#7C3AED" }}>{rival.record.wins}</div>
             <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700 }}>WINS</div>
           </div>
           <div style={{
@@ -299,11 +299,11 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 7 }}>
             <div style={{
               width: 10, height: 10, borderRadius: "50%",
-              background: rival.myLoggedToday ? "#10B981" : "#EF4444",
-              boxShadow: rival.myLoggedToday ? "0 0 8px #10B981" : "0 0 8px #EF4444",
+              background: rival.myLoggedToday ? "#7C3AED" : "#EF4444",
+              boxShadow: rival.myLoggedToday ? "0 0 8px #7C3AED" : "0 0 8px #EF4444",
             }} />
             <span style={{ fontSize: 12, color: "#9CA3AF" }}>
-              You — <strong style={{ color: rival.myLoggedToday ? "#10B981" : "#EF4444" }}>
+              You — <strong style={{ color: rival.myLoggedToday ? "#7C3AED" : "#EF4444" }}>
                 {rival.myLoggedToday ? "Logged today ✓" : "Not yet"}
               </strong>
             </span>
@@ -311,11 +311,11 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 7 }}>
             <div style={{
               width: 10, height: 10, borderRadius: "50%",
-              background: rival.loggedToday ? "#EF4444" : "#10B981",
-              boxShadow: rival.loggedToday ? "0 0 8px #EF4444" : "0 0 8px #10B981",
+              background: rival.loggedToday ? "#EF4444" : "#7C3AED",
+              boxShadow: rival.loggedToday ? "0 0 8px #EF4444" : "0 0 8px #7C3AED",
             }} />
             <span style={{ fontSize: 12, color: "#9CA3AF" }}>
-              Them — <strong style={{ color: rival.loggedToday ? "#EF4444" : "#10B981" }}>
+              Them — <strong style={{ color: rival.loggedToday ? "#EF4444" : "#7C3AED" }}>
                 {rival.loggedToday ? "Logged today" : "Not yet"}
               </strong>
             </span>

@@ -43,10 +43,10 @@ const TIERS: {
     emoji: "🌱",
     name: "Beginner",
     desc: "Just getting started — building the habit",
-    color: "#10B981",
+    color: "#7C3AED",
     bg: "linear-gradient(135deg, #064E3B, #065F46)",
-    border: "#10B98155",
-    glow: "#10B98133",
+    border: "#7C3AED55",
+    glow: "#7C3AED33",
   },
   {
     id: "intermediate",
@@ -157,7 +157,7 @@ const BADGES = [
   { id: "running_it",  emoji: "👊", name: "Running It",   desc: "Won 5 total weeks",              earned: false, gradient: "linear-gradient(135deg,#7C3AED,#A855F7)", border: "#7C3AED", glow: "#7C3AED44", label: "ELECTRIC" },
   { id: "dominant",    emoji: "😤", name: "Dominant",     desc: "Won 4 straight weeks",           earned: false, gradient: "linear-gradient(135deg,#B91C1C,#EF4444)", border: "#B91C1C", glow: "#B91C1C44", label: "CRIMSON"  },
   { id: "untouchable", emoji: "💀", name: "Untouchable",  desc: "8-week undefeated streak",       earned: false, gradient: "linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)", border: "#4338CA", glow: "#4338CA44", label: "COSMIC" },
-  { id: "the_goat",    emoji: "🏆", name: "The GOAT",     desc: "Legendary status — 20 total wins", earned: false, gradient: "linear-gradient(135deg,#FFD700,#FF6B6B,#A855F7,#06B6D4)", border: "#FFD700", glow: "#FFD70055", label: "GALAXY" },
+  { id: "the_goat",    emoji: "🏆", name: "The GOAT",     desc: "Legendary status — 20 total wins", earned: false, gradient: "linear-gradient(135deg,#FFD700,#FF6B6B,#A855F7,#7C3AED)", border: "#FFD700", glow: "#FFD70055", label: "GALAXY" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -544,8 +544,8 @@ function HeadToHeadPanel({ rival, category, tier }: { rival: MockRival; category
               background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 20, fontWeight: 900, color: "#fff",
-              border: iAhead ? "3px solid #10B981" : "3px solid #7C3AED44",
-              boxShadow: iAhead ? "0 0 20px #10B98155" : "none",
+              border: iAhead ? "3px solid #7C3AED" : "3px solid #7C3AED44",
+              boxShadow: iAhead ? "0 0 20px #7C3AED55" : "none",
             }}>
               {getInitials(ME.name)}
             </div>
@@ -638,7 +638,7 @@ function HeadToHeadPanel({ rival, category, tier }: { rival: MockRival; category
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 28, color: "#10B981" }}>{ME.record.wins}</div>
+              <div style={{ fontWeight: 900, fontSize: 28, color: "#7C3AED" }}>{ME.record.wins}</div>
               <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>WINS</div>
             </div>
             <div style={{ fontWeight: 900, fontSize: 18, color: "#9CA3AF" }}>—</div>
@@ -664,17 +664,17 @@ function HeadToHeadPanel({ rival, category, tier }: { rival: MockRival; category
           ].map((s) => (
             <div key={s.sublabel} style={{
               flex: 1, background: "#0D0D0D", borderRadius: 12, padding: "12px 14px",
-              border: `1px solid ${(s.logged && s.isThreat) ? "#EF444433" : (s.logged) ? "#10B98144" : "#EF444433"}`,
+              border: `1px solid ${(s.logged && s.isThreat) ? "#EF444433" : (s.logged) ? "#7C3AED44" : "#EF444433"}`,
               display: "flex", alignItems: "center", gap: 10,
             }}>
               <div style={{
                 width: 12, height: 12, borderRadius: "50%", flexShrink: 0,
-                background: (s.logged && s.isThreat) ? "#EF4444" : s.logged ? "#10B981" : "#EF4444",
-                boxShadow: (s.logged && s.isThreat) ? "0 0 10px #EF4444" : s.logged ? "0 0 10px #10B981" : "0 0 10px #EF4444",
+                background: (s.logged && s.isThreat) ? "#EF4444" : s.logged ? "#7C3AED" : "#EF4444",
+                boxShadow: (s.logged && s.isThreat) ? "0 0 10px #EF4444" : s.logged ? "0 0 10px #7C3AED" : "0 0 10px #EF4444",
                 animation: "statusPulse 1.5s ease-in-out infinite",
               }} />
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: (s.logged && s.isThreat) ? "#EF4444" : s.logged ? "#10B981" : "#EF4444" }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: (s.logged && s.isThreat) ? "#EF4444" : s.logged ? "#7C3AED" : "#EF4444" }}>
                   {s.label}
                 </div>
                 <div style={{ fontSize: 10, color: "#9CA3AF" }}>{s.sublabel}</div>
@@ -799,7 +799,7 @@ function ChatPanel({ rivalFirstName }: { rivalFirstName: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function NotificationsPanel() {
-  const typeColors: Record<string, string> = { warning: "#F5A623", danger: "#EF4444", success: "#10B981" };
+  const typeColors: Record<string, string> = { warning: "#F5A623", danger: "#EF4444", success: "#7C3AED" };
   return (
     <div>
       <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
