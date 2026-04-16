@@ -254,7 +254,7 @@ function FoodSearchInput({
 }
 
 const MOOD_EMOJIS = ["??", "??", "??", "??", "??"];
-const WELLNESS_TYPES = ["Yoga", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Walk", "Sleep", "Other"];
+const WELLNESS_TYPES = ["Sleep", "Yoga", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Walk", "Other"];
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
 
@@ -318,6 +318,14 @@ export default function PostPage() {
   const [wellnessNotes, setWellnessNotes] = useState("");
   const [mood, setMood] = useState("");
   const [wellnessPhotoUrl, setWellnessPhotoUrl] = useState<string | null>(null);
+  // Extended wellness tracking fields
+  const [sleepHours, setSleepHours] = useState("");
+  const [sleepQuality, setSleepQuality] = useState<number | null>(null);
+  const [sleepBedtime, setSleepBedtime] = useState("");
+  const [sleepWakeTime, setSleepWakeTime] = useState("");
+  const [steps, setSteps] = useState("");
+  const [hrv, setHrv] = useState("");
+  const [restingHR, setRestingHR] = useState("");
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
@@ -689,6 +697,17 @@ export default function PostPage() {
         if (wellnessPhotoUrl) {
           wellnessUploadedUrl = await uploadPhoto(wellnessPhotoUrl, 'activity', `${user.id}/wellness-${Date.now()}.jpg`);
         }
+        // Build extended wellness_data object
+        const wellnessData: Record<string, any> = {};
+        if (wellnessType === 'Sleep') {
+          if (sleepHours) wellnessData.sleep_hours = parseFloat(sleepHours);
+          if (sleepQuality !== null) wellnessData.sleep_quality = sleepQuality;
+          if (sleepBedtime) wellnessData.sleep_bedtime = sleepBedtime;
+          if (sleepWakeTime) wellnessData.sleep_wake_time = sleepWakeTime;
+        }
+        if (steps) wellnessData.steps = parseInt(steps);
+        if (hrv) wellnessData.hrv = parseInt(hrv);
+        if (restingHR) wellnessData.resting_hr = parseInt(restingHR);
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'wellness',
@@ -697,6 +716,7 @@ export default function PostPage() {
           mood: mood || null,
           notes: wellnessNotes || null,
           photo_url: wellnessUploadedUrl || null,
+          wellness_data: Object.keys(wellnessData).length > 0 ? wellnessData : null,
         });
         error = res.error;
       }
@@ -1742,6 +1762,63 @@ export default function PostPage() {
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
                   <input style={iStyle} placeholder="e.g. 20 min" value={wellnessDuration} onChange={e => setWellnessDuration(e.target.value)} />
                 </div>
+
+                {/* Sleep-specific fields */}
+                {wellnessType === 'Sleep' && (
+                  <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #2D1B69', marginBottom: 12 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: '#A78BFA', marginBottom: 12 }}>😴 Sleep Details</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Hours Slept</label>
+                        <input style={iStyle} type="text" inputMode="decimal" placeholder="e.g. 7.5" value={sleepHours} onChange={e => setSleepHours(e.target.value)} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sleep Quality (1-5)</label>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          {[1, 2, 3, 4, 5].map(q => (
+                            <button key={q} onClick={() => setSleepQuality(sleepQuality === q ? null : q)} style={{
+                              flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+                              background: sleepQuality === q ? '#7C3AED' : '#1A1228',
+                              color: sleepQuality === q ? '#fff' : '#9CA3AF',
+                              fontWeight: 800, fontSize: 13, transition: 'all 0.15s',
+                            }}>{q}</button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Bedtime</label>
+                        <input style={iStyle} type="time" value={sleepBedtime} onChange={e => setSleepBedtime(e.target.value)} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Wake Time</label>
+                        <input style={iStyle} type="time" value={sleepWakeTime} onChange={e => setSleepWakeTime(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Steps, HRV, Resting HR */}
+                <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #2D1B69', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#A78BFA', marginBottom: 12 }}>📊 Body Stats (optional)</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Steps</label>
+                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 8500" value={steps} onChange={e => setSteps(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>HRV (ms)</label>
+                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 62" value={hrv} onChange={e => setHrv(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Resting HR</label>
+                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 58" value={restingHR} onChange={e => setRestingHR(e.target.value)} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Wearable sync (Apple Health, WHOOP) coming in v2</div>
+                </div>
+
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</label>
                   <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How was it? How do you feel?" value={wellnessNotes} onChange={e => setWellnessNotes(e.target.value)} />
