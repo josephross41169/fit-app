@@ -7,10 +7,10 @@ import { supabase } from "@/lib/supabase";
 const G = "#7C3AED";
 const GL = "#F3F0FF";
 const GM = "#DDD6FE";
-const DARK_BG = "#1a1620";
-const DARK_CARD = "#2d1f3f";
-const DARK_BORDER = "#3f2d52";
-const DARK_INPUT = "#3d2d50";
+const DARK_BG = "#0D0D0D";
+const DARK_CARD = "#1A1A1A";
+const DARK_BORDER = "#2A2A2A";
+const DARK_INPUT = "#1A1A1A";
 
 export default function SignupPage() {
   const router = useRouter();
