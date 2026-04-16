@@ -9,10 +9,10 @@ import { computeTier, TIER_COLORS } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
+  blue:"#7C3AED", greenLight:"#F3F0FF", greenMid:"#DDD6FE",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
-  green:"#52C97A",
+  green:"#7C3AED",
   // Dark sidebar palette
   dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
 };
