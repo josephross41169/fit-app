@@ -852,12 +852,46 @@ function NewMembersPanel({ members, currentUser }: { members: any[]; currentUser
   );
 }
 
+// ── Activity Type Filter Chips ────────────────────────────────────────────────
+type ActivityFilter = "all" | "workout" | "nutrition" | "wellness";
+
+function ActivityFilterChips({ value, onChange }: { value: ActivityFilter; onChange: (v: ActivityFilter) => void }) {
+  const chips: { key: ActivityFilter; label: string; emoji: string }[] = [
+    { key: "all", label: "All", emoji: "⚡" },
+    { key: "workout", label: "Workouts", emoji: "🏋️" },
+    { key: "nutrition", label: "Nutrition", emoji: "🥗" },
+    { key: "wellness", label: "Wellness", emoji: "🌿" },
+  ];
+  return (
+    <div style={{ display:"flex", gap:6, flexWrap:"wrap", padding:"0 12px 12px" }}>
+      {chips.map(c => (
+        <button key={c.key} onClick={() => onChange(c.key)} style={{
+          padding:"5px 11px", borderRadius:99, border:"none", cursor:"pointer",
+          fontWeight:700, fontSize:11,
+          background: value === c.key ? "#7C3AED" : "rgba(124,58,237,0.10)",
+          color: value === c.key ? "#fff" : "#9CA3AF",
+          transition:"all 0.15s",
+        }}>
+          {c.emoji} {c.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Feed Page ────────────────────────────────────────────────────────────
 export default function FeedPage() {
   const { user } = useAuth();
   const [posts, setPosts] = useState(INITIAL_POSTS);
   const [dbPosts, setDbPosts] = useState<any[]>([]);
+  const [dbPostsPage, setDbPostsPage] = useState(0);
+  const [dbPostsHasMore, setDbPostsHasMore] = useState(true);
+  const [loadingMorePosts, setLoadingMorePosts] = useState(false);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [activityLogsPage, setActivityLogsPage] = useState(0);
+  const [activityLogsHasMore, setActivityLogsHasMore] = useState(true);
+  const [loadingMoreActivity, setLoadingMoreActivity] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [userBadgeMap, setUserBadgeMap] = useState<Record<string, string[]>>({});
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
@@ -874,33 +908,42 @@ export default function FeedPage() {
   const unreadCount = notifications.filter(n => !n.read).length;
   const [newMembers, setNewMembers] = useState<any[]>([]);
 
-  useEffect(() => {
-    async function loadFeed() {
-      const { data } = await supabase
-        .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, users (id, username, full_name, avatar_url))`)
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(20);
+  const PAGE_SIZE = 10;
 
-      if (data && data.length > 0) {
-        // Check which posts the current user has liked
-        let likedPostIds: Set<string> = new Set();
-        if (user) {
-          const postIds = data.map((p: any) => p.id);
-          const { data: likeData } = await supabase
-            .from('likes')
-            .select('post_id')
-            .eq('user_id', user.id)
-            .in('post_id', postIds);
-          if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
-        }
-        setDbPosts(data.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) })));
+  async function fetchPosts(page: number, append = false) {
+    if (page === 0) setLoadingFeed(true);
+    else setLoadingMorePosts(true);
+    const { data } = await supabase
+      .from('posts')
+      .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, users (id, username, full_name, avatar_url))`)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+    if (data) {
+      let likedPostIds: Set<string> = new Set();
+      if (user && data.length > 0) {
+        const postIds = data.map((p: any) => p.id);
+        const { data: likeData } = await supabase
+          .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
+        if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
       }
-      setLoadingFeed(false);
+      const mapped = data.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+      if (append) setDbPosts(prev => [...prev, ...mapped]);
+      else setDbPosts(mapped);
+      setDbPostsHasMore(data.length === PAGE_SIZE);
+      setDbPostsPage(page);
     }
-    loadFeed();
-  }, []);
+    if (page === 0) setLoadingFeed(false);
+    else setLoadingMorePosts(false);
+  }
+
+  useEffect(() => { fetchPosts(0); }, []);
+
+  async function loadMorePosts() {
+    if (loadingMorePosts || !dbPostsHasMore) return;
+    await fetchPosts(dbPostsPage + 1, true);
+  }
 
   useEffect(() => {
     if (feedTab !== "following" || !user) return;
@@ -932,9 +975,45 @@ export default function FeedPage() {
     loadFollowingFeed();
   }, [feedTab, user]);
 
+  async function fetchActivityLogs(page: number, append = false, filter: ActivityFilter = activityFilter) {
+    if (page > 0) setLoadingMoreActivity(true);
+    let query = supabase
+      .from('activity_logs')
+      .select('*, users:user_id(id, username, full_name, avatar_url)')
+      .order('logged_at', { ascending: false })
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    if (filter !== "all") query = query.eq('log_type', filter);
+    const { data } = await query;
+    if (data) {
+      if (append) setActivityLogs(prev => [...prev, ...data]);
+      else setActivityLogs(data);
+      setActivityLogsHasMore(data.length === PAGE_SIZE);
+      setActivityLogsPage(page);
+      // badge loading
+      if (data.length > 0) {
+        const userIds = [...new Set(data.map((l: any) => l.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          const { data: badgeData } = await supabase.from('badges').select('user_id, badge_id, created_at')
+            .in('user_id', userIds).gte('created_at', sevenDaysAgo.toISOString()).eq('show_celebration', true);
+          if (badgeData) {
+            const map: Record<string, string[]> = {};
+            badgeData.forEach((b: any) => { if (!map[b.user_id]) map[b.user_id] = []; map[b.user_id].push(b.badge_id); });
+            if (append) setUserBadgeMap(prev => ({ ...prev, ...map }));
+            else setUserBadgeMap(map);
+          }
+        }
+      }
+    }
+    if (page > 0) setLoadingMoreActivity(false);
+  }
+
   // Load activity logs for sidebar
   useEffect(() => {
     async function loadActivityFeed() {
+      await fetchActivityLogs(0, false, activityFilter);
+      // legacy badge load already handled inside fetchActivityLogs
+      if (false) {
       const { data } = await supabase
         .from('activity_logs')
         .select('*, users:user_id(id, username, full_name, avatar_url)')
@@ -963,9 +1042,15 @@ export default function FeedPage() {
           }
         }
       }
+      } // end if (false)
     }
     loadActivityFeed();
   }, []);
+
+  // Re-fetch activity logs when filter changes
+  useEffect(() => {
+    fetchActivityLogs(0, false, activityFilter);
+  }, [activityFilter]);
 
   // Search users
   useEffect(() => {
@@ -1358,6 +1443,18 @@ export default function FeedPage() {
                   {displayPosts.map(post => (
                     <PostCard key={post.id} post={post} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(post.id)} />
                   ))}
+                  {/* Load More posts */}
+                  {dbPostsHasMore && dbPosts.length > 0 && (
+                    <div style={{ textAlign:"center", marginBottom:24 }}>
+                      <button
+                        onClick={loadMorePosts}
+                        disabled={loadingMorePosts}
+                        style={{ padding:"12px 32px", borderRadius:99, background:"#7C3AED", color:"#fff", border:"none", cursor:loadingMorePosts?"default":"pointer", fontWeight:800, fontSize:14, opacity:loadingMorePosts?0.6:1, transition:"opacity 0.15s" }}
+                      >
+                        {loadingMorePosts ? "Loading…" : "Load More Posts"}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </>
@@ -1366,10 +1463,11 @@ export default function FeedPage() {
 
         {/* RIGHT: Activity sidebar (desktop only) */}
         <div className="feed-sidebar feed-desktop-only" style={{ background:C.dark, borderRadius:24, padding:"20px 0" }}>
-          <div style={{ padding:"0 16px 12px", borderBottom:`1px solid ${C.darkBorder}`, marginBottom:16 }}>
+          <div style={{ padding:"0 16px 12px", borderBottom:`1px solid ${C.darkBorder}`, marginBottom:8 }}>
             <div style={{ fontWeight:900,fontSize:16,color:"#E2E8F0",marginBottom:2 }}>Activity Feed</div>
             <div style={{ fontSize:12,color:C.darkSub }}>Workouts, nutrition & wellness</div>
           </div>
+          <ActivityFilterChips value={activityFilter} onChange={f => setActivityFilter(f)} />
           <div style={{ padding:"0 12px" }}>
             {sidebarActivityPosts.length > 0
               ? sidebarActivityPosts.map((post: any) => (
@@ -1379,6 +1477,18 @@ export default function FeedPage() {
                   <SideUserBlock key={post.id} post={post} userBadges={[]} />
                 ))
             }
+            {/* Load More activity */}
+            {activityLogsHasMore && activityLogs.length > 0 && (
+              <div style={{ textAlign:"center", marginBottom:16 }}>
+                <button
+                  onClick={() => fetchActivityLogs(activityLogsPage + 1, true, activityFilter)}
+                  disabled={loadingMoreActivity}
+                  style={{ padding:"9px 24px", borderRadius:99, background:"rgba(124,58,237,0.15)", color:"#7C3AED", border:"1px solid rgba(124,58,237,0.3)", cursor:loadingMoreActivity?"default":"pointer", fontWeight:700, fontSize:12, opacity:loadingMoreActivity?0.6:1 }}
+                >
+                  {loadingMoreActivity ? "Loading…" : "Load More ↓"}
+                </button>
+              </div>
+            )}
             <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
               <div>
                 <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>Suggested For You</div>
