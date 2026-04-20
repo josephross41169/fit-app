@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { mockCompetitions } from "@/lib/mockData";
 
-const TYPE_EMOJI: Record<string, string> = { steps: "??", strength: "??", nutrition: "??" };
+const TYPE_EMOJI: Record<string, string> = { steps: "🚶", strength: "💪", nutrition: "🥗" };
 
 export default function CompetitionsPage() {
   const [joined, setJoined] = useState<string[]>([]);
@@ -13,14 +13,14 @@ export default function CompetitionsPage() {
     <div className="min-h-screen pb-24" style={{ background: "#FFF8F0" }}>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b px-4 pt-12 pb-4" style={{ borderColor: "#DDD6FE" }}>
-        <h1 className="text-2xl font-black" style={{ color: "#1A1A1A" }}>Competitions ??</h1>
+        <h1 className="text-2xl font-black" style={{ color: "#1A1A1A" }}>Competitions 🏆</h1>
         <p className="text-sm mt-1" style={{ color: "#6B7280" }}>Compete. Win. Level up.</p>
       </div>
 
       <div className="px-4 py-4 space-y-6">
         {/* Active */}
         <div>
-          <h2 className="text-lg font-bold mb-3" style={{ color: "#1A1A1A" }}>? Active Challenges</h2>
+          <h2 className="text-lg font-bold mb-3" style={{ color: "#1A1A1A" }}>⚡ Active Challenges</h2>
           {active.map(comp => (
             <div key={comp.id} className="bg-white rounded-3xl p-5 shadow-sm mb-3" style={{ border: "1px solid #DDD6FE" }}>
               <div className="flex items-start gap-3 mb-4">
@@ -51,7 +51,7 @@ export default function CompetitionsPage() {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-xs" style={{ color: "#6B7280" }}>?? {comp.participants.toLocaleString()} competing</span>
+                <span className="text-xs" style={{ color: "#6B7280" }}>👥 {comp.participants.toLocaleString()} competing</span>
                 <span className="text-sm font-bold" style={{ color: "#A78BFA" }}>{comp.prize}</span>
               </div>
             </div>
@@ -70,7 +70,7 @@ export default function CompetitionsPage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-sm" style={{ color: "#1A1A1A" }}>{comp.name}</h3>
                   <p className="text-xs truncate" style={{ color: "#6B7280" }}>{comp.description}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>?? {comp.participants.toLocaleString()} � {comp.daysLeft} days left</p>
+                  <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>👥 {comp.participants.toLocaleString()} - {comp.daysLeft} days left</p>
                 </div>
                 <button
                   onClick={() => setJoined(j => j.includes(comp.id) ? j.filter(x => x !== comp.id) : [...j, comp.id])}
@@ -78,7 +78,7 @@ export default function CompetitionsPage() {
                   style={joined.includes(comp.id)
                     ? { background: "#F3F0FF", color: "#7C3AED", border: "2px solid #7C3AED" }
                     : { background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "white" }}>
-                  {joined.includes(comp.id) ? "Joined ?" : "Join"}
+                  {joined.includes(comp.id) ? "Joined ✓" : "Join"}
                 </button>
               </div>
             ))}
