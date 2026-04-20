@@ -2,10 +2,10 @@ import Link from "next/link";
 
 export default function LandingPage() {
   const features = [
-    { icon: "???", title: "Log Workouts", desc: "Track every rep, set, and PR" },
-    { icon: "??", title: "Track Nutrition", desc: "Log meals and hit your macros" },
-    { icon: "??", title: "Compete", desc: "Join challenges, earn badges" },
-    { icon: "??", title: "Connect", desc: "Follow athletes, share progress" },
+    { icon: "💪", title: "Log Workouts", desc: "Track every rep, set, and PR" },
+    { icon: "🥗", title: "Track Nutrition", desc: "Log meals and hit your macros" },
+    { icon: "🏆", title: "Compete", desc: "Join challenges, earn badges" },
+    { icon: "🤝", title: "Connect", desc: "Follow athletes, share progress" },
   ];
 
   return (
@@ -29,7 +29,7 @@ export default function LandingPage() {
           <div className="text-9xl font-black text-white tracking-tighter leading-none drop-shadow-lg">
             FIT
           </div>
-          <div className="text-5xl -mt-2">?</div>
+          <div className="text-5xl -mt-2">💪</div>
         </div>
 
         {/* Tagline */}

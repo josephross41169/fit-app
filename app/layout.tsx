@@ -4,7 +4,7 @@ import PWARegister from "@/components/PWARegister";
 import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "FIT ? � Track. Connect. Compete.",
+  title: "FIT 💪 - Track. Connect. Compete.",
   description: "The fitness social app built for people who show up.",
 };
 
