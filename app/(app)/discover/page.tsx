@@ -16,19 +16,19 @@ const C = {
 
 const LOCAL_POSTS = [
   { id: 1, user: "Kayla Nguyen", username: "kayla_fit_lv", avatar: "KN", time: "1h ago",
-    caption: "Morning hike at Red Rock Canyon ??? Nothing like Vegas in the early hours before the heat hits. 6 miles done!",
+    caption: "Morning hike at Red Rock Canyon 🏔️ Nothing like Vegas in the early hours before the heat hits. 6 miles done!",
     tags: ["#LasVegas","#RedRock","#HikingFit"], likes: 124,
     photo: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&q=80" },
   { id: 2, user: "Marcus Bell", username: "marcus_lvfit", avatar: "MB", time: "3h ago",
-    caption: "Orangetheory trial class this morning � absolute FIRE ?? First class free this week at the Summerlin location. Go get it!",
+    caption: "Orangetheory trial class this morning - absolute FIRE 🔥 First class free this week at the Summerlin location. Go get it!",
     tags: ["#LasVegas","#Orangetheory","#Fitness"], likes: 89,
     photo: "https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=800&q=80" },
   { id: 3, user: "Priya Sharma", username: "priya_wellness_lv", avatar: "PS", time: "5h ago",
-    caption: "Farmers market haul ?? Downtown Summerlin had the most incredible produce today. Meal prepping all week with this!",
+    caption: "Farmers market haul 🥬 Downtown Summerlin had the most incredible produce today. Meal prepping all week with this!",
     tags: ["#LasVegas","#FarmersMarket","#MealPrep"], likes: 203,
     photo: "https://images.unsplash.com/photo-1506484381205-f7945653044d?w=800&q=80" },
   { id: 4, user: "Diego Reyes", username: "diego_runs_lv", avatar: "DR", time: "7h ago",
-    caption: "5K run + brunch at Eggslut after ?? The Vegas Strip at 6am before the tourists wake up is genuinely beautiful.",
+    caption: "5K run + brunch at Eggslut after 🏃 The Vegas Strip at 6am before the tourists wake up is genuinely beautiful.",
     tags: ["#LasVegas","#5K","#RunClub"], likes: 156,
     photo: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80" },
 ];
