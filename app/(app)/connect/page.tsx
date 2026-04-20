@@ -347,8 +347,45 @@ const CATEGORY_COLORS: Record<string, string> = {
   "General":      "#7C3AED",
 };
 
+// Type definitions
+interface DbGroup {
+  id: string;
+  name: string;
+  category?: string;
+  emoji?: string;
+  location?: string;
+  member_count?: number;
+  meet_frequency?: string;
+  tags?: string[];
+  description?: string;
+  banner_url?: string;
+  is_online?: boolean;
+  is_member?: boolean;
+}
+
+interface DisplayGroup {
+  id: string;
+  name: string;
+  category: string;
+  emoji: string;
+  city: string;
+  members: number;
+  active: boolean;
+  meetFrequency: string;
+  location: string;
+  tags: string[];
+  description: string;
+  nextEvent: null;
+  recentPhoto: string;
+  is_local: boolean;
+  trending: boolean;
+  isPrivate: boolean;
+  is_member: boolean;
+  db_id: string;
+}
+
 // Normalize a DB group to display format
-function normalizeDbGroup(g: any) {
+function normalizeDbGroup(g: DbGroup): DisplayGroup {
   return {
     id: g.id,
     name: g.name,
@@ -363,7 +400,7 @@ function normalizeDbGroup(g: any) {
     description: g.description || '',
     nextEvent: null,
     recentPhoto: g.banner_url || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80',
-    is_local: !g.is_online,
+    is_local: !(g.is_online || false),
     trending: false,
     isPrivate: false,
     is_member: g.is_member || false,
@@ -374,7 +411,7 @@ function normalizeDbGroup(g: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // GROUP CARD COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-function GroupCard({ group, onJoin }: { group: any; onJoin?: (id: string) => void }) {
+function GroupCard({ group, onJoin }: { group: DisplayGroup; onJoin?: (id: string) => void }) {
   const [joined, setJoined] = useState(group.is_member || false);
   const [joining, setJoining] = useState(false);
   const router = useRouter();
@@ -490,7 +527,7 @@ function GroupCard({ group, onJoin }: { group: any; onJoin?: (id: string) => voi
 // ─────────────────────────────────────────────────────────────────────────────
 const EMOJI_OPTIONS = ["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","❤️","🧠"];
 
-function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: (group: any) => void }) {
+function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: (group: DisplayGroup) => void }) {
   const [form, setForm] = useState({
     name: '', description: '', category: 'General', emoji: '💪',
     location: '', meet_frequency: '', is_online: false,
@@ -515,8 +552,9 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
       const data = await res.json();
       if (data.error) { setError(data.error); setSubmitting(false); return; }
       onCreated(data.group);
-    } catch (err: any) {
-      setError(err.message || 'Failed to create group');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create group';
+      setError(errorMessage);
       setSubmitting(false);
     }
   }

@@ -86,10 +86,43 @@ const SUGGESTED_ACCOUNTS = [
 ];
 
 // -----------------------------------------------------------------------------
+// TYPE DEFINITIONS
+// -----------------------------------------------------------------------------
+
+interface Post {
+  id: string | number;
+  caption?: string;
+  media_url?: string;
+  photo?: string;
+  time?: string;
+  user?: string | { full_name?: string; username?: string; avatar_url?: string };
+  users?: { full_name?: string; username?: string; avatar_url?: string };
+  username?: string;
+  avatar?: string;
+  tags?: string[];
+  likes?: number;
+  likes_count?: number;
+}
+
+interface DbEvent {
+  id: string | number;
+  event_type?: string;
+  location?: string;
+  start_date?: string;
+  event_name?: string;
+}
+
+interface LocalPost extends Post {
+  user: string;
+  username: string;
+  avatar: string;
+  likes: number;
+}
+
 // COMPONENTS
 // -----------------------------------------------------------------------------
 
-function DiscoverPost({ post, liked: initLiked }: { post: any; liked: boolean }) {
+function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }) {
   const [liked, setLiked] = useState(initLiked);
   // Support both mock (post.likes) and real DB (post.likes_count)
   const [likes, setLikes] = useState(post.likes ?? post.likes_count ?? 0);
@@ -282,7 +315,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 // -----------------------------------------------------------------------------
 // LOCAL TAB
 // -----------------------------------------------------------------------------
-function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: any[]; onChangeCity: () => void; dbEvents: any[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
+function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: Post[]; onChangeCity: () => void; dbEvents: DbEvent[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
   const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
 
   // Merge real DB events with mock events � real ones first

@@ -441,7 +441,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
 }
 
 // ── Post Card (left column — media + social only) ─────────────────────────────
-function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; currentUser?: any }) {
+function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } } }) {
   const isOwner = currentUser && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username);
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
@@ -785,7 +785,16 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
 }
 
 // ── New Members Panel ─────────────────────────────────────────────────────────
-function NewMembersPanel({ members, currentUser }: { members: any[]; currentUser: any }) {
+interface Member {
+  id: string;
+  full_name?: string;
+  username?: string;
+  city?: string;
+  created_at: string;
+  avatar_url?: string;
+}
+
+function NewMembersPanel({ members, currentUser }: { members: Member[]; currentUser: { profile?: { city?: string }; id: string } }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? members : members.slice(0, 3);
   const userCity = currentUser?.profile?.city?.split(",")[0]?.trim()?.toLowerCase() || "";
