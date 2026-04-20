@@ -451,6 +451,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
   const [commentLoading, setCommentLoading] = useState(false);
+  const [brokenImage, setBrokenImage] = useState(false);
   const [replyTo, setReplyTo] = useState<{id:number|string;user:string}|null>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [m, d] = post.dateShort.split(".").map(Number);
@@ -586,7 +587,15 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
           <div style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center" }}>
-            <img src={post.photos[currentPhoto]} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(post.photos[currentPhoto])} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            {!brokenImage && (
+              <img src={post.photos[currentPhoto]} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(post.photos[currentPhoto])} onError={() => { setBrokenImage(true); }} />
+            )}
+            {brokenImage && (
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12 }}>
+                <div style={{ fontSize:60 }}>📸</div>
+                <div style={{ fontSize:14,color:"rgba(255,255,255,0.8)",fontWeight:700 }}>Photo unavailable</div>
+              </div>
+            )}
             {post.photos.length > 1 && (<>
               <div style={{ position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6 }}>
                 {post.photos.map((_,i) => (
