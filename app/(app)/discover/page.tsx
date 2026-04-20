@@ -34,55 +34,55 @@ const LOCAL_POSTS = [
 ];
 
 const LOCAL_EVENTS = [
-  { id: 1, name: "Farmers Market", venue: "Downtown Summerlin", day: "SAT", date: "29", emoji: "??", category: "Wellness", price: "Free", time: "8AM�1PM" },
-  { id: 2, name: "Degree Wellness Day Pass", venue: "Degree Wellness � Summerlin", day: "FRI", date: "28", emoji: "??", category: "Spa", price: "$35", time: "10AM�6PM" },
-  { id: 3, name: "5K Run & Brunch", venue: "The Strip � Wynn Start", day: "SUN", date: "30", emoji: "??", category: "Running", price: "$25", time: "7AM�10AM" },
-  { id: 4, name: "Orangetheory Trial Day", venue: "Orangetheory � Summerlin", day: "THU", date: "27", emoji: "??", category: "HIIT", price: "Free", time: "6AM�7PM" },
-  { id: 5, name: "Yoga in the Park", venue: "Sunset Park � Las Vegas", day: "SAT", date: "29", emoji: "??", category: "Yoga", price: "Free", time: "8AM�9:30AM" },
-  { id: 6, name: "Bodybuilding Expo", venue: "Las Vegas Convention Ctr", day: "SAT", date: "29", emoji: "???", category: "Expo", price: "$20", time: "9AM�5PM" },
+  { id: 1, name: "Farmers Market", venue: "Downtown Summerlin", day: "SAT", date: "29", emoji: "🛒", category: "Wellness", price: "Free", time: "8AM-1PM" },
+  { id: 2, name: "Degree Wellness Day Pass", venue: "Degree Wellness - Summerlin", day: "FRI", date: "28", emoji: "🧖", category: "Spa", price: "$35", time: "10AM-6PM" },
+  { id: 3, name: "5K Run & Brunch", venue: "The Strip - Wynn Start", day: "SUN", date: "30", emoji: "🏃", category: "Running", price: "$25", time: "7AM-10AM" },
+  { id: 4, name: "Orangetheory Trial Day", venue: "Orangetheory - Summerlin", day: "THU", date: "27", emoji: "🔥", category: "HIIT", price: "Free", time: "6AM-7PM" },
+  { id: 5, name: "Yoga in the Park", venue: "Sunset Park - Las Vegas", day: "SAT", date: "29", emoji: "🧘", category: "Yoga", price: "Free", time: "8AM-9:30AM" },
+  { id: 6, name: "Bodybuilding Expo", venue: "Las Vegas Convention Ctr", day: "SAT", date: "29", emoji: "💪", category: "Expo", price: "$20", time: "9AM-5PM" },
 ];
 
 const WORLD_POSTS = [
   { id: 1, user: "Chris Bumstead", username: "cbum", avatar: "CB", time: "2h ago",
-    caption: "Prep is going insane this year. I genuinely think this is the best shape I've ever been in. Classic Olympia here we come ??",
+    caption: "Prep is going insane this year. I genuinely think this is the best shape I've ever been in. Classic Olympia here we come 💪",
     tags: ["#Olympia","#ClassicPhysique","#Cbum"], likes: 48200,
     photo: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80" },
   { id: 2, user: "Courtney Black", username: "courtney_black", avatar: "CB", time: "4h ago",
-    caption: "New Gymshark collab just dropped and I am OBSESSED ?? Link in bio � these might be the best leggings I've ever worn.",
+    caption: "New Gymshark collab just dropped and I am OBSESSED 🔥 Link in bio - these might be the best leggings I've ever worn.",
     tags: ["#Gymshark","#Fitness","#GymFashion"], likes: 31500,
     photo: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&q=80" },
   { id: 3, user: "Jeff Nippard", username: "jeffnippard", avatar: "JN", time: "6h ago",
     caption: "Science-based arm training guide is LIVE on YouTube. This is the most comprehensive arm video I've ever made. Go watch it!",
     tags: ["#Science","#ArmDay","#NaturalBodybuilding"], likes: 22800,
     photo: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&q=80" },
-  { id: 4, user: "Natacha Oc�ane", username: "natacha_oceane", avatar: "NO", time: "8h ago",
-    caption: "Your body is not a before and after. Stop treating it like a project to fix and start treating it like a home to live in ??",
+  { id: 4, user: "Natacha Oceane", username: "natacha_oceane", avatar: "NO", time: "8h ago",
+    caption: "Your body is not a before and after. Stop treating it like a project to fix and start treating it like a home to live in 💚",
     tags: ["#BodyPositivity","#MindfulFitness","#Wellness"], likes: 67400,
     photo: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=800&q=80" },
 ];
 
 const TRENDING_BRANDS = [
-  { id: 1, name: "Gymshark", handle: "@gymshark", emoji: "??", category: "Apparel", posts: "2.4M", color: "#1A1A1A", followers: "7.2M" },
-  { id: 2, name: "Nike Training", handle: "@niketraining", emoji: "??", category: "Footwear & Apparel", posts: "8.1M", color: "#E5000F", followers: "31.5M" },
-  { id: 3, name: "Dior Fitness", handle: "@dior", emoji: "??", category: "Luxury Activewear", posts: "890K", color: "#C9A96E", followers: "4.1M" },
-  { id: 4, name: "Lululemon", handle: "@lululemon", emoji: "??", category: "Activewear", posts: "3.2M", color: "#BE3A34", followers: "5.8M" },
-  { id: 5, name: "Whoop", handle: "@whoop", emoji: "??", category: "Wearables", posts: "420K", color: "#00D4AA", followers: "1.3M" },
+  { id: 1, name: "Gymshark", handle: "@gymshark", emoji: "💪", category: "Apparel", posts: "2.4M", color: "#1A1A1A", followers: "7.2M" },
+  { id: 2, name: "Nike Training", handle: "@niketraining", emoji: "👟", category: "Footwear & Apparel", posts: "8.1M", color: "#E5000F", followers: "31.5M" },
+  { id: 3, name: "Dior Fitness", handle: "@dior", emoji: "👗", category: "Luxury Activewear", posts: "890K", color: "#C9A96E", followers: "4.1M" },
+  { id: 4, name: "Lululemon", handle: "@lululemon", emoji: "🧘", category: "Activewear", posts: "3.2M", color: "#BE3A34", followers: "5.8M" },
+  { id: 5, name: "Whoop", handle: "@whoop", emoji: "⌚", category: "Wearables", posts: "420K", color: "#00D4AA", followers: "1.3M" },
 ];
 
 const TRENDING_PEOPLE = [
-  { id: 1, name: "Chris Bumstead", handle: "@cbum", avatar: "CB", specialty: "Classic Physique � 4x Olympia", followers: "22.4M", trend: "+18K today" },
-  { id: 2, name: "Courtney Black", handle: "@courtney_black", avatar: "CB2", specialty: "HIIT � Gymshark Athlete", followers: "4.1M", trend: "+6.2K today" },
+  { id: 1, name: "Chris Bumstead", handle: "@cbum", avatar: "CB", specialty: "Classic Physique - 4x Olympia", followers: "22.4M", trend: "+18K today" },
+  { id: 2, name: "Courtney Black", handle: "@courtney_black", avatar: "CB2", specialty: "HIIT - Gymshark Athlete", followers: "4.1M", trend: "+6.2K today" },
   { id: 3, name: "Jeff Nippard", handle: "@jeffnippard", avatar: "JN", specialty: "Science-Based Training", followers: "8.8M", trend: "+9.1K today" },
-  { id: 4, name: "Natacha Oc�ane", handle: "@natacha_oceane", avatar: "NO", specialty: "Mindful Fitness � Wellness", followers: "3.2M", trend: "+4.8K today" },
-  { id: 5, name: "Andrew Huberman", handle: "@hubermanlab", avatar: "AH", specialty: "Neuroscience � Performance", followers: "6.7M", trend: "+12.3K today" },
+  { id: 4, name: "Natacha Oceane", handle: "@natacha_oceane", avatar: "NO", specialty: "Mindful Fitness - Wellness", followers: "3.2M", trend: "+4.8K today" },
+  { id: 5, name: "Andrew Huberman", handle: "@hubermanlab", avatar: "AH", specialty: "Neuroscience - Performance", followers: "6.7M", trend: "+12.3K today" },
 ];
 
 const SUGGESTED_ACCOUNTS = [
   { id: 1, avatar: "RS", name: "Rachel Stone", handle: "@rachel_lifts", specialty: "Olympic Weightlifting", followers: "84K", mutual: 3 },
-  { id: 2, avatar: "TM", name: "Tyler Moore", handle: "@tyler_macro", specialty: "Nutrition Coach � IFBB", followers: "142K", mutual: 5 },
-  { id: 3, avatar: "AM", name: "Aisha Mohammed", handle: "@aisha_runs", specialty: "Marathon � Trail Running", followers: "56K", mutual: 2 },
-  { id: 4, avatar: "BK", name: "Brandon Kim", handle: "@bk_calisthenics", specialty: "Calisthenics � Street Workout", followers: "218K", mutual: 7 },
-  { id: 5, avatar: "LF", name: "Luna Ferreira", handle: "@luna_wellness", specialty: "Pilates � Breathwork", followers: "93K", mutual: 4 },
+  { id: 2, avatar: "TM", name: "Tyler Moore", handle: "@tyler_macro", specialty: "Nutrition Coach - IFBB", followers: "142K", mutual: 5 },
+  { id: 3, avatar: "AM", name: "Aisha Mohammed", handle: "@aisha_runs", specialty: "Marathon - Trail Running", followers: "56K", mutual: 2 },
+  { id: 4, avatar: "BK", name: "Brandon Kim", handle: "@bk_calisthenics", specialty: "Calisthenics - Street Workout", followers: "218K", mutual: 7 },
+  { id: 5, avatar: "LF", name: "Luna Ferreira", handle: "@luna_wellness", specialty: "Pilates - Breathwork", followers: "93K", mutual: 4 },
 ];
 
 // -----------------------------------------------------------------------------
