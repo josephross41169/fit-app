@@ -585,8 +585,8 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
 
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
-          <div style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"#111",overflow:"hidden" }}>
-            <img src={post.photos[currentPhoto]} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(post.photos[currentPhoto])} />
+          <div style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center" }}>
+            <img src={post.photos[currentPhoto]} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(post.photos[currentPhoto])} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             {post.photos.length > 1 && (<>
               <div style={{ position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6 }}>
                 {post.photos.map((_,i) => (
