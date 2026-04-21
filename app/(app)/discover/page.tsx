@@ -128,7 +128,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
   const [likes, setLikes] = useState(post.likes ?? post.likes_count ?? 0);
   const router = useRouter();
 
-  // Normalize fields � handle both mock data shapes and real DB posts
+  // Normalize fields · handle both mock data shapes and real DB posts
   // DB posts: post.user = joined users row (object), post.users = same via alternate join key
   const userObj = (post.user && typeof post.user === 'object') ? post.user : (post.users || null);
   const displayName   = (typeof post.user === 'string' ? post.user : null) || userObj?.full_name || userObj?.username || "User";
@@ -151,7 +151,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
         </div>
         <div style={{ flex:1,cursor:"pointer" }} onClick={() => router.push(`/profile/${displayHandle}`)}>
           <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{displayName}</div>
-          <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} � {post.time || ""}</div>
+          <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} · {post.time || ""}</div>
         </div>
         <button style={{ padding:"6px 16px",borderRadius:20,background:C.greenLight,border:`1.5px solid ${C.blue}`,color:C.blue,fontWeight:800,fontSize:12,cursor:"pointer" }}>
           + Follow
@@ -200,7 +200,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
   );
 }
 
-// -- Local Event Card � dark detail style matching worldwide cards -------------
+// -- Local Event Card · dark detail style matching worldwide cards -------------
 function EventCard({ event }: { event: typeof LOCAL_EVENTS[0] }) {
   const [saved, setSaved] = useState(false);
   const router = useRouter();
@@ -226,7 +226,7 @@ function EventCard({ event }: { event: typeof LOCAL_EVENTS[0] }) {
         <div style={{ display:"flex",gap:8,alignItems:"center" }}>
           <span style={{ background:"rgba(124,58,237,0.2)",color:"#4ADE80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{event.category}</span>
           <span style={{ color:C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
-          <span style={{ color:C.darkSub,fontSize:10 }}>� {event.time}</span>
+          <span style={{ color:C.darkSub,fontSize:10 }}>· {event.time}</span>
         </div>
       </div>
       {/* Save button */}
@@ -279,7 +279,7 @@ function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0
       <div style={{ flex:1,minWidth:0 }}>
         <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.name}</div>
         <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.specialty}</div>
-        <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>?? {person.trend}</div>
+        <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
       </div>
       <button onClick={() => setFollowing(f=>!f)} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
         {following ? "Following" : "+ Follow"}
@@ -301,7 +301,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
         <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.name}</div>
         <div style={{ fontSize:10,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.specialty}</div>
         <div style={{ fontSize:10,color:C.darkSub,marginTop:2 }}>
-          <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers �
+          <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers ·
           <span style={{ color:"#7C3AED",fontWeight:700 }}> {account.mutual} mutual</span>
         </div>
       </div>
@@ -318,7 +318,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: Post[]; onChangeCity: () => void; dbEvents: DbEvent[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
   const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
 
-  // Merge real DB events with mock events � real ones first
+  // Merge real DB events with mock events · real ones first
   const allEvents = [
     ...dbEvents.map((e: any) => {
       const d = e.event_date ? new Date(e.event_date) : null;
@@ -326,9 +326,9 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         id: e.id,
         name: e.name,
         venue: e.location || (e.groups?.name ? `${e.groups.name}` : 'Online'),
-        day: d ? d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase() : '�',
-        date: d ? String(d.getDate()) : '�',
-        emoji: e.emoji || e.groups?.emoji || '??',
+        day: d ? d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase() : '·',
+        date: d ? String(d.getDate()) : '·',
+        emoji: e.emoji || e.groups?.emoji || '📍',
         category: e.groups?.category || 'Event',
         price: e.price || 'Free',
         time: d ? d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '',
@@ -344,7 +344,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
 
   function handleHostSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // In production this would POST to an API � for now show success
+    // In production this would POST to an API · for now show success
     setHostSubmitted(true);
     setTimeout(() => { setShowHostModal(false); setHostSubmitted(false); setHostForm({ name:'', date:'', time:'', location:'', description:'', price:'Free', contact:'' }); }, 2500);
   }
@@ -356,10 +356,10 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
       <div style={{ flex:1, minWidth:0 }}>
         {/* City banner */}
         <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
-          <div style={{ fontSize:36 }}>??</div>
+          <div style={{ fontSize:36 }}>📍</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>{userCity}</div>
-            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Showing fitness content near you � {postsToShow.length} posts this week</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Showing fitness content near you · {postsToShow.length} posts this week</div>
           </div>
           <button onClick={onChangeCity} style={{ marginLeft:"auto",background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.4)",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,padding:"7px 14px",cursor:"pointer",flexShrink:0 }}>
             Change City
@@ -375,8 +375,8 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         <div style={{ marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}` }}>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
-              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>?? Local Events This Week</div>
-              <div style={{ fontSize:11,color:C.darkSub }}>Las Vegas � Mar 27�30</div>
+              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>📅 Local Events This Week</div>
+              <div style={{ fontSize:11,color:C.darkSub }}>Las Vegas · Mar 27·30</div>
             </div>
             <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#4ADE80",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
           </div>
@@ -408,13 +408,13 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
           <div style={{ background:"#1A1D2E",borderRadius:24,border:"1px solid #2A2D3E",width:"100%",maxWidth:480,padding:28,maxHeight:"90vh",overflowY:"auto" }} onClick={e => e.stopPropagation()}>
             {hostSubmitted ? (
               <div style={{ textAlign:"center",padding:"32px 0" }}>
-                <div style={{ fontSize:56,marginBottom:12 }}>??</div>
+                <div style={{ fontSize:56,marginBottom:12 }}>🎉</div>
                 <div style={{ fontWeight:900,fontSize:20,color:"#7C3AED",marginBottom:8 }}>Event Submitted!</div>
                 <div style={{ fontSize:14,color:"#8892A4" }}>We'll review and post your event to the local feed.</div>
               </div>
             ) : (
               <>
-                <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:20 }}>?? Host a Local Event</div>
+                <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:20 }}>🎉 Host a Local Event</div>
                 <form onSubmit={handleHostSubmit}>
                   {[
                     { label:"Event Name *", key:"name", placeholder:"e.g. Saturday Morning 5K" },
@@ -448,7 +448,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
                   <div style={{ display:"flex",gap:10 }}>
                     <button type="button" onClick={() => setShowHostModal(false)} style={{ flex:1,padding:"11px",borderRadius:10,border:"1px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer" }}>Cancel</button>
                     <button type="submit" disabled={!hostForm.name||!hostForm.location||!hostForm.date} style={{ flex:2,padding:"11px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",opacity:(!hostForm.name||!hostForm.location||!hostForm.date)?0.5:1 }}>
-                      Submit Event ??
+                      Submit Event 🚀
                     </button>
                   </div>
                 </form>
@@ -472,7 +472,7 @@ function WorldTab() {
       <div style={{ flex:1, minWidth:0 }}>
         {/* Trending banner */}
         <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
-          <div style={{ fontSize:36 }}>??</div>
+          <div style={{ fontSize:36 }}>🌍</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Trending Worldwide</div>
             <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Top fitness content from around the globe right now</div>
@@ -489,7 +489,7 @@ function WorldTab() {
         <div style={{ marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}` }}>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
-              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>?? Trending Brands</div>
+              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>🔥 Trending Brands</div>
               <div style={{ fontSize:11,color:C.darkSub }}>Top 5 this week</div>
             </div>
             <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
@@ -513,7 +513,7 @@ function WorldTab() {
         <div style={{ margin:"20px 0 16px",paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}` }}>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
-              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>?? Suggested For You</div>
+              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>💡 Suggested For You</div>
               <div style={{ fontSize:11,color:C.darkSub }}>Based on your interests</div>
             </div>
             <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
@@ -609,7 +609,7 @@ export default function DiscoverPage() {
         <div style={{ maxWidth:1200,margin:"0 auto",padding:"14px 24px 0",display:"flex",alignItems:"center",gap:16 }}>
           {/* Title */}
           <div style={{ display:"flex",alignItems:"center",gap:8,marginRight:8 }}>
-            <span style={{ fontSize:20 }}>??</span>
+            <span style={{ fontSize:20 }}>🔍</span>
             <span style={{ fontWeight:900,fontSize:20,color:C.text }}>Discovery</span>
           </div>
 
@@ -626,7 +626,7 @@ export default function DiscoverPage() {
                 style={{ background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1 }}
               />
               {searchQuery && (
-                <button onClick={()=>setSearchQuery("")} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>�</button>
+                <button onClick={()=>setSearchQuery("")} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>·</button>
               )}
             </div>
             {/* Search results dropdown */}
@@ -674,7 +674,7 @@ export default function DiscoverPage() {
               alignItems:"center",
               gap:8,
             }}>
-              {t === "local" ? "?? Local" : "?? Worldwide"}
+              {t === "local" ? "📍 Local" : "🌍 Worldwide"}
             </button>
           ))}
         </div>
@@ -689,7 +689,7 @@ export default function DiscoverPage() {
           onClick={() => setShowChangeCityOverlay(false)}>
           <div style={{ background:"#1A2E1E",borderRadius:20,padding:28,width:"100%",maxWidth:380,border:"2px solid #2A4A30" }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:16 }}>?? Change City</div>
+            <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:16 }}>📍 Change City</div>
             <input
               value={newCityInput}
               onChange={e => setNewCityInput(e.target.value)}
