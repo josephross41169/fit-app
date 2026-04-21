@@ -61,11 +61,8 @@ interface WorkoutProgressGraphsProps {
 }
 
 export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraphsProps) {
-  const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"1m" | "3m" | "6m" | "all">("3m");
   const [activeGraph, setActiveGraph] = useState<"lifting" | "cardio">("lifting");
-  const [showAllExercises, setShowAllExercises] = useState(false);
-  const EXERCISES_VISIBLE = 5;
 
   // Time range filter
   const now = new Date();
@@ -75,17 +72,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   else if (timeRange === "6m") cutoff.setMonth(now.getMonth() - 6);
   else cutoff.setFullYear(2000);
 
-  // Deduplicate workouts by id to prevent double-counting same day's workout
-  const uniqueWorkoutMap = new Map<string, any>();
-  workouts.forEach((w: any) => {
-    const key = w.id || w.created_at || w._id;
-    if (key && !uniqueWorkoutMap.has(key)) {
-      uniqueWorkoutMap.set(key, w);
-    }
-  });
-  const uniqueWorkouts = Array.from(uniqueWorkoutMap.values());
-
-  const filteredWorkouts = uniqueWorkouts.filter((w: any) => {
+  const filteredWorkouts = workouts.filter((w: any) => {
     const d = parseId(w.id || w.created_at || "");
     return d ? d >= cutoff : true;
   });
@@ -132,8 +119,6 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   const allExercises = Array.from(exerciseMap.values());
   const liftingExercises = allExercises.filter(e => !e.isCardio);
   const cardioExercises = allExercises.filter(e => e.isCardio);
-  const activeExercises = activeGraph === "lifting" ? liftingExercises : cardioExercises;
-  const visibleExercises = showAllExercises ? activeExercises : activeExercises.slice(0, EXERCISES_VISIBLE);
 
   const totalWorkouts = filteredWorkouts.length;
   const totalVolume = liftingExercises.reduce((s, ex) => s + ex.totalVolume, 0);
@@ -322,131 +307,6 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         )}
       </>)}
 
-      {/* ── Exercise list ──────────────────────────────────────────────── */}
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-          {activeGraph === "lifting" ? "💪" : "🏃"} {activeGraph === "lifting" ? "Exercises" : "Activities"} ({activeExercises.length})
-        </div>
-
-        {activeExercises.length === 0 && (
-          <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13 }}>
-            {activeGraph === "lifting"
-              ? "Log workouts with exercises to see progress here 📈"
-              : "Log cardio sessions to see progress here 🏃"}
-          </div>
-        )}
-
-        {visibleExercises.map((ex) => (
-          <div key={ex.name} style={{ marginBottom: 8 }}>
-            {expandedExercise !== ex.name ? (
-              /* ── Collapsed row ── */
-              <button onClick={() => setExpandedExercise(ex.name)} style={{
-                width: "100%", background: C.purpleDark, border: `1px solid ${C.purpleBorder}`,
-                borderRadius: 10, padding: "11px 14px", cursor: "pointer",
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                textAlign: "left",
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ex.name}</div>
-                  <div style={{ fontSize: 11, color: C.sub }}>
-                    {ex.isCardio ? (
-                      <>Best: <span style={{ color: C.cyan }}>{ex.bestWeight > 0 ? `${ex.bestWeight} mi` : "—"}</span>
-                      {" · "}{ex.history.length} session{ex.history.length !== 1 ? "s" : ""}</>
-                    ) : (
-                      <>Best: <span style={{ color: C.gold }}>{ex.bestWeight > 0 ? `${ex.bestWeight} lbs` : "—"}</span>
-                      {" · "}Last: <span style={{ color: C.purple }}>{ex.lastWeight > 0 ? `${ex.lastWeight} lbs` : "—"}</span>
-                      {" · "}{ex.history.length} session{ex.history.length !== 1 ? "s" : ""}</>
-                    )}
-                  </div>
-                </div>
-                <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{ width: 15, height: 15, flexShrink: 0, marginLeft: 8 }}>
-                  <path d="M6 9l6 6 6-6"/>
-                </svg>
-              </button>
-            ) : (
-              /* ── Expanded row ── */
-              <div style={{ background: C.purpleDark, border: `1px solid ${C.purple}`, borderRadius: 10, overflow: "hidden" }}>
-                <button onClick={() => setExpandedExercise(null)} style={{
-                  width: "100%", background: "transparent", border: "none", cursor: "pointer",
-                  padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
-                }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 3 }}>{ex.name}</div>
-                    <div style={{ fontSize: 11, color: C.sub }}>
-                      {ex.isCardio ? (
-                        <>Best: <span style={{ color: C.cyan, fontWeight: 700 }}>{ex.bestWeight > 0 ? `${ex.bestWeight} mi` : "—"}</span></>
-                      ) : (
-                        <>Best: <span style={{ color: C.gold, fontWeight: 700 }}>{ex.bestWeight > 0 ? `${ex.bestWeight} lbs` : "—"}</span>
-                        {" · "}Last: <span style={{ color: C.purple, fontWeight: 700 }}>{ex.lastWeight > 0 ? `${ex.lastWeight} lbs` : "—"}</span></>
-                      )}
-                    </div>
-                  </div>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{ width: 15, height: 15, transform: "rotate(180deg)", flexShrink: 0 }}>
-                    <path d="M6 9l6 6 6-6"/>
-                  </svg>
-                </button>
-
-                <div style={{ padding: "0 14px 14px" }}>
-                  {ex.history.length > 1 ? (
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>
-                        {ex.isCardio ? "Distance Progress (mi)" : "Weight Progress (lbs)"}
-                      </div>
-                      <div style={{ background: "#0D0D0D", borderRadius: 10, padding: "10px 4px 6px" }}>
-                        <ResponsiveContainer width="100%" height={130}>
-                          <LineChart data={ex.history} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
-                            <XAxis dataKey="date" stroke={C.sub} tick={{ fontSize: 9 }} />
-                            <YAxis stroke={C.sub} tick={{ fontSize: 9 }} domain={["auto","auto"]} />
-                            <Tooltip {...tooltipStyle} formatter={(val: any) => [`${val}${ex.isCardio ? " mi" : " lbs"}`, ex.isCardio ? "Distance" : "Weight"]} />
-                            <Line type="monotone" dataKey="weight" stroke={ex.isCardio ? C.cyan : C.gold}
-                              dot={{ fill: ex.isCardio ? C.cyan : C.gold, r: 4, strokeWidth: 0 }}
-                              activeDot={{ r: 6 }} strokeWidth={2.5} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 12, color: C.sub, padding: "8px 0 10px", background: "transparent" }}>
-                      Log this {ex.isCardio ? "activity" : "exercise"} again to see a progress chart 📈
-                    </div>
-                  )}
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                    {(ex.isCardio ? [
-                      { label: "Sessions", value: String(ex.history.length), color: C.text },
-                      { label: "Best Dist", value: ex.bestWeight > 0 ? `${ex.bestWeight} mi` : "—", color: C.cyan },
-                      { label: "Last Dist", value: ex.lastWeight > 0 ? `${ex.lastWeight} mi` : "—", color: C.sub },
-                    ] : [
-                      { label: "Sessions", value: String(ex.history.length), color: C.text },
-                      { label: "Volume",   value: ex.totalVolume > 0 ? `${(ex.totalVolume/1000).toFixed(1)}k` : "—", color: C.gold },
-                      { label: "PR",       value: ex.pr ? `${ex.pr.weight} lbs` : "—", color: C.gold },
-                    ]).map(({ label, value, color }) => (
-                      <div key={label} style={{ background: "#0D0D0D", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
-                        <div style={{ fontSize: 9, color: C.sub, marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Show more / less toggle */}
-        {activeExercises.length > EXERCISES_VISIBLE && (
-          <button onClick={() => { setShowAllExercises(s => !s); setExpandedExercise(null); }} style={{
-            width: "100%", marginTop: 4, padding: "10px 0", borderRadius: 10, cursor: "pointer",
-            background: "transparent", border: `1px dashed ${C.purpleBorder}`,
-            color: C.sub, fontWeight: 700, fontSize: 12,
-          }}>
-            {showAllExercises
-              ? `↑ Show less`
-              : `↓ Show all ${activeExercises.length} ${activeGraph === "lifting" ? "exercises" : "activities"}`}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
