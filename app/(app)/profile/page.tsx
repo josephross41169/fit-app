@@ -249,7 +249,30 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:900,fontSize:19,color:C.text}}>{day.label}</div>
-          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${workout.duration}  ·  🔥 ${workout.calories} cal`:"😴 Rest day"}</div>
+          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?(()=>{
+            const cardioList = ((workout as any).cardio || []) as any[];
+            const exList = workout.exercises || [];
+            const parts: string[] = [];
+            const cardioByType: Record<string,{dist:number;dur:number}> = {};
+            cardioList.forEach((c:any)=>{
+              const t = (c.type||'Cardio') as string;
+              if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
+              cardioByType[t].dist += parseFloat(String(c.distance))||0;
+              cardioByType[t].dur  += parseFloat(String(c.duration))||0;
+            });
+            Object.entries(cardioByType).forEach(([type,{dist,dur}])=>{
+              if(dist>0) parts.push(`${dist.toFixed(2)} mi ${type.toLowerCase()}`);
+              else if(dur>0) parts.push(`${dur} min ${type.toLowerCase()}`);
+              else parts.push(type);
+            });
+            if(exList.length>0) parts.push(workout.type||'Workout');
+            const summary = parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
+            const extras = [
+              workout.duration&&workout.duration!=='—'?`⏱ ${workout.duration}`:null,
+              workout.calories>0?`🔥 ${workout.calories} cal`:null,
+            ].filter(Boolean).join('  ·  ');
+            return '💪 ' + summary + (extras ? '  ·  ' + extras : '');
+          })():"😴 Rest day"}</div>
           {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
         </div>
         <div style={{width:34,height:34,borderRadius:"50%",background:"#2D1F52",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
@@ -417,8 +440,31 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>💪</span>
                 <div>
-                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{workout.type}</div>
-                  <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{workout.duration}  ·  {workout.calories} cal burned</div>
+                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{(()=>{
+                    const cardioList = ((workout as any).cardio || []) as any[];
+                    const exList = workout.exercises || [];
+                    const parts: string[] = [];
+                    const cardioByType: Record<string,{dist:number;dur:number}> = {};
+                    cardioList.forEach((c:any)=>{
+                      const t = (c.type||'Cardio') as string;
+                      if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
+                      cardioByType[t].dist += parseFloat(String(c.distance))||0;
+                      cardioByType[t].dur  += parseFloat(String(c.duration))||0;
+                    });
+                    Object.entries(cardioByType).forEach(([type,{dist,dur}])=>{
+                      if(dist>0) parts.push(`${dist.toFixed(2)} mi ${type.toLowerCase()}`);
+                      else if(dur>0) parts.push(`${dur} min ${type.toLowerCase()}`);
+                      else parts.push(type);
+                    });
+                    if(exList.length>0) parts.push(workout.type||'Workout');
+                    return parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
+                  })()}</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)",marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                    {workout.duration&&workout.duration!=='—'&&<span>⏱ {workout.duration}</span>}
+                    {workout.calories>0&&<span>🔥 {workout.calories} cal</span>}
+                    {workout.exercises&&workout.exercises.length>0&&<span>💪 {workout.exercises.length} exercise{workout.exercises.length!==1?'s':''}</span>}
+                    {((workout as any).cardio||[]).length>0&&<span>🏃 {((workout as any).cardio||[]).length} cardio</span>}
+                  </div>
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -437,8 +483,8 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   return s+(w*(ex.sets||0)*(ex.reps||0));
                 },0);
                 return (<>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
-                  {["Exercise","Sets","Reps","Weight","Volume"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
+                  {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                 </div>
                 {workout.exercises.map((ex,i)=>{
                   const wsArr: string[] = (ex as any).weights && Array.isArray((ex as any).weights) ? (ex as any).weights : [];
@@ -447,12 +493,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     : (wsArr[0] || ex.weight || '—');
                   const exVol = (parseFloat(String(ex.weight))||0)*(ex.sets||0)*(ex.reps||0);
                   return (
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 60px 60px 90px 90px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                    <span style={{fontSize:14,fontWeight:600,color:C.text}}>{ex.name}</span>
-                    <span style={{fontSize:16,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
-                    <span style={{fontSize:16,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
-                    <span style={{fontSize:13,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
-                    <span style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textAlign:"center"}}>{exVol>0?`${exVol>=1000?(exVol/1000).toFixed(1)+'k':exVol.toFixed(0)} lbs`:'—'}</span>
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                    <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                    <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
+                    <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
+                    <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
                   </div>
                   );
                 })}
@@ -469,11 +514,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               {workout.cardio && workout.cardio.length > 0 && (
                 <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
                   <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
                     {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                   </div>
                   {workout.cardio.map((c,i)=>(
-                    <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                    <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
                       <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
                       <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
                       <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
@@ -502,7 +547,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Nutrition</span>
             </div>
             <div style={{background:"#1A1230",padding:16,display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                 {[{l:"Calories",k:"calories"},{l:"Protein (g)",k:"protein"},{l:"Carbs (g)",k:"carbs"},{l:"Fat (g)",k:"fat"},{l:"Sugar (g)",k:"sugar"}].map(f=>(
                   <div key={f.k}>
                     <label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>{f.l}</label>
@@ -677,7 +722,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 <button onClick={()=>setWellBuf(w=>({entries:[...w.entries,{...emptyWellness}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0D0D0D",color:C.purple,border:"1.5px solid #7C3AED",cursor:"pointer"}}>+ Add Activity</button>
               </div>
               {wellBuf.entries.map((e,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"50px 1fr 1fr 36px",gap:8,alignItems:"center"}}>
+                <div key={i} style={{display:"grid",gridTemplateColumns:"40px 1fr 80px 32px",gap:8,alignItems:"center"}}>
                   <input style={iStyle} placeholder="🧘" value={e.emoji} onChange={ev=>setWellBuf(w=>({entries:w.entries.map((x,j)=>j===i?{...x,emoji:ev.target.value}:x)}))}/>
                   <input style={iStyle} placeholder="Activity (e.g. Cold Plunge)" value={e.activity} onChange={ev=>setWellBuf(w=>({entries:w.entries.map((x,j)=>j===i?{...x,activity:ev.target.value}:x)}))}/>
                   <input style={iStyle} placeholder="Notes (optional)" value={e.notes} onChange={ev=>setWellBuf(w=>({entries:w.entries.map((x,j)=>j===i?{...x,notes:ev.target.value}:x)}))}/>
@@ -1816,7 +1861,7 @@ export default function ProfilePage() {
                 {/* Workout Progress Graphs */}
                 {realDays.length > 0 && (
                   <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.purpleMid}`,marginBottom:20}}>
-                    <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id, id: d.id }))} />
+                    <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id }))} />
                   </div>
                 )}
                 {(realDays.length > 0 ? realDays : DAYS).map(day => {
@@ -1900,15 +1945,6 @@ export default function ProfilePage() {
               )}
               <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement
-              </button>
-            </div>
-
-            {/* PR Hall of Fame link */}
-            <div style={{background:C.white,borderRadius:22,padding:20,border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
-              <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:6}}>🏆 Personal Records</div>
-              <div style={{fontSize:13,color:C.sub,marginBottom:14}}>Your all-time best lifts, automatically tracked every time you log a workout.</div>
-              <button onClick={()=>router.push('/prs')} style={{width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer"}}>
-                View PR Hall of Fame →
               </button>
             </div>
 
