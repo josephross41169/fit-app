@@ -144,7 +144,41 @@ function Badge({ count }: { count: number }) {
   );
 }
 
-// ── Desktop sidebar nav item ──────────────────────────────────────────────────
+// ── Desktop sidebar nav item (collapsible) ───────────────────────────────────
+function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: typeof tabs[0]; active: boolean; badge?: number; collapsed: boolean }) {
+  return (
+    <Link href={tab.href}
+      title={collapsed ? tab.label : undefined}
+      style={{
+        display: "flex", alignItems: "center",
+        gap: collapsed ? 0 : 12,
+        padding: collapsed ? "12px 0" : "10px 14px",
+        borderRadius: 14,
+        background: active ? PURPLE_BG : "transparent",
+        position: "relative",
+        justifyContent: collapsed ? "center" : "flex-start",
+        transition: "all 0.2s",
+        textDecoration: "none",
+      }}>
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        {tab.icon(active)}
+        {badge ? <Badge count={badge} /> : null}
+      </div>
+      {!collapsed && (
+        <span style={{ fontSize: 14, fontWeight: 600, color: active ? PURPLE : "#9CA3AF", whiteSpace: "nowrap", overflow: "hidden" }}>
+          {tab.label}
+        </span>
+      )}
+      {!collapsed && badge ? (
+        <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 99, background: "#EF4444", color: "#fff" }}>
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+// ── Desktop sidebar nav item (original — kept for reference) ──────────────────
 function SideNavItem({ tab, active, badge }: { tab: typeof tabs[0]; active: boolean; badge?: number }) {
   return (
     <Link href={tab.href}
@@ -174,6 +208,21 @@ export default function BottomNav() {
   const { user } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebar_collapsed") === "true";
+    }
+    return false;
+  });
+
+  function toggleSidebar() {
+    setCollapsed(c => {
+      const next = !c;
+      localStorage.setItem("sidebar_collapsed", String(next));
+      window.dispatchEvent(new CustomEvent("sidebar_toggle", { detail: { collapsed: next } }));
+      return next;
+    });
+  }
 
   // ── Unread messages badge ────────────────────────────────────────────────
   useEffect(() => {
@@ -290,17 +339,55 @@ export default function BottomNav() {
       </nav>
 
       {/* Desktop sidebar */}
-      <nav className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r py-6 px-3 w-16 lg:w-56"
-        style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
-        {/* Logo */}
-        <div className="mb-8 px-4">
-          <span className="text-2xl font-black hidden lg:block" style={{ color: PURPLE }}>FIT ⚡</span>
-          <span className="text-2xl font-black lg:hidden" style={{ color: PURPLE }}>F⚡</span>
+      <nav
+        className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r py-6 px-3"
+        style={{
+          background: "#0D0D0D", borderColor: "#1A1228",
+          width: collapsed ? 64 : 224,
+          transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Logo + collapse toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", marginBottom: 32, padding: "0 4px" }}>
+          {!collapsed && (
+            <span className="text-2xl font-black" style={{ color: PURPLE, whiteSpace: "nowrap" }}>FIT ⚡</span>
+          )}
+          <button
+            onClick={toggleSidebar}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            style={{
+              background: "rgba(124,58,237,0.12)",
+              border: "1px solid rgba(124,58,237,0.25)",
+              borderRadius: 10,
+              width: 34, height: 34,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0,
+              transition: "background 0.15s",
+            }}
+          >
+            {/* Hamburger / close icon */}
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              {collapsed ? (
+                <>
+                  <line x1="3" y1="5" x2="15" y2="5" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="9" x2="15" y2="9" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="13" x2="15" y2="13" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="5" x2="15" y2="5" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="9" x2="12" y2="9" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="13" x2="15" y2="13" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                </>
+              )}
+            </svg>
+          </button>
         </div>
 
         <div className="flex flex-col gap-1">
           {tabs.map((tab) => (
-            <SideNavItem key={tab.href} tab={tab} active={pathname === tab.href} badge={getBadge(tab.href)} />
+            <SideNavItemCollapsible key={tab.href} tab={tab} active={pathname === tab.href} badge={getBadge(tab.href)} collapsed={collapsed} />
           ))}
         </div>
       </nav>
