@@ -1346,8 +1346,14 @@ export default function ProfilePage() {
           .profile-avatar-col { order: 2 !important; margin-top: -48px !important; z-index: 2 !important; position: relative !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
-          .profile-outer { padding: 0 0 80px !important; max-width: 100% !important; }
+          .profile-outer { padding: 0 0 80px !important; max-width: 100% !important; margin: 0 !important; }
           .profile-stats-bio { padding: 0 16px !important; }
+        }
+        @media (min-width: 768px) and (max-width: 1100px) {
+          .profile-layout {
+            grid-template-columns: 200px 1fr 200px !important;
+            gap: 16px !important;
+          }
         }
         .highlight-slot:hover .highlight-remove { opacity: 1 !important; }
       `}</style>
@@ -1633,7 +1639,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="profile-outer" style={{maxWidth:1400,padding:"32px 24px"}}>
+      <div className="profile-outer" style={{maxWidth:1200,padding:"32px 24px",margin:"0 auto"}}>
 
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:28,alignItems:"flex-start",flexWrap:"wrap",marginBottom:36}}>
@@ -1798,7 +1804,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 3-column */}
-        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"260px 1fr 260px",gap:24,alignItems:"start"}}>
+        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(220px,260px) 1fr minmax(220px,260px)",gap:20,alignItems:"start"}}>
 
           {/* LEFT — Highlights */}
           <div>
