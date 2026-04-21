@@ -423,7 +423,8 @@ export default function StatsPage(){
   const avgPerWeek=totalWorkouts>0?(totalWorkouts/activeWeeks).toFixed(1):"0";
   const totalVolume=workoutLogs.reduce((s,l)=>s+calcVol(Array.isArray(l.exercises)?l.exercises:[]),0);
   const totalCalBurned=workoutLogs.reduce((s,l)=>s+(l.workout_calories||0),0);
-  const avgDuration=totalWorkouts>0?Math.round(workoutLogs.reduce((s,l)=>s+(l.workout_duration_min||0),0)/totalWorkouts):0;
+  const logsWithDuration=workoutLogs.filter(l=>(l.workout_duration_min||0)>0);
+  const avgDuration=logsWithDuration.length>0?Math.round(logsWithDuration.reduce((s,l)=>s+l.workout_duration_min,0)/logsWithDuration.length):0;
   const favDay=(()=>{
     if(!workoutLogs.length) return "—";
     const map=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -485,7 +486,51 @@ export default function StatsPage(){
     }));
   })();
 
+  // ── Per-activity range stats (running + lifting) ─────────────────────────────
+  // Running stats bucketed by week and month
+  const runEntries = allCardio.filter((c:any)=>{
+    const t=normalizeCardio(c.type||"");
+    return t.includes("Run")||t.includes("Walk")||t.includes("Treadmill");
+  });
+  const runStats = {
+    totalMiles: Math.round(runEntries.reduce((s:number,c:any)=>s+(parseFloat(String(c.distance))||0),0)*100)/100,
+    totalMin: runEntries.reduce((s:number,c:any)=>s+(parseFloat(String(c.duration))||0),0),
+    sessions: runEntries.length,
+    avgMiles: runEntries.length>0?Math.round((runEntries.reduce((s:number,c:any)=>s+(parseFloat(String(c.distance))||0),0)/runEntries.length)*100)/100:0,
+    avgMin: runEntries.length>0?Math.round(runEntries.reduce((s:number,c:any)=>s+(parseFloat(String(c.duration))||0),0)/runEntries.length):0,
+    longestRun: runEntries.reduce((best:number,c:any)=>Math.max(best,parseFloat(String(c.distance))||0),0),
+    longestRun_date: runEntries.reduce((best:{dist:number,date:string},{distance,logged_at}:any)=>{const d=parseFloat(String(distance))||0;return d>best.dist?{dist:d,date:logged_at}:best;},{dist:0,date:""}).date,
+  };
+  // Avg pace (min/mile)
+  const runPaceMin = runStats.totalMiles>0?Math.floor(runStats.totalMin/runStats.totalMiles):0;
+  const runPaceSec = runStats.totalMiles>0?Math.round(((runStats.totalMin/runStats.totalMiles)-runPaceMin)*60):0;
+  const runPaceStr = runPaceMin>0?`${runPaceMin}:${runPaceSec.toString().padStart(2,"0")} /mi`:"—";
+
+  // Weekly run distance for chart
+  const weeklyRunDist=(()=>{
+    const weeks:Record<string,number>={};
+    runEntries.forEach((c:any)=>{
+      if(!c.logged_at) return;
+      const d=new Date(c.logged_at); d.setDate(d.getDate()-d.getDay());
+      const key=d.toISOString().slice(0,10);
+      weeks[key]=(weeks[key]||0)+(parseFloat(String(c.distance))||0);
+    });
+    return Object.entries(weeks).sort().map(([date,mi])=>({week:fmt(date),miles:Math.round(mi*100)/100}));
+  })();
+
+  // Lifting stats
+  const liftingLogs=workoutLogs.filter(l=>Array.isArray(l.exercises)&&l.exercises.length>0);
+  const liftStats={
+    sessions:liftingLogs.length,
+    totalVolume:liftingLogs.reduce((s,l)=>s+calcVol(Array.isArray(l.exercises)?l.exercises:[]),0),
+    avgVolume:liftingLogs.length>0?Math.round(liftingLogs.reduce((s,l)=>s+calcVol(Array.isArray(l.exercises)?l.exercises:[]),0)/liftingLogs.length):0,
+    avgDuration:liftingLogs.filter(l=>l.workout_duration_min>0).length>0?Math.round(liftingLogs.filter(l=>l.workout_duration_min>0).reduce((s,l)=>s+l.workout_duration_min,0)/liftingLogs.filter(l=>l.workout_duration_min>0).length):0,
+    totalCalBurned:liftingLogs.reduce((s,l)=>s+(l.workout_calories||0),0),
+    bestVolume:liftingLogs.reduce((best:{vol:number,date:string,type:string},l)=>{const v=calcVol(Array.isArray(l.exercises)?l.exercises:[]);return v>best.vol?{vol:v,date:l.logged_at,type:l.workout_type||"Workout"}:best;},{vol:0,date:"",type:""}),
+  };
+
   // Muscle groups
+
   const muscleGroups=(()=>{
     const g:Record<string,number>={};
     workoutLogs.forEach(l=>(Array.isArray(l.exercises)?l.exercises:[]).forEach((ex:any)=>{
@@ -777,27 +822,7 @@ export default function StatsPage(){
               {allWorkoutDates.length>0?<Heatmap dates={allWorkoutDates}/>:<div style={{color:C.sub,fontSize:13,textAlign:"center"}}>No workouts logged yet</div>}
             </div>
 
-            {/* Workout breakdown by muscle group with avg volume */}
-            {workoutByMuscle.length>0&&(<>
-              <SecHead title="Lifting — By Muscle Group"/>
-              <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-                {workoutByMuscle.map(({muscle,count,avgVol,color})=>(
-                  <div key={muscle} style={{marginBottom:14}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:10,height:10,borderRadius:2,background:color,flexShrink:0}}/>
-                        <span style={{fontSize:13,fontWeight:700}}>{muscle}</span>
-                      </div>
-                      <div style={{display:"flex",gap:12,alignItems:"center"}}>
-                        {avgVol>0&&<span style={{fontSize:11,color:C.sub}}>{avgVol>=1000?`${(avgVol/1000).toFixed(1)}k`:avgVol} lbs avg</span>}
-                        <span style={{fontSize:12,fontWeight:700,color}}>{count} session{count!==1?"s":""}</span>
-                      </div>
-                    </div>
-                    <ProgBar value={count} max={workoutByMuscle[0].count} color={color}/>
-                  </div>
-                ))}
-              </div>
-            </>)}
+
 
             {/* This week detail — rich cards */}
             {thisWeekLogs.length>0&&(<>
@@ -863,21 +888,7 @@ export default function StatsPage(){
               </div>
             </>)}
 
-            {/* Weekly volume chart */}
-            <SecHead title="Weekly Volume (lbs)"/>
-            {weeklyVolume.length>1?(
-              <ChartWrap>
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={weeklyVolume} margin={{top:4,right:8,left:-16,bottom:0}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-                    <XAxis dataKey="week" tick={{fontSize:9,fill:C.sub}}/>
-                    <YAxis tick={{fontSize:9,fill:C.sub}}/>
-                    <Tooltip content={<Tip/>}/>
-                    <Bar dataKey="volume" name="Volume (lbs)" fill={C.purple} radius={[4,4,0,0]}/>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartWrap>
-            ):<Empty icon="📈" text="Log more workouts to see volume trends"/>}
+
 
             {/* Training days */}
             <SecHead title="Training by Day of Week"/>
@@ -953,6 +964,115 @@ export default function StatsPage(){
                 </ResponsiveContainer>
               </ChartWrap>
               <div style={{fontSize:11,color:C.sub,textAlign:"center",marginTop:6}}>Bigger = more sessions training that muscle group</div>
+            </>)}
+
+            {/* ── 🏃 RUNNING DEEP DIVE ─────────────────────────────────────────── */}
+            {runStats.sessions>0&&(<>
+              <div style={{marginTop:32,marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
+                <div style={{height:1,flex:1,background:C.border}}/>
+                <div style={{fontWeight:900,fontSize:16,color:C.cyan}}>🏃 Running</div>
+                <div style={{height:1,flex:1,background:C.border}}/>
+              </div>
+
+              {/* Key run stats */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <BigNum icon="📏" label="Total Distance" value={`${runStats.totalMiles} mi`} sub={`${rangeLabel(range)}`} color={C.cyan}/>
+                <BigNum icon="⚡" label="Avg Pace" value={runPaceStr} sub="per mile" color={C.green}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                <MiniNum label="Sessions" value={runStats.sessions} color={C.cyan}/>
+                <MiniNum label="Avg Distance" value={runStats.avgMiles>0?`${runStats.avgMiles} mi`:"—"} color={C.text}/>
+                <MiniNum label="Avg Duration" value={runStats.avgMin>0?`${runStats.avgMin} min`:"—"} color={C.text}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+                <MiniNum label="🏆 Longest Run" value={runStats.longestRun>0?`${runStats.longestRun} mi`:"—"} color={C.gold}/>
+                <MiniNum label="Total Time" value={runStats.totalMin>60?`${(runStats.totalMin/60).toFixed(1)}h`:`${Math.round(runStats.totalMin)} min`} color={C.subLight}/>
+              </div>
+
+              {/* Weekly distance chart */}
+              {weeklyRunDist.length>1&&(<>
+                <SecHead title="Weekly Run Distance (mi)"/>
+                <ChartWrap>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <BarChart data={weeklyRunDist} margin={{top:4,right:8,left:-16,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+                      <XAxis dataKey="week" tick={{fontSize:9,fill:C.sub}}/>
+                      <YAxis tick={{fontSize:9,fill:C.sub}}/>
+                      <Tooltip content={<Tip/>}/>
+                      <Bar dataKey="miles" name="Miles" fill={C.cyan} radius={[4,4,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartWrap>
+              </>)}
+            </>)}
+
+            {/* ── 🏋️ LIFTING DEEP DIVE ─────────────────────────────────────────── */}
+            {liftStats.sessions>0&&(<>
+              <div style={{marginTop:32,marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
+                <div style={{height:1,flex:1,background:C.border}}/>
+                <div style={{fontWeight:900,fontSize:16,color:C.purple}}>🏋️ Lifting</div>
+                <div style={{height:1,flex:1,background:C.border}}/>
+              </div>
+
+              {/* Key lift stats */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <BigNum icon="📦" label="Total Volume" value={liftStats.totalVolume>0?`${(liftStats.totalVolume/1000).toFixed(1)}k lbs`:"—"} sub={rangeLabel(range)} color={C.purple}/>
+                <BigNum icon="📊" label="Avg Volume/Session" value={liftStats.avgVolume>0?`${(liftStats.avgVolume/1000).toFixed(1)}k lbs`:"—"} sub="per workout" color={C.gold}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                <MiniNum label="Sessions" value={liftStats.sessions} color={C.purple}/>
+                <MiniNum label="Avg Duration" value={liftStats.avgDuration>0?`${liftStats.avgDuration} min`:"—"} color={C.text}/>
+                <MiniNum label="Cal Burned" value={liftStats.totalCalBurned>0?`${(liftStats.totalCalBurned/1000).toFixed(1)}k`:"—"} color={C.red}/>
+              </div>
+
+              {/* Best session */}
+              {liftStats.bestVolume.vol>0&&(
+                <div style={{background:C.purpleDim,borderRadius:12,padding:"12px 16px",border:`1px solid ${C.purpleBorder}`,marginBottom:20}}>
+                  <div style={{fontSize:11,color:C.sub,marginBottom:4,textTransform:"uppercase",letterSpacing:0.8,fontWeight:700}}>🏆 Best Session in Period</div>
+                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>{liftStats.bestVolume.type}</div>
+                  <div style={{fontSize:12,color:C.sub,marginTop:3}}>
+                    {liftStats.bestVolume.date&&fmt(liftStats.bestVolume.date)} · <span style={{color:C.gold,fontWeight:700}}>{(liftStats.bestVolume.vol/1000).toFixed(1)}k lbs total volume</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Muscle group breakdown */}
+              {workoutByMuscle.length>0&&(<>
+                <SecHead title="Volume by Muscle Group"/>
+                <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
+                  {workoutByMuscle.map(({muscle,count,avgVol,color})=>(
+                    <div key={muscle} style={{marginBottom:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{width:10,height:10,borderRadius:2,background:color,flexShrink:0}}/>
+                          <span style={{fontSize:13,fontWeight:700}}>{muscle}</span>
+                        </div>
+                        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                          {avgVol>0&&<span style={{fontSize:11,color:C.sub}}>{avgVol>=1000?`${(avgVol/1000).toFixed(1)}k`:avgVol} lbs avg</span>}
+                          <span style={{fontSize:12,fontWeight:700,color}}>{count}×</span>
+                        </div>
+                      </div>
+                      <ProgBar value={count} max={workoutByMuscle[0].count} color={color}/>
+                    </div>
+                  ))}
+                </div>
+              </>)}
+
+              {/* Weekly volume */}
+              {weeklyVolume.length>1&&(<>
+                <SecHead title="Weekly Volume Trend (lbs)"/>
+                <ChartWrap>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <BarChart data={weeklyVolume} margin={{top:4,right:8,left:-16,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+                      <XAxis dataKey="week" tick={{fontSize:9,fill:C.sub}}/>
+                      <YAxis tick={{fontSize:9,fill:C.sub}}/>
+                      <Tooltip content={<Tip/>}/>
+                      <Bar dataKey="volume" name="Volume (lbs)" fill={C.purple} radius={[4,4,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartWrap>
+              </>)}
             </>)}
           </>)}
 
