@@ -1651,10 +1651,10 @@ export default function ProfilePage() {
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
             >
-              <TierFrame tier={userTier} size={110}>
+              <TierFrame tier={userTier} size={128}>
               {profileImg
-                ? <img src={profileImg} style={{width:110,height:110,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:110,height:110,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:42,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                ? <img src={profileImg} style={{width:128,height:128,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                : <div style={{width:128,height:128,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:50,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
@@ -1807,7 +1807,7 @@ export default function ProfilePage() {
         <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(200px,240px) 1fr minmax(200px,240px)",gap:16,alignItems:"start"}}>
 
           {/* LEFT — Highlights */}
-          <div>
+          <div style={{paddingTop:44}}>
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
@@ -1897,7 +1897,7 @@ export default function ProfilePage() {
           </div>
 
           {/* RIGHT */}
-          <div>
+          <div style={{paddingTop:44}}>
             {/* Badges & Awards */}
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
