@@ -1639,22 +1639,22 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="profile-outer" style={{maxWidth:1200,padding:"32px 24px",margin:"0 auto"}}>
+      <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
 
         {/* Profile header */}
-        <div className="profile-header-wrap" style={{display:"flex",gap:28,alignItems:"flex-start",flexWrap:"wrap",marginBottom:36}}>
+        <div className="profile-header-wrap" style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,flexShrink:0}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:160}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
             >
-              <TierFrame tier={userTier} size={150}>
+              <TierFrame tier={userTier} size={110}>
               {profileImg
-                ? <img src={profileImg} style={{width:150,height:150,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:150,height:150,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                ? <img src={profileImg} style={{width:110,height:110,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                : <div style={{width:110,height:110,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:42,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
@@ -1689,7 +1689,7 @@ export default function ProfilePage() {
               )}
             </div>
             <div style={{textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:19,color:C.text}}>{profile.name}</div>
+              <div style={{fontWeight:900,fontSize:17,color:C.text}}>{profile.name}</div>
               <TierTitle tier={userTier} />
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:4,flexWrap:"wrap"}}>
                 <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>
@@ -1700,12 +1700,12 @@ export default function ProfilePage() {
               )}
               {/* Tier progress bar */}
               {userTier !== "untouchable" && tierInfo.nextTier && (
-                <div style={{marginTop:10,padding:"8px 14px",background:"rgba(0,0,0,0.3)",borderRadius:12,border:"1px solid rgba(255,255,255,0.06)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                    <span style={{fontSize:10,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.5}}>Tier Progress</span>
-                    <span style={{fontSize:10,fontWeight:700,color:C.sub}}>{tierInfo.nextDescription}</span>
+                <div style={{marginTop:8,padding:"5px 10px",background:"rgba(0,0,0,0.3)",borderRadius:8,border:"1px solid rgba(255,255,255,0.06)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                    <span style={{fontSize:9,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.5}}>Progress</span>
+                    <span style={{fontSize:9,fontWeight:700,color:C.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}}>{tierInfo.nextDescription}</span>
                   </div>
-                  <div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                  <div style={{height:3,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
                     <div style={{height:"100%",borderRadius:2,background:"#7C3AED",width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
                   </div>
                 </div>
@@ -1730,10 +1730,10 @@ export default function ProfilePage() {
           </div>
 
           {/* Banner + stats */}
-          <div className="profile-banner-block" style={{flex:1,minWidth:260}}>
+          <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:155,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
+              style={{width:"100%",height:140,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
@@ -1804,7 +1804,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 3-column */}
-        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(220px,260px) 1fr minmax(220px,260px)",gap:20,alignItems:"start"}}>
+        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(200px,240px) 1fr minmax(200px,240px)",gap:16,alignItems:"start"}}>
 
           {/* LEFT — Highlights */}
           <div>
