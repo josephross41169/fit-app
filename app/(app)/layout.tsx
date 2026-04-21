@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import BottomNav from "@/components/BottomNav";
@@ -7,10 +7,25 @@ import BottomNav from "@/components/BottomNav";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebar_collapsed") === "true";
+    }
+    return false;
+  });
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
+
+  useEffect(() => {
+    function handleToggle(e: Event) {
+      const ce = e as CustomEvent<{ collapsed: boolean }>;
+      setSidebarCollapsed(ce.detail.collapsed);
+    }
+    window.addEventListener("sidebar_toggle", handleToggle);
+    return () => window.removeEventListener("sidebar_toggle", handleToggle);
+  }, []);
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -24,8 +39,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0D" }}>
       <BottomNav />
-      <main className="pb-20 md:pb-0 md:pl-16 lg:pl-56">{children}</main>
+      <main
+        style={{
+          paddingBottom: 80,
+          // On desktop: offset by sidebar width with smooth transition
+          transition: "padding-left 0.25s cubic-bezier(0.4,0,0.2,1)",
+        }}
+        // Mobile: no left padding (bottom nav); md+: offset by sidebar
+        className="md:pb-0"
+      >
+        {/* Inline style for responsive sidebar offset — avoids Tailwind purge issues */}
+        <style>{`
+          @media (min-width: 768px) {
+            main {
+              padding-left: ${sidebarCollapsed ? "64px" : "224px"} !important;
+            }
+          }
+        `}</style>
+        {children}
+      </main>
     </div>
   );
 }
-
