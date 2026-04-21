@@ -56,7 +56,7 @@ export default function LandingPage() {
         <Link href="/signup"
           className="w-full py-4 rounded-2xl font-bold text-lg text-center transition-all duration-200 active:scale-95 shadow-lg"
           style={{ background: "#FFFFFF", color: "#7C3AED" }}>
-          Get Started � It&apos;s Free
+          Get Started · It&apos;s Free
         </Link>
 
         <p className="mt-4 text-orange-100 text-sm">
