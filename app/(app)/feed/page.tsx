@@ -9,7 +9,7 @@ import { computeTier, TIER_COLORS } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#F3F0FF", greenMid:"#DDD6FE",
+  blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
   green:"#7C3AED",
@@ -527,7 +527,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
       {/* Tier skin: border + glow based on user's tier */}
       <div style={{
         background: C.white,
-        border: `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : C.greenMid}`,
+        border: `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : "#2D1F52"}`,
         boxShadow: post.tier && post.tier !== "default" ? `0 4px 24px ${TIER_COLORS[post.tier as Tier]?.glow}` : "0 4px 24px rgba(124,58,237,0.10)",
         borderRadius: 20, marginBottom: 24, overflow: "hidden" as const,
       }}>
@@ -559,7 +559,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
             <div style={{ position:"relative" }}>
               <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:C.sub,fontSize:20,lineHeight:1 }}>···</button>
               {showMenu && (
-                <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:C.white,border:`1.5px solid ${C.greenMid}`,borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",minWidth:160,overflow:"hidden" }}>
+                <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:"#111118",border:"1.5px solid #2D1F52",borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.4)",minWidth:160,overflow:"hidden" }}>
                   {!confirmDelete ? (
                     <button onClick={() => setConfirmDelete(true)} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#EF4444",display:"flex",alignItems:"center",gap:8 }}>
                       🗑️ Delete Post
@@ -569,7 +569,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
                       <div style={{ fontSize:13,fontWeight:700,color:C.text,marginBottom:10 }}>Delete this post?</div>
                       <div style={{ display:"flex",gap:8 }}>
                         <button onClick={() => { setShowMenu(false); setConfirmDelete(false); onDelete(); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer" }}>Yes, delete</button>
-                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
+                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"1.5px solid #2D1F52",background:"#1A1228",color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
                       </div>
                     </div>
                   )}
@@ -607,7 +607,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
             </>)}
           </div>
         ) : (
-          <label style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,margin:"0 18px 12px",height:340,borderRadius:16,border:`2px dashed ${C.greenMid}`,background:C.greenLight,cursor:isOwner?"pointer":"default" }}>
+          <label style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,margin:"0 18px 12px",height:340,borderRadius:16,border:"2px dashed #2D1F52",background:"#1A1228",cursor:isOwner?"pointer":"default" }}>
             {isOwner ? (<>
               <span style={{ fontSize:36 }}>📷</span>
               <div>
@@ -625,7 +625,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         )}
         {post.photos.length > 0 && isOwner && (
           <div style={{ padding:"6px 18px 0",display:"flex",alignItems:"center",gap:8 }}>
-            <label style={{ fontSize:12,fontWeight:700,color:C.blue,cursor:"pointer",padding:"5px 14px",borderRadius:20,background:C.greenLight,border:`1px solid ${C.greenMid}` }}>
+            <label style={{ fontSize:12,fontWeight:700,color:C.blue,cursor:"pointer",padding:"5px 14px",borderRadius:20,background:"#1A1228",border:"1px solid #2D1F52" }}>
               + Add Photo
               <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
             </label>
@@ -649,7 +649,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
           const hasCardio = cardio.length > 0;
           const isPR = (post as any).isPR;
           return (
-            <div style={{ margin:"10px 18px 0", borderRadius:14, border:`1.5px solid ${C.greenMid}`, background:C.greenLight, overflow:"hidden" }}>
+            <div style={{ margin:"10px 18px 0", borderRadius:14, border:"1.5px solid #2D1F52", background:"#1A1228", overflow:"hidden" }}>
               {/* Header row */}
               <div style={{ padding:"10px 14px 8px", display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:17 }}>🏋️</span>
@@ -700,7 +700,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         {post.nutrition && (() => {
           const meals = post.nutrition.meals || [];
           return (
-            <div style={{ margin:"10px 18px 0", borderRadius:14, border:`1.5px solid ${C.greenMid}`, background:C.greenLight, overflow:"hidden" }}>
+            <div style={{ margin:"10px 18px 0", borderRadius:14, border:"1.5px solid #2D1F52", background:"#1A1228", overflow:"hidden" }}>
               <div style={{ padding:"10px 14px 8px", display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:17 }}>🥗</span>
                 <span style={{ fontWeight:900, fontSize:14, color:C.text }}>Nutrition Log</span>
@@ -721,7 +721,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         })()}
 
         {/* Actions */}
-        <div style={{ padding:"12px 18px",display:"flex",alignItems:"center",gap:20,borderTop:`1px solid ${C.greenLight}`,marginTop:12 }}>
+        <div style={{ padding:"12px 18px",display:"flex",alignItems:"center",gap:20,borderTop:"1px solid #2D1F52",marginTop:12 }}>
           <button onClick={toggleLike} disabled={likeLoading} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:likeLoading?"default":"pointer",padding:0,opacity:likeLoading?0.7:1 }}>
             <svg viewBox="0 0 24 24" fill={post.liked?"#FF6B6B":"none"} stroke={post.liked?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:24,height:24,transition:"all 0.15s",transform:post.liked?"scale(1.15)":"scale(1)" }}>
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -752,7 +752,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
                     ? <img src={c.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                     : c.avatar}
                 </div>
-                <div style={{ flex:1,background:C.greenLight,borderRadius:14,padding:"9px 13px",border:`1px solid ${C.greenMid}` }}>
+                <div style={{ flex:1,background:"#1A1228",borderRadius:14,padding:"9px 13px",border:"1px solid #2D1F52" }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3 }}>
                     <span style={{ fontWeight:800,fontSize:12,color:C.text }}>{c.user}</span>
                     <span style={{ fontSize:10,color:C.sub }}>{c.time}</span>
@@ -783,7 +783,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
               ? <img src={currentUser.profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
-          <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:C.greenLight,borderRadius:24,padding:"8px 16px",border:`1.5px solid ${C.greenMid}` }}>
+          <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#1A1228",borderRadius:24,padding:"8px 16px",border:"1.5px solid #2D1F52" }}>
             <input ref={commentInputRef} id={`ci-${post.id}`} value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submitComment()} placeholder={replyTo?`Reply to ${replyTo.user.split(' ')[0]}...`:"Add a comment..."} style={{ flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:C.text }} />
             {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
           </div>
@@ -1278,7 +1278,7 @@ export default function FeedPage() {
       `}</style>
 
       {/* ── Sticky Header ── */}
-      <div style={{ position:"sticky",top:0,zIndex:100,background:C.white,borderBottom:`2px solid ${C.greenLight}` }}>
+      <div style={{ position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid #2D1F52` }}>
         <div className="feed-header-inner" style={{ padding:"14px 28px 12px",display:"flex",alignItems:"center",gap:12,justifyContent:"space-between" }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
             <span style={{ fontSize:20 }}>⚡</span>
@@ -1286,19 +1286,19 @@ export default function FeedPage() {
           </div>
           {/* Search bar */}
           <div style={{ flex:1,maxWidth:360,position:"relative" }}>
-            <div style={{ display:"flex",alignItems:"center",gap:8,background:C.greenLight,borderRadius:24,padding:"7px 14px",border:`1.5px solid ${searchQuery?C.blue:C.greenMid}` }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8,background:"#1A1228",borderRadius:24,padding:"7px 14px",border:`1.5px solid ${searchQuery?C.blue:"#2D1F52"}` }}>
               <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:15,height:15,flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search people..." style={{background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1,minWidth:0}}/>
               {searchQuery && <button onClick={()=>{setSearchQuery("");setSearchResults([]);}} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>×</button>}
             </div>
             {searchQuery.trim() && (
-              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:C.white,borderRadius:16,border:`1.5px solid ${C.greenMid}`,boxShadow:"0 8px 24px rgba(0,0,0,0.10)",zIndex:200,overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
+              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:"#111118",borderRadius:16,border:"1.5px solid #2D1F52",boxShadow:"0 8px 24px rgba(0,0,0,0.4)",zIndex:200,overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
                 {searchLoading ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>Searching...</div>
                 : searchResults.length===0 ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>No results</div>
                 : searchResults.map(u=>(
                   <div key={u.id} onClick={()=>{setSearchQuery("");setSearchResults([]);window.location.href=`/profile/${u.username}`;}}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`}}
-                    onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #2D1F52"}}
+                    onMouseEnter={e=>(e.currentTarget.style.background="#2D1F52")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
                     <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
                       {u.avatar_url?<img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
@@ -1350,7 +1350,7 @@ export default function FeedPage() {
       {viewingStory && <StoryViewer story={viewingStory} onClose={() => setViewingStory(null)} />}
 
       {/* ── Stories Row (visible on all views) ── */}
-      <div style={{ padding:"12px 0 0", borderBottom:`1px solid ${C.greenMid}`, overflowX:"auto" }}>
+      <div style={{ padding:"12px 0 0", borderBottom:"1px solid #2D1F52", overflowX:"auto" }}>
         <div style={{ display:"flex", gap:16, padding:"4px 24px 14px", minWidth:"max-content" }}>
           {INITIAL_STORIES.map(story => {
             const tier: Tier = "default"; // stories use default tier frame (users could earn tiers shown here in future)
@@ -1379,7 +1379,7 @@ export default function FeedPage() {
 
         {/* LEFT: Social feed (desktop only) */}
         <div className="feed-main feed-desktop-only">
-          <div style={{ height:1,background:C.greenMid,marginBottom:20 }}/>
+          <div style={{ height:1,background:"#2D1F52",marginBottom:20 }}/>
           {feedTab === "notifications" ? (
             <div style={{ padding:"16px 20px", maxWidth:600 }}>
               <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
@@ -1405,7 +1405,7 @@ export default function FeedPage() {
           ) : feedTab === "following" ? (
             loadingFollowing ? (
               <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #DDD6FE",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <p style={{ fontWeight:600 }}>Loading following feed…</p>
               </div>
@@ -1442,7 +1442,7 @@ export default function FeedPage() {
             <>
               {loadingFeed ? (
                 <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                  <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #DDD6FE",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                  <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
                   <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                   <p style={{ fontWeight:600 }}>Loading feed…</p>
                 </div>
@@ -1454,7 +1454,7 @@ export default function FeedPage() {
                   )}
 
                   {displayPosts.length === 0 && (
-                    <div style={{ background:"#F3F0FF",border:"1.5px solid #DDD6FE",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
+                    <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
                       👋 No posts yet. Share something to the feed to see it here!
                     </div>
                   )}
@@ -1544,7 +1544,7 @@ export default function FeedPage() {
 
       {/* ── Mobile: interleaved single-column feed ── */}
       <div className="feed-mobile-only" style={{ padding:"0 12px" }}>
-        <div style={{ height:1,background:C.greenMid,margin:"12px 0 16px" }}/>
+        <div style={{ height:1,background:"#2D1F52",margin:"12px 0 16px" }}/>
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
             <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
@@ -1570,7 +1570,7 @@ export default function FeedPage() {
         ) : feedTab === "following" ? (
           loadingFollowing ? (
             <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #DDD6FE",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
               <p style={{ fontWeight:600 }}>Loading following feed…</p>
             </div>
           ) : followingPosts.length === 0 ? (
@@ -1605,7 +1605,7 @@ export default function FeedPage() {
         ) : (
         <>
         {dbPosts.length === 0 && !loadingFeed && (
-          <div style={{ background:"#F3F0FF",border:"1.5px solid #DDD6FE",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
+          <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
             👋 These are sample posts. Log a workout or share to feed to see real content!
           </div>
         )}
