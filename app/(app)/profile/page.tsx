@@ -242,7 +242,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     <div style={{background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}}>
 
       {/* HEADER */}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?C.purpleLight:C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?"#2D1F52":C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,#4ADE80,#22C55E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(74,222,128,0.3)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
@@ -274,7 +274,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       </button>
 
       {/* BODY */}
-      {open && <div style={{padding:"24px 24px 28px",borderTop:`2px solid ${C.purpleMid}`}}>
+      {open && <div style={{padding:"24px 24px 28px",borderTop:`2px solid ${C.purpleMid}`,background:"#1E1530"}}>
 
         {/* Photos */}
         <div style={{marginBottom:24}}>
