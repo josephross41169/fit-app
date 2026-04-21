@@ -75,7 +75,17 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   else if (timeRange === "6m") cutoff.setMonth(now.getMonth() - 6);
   else cutoff.setFullYear(2000);
 
-  const filteredWorkouts = workouts.filter((w: any) => {
+  // Deduplicate workouts by id to prevent double-counting same day's workout
+  const uniqueWorkoutMap = new Map<string, any>();
+  workouts.forEach((w: any) => {
+    const key = w.id || w.created_at || w._id;
+    if (key && !uniqueWorkoutMap.has(key)) {
+      uniqueWorkoutMap.set(key, w);
+    }
+  });
+  const uniqueWorkouts = Array.from(uniqueWorkoutMap.values());
+
+  const filteredWorkouts = uniqueWorkouts.filter((w: any) => {
     const d = parseId(w.id || w.created_at || "");
     return d ? d >= cutoff : true;
   });
