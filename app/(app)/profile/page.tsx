@@ -1816,7 +1816,7 @@ export default function ProfilePage() {
                 {/* Workout Progress Graphs */}
                 {realDays.length > 0 && (
                   <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.purpleMid}`,marginBottom:20}}>
-                    <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id }))} />
+                    <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id, id: d.id }))} />
                   </div>
                 )}
                 {(realDays.length > 0 ? realDays : DAYS).map(day => {
