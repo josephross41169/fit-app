@@ -753,10 +753,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 </div>
               </div>
             </button>
-            {wellOpen && <div style={{background:"#F5F3FF",padding:14,display:"flex",flexDirection:"column",gap:8}}>
+            {wellOpen && <div style={{background:"#1A1230",padding:14,display:"flex",flexDirection:"column",gap:8}}>
               {wellness.entries.map((e,i)=>(
                 <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #3D2A6E"}}>
-                  <div style={{width:44,height:44,borderRadius:13,background:"#F5F3FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
+                  <div style={{width:44,height:44,borderRadius:13,background:"#2D1F52",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
                   <div style={{flex:1}}>
                     <div style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</div>
                     {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:2}}>{e.notes}</div>}
@@ -1788,9 +1788,9 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:"#F5F3FF",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
+            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
               onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
-              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="#F5F3FF"}}>
+              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
               ✏️ Edit Profile
             </button>
             </div>{/* end profile-stats-bio */}
