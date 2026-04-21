@@ -506,7 +506,7 @@ export default function GroupPage() {
   // ── UI State ──
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [tab, setTab] = useState<"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members">("posts");
+  const [tab, setTab] = useState<"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members"|"war">("posts");
   const [postLikes, setPostLikes] = useState<Record<string,number>>({});
   const [likedPosts, setLikedPosts] = useState<Record<string,boolean>>({});
   const [noteText, setNoteText] = useState("");
@@ -1310,6 +1310,7 @@ export default function GroupPage() {
             {([
               { key:"events", label:"🗓️ Events" },
               { key:"members", label:"👥 Members" },
+              { key:"war", label:"⚔️ Wars" },
             ] as const).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className="groups-mobile-tabs-extra"
@@ -1723,6 +1724,58 @@ export default function GroupPage() {
                   {m.points > 0 && <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
                 </div>
               ))}
+            </div>
+          )}
+
+          {tab === "war" && (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                <div>
+                  <div style={{ fontWeight:900, fontSize:18, color:"#F0F0F0" }}>⚔️ Group Wars</div>
+                  <div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Challenge other groups. Compete. Win trophies.</div>
+                </div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <button
+                  onClick={() => router.push(`/groups/${groupId}/challenges`)}
+                  style={{
+                    width:"100%", padding:"16px 20px", borderRadius:16,
+                    background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                    border:"none", color:"#fff", fontWeight:800, fontSize:15, cursor:"pointer",
+                    display:"flex", alignItems:"center", justifyContent:"space-between",
+                  }}>
+                  <span>⚔️ View Our Challenges</span>
+                  <span style={{ fontSize:20 }}>→</span>
+                </button>
+                <button
+                  onClick={() => router.push("/challenges")}
+                  style={{
+                    width:"100%", padding:"16px 20px", borderRadius:16,
+                    background:"#111118", border:"1px solid #2D1F52",
+                    color:"#F0F0F0", fontWeight:700, fontSize:14, cursor:"pointer",
+                    display:"flex", alignItems:"center", justifyContent:"space-between",
+                  }}>
+                  <span>📋 Open Challenge Board</span>
+                  <span style={{ fontSize:12, color:"#6B7280" }}>Find opponents →</span>
+                </button>
+                <div style={{
+                  background:"#111118", borderRadius:14, padding:"16px",
+                  border:"1px solid #1E1E2E", marginTop:4,
+                }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#9CA3AF", marginBottom:8 }}>How it works</div>
+                  {[
+                    { icon:"1️⃣", text:"Admin creates a challenge and selects team members" },
+                    { icon:"2️⃣", text:"Challenge is posted to the open board for any group to accept" },
+                    { icon:"3️⃣", text:"Both groups compete — logs auto-track toward the goal" },
+                    { icon:"🏆", text:"Winning group earns a trophy displayed on their page" },
+                  ].map(({ icon, text }) => (
+                    <div key={text} style={{ display:"flex", gap:10, alignItems:"flex-start", marginBottom:8 }}>
+                      <span style={{ fontSize:16, flexShrink:0 }}>{icon}</span>
+                      <span style={{ fontSize:13, color:"#9CA3AF" }}>{text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
