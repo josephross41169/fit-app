@@ -162,7 +162,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
       <div onClick={() => router.push(`/post/${post.id}`)} style={{ width:"100%",aspectRatio:"4/3",background:"#111",overflow:"hidden",position:"relative",cursor:"pointer" }}>
         {photoSrc
           ? <img src={photoSrc} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
-          : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>??</div>
+          : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📸</div>
         }
         {tags.length > 0 && (
         <div style={{ position:"absolute",bottom:14,left:18,display:"flex",gap:8,flexWrap:"wrap" }}>
@@ -222,7 +222,7 @@ function EventCard({ event }: { event: typeof LOCAL_EVENTS[0] }) {
           <span style={{ fontSize:14 }}>{event.emoji}</span>
           <span style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{event.name}</span>
         </div>
-        <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>?? {event.venue}</div>
+        <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>📍 {event.venue}</div>
         <div style={{ display:"flex",gap:8,alignItems:"center" }}>
           <span style={{ background:"rgba(124,58,237,0.2)",color:"#4ADE80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{event.category}</span>
           <span style={{ color:C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
@@ -386,7 +386,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         {allEvents.length > 6 && (
           <button onClick={() => setShowAllEvents(!showAllEvents)}
             style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#4ADE80",marginBottom:8,textAlign:"center" }}>
-            {showAllEvents ? "Show less ?" : `See all ${allEvents.length} events ?`}
+            {showAllEvents ? "Show less ↑" : `See all ${allEvents.length} events →`}
           </button>
         )}
 
