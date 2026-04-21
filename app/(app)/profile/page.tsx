@@ -1903,6 +1903,15 @@ export default function ProfilePage() {
               </button>
             </div>
 
+            {/* PR Hall of Fame link */}
+            <div style={{background:C.white,borderRadius:22,padding:20,border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
+              <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:6}}>🏆 Personal Records</div>
+              <div style={{fontSize:13,color:C.sub,marginBottom:14}}>Your all-time best lifts, automatically tracked every time you log a workout.</div>
+              <button onClick={()=>router.push('/prs')} style={{width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer"}}>
+                View PR Hall of Fame →
+              </button>
+            </div>
+
             {/* Body Weight Tracker */}
             {user && <WeightTracker userId={user.id} />}
 

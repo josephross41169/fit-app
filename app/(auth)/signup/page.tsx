@@ -80,7 +80,8 @@ export default function SignupPage() {
       // If session exists immediately, email confirm is disabled — go straight to feed
       // If not, Supabase will send a confirm email — still show success and redirect
       setSuccess(true);
-      setTimeout(() => router.push("/feed"), 1800);
+      // Redirect new users through onboarding wizard instead of straight to feed
+      setTimeout(() => router.push("/onboarding"), 1800);
 
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
