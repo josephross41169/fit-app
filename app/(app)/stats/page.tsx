@@ -44,6 +44,28 @@ function getMuscle(name:string):string {
   return "Other";
 }
 
+// Normalize cardio names: "Monday morning run", "neighborhood morning run" → "Morning Run"
+function normalizeCardio(raw:string):string {
+  const s=raw.toLowerCase().trim();
+  // Time of day
+  const time=s.includes("morning")?"Morning":s.includes("afternoon")?"Afternoon":s.includes("evening")||s.includes("night")?"Evening":"";
+  // Activity type
+  const CARDIO_TYPES=[
+    {keys:["treadmill"],label:"Treadmill"},
+    {keys:["run","jog","sprint"],label:"Run"},
+    {keys:["walk"],label:"Walk"},
+    {keys:["cycle","bike","cycling","spin"],label:"Cycling"},
+    {keys:["swim"],label:"Swim"},
+    {keys:["hiit"],label:"HIIT"},
+    {keys:["row","rowing"],label:"Row"},
+    {keys:["elliptical","stair"],label:"Machine"},
+  ];
+  for(const {keys,label} of CARDIO_TYPES){
+    if(keys.some(k=>s.includes(k))) return time?`${time} ${label}`:label;
+  }
+  return time?`${time} Cardio`:"Cardio";
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function daysAgo(n:number){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString(); }
 function rangeToIso(r:Range){ return daysAgo(r==="1W"?7:r==="1M"?30:r==="3M"?90:r==="6M"?180:365); }
@@ -148,34 +170,59 @@ function MacroRow({label,current,goal,color,unit}:{label:string;current:number;g
   );
 }
 function Heatmap({dates}:{dates:string[]}){
+  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const DAYS=["S","M","T","W","T","F","S"];
   const today=new Date();
   const cells=Array.from({length:84},(_,i)=>{
     const d=new Date(today); d.setDate(today.getDate()-(83-i));
     const key=d.toISOString().slice(0,10);
-    return{date:key,count:dates.filter(dt=>dt.startsWith(key)).length};
+    return{date:key,count:dates.filter(dt=>dt.startsWith(key)).length,dayOfWeek:d.getDay(),month:d.getMonth(),day:d.getDate()};
   });
   const weeks:typeof cells[]=[];
   for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
   const col=(n:number)=>n===0?C.border:n===1?"#4C1D95":n===2?"#6D28D9":C.purple;
   const todayStr=today.toISOString().slice(0,10);
+  // Month labels: show month name above the first week that starts a new month
+  const monthLabels:Record<number,string>={};
+  weeks.forEach((week,wi)=>{
+    const first=week[0];
+    if(wi===0||first.day<=7) monthLabels[wi]=MONTHS[first.month];
+  });
   return(
     <div style={{overflowX:"auto"}}>
+      {/* Month labels */}
+      <div style={{display:"flex",gap:3,marginBottom:4,paddingLeft:20}}>
+        {weeks.map((week,wi)=>(
+          <div key={wi} style={{width:13,fontSize:9,color:C.sub,textAlign:"center",flexShrink:0}}>
+            {monthLabels[wi]||""}
+          </div>
+        ))}
+      </div>
       <div style={{display:"flex",gap:3}}>
+        {/* Day of week labels */}
+        <div style={{display:"flex",flexDirection:"column",gap:3,marginRight:4}}>
+          {DAYS.map((d,i)=>(
+            <div key={i} style={{width:13,height:13,fontSize:8,color:C.sub,display:"flex",alignItems:"center",justifyContent:"flex-end",flexShrink:0}}>
+              {i%2===1?d:""}
+            </div>
+          ))}
+        </div>
         {weeks.map((week,wi)=>(
           <div key={wi} style={{display:"flex",flexDirection:"column",gap:3}}>
             {week.map((cell,di)=>(
-              <div key={di} title={`${cell.date}: ${cell.count}`} style={{
+              <div key={di} title={`${cell.date}: ${cell.count} workout${cell.count!==1?"s":""}`} style={{
                 width:13,height:13,borderRadius:3,background:col(cell.count),
                 border:cell.date===todayStr?`1.5px solid ${C.gold}`:"none",
+                cursor:"default",
               }}/>
             ))}
           </div>
         ))}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8}}>
-        <span style={{fontSize:10,color:C.sub}}>Less</span>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,paddingLeft:20}}>
+        <span style={{fontSize:10,color:C.sub}}>None</span>
         {[0,1,2,3].map(v=><div key={v} style={{width:11,height:11,borderRadius:2,background:col(v)}}/>)}
-        <span style={{fontSize:10,color:C.sub}}>More</span>
+        <span style={{fontSize:10,color:C.sub}}>3+</span>
       </div>
     </div>
   );
@@ -364,7 +411,16 @@ export default function StatsPage(){
   const streaks=calcStreak(allWorkoutDates);
   const totalWorkouts=workoutLogs.length;
   const rangeWeeks=range==="1W"?1:range==="1M"?4:range==="3M"?13:range==="6M"?26:52;
-  const avgPerWeek=totalWorkouts>0?(totalWorkouts/rangeWeeks).toFixed(1):"0";
+  // Count only actual weeks that had at least 1 workout (not all weeks in range)
+  const activeWeeks=(()=>{
+    const ws=new Set<string>();
+    workoutLogs.forEach(l=>{
+      const d=new Date(l.logged_at); d.setDate(d.getDate()-d.getDay());
+      ws.add(d.toISOString().slice(0,10));
+    });
+    return Math.max(1,ws.size);
+  })();
+  const avgPerWeek=totalWorkouts>0?(totalWorkouts/activeWeeks).toFixed(1):"0";
   const totalVolume=workoutLogs.reduce((s,l)=>s+calcVol(Array.isArray(l.exercises)?l.exercises:[]),0);
   const totalCalBurned=workoutLogs.reduce((s,l)=>s+(l.workout_calories||0),0);
   const avgDuration=totalWorkouts>0?Math.round(workoutLogs.reduce((s,l)=>s+(l.workout_duration_min||0),0)/totalWorkouts):0;
@@ -379,6 +435,28 @@ export default function StatsPage(){
   // Workout type breakdown (this week)
   const thisWeekStart=new Date(); thisWeekStart.setDate(thisWeekStart.getDate()-thisWeekStart.getDay());
   const thisWeekLogs=workoutLogs.filter(l=>new Date(l.logged_at)>=thisWeekStart);
+  // Group lifting sessions by primary muscle group, with avg volume
+  const workoutByMuscle=(()=>{
+    const g:Record<string,{count:number;totalVol:number;sessions:string[]}>={};
+    workoutLogs.forEach(l=>{
+      const exs=Array.isArray(l.exercises)?l.exercises:[];
+      if(exs.length===0) return; // pure cardio, skip
+      // Find primary muscle group (most sets)
+      const mc:Record<string,number>={};
+      exs.forEach((ex:any)=>{const m=getMuscle(ex.name||"");mc[m]=(mc[m]||0)+(parseInt(String(ex.sets))||1);});
+      const primary=Object.entries(mc).sort((a,b)=>b[1]-a[1])[0]?.[0]||"Other";
+      if(!g[primary]) g[primary]={count:0,totalVol:0,sessions:[]};
+      const vol=calcVol(exs);
+      g[primary].count++;
+      g[primary].totalVol+=vol;
+      if(l.workout_type) g[primary].sessions.push(l.workout_type);
+    });
+    return Object.entries(g).sort((a,b)=>b[1].count-a[1].count).map(([muscle,{count,totalVol,sessions}])=>({
+      muscle,count,
+      avgVol:count>0?Math.round(totalVol/count):0,
+      color:MUSCLE_COLORS[muscle]||"#6B7280",
+    }));
+  })();
   const workoutTypes=(()=>{
     const t:Record<string,number>={};
     workoutLogs.forEach(l=>{const tp=l.workout_type||"Workout";t[tp]=(t[tp]||0)+1;});
@@ -392,9 +470,19 @@ export default function StatsPage(){
   const totalCardioMin=allCardio.reduce((s:number,c:any)=>s+(parseFloat(String(c.duration))||0),0);
   const totalCardioMiles=allCardio.reduce((s:number,c:any)=>s+(parseFloat(String(c.distance))||0),0);
   const cardioTypes=(()=>{
-    const t:Record<string,number>={};
-    allCardio.forEach((c:any)=>{const tp=c.type||"Cardio";t[tp]=(t[tp]||0)+1;});
-    return Object.entries(t).sort((a,b)=>b[1]-a[1]).map(([type,count])=>({type,count}));
+    const t:Record<string,{count:number;totalDist:number;totalDur:number}>={};
+    allCardio.forEach((c:any)=>{
+      const tp=normalizeCardio(c.type||"Cardio");
+      if(!t[tp]) t[tp]={count:0,totalDist:0,totalDur:0};
+      t[tp].count++;
+      t[tp].totalDist+=parseFloat(String(c.distance))||0;
+      t[tp].totalDur+=parseFloat(String(c.duration))||0;
+    });
+    return Object.entries(t).sort((a,b)=>b[1].count-a[1].count).map(([type,{count,totalDist,totalDur}])=>({
+      type,count,
+      avgDist:count>0?Math.round((totalDist/count)*100)/100:0,
+      avgDur:count>0?Math.round(totalDur/count):0,
+    }));
   })();
 
   // Muscle groups
@@ -668,20 +756,19 @@ export default function StatsPage(){
 
           {/* ═══════════════════════════════════════════ WORKOUT ══ */}
           {tab==="workout"&&(<>
-            {/* Hero stats */}
+            {/* Hero stats — no streak (inaccurate), focus on real numbers */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <BigNum icon="🔥" label="Streak" value={`${streaks.current}d`} sub={`best: ${streaks.longest}d`} color={C.gold}/>
               <BigNum icon="💪" label="Total Sessions" value={totalWorkouts} sub={rangeLabel(range)} color={C.purple}/>
+              <BigNum icon="📅" label="Avg / Active Week" value={avgPerWeek} sub="workouts per week trained" color={C.gold}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
-              <MiniNum label="Avg/Week" value={avgPerWeek} color={C.text}/>
               <MiniNum label="Avg Duration" value={avgDuration>0?`${avgDuration}m`:"—"} color={C.cyan}/>
               <MiniNum label="Fav Day" value={favDay} color={C.gold}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:24}}>
-              <MiniNum label="Lifting" value={liftingSessions} color={C.purple}/>
-              <MiniNum label="Cardio" value={cardioSessions} color={C.cyan}/>
               <MiniNum label="Cal Burned" value={totalCalBurned>0?`${(totalCalBurned/1000).toFixed(1)}k`:"—"} color={C.red}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:24}}>
+              <MiniNum label="🏋️ Lifting Sessions" value={liftingSessions} color={C.purple}/>
+              <MiniNum label="🏃 Cardio Sessions" value={cardioSessions} color={C.cyan}/>
             </div>
 
             {/* Heatmap */}
@@ -690,43 +777,86 @@ export default function StatsPage(){
               {allWorkoutDates.length>0?<Heatmap dates={allWorkoutDates}/>:<div style={{color:C.sub,fontSize:13,textAlign:"center"}}>No workouts logged yet</div>}
             </div>
 
-            {/* Workout type breakdown */}
-            {workoutTypes.length>0&&(<>
-              <SecHead title="Workout Type Breakdown"/>
+            {/* Workout breakdown by muscle group with avg volume */}
+            {workoutByMuscle.length>0&&(<>
+              <SecHead title="Lifting — By Muscle Group"/>
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-                {workoutTypes.map(({type,count})=>(
-                  <div key={type} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                      <span style={{fontSize:13,fontWeight:700}}>{type}</span>
-                      <span style={{fontSize:12,fontWeight:700,color:C.purple}}>{count}×</span>
+                {workoutByMuscle.map(({muscle,count,avgVol,color})=>(
+                  <div key={muscle} style={{marginBottom:14}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:10,height:10,borderRadius:2,background:color,flexShrink:0}}/>
+                        <span style={{fontSize:13,fontWeight:700}}>{muscle}</span>
+                      </div>
+                      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                        {avgVol>0&&<span style={{fontSize:11,color:C.sub}}>{avgVol>=1000?`${(avgVol/1000).toFixed(1)}k`:avgVol} lbs avg</span>}
+                        <span style={{fontSize:12,fontWeight:700,color}}>{count} session{count!==1?"s":""}</span>
+                      </div>
                     </div>
-                    <ProgBar value={count} max={workoutTypes[0].count} color={C.purple}/>
+                    <ProgBar value={count} max={workoutByMuscle[0].count} color={color}/>
                   </div>
                 ))}
               </div>
             </>)}
 
-            {/* This week detail */}
+            {/* This week detail — rich cards */}
             {thisWeekLogs.length>0&&(<>
               <SecHead title="This Week's Sessions"/>
-              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
                 {thisWeekLogs.map((l:any,i:number)=>{
-                  const vol=calcVol(Array.isArray(l.exercises)?l.exercises:[]);
-                  const muscle=Array.isArray(l.exercises)&&l.exercises.length>0?getMuscle(l.exercises[0].name||""):"";
+                  const exs=Array.isArray(l.exercises)?l.exercises:[];
+                  const cardios=Array.isArray(l.cardio)?l.cardio:[];
+                  const vol=calcVol(exs);
+                  // Primary muscle group from sets distribution
+                  const mc:Record<string,number>={};
+                  exs.forEach((ex:any)=>{const m=getMuscle(ex.name||"");mc[m]=(mc[m]||0)+(parseInt(String(ex.sets))||1);});
+                  const muscle=Object.entries(mc).sort((a,b)=>b[1]-a[1])[0]?.[0]||"";
+                  const color=MUSCLE_COLORS[muscle]||C.sub;
+                  // Top exercises by volume
+                  const topExs=[...exs].sort((a:any,b:any)=>(parseFloat(String(b.weight))||0)-(parseFloat(String(a.weight))||0)).slice(0,3);
                   return(
-                    <div key={i} style={{background:C.card,borderRadius:12,padding:"12px 16px",border:`1px solid ${C.border}`}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div key={i} style={{background:C.card,borderRadius:14,padding:"14px 16px",border:`1px solid ${muscle?color:C.border}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:exs.length>0||cardios.length>0?10:0}}>
                         <div>
-                          <div style={{fontWeight:700,fontSize:14,color:C.text}}>{l.workout_type||"Workout"}</div>
-                          <div style={{fontSize:11,color:C.sub,marginTop:2}}>
-                            {fmtDay(l.logged_at)}
-                            {l.workout_duration_min&&` · ${l.workout_duration_min} min`}
-                            {l.workout_calories>0&&` · 🔥${l.workout_calories} cal`}
-                            {muscle&&<span style={{color:MUSCLE_COLORS[muscle]||C.sub,marginLeft:6,fontWeight:700}}>{muscle}</span>}
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{fontWeight:800,fontSize:14,color:C.text}}>{l.workout_type||"Workout"}</div>
+                            {muscle&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,background:`${color}22`,color}}>{muscle}</span>}
+                          </div>
+                          <div style={{fontSize:11,color:C.sub,marginTop:3,display:"flex",gap:10,flexWrap:"wrap"}}>
+                            <span>{fmtDay(l.logged_at)}</span>
+                            {l.workout_duration_min&&<span>⏱ {l.workout_duration_min} min</span>}
+                            {l.workout_calories>0&&<span>🔥 {l.workout_calories} cal</span>}
+                            {exs.length>0&&<span>💪 {exs.length} exercise{exs.length!==1?"s":""}</span>}
+                            {cardios.length>0&&<span>🏃 {cardios.length} cardio</span>}
                           </div>
                         </div>
-                        {vol>0&&<div style={{fontSize:12,fontWeight:800,color:C.gold}}>{vol>=1000?`${(vol/1000).toFixed(1)}k`:vol.toFixed(0)} lbs</div>}
+                        {vol>0&&<div style={{fontSize:13,fontWeight:900,color:C.gold,flexShrink:0}}>{vol>=1000?`${(vol/1000).toFixed(1)}k`:vol.toFixed(0)}<span style={{fontSize:10,fontWeight:400,color:C.sub}}> lbs</span></div>}
                       </div>
+                      {/* Top exercises */}
+                      {topExs.length>0&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          {topExs.map((ex:any,j:number)=>(
+                            <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"5px 8px",background:C.bg,borderRadius:7}}>
+                              <span style={{fontSize:12,color:C.subLight}}>{ex.name}</span>
+                              <span style={{fontSize:12,fontWeight:700,color:C.gold}}>{ex.sets}×{ex.reps} @ {ex.weight} lbs</span>
+                            </div>
+                          ))}
+                          {exs.length>3&&<div style={{fontSize:11,color:C.sub,textAlign:"center",paddingTop:2}}>+{exs.length-3} more exercises</div>}
+                        </div>
+                      )}
+                      {/* Cardio details */}
+                      {cardios.length>0&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:topExs.length>0?6:0}}>
+                          {cardios.map((c:any,j:number)=>(
+                            <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"5px 8px",background:C.bg,borderRadius:7}}>
+                              <span style={{fontSize:12,color:C.subLight}}>{normalizeCardio(c.type||"Cardio")}</span>
+                              <span style={{fontSize:12,fontWeight:700,color:C.cyan}}>
+                                {c.distance?`${c.distance} mi`:""}{c.distance&&c.duration?" · ":""}{c.duration?`${c.duration} min`:""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -777,11 +907,15 @@ export default function StatsPage(){
               </div>
               {cardioTypes.length>0&&(
                 <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-                  {cardioTypes.map(({type,count})=>(
-                    <div key={type} style={{marginBottom:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  {cardioTypes.map(({type,count,avgDist,avgDur})=>(
+                    <div key={type} style={{marginBottom:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                         <span style={{fontSize:13,fontWeight:700}}>{type}</span>
-                        <span style={{fontSize:12,fontWeight:700,color:C.cyan}}>{count}×</span>
+                        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                          {avgDist>0&&<span style={{fontSize:11,color:C.sub}}>{avgDist.toFixed(2)} mi avg</span>}
+                          {avgDur>0&&<span style={{fontSize:11,color:C.sub}}>{avgDur} min avg</span>}
+                          <span style={{fontSize:12,fontWeight:700,color:C.cyan}}>{count}×</span>
+                        </div>
                       </div>
                       <ProgBar value={count} max={cardioTypes[0].count} color={C.cyan}/>
                     </div>
