@@ -1,37 +1,60 @@
 "use client";
 import { useState } from "react";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 
 type WorkoutData = {
-  date: string;
-  exercise: string;
-  weight: number;
-  reps: number;
-  sets: number;
-  volume: number;
+  date: string; exercise: string; weight: number;
+  reps: number; sets: number; volume: number;
 };
-
 type ExerciseStats = {
-  name: string;
-  bestWeight: number;
-  lastWeight: number;
-  totalVolume: number;
-  pr: { weight: number; date: string } | null;
-  history: WorkoutData[];
+  name: string; bestWeight: number; lastWeight: number;
+  totalVolume: number; pr: { weight: number; date: string } | null;
+  history: WorkoutData[]; isCardio: boolean;
 };
 
 const C = {
-  purple: "#7C3AED",
-  purpleDark: "#1E1530",
-  purpleMid: "#2D1F52",
-  purpleBorder: "#4C3A7A",
-  gold: "#F5A623",
-  text: "#F0F0F0",
-  sub: "#9CA3AF",
-  green: "#4ADE80",
+  purple: "#7C3AED", purpleDark: "#1E1530", purpleMid: "#2D1F52",
+  purpleBorder: "#4C3A7A", gold: "#F5A623", cyan: "#06B6D4",
+  text: "#F0F0F0", sub: "#9CA3AF", green: "#4ADE80",
 };
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function parseId(raw: string): Date | null {
+  const parts = raw.split("/");
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+  }
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtDate(raw: string): string {
+  const d = parseId(raw);
+  if (!d) return raw.slice(0, 8);
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+// Format a week as "Apr 14–20"
+function fmtWeekRange(weekStartStr: string): string {
+  const parts = weekStartStr.split(" ");
+  if (parts.length !== 2) return weekStartStr;
+  const month = MONTHS.indexOf(parts[0]);
+  const startDay = parseInt(parts[1]);
+  if (isNaN(startDay) || month < 0) return weekStartStr;
+  const startDate = new Date(new Date().getFullYear(), month, startDay);
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 6);
+  const endMonth = MONTHS[endDate.getMonth()];
+  const endDay = endDate.getDate();
+  if (endDate.getMonth() === startDate.getMonth()) {
+    return `${parts[0]} ${startDay}–${endDay}`;
+  }
+  return `${parts[0]} ${startDay}–${endMonth} ${endDay}`;
+}
 
 interface WorkoutProgressGraphsProps {
   workouts: any[];
@@ -40,24 +63,9 @@ interface WorkoutProgressGraphsProps {
 export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraphsProps) {
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"1m" | "3m" | "6m" | "all">("3m");
-
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-  // Parse a day id like "04/20/2026" (MM/DD/YYYY) into a Date
-  function parseId(raw: string): Date | null {
-    const parts = raw.split("/");
-    if (parts.length === 3) {
-      return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
-    }
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  function formatDate(raw: string): string {
-    const d = parseId(raw);
-    if (!d) return raw.slice(0, 8);
-    return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
-  }
+  const [activeGraph, setActiveGraph] = useState<"lifting" | "cardio">("lifting");
+  const [showAllExercises, setShowAllExercises] = useState(false);
+  const EXERCISES_VISIBLE = 5;
 
   // Time range filter
   const now = new Date();
@@ -72,17 +80,17 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     return d ? d >= cutoff : true;
   });
 
-  // Build exercise map from filtered workouts
+  // Build exercise map
   const exerciseMap = new Map<string, ExerciseStats>();
 
   filteredWorkouts.forEach((w: any) => {
-    const logDate = formatDate(w.id || w.created_at || "");
+    const logDate = fmtDate(w.id || w.created_at || "");
     const exList: any[] = w.workout?.exercises || w.exercises || [];
 
     exList.forEach((ex: any) => {
       if (!ex.name) return;
       if (!exerciseMap.has(ex.name)) {
-        exerciseMap.set(ex.name, { name: ex.name, bestWeight: 0, lastWeight: 0, totalVolume: 0, pr: null, history: [] });
+        exerciseMap.set(ex.name, { name: ex.name, bestWeight: 0, lastWeight: 0, totalVolume: 0, pr: null, history: [], isCardio: false });
       }
       const stats = exerciseMap.get(ex.name)!;
       const weight = parseFloat(String(ex.weight)) || 0;
@@ -98,9 +106,9 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     const cardioList: any[] = w.workout?.cardio || w.cardio || [];
     cardioList.forEach((cardio: any) => {
       if (!cardio.type) return;
-      const key = `🏃 ${cardio.type}`;
+      const key = cardio.type;
       if (!exerciseMap.has(key)) {
-        exerciseMap.set(key, { name: key, bestWeight: 0, lastWeight: 0, totalVolume: 0, pr: null, history: [] });
+        exerciseMap.set(key, { name: key, bestWeight: 0, lastWeight: 0, totalVolume: 0, pr: null, history: [], isCardio: true });
       }
       const stats = exerciseMap.get(key)!;
       const distance = parseFloat(String(cardio.distance)) || 0;
@@ -111,9 +119,14 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     });
   });
 
-  const exercises = Array.from(exerciseMap.values());
+  const allExercises = Array.from(exerciseMap.values());
+  const liftingExercises = allExercises.filter(e => !e.isCardio);
+  const cardioExercises = allExercises.filter(e => e.isCardio);
+  const activeExercises = activeGraph === "lifting" ? liftingExercises : cardioExercises;
+  const visibleExercises = showAllExercises ? activeExercises : activeExercises.slice(0, EXERCISES_VISIBLE);
+
   const totalWorkouts = filteredWorkouts.length;
-  const totalVolume = exercises.reduce((s, ex) => s + ex.totalVolume, 0);
+  const totalVolume = liftingExercises.reduce((s, ex) => s + ex.totalVolume, 0);
   const totalCalories = filteredWorkouts.reduce((s: number, w: any) => s + (w.workout?.calories || 0), 0);
 
   // Avg per week
@@ -127,33 +140,69 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     }
   }
 
-  // Frequency chart bucketed by week
-  const weekBuckets: Record<string, number> = {};
+  // ── LIFTING frequency chart — bucketed by week with range labels ──────────
+  const liftingWeekBuckets: Record<string, { count: number; startDate: Date }> = {};
   filteredWorkouts.forEach((w: any) => {
     const d = parseId(w.id || w.created_at || "");
     if (!d) return;
     const weekStart = new Date(d);
-    weekStart.setDate(d.getDate() - d.getDay());
+    weekStart.setDate(d.getDate() - d.getDay()); // Sunday
     const key = `${MONTHS[weekStart.getMonth()]} ${weekStart.getDate()}`;
-    weekBuckets[key] = (weekBuckets[key] || 0) + 1;
+    if (!liftingWeekBuckets[key]) liftingWeekBuckets[key] = { count: 0, startDate: weekStart };
+    liftingWeekBuckets[key].count++;
   });
 
-  const freqData = Object.entries(weekBuckets).slice(-8).map(([week, count]) => ({ week, workouts: count }));
+  const liftingFreqData = Object.entries(liftingWeekBuckets)
+    .sort((a, b) => a[1].startDate.getTime() - b[1].startDate.getTime())
+    .slice(-8)
+    .map(([week, { count }]) => ({ week: fmtWeekRange(week), workouts: count }));
+
+  // ── CARDIO frequency chart — bucketed by week ────────────────────────────
+  const cardioWeekBuckets: Record<string, { count: number; startDate: Date; totalDist: number }> = {};
+  filteredWorkouts.forEach((w: any) => {
+    const d = parseId(w.id || w.created_at || "");
+    if (!d) return;
+    const cardioList: any[] = w.workout?.cardio || w.cardio || [];
+    if (!cardioList.length) return;
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay());
+    const key = `${MONTHS[weekStart.getMonth()]} ${weekStart.getDate()}`;
+    if (!cardioWeekBuckets[key]) cardioWeekBuckets[key] = { count: 0, startDate: weekStart, totalDist: 0 };
+    cardioWeekBuckets[key].count++;
+    cardioList.forEach((c: any) => { cardioWeekBuckets[key].totalDist += parseFloat(String(c.distance)) || 0; });
+  });
+
+  const cardioFreqData = Object.entries(cardioWeekBuckets)
+    .sort((a, b) => a[1].startDate.getTime() - b[1].startDate.getTime())
+    .slice(-8)
+    .map(([week, { count, totalDist }]) => ({
+      week: fmtWeekRange(week),
+      sessions: count,
+      distance: Math.round(totalDist * 10) / 10,
+    }));
+
+  const hasLifting = liftingExercises.length > 0;
+  const hasCardio  = cardioExercises.length > 0;
+
+  const tooltipStyle = {
+    contentStyle: { background: "#1A1A1A", border: `1px solid ${C.purple}`, borderRadius: 8, fontSize: 12 },
+    labelStyle: { color: C.text },
+  };
 
   return (
     <div style={{ padding: "8px 0", color: C.text }}>
-      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 16, color: C.text }}>📊 Workout Progress</div>
+      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>📊 Workout Progress</div>
 
-      {/* Key Stats */}
+      {/* Key stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
         {[
-          { label: "Workouts", value: String(totalWorkouts), color: C.purple },
+          { label: "Workouts",     value: String(totalWorkouts), color: C.purple },
           { label: "Total Volume", value: totalVolume > 0 ? `${(totalVolume/1000).toFixed(0)}k lbs` : "—", color: C.gold },
-          { label: "Avg/Week", value: avgPerWeek, color: C.green },
+          { label: "Avg/Week",     value: avgPerWeek, color: C.green },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
             <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: value.length > 5 ? 15 : 20, fontWeight: 800, color }}>{value}</div>
+            <div style={{ fontSize: value.length > 5 ? 14 : 20, fontWeight: 800, color }}>{value}</div>
           </div>
         ))}
       </div>
@@ -165,115 +214,228 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         </div>
       )}
 
-      {/* Time Range */}
+      {/* Time range */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {(["1m", "3m", "6m", "all"] as const).map((range) => (
-          <button key={range} onClick={() => setTimeRange(range)} style={{
+        {(["1m","3m","6m","all"] as const).map(r => (
+          <button key={r} onClick={() => { setTimeRange(r); setShowAllExercises(false); }} style={{
             padding: "6px 12px", fontSize: 12, fontWeight: 700,
-            background: timeRange === range ? C.purple : C.purpleDark,
-            color: timeRange === range ? "#fff" : C.sub,
-            border: `1px solid ${timeRange === range ? C.purple : C.purpleBorder}`,
+            background: timeRange === r ? C.purple : C.purpleDark,
+            color: timeRange === r ? "#fff" : C.sub,
+            border: `1px solid ${timeRange === r ? C.purple : C.purpleBorder}`,
             borderRadius: 8, cursor: "pointer",
           }}>
-            {range === "1m" ? "1 Mo" : range === "3m" ? "3 Mo" : range === "6m" ? "6 Mo" : "All"}
+            {r === "1m" ? "1 Mo" : r === "3m" ? "3 Mo" : r === "6m" ? "6 Mo" : "All"}
           </button>
         ))}
       </div>
 
-      {/* Frequency Chart */}
-      {freqData.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: C.text }}>📅 Workout Frequency</div>
-          <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
-            <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={freqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
-                <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 10 }} />
-                <YAxis stroke={C.sub} tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: "#1A1A1A", border: `1px solid ${C.purple}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: C.text }} itemStyle={{ color: C.purple }} />
-                <Bar dataKey="workouts" fill={C.purple} radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+      {/* ── Graph toggle tabs ──────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 0, marginBottom: 16, background: C.purpleDark, borderRadius: 12, padding: 4, border: `1px solid ${C.purpleBorder}` }}>
+        {[
+          { key: "lifting" as const, icon: "💪", label: `Lifting${hasLifting ? ` (${liftingExercises.length})` : ""}` },
+          { key: "cardio"  as const, icon: "🏃", label: `Cardio${hasCardio   ? ` (${cardioExercises.length})` : ""}`  },
+        ].map(({ key, icon, label }) => (
+          <button key={key} onClick={() => { setActiveGraph(key); setExpandedExercise(null); setShowAllExercises(false); }} style={{
+            flex: 1, padding: "8px 0", border: "none", cursor: "pointer", borderRadius: 9,
+            fontWeight: 700, fontSize: 13,
+            background: activeGraph === key ? C.purple : "transparent",
+            color: activeGraph === key ? "#fff" : C.sub,
+            transition: "all 0.15s",
+          }}>
+            {icon} {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── LIFTING graph ──────────────────────────────────────────────── */}
+      {activeGraph === "lifting" && (<>
+        {liftingFreqData.length > 0 ? (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📅 Sessions per Week</div>
+            <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart data={liftingFreqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
+                  <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 9 }} interval={0} />
+                  <YAxis stroke={C.sub} tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip {...tooltipStyle} itemStyle={{ color: C.purple }} />
+                  <Bar dataKey="workouts" name="Sessions" fill={C.purple} radius={[6,6,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13, marginBottom: 20 }}>
+            No lifting sessions logged yet 💪
+          </div>
+        )}
+      </>)}
 
-      {/* Exercise Breakdown */}
+      {/* ── CARDIO graph ───────────────────────────────────────────────── */}
+      {activeGraph === "cardio" && (<>
+        {cardioFreqData.length > 0 ? (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🏃 Cardio Sessions per Week</div>
+            <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart data={cardioFreqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
+                  <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 9 }} interval={0} />
+                  <YAxis stroke={C.sub} tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip {...tooltipStyle} itemStyle={{ color: C.cyan }} />
+                  <Bar dataKey="sessions" name="Sessions" fill={C.cyan} radius={[6,6,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Distance line chart */}
+            {cardioFreqData.some(d => d.distance > 0) && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: C.sub }}>📏 Distance per Week (miles)</div>
+                <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
+                  <ResponsiveContainer width="100%" height={120}>
+                    <LineChart data={cardioFreqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
+                      <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 9 }} interval={0} />
+                      <YAxis stroke={C.sub} tick={{ fontSize: 10 }} />
+                      <Tooltip {...tooltipStyle} itemStyle={{ color: C.green }} />
+                      <Line dataKey="distance" name="Distance (mi)" stroke={C.green} strokeWidth={2.5} dot={{ fill: C.green, r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13, marginBottom: 20 }}>
+            No cardio logged yet 🏃
+          </div>
+        )}
+      </>)}
+
+      {/* ── Exercise list ──────────────────────────────────────────────── */}
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: C.text }}>💪 Exercises ({exercises.length})</div>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+          {activeGraph === "lifting" ? "💪" : "🏃"} {activeGraph === "lifting" ? "Exercises" : "Activities"} ({activeExercises.length})
+        </div>
 
-        {exercises.length === 0 && (
+        {activeExercises.length === 0 && (
           <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13 }}>
-            Log workouts with exercises to see your progress here 📈
+            {activeGraph === "lifting"
+              ? "Log workouts with exercises to see progress here 📈"
+              : "Log cardio sessions to see progress here 🏃"}
           </div>
         )}
 
-        {exercises.map((ex) => (
-          <div key={ex.name} style={{ marginBottom: 10 }}>
+        {visibleExercises.map((ex) => (
+          <div key={ex.name} style={{ marginBottom: 8 }}>
             {expandedExercise !== ex.name ? (
-              <div onClick={() => setExpandedExercise(ex.name)} style={{
-                background: C.purpleDark, border: `1px solid ${C.purpleBorder}`,
-                borderRadius: 10, padding: "12px 14px", cursor: "pointer",
+              /* ── Collapsed row ── */
+              <button onClick={() => setExpandedExercise(ex.name)} style={{
+                width: "100%", background: C.purpleDark, border: `1px solid ${C.purpleBorder}`,
+                borderRadius: 10, padding: "11px 14px", cursor: "pointer",
                 display: "flex", justifyContent: "space-between", alignItems: "center",
+                textAlign: "left",
               }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{ex.name}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ex.name}</div>
                   <div style={{ fontSize: 11, color: C.sub }}>
-                    Best: <span style={{ color: C.gold }}>{ex.bestWeight > 0 ? `${ex.bestWeight} lbs` : "—"}</span>
-                    {" · "}Last: <span style={{ color: C.purple }}>{ex.lastWeight > 0 ? `${ex.lastWeight} lbs` : "—"}</span>
-                    {" · "}{ex.history.length} session{ex.history.length !== 1 ? "s" : ""}
+                    {ex.isCardio ? (
+                      <>Best: <span style={{ color: C.cyan }}>{ex.bestWeight > 0 ? `${ex.bestWeight} mi` : "—"}</span>
+                      {" · "}{ex.history.length} session{ex.history.length !== 1 ? "s" : ""}</>
+                    ) : (
+                      <>Best: <span style={{ color: C.gold }}>{ex.bestWeight > 0 ? `${ex.bestWeight} lbs` : "—"}</span>
+                      {" · "}Last: <span style={{ color: C.purple }}>{ex.lastWeight > 0 ? `${ex.lastWeight} lbs` : "—"}</span>
+                      {" · "}{ex.history.length} session{ex.history.length !== 1 ? "s" : ""}</>
+                    )}
                   </div>
                 </div>
-                <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{ width: 16, height: 16 }}><path d="M6 9l6 6 6-6"/></svg>
-              </div>
+                <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{ width: 15, height: 15, flexShrink: 0, marginLeft: 8 }}>
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </button>
             ) : (
-              <div style={{ background: C.purpleDark, border: `1px solid ${C.purple}`, borderRadius: 10, padding: "14px 14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, cursor: "pointer" }} onClick={() => setExpandedExercise(null)}>
+              /* ── Expanded row ── */
+              <div style={{ background: C.purpleDark, border: `1px solid ${C.purple}`, borderRadius: 10, overflow: "hidden" }}>
+                <button onClick={() => setExpandedExercise(null)} style={{
+                  width: "100%", background: "transparent", border: "none", cursor: "pointer",
+                  padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
+                }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 3 }}>{ex.name}</div>
                     <div style={{ fontSize: 11, color: C.sub }}>
-                      Best: <span style={{ color: C.gold, fontWeight: 700 }}>{ex.bestWeight > 0 ? `${ex.bestWeight} lbs` : "—"}</span>
-                      {" · "}Last: <span style={{ color: C.purple, fontWeight: 700 }}>{ex.lastWeight > 0 ? `${ex.lastWeight} lbs` : "—"}</span>
+                      {ex.isCardio ? (
+                        <>Best: <span style={{ color: C.cyan, fontWeight: 700 }}>{ex.bestWeight > 0 ? `${ex.bestWeight} mi` : "—"}</span></>
+                      ) : (
+                        <>Best: <span style={{ color: C.gold, fontWeight: 700 }}>{ex.bestWeight > 0 ? `${ex.bestWeight} lbs` : "—"}</span>
+                        {" · "}Last: <span style={{ color: C.purple, fontWeight: 700 }}>{ex.lastWeight > 0 ? `${ex.lastWeight} lbs` : "—"}</span></>
+                      )}
                     </div>
                   </div>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{ width: 16, height: 16, transform: "rotate(180deg)" }}><path d="M6 9l6 6 6-6"/></svg>
-                </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{ width: 15, height: 15, transform: "rotate(180deg)", flexShrink: 0 }}>
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
 
-                {ex.history.length > 1 ? (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>Weight Progress</div>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <LineChart data={ex.history} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
-                        <XAxis dataKey="date" stroke={C.sub} tick={{ fontSize: 10 }} />
-                        <YAxis stroke={C.sub} tick={{ fontSize: 10 }} />
-                        <Tooltip contentStyle={{ background: "#1A1A1A", border: `1px solid ${C.purple}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: C.text }} formatter={(val: any) => [`${val} lbs`, "Weight"]} />
-                        <Line type="monotone" dataKey="weight" stroke={C.gold} dot={{ fill: C.gold, r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} strokeWidth={2.5} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, padding: "8px 12px", background: "#0D0D0D", borderRadius: 8 }}>
-                    Log this exercise again to see your progress chart 📈
-                  </div>
-                )}
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                  {[
-                    { label: "Sessions", value: String(ex.history.length), color: C.text },
-                    { label: "Volume", value: ex.totalVolume > 0 ? `${(ex.totalVolume/1000).toFixed(1)}k` : "—", color: C.gold },
-                    { label: "PR", value: ex.pr ? `${ex.pr.weight} lbs` : "—", color: C.gold },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: "#0D0D0D", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 10, color: C.sub, marginBottom: 2 }}>{label}</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color }}>{value}</div>
+                <div style={{ padding: "0 14px 14px" }}>
+                  {ex.history.length > 1 ? (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>
+                        {ex.isCardio ? "Distance Progress (mi)" : "Weight Progress (lbs)"}
+                      </div>
+                      <div style={{ background: "#0D0D0D", borderRadius: 10, padding: "10px 4px 6px" }}>
+                        <ResponsiveContainer width="100%" height={130}>
+                          <LineChart data={ex.history} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
+                            <XAxis dataKey="date" stroke={C.sub} tick={{ fontSize: 9 }} />
+                            <YAxis stroke={C.sub} tick={{ fontSize: 9 }} domain={["auto","auto"]} />
+                            <Tooltip {...tooltipStyle} formatter={(val: any) => [`${val}${ex.isCardio ? " mi" : " lbs"}`, ex.isCardio ? "Distance" : "Weight"]} />
+                            <Line type="monotone" dataKey="weight" stroke={ex.isCardio ? C.cyan : C.gold}
+                              dot={{ fill: ex.isCardio ? C.cyan : C.gold, r: 4, strokeWidth: 0 }}
+                              activeDot={{ r: 6 }} strokeWidth={2.5} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div style={{ fontSize: 12, color: C.sub, padding: "8px 0 10px", background: "transparent" }}>
+                      Log this {ex.isCardio ? "activity" : "exercise"} again to see a progress chart 📈
+                    </div>
+                  )}
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                    {(ex.isCardio ? [
+                      { label: "Sessions", value: String(ex.history.length), color: C.text },
+                      { label: "Best Dist", value: ex.bestWeight > 0 ? `${ex.bestWeight} mi` : "—", color: C.cyan },
+                      { label: "Last Dist", value: ex.lastWeight > 0 ? `${ex.lastWeight} mi` : "—", color: C.sub },
+                    ] : [
+                      { label: "Sessions", value: String(ex.history.length), color: C.text },
+                      { label: "Volume",   value: ex.totalVolume > 0 ? `${(ex.totalVolume/1000).toFixed(1)}k` : "—", color: C.gold },
+                      { label: "PR",       value: ex.pr ? `${ex.pr.weight} lbs` : "—", color: C.gold },
+                    ]).map(({ label, value, color }) => (
+                      <div key={label} style={{ background: "#0D0D0D", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+                        <div style={{ fontSize: 9, color: C.sub, marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
           </div>
         ))}
+
+        {/* Show more / less toggle */}
+        {activeExercises.length > EXERCISES_VISIBLE && (
+          <button onClick={() => { setShowAllExercises(s => !s); setExpandedExercise(null); }} style={{
+            width: "100%", marginTop: 4, padding: "10px 0", borderRadius: 10, cursor: "pointer",
+            background: "transparent", border: `1px dashed ${C.purpleBorder}`,
+            color: C.sub, fontWeight: 700, fontSize: 12,
+          }}>
+            {showAllExercises
+              ? `↑ Show less`
+              : `↓ Show all ${activeExercises.length} ${activeGraph === "lifting" ? "exercises" : "activities"}`}
+          </button>
+        )}
       </div>
     </div>
   );
