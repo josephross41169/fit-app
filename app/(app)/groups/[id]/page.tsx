@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -647,6 +647,52 @@ export default function GroupPage() {
     _isOwner: currentUser && dbGroup.created_by === currentUser?.id,
   } : mockGroup;
 
+
+  if (!loading && !group) {
+    return (
+      <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
+        <div style={{ background:C.white, borderRadius:24, border:`2px solid ${C.blueMid}`, padding:"48px 40px", maxWidth:440, width:"100%", textAlign:"center" }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>🤝</div>
+          <div style={{ fontWeight:900, fontSize:20, color:C.text, marginBottom:8 }}>Group not found</div>
+          <button onClick={() => router.push("/connect")} style={{ color:C.blue, fontWeight:700, fontSize:14, background:"none", border:"none", cursor:"pointer" }}>← Back to Connect</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || !group) {
+    return (
+      <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ fontWeight:700, fontSize:16, color:C.sub }}>Loading group...</div>
+      </div>
+    );
+  }
+
+  // ── Load war challenges (must be hook, before any conditional returns) ────────
+  const loadWarChallenges = useCallback(async () => {
+    const dbId = (dbGroup as any)?.id;
+    if (!dbId) return;
+    setWarLoading(true);
+    try {
+      const { data } = await supabase
+        .from("group_challenges")
+        .select(`*, creator_group:creator_group_id(id,name), opponent_group:opponent_group_id(id,name),
+          winner_group:winner_group_id(id,name),
+          group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted,
+            users(id,username,full_name,avatar_url)),
+          group_challenge_media(id,media_url,media_type,caption,created_at,user_id,
+            users(username,full_name))`)
+        .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
+        .order("created_at", { ascending: false });
+      setWarChallenges(data || []);
+    } catch(e) { console.error(e); }
+    setWarLoading(false);
+  }, [dbGroup, tab]);
+
+  useEffect(() => {
+    if (tab === "war" && (dbGroup as any)?.id) loadWarChallenges();
+  }, [tab, dbGroup, loadWarChallenges]);
+
   if (!loading && !group) {
     return (
       <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
@@ -669,31 +715,6 @@ export default function GroupPage() {
 
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
   const isOwnerOrMod = group._isOwner || isMemberDB;
-
-  // ── Load war challenges ──────────────────────────────────────────────────────
-  const loadWarChallenges = async () => {
-    const dbId = group._dbId;
-    if (!dbId) return;
-    setWarLoading(true);
-    try {
-      const { data } = await supabase
-        .from("group_challenges")
-        .select(`*, creator_group:creator_group_id(id,name), opponent_group:opponent_group_id(id,name),
-          winner_group:winner_group_id(id,name),
-          group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted,
-            users(id,username,full_name,avatar_url)),
-          group_challenge_media(id,media_url,media_type,caption,created_at,user_id,
-            users(username,full_name))`)
-        .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
-        .order("created_at", { ascending: false });
-      setWarChallenges(data || []);
-    } catch(e) { console.error(e); }
-    setWarLoading(false);
-  };
-
-  useEffect(() => {
-    if (tab === "war" && group._dbId) loadWarChallenges();
-  }, [tab, group._dbId]);
 
   // ── Create challenge ─────────────────────────────────────────────────────────
   const createWarChallenge = async () => {
@@ -720,7 +741,7 @@ export default function GroupPage() {
       setShowCreateWar(false);
       setWarForm({ title:"", metric:"miles_run", lift_type:"", duration_days:7 });
       setWarSelectedMembers([]);
-      loadWarChallenges();
+      await loadWarChallenges();
     } catch(e) { console.error(e); alert("Error creating challenge"); }
     setWarSaving(false);
   };
