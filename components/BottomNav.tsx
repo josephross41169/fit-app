@@ -124,6 +124,19 @@ const tabs = [
     )
   },
   {
+    href: "/leaderboard", label: "Ranks",
+    icon: (active: boolean) => (
+      <div style={{
+        width: 24, height: 24,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: active ? 18 : 16,
+        filter: active ? "none" : "grayscale(0.4)",
+      }}>
+        🏆
+      </div>
+    )
+  },
+  {
     href: "/profile", label: "Profile",
     icon: (active: boolean) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
