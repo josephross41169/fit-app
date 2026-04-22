@@ -771,14 +771,26 @@ export async function POST(req: NextRequest) {
     if (action === 'delete_group_challenge') {
       const { challengeId } = payload;
       if (!challengeId) return NextResponse.json({ error: 'Missing challengeId' }, { status: 400 });
-      // Delete members first (foreign key)
-      await admin.from('group_challenge_members').delete().eq('challenge_id', challengeId);
-      // Delete media
-      await admin.from('group_challenge_media').delete().eq('challenge_id', challengeId);
-      // Delete the challenge itself
-      const { error } = await admin.from('group_challenges').delete().eq('id', challengeId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true });
+
+      // Try group_challenges table first (wars + group goals)
+      const { data: gcRow } = await admin.from('group_challenges').select('id').eq('id', challengeId).single();
+      if (gcRow) {
+        await admin.from('group_challenge_members').delete().eq('challenge_id', challengeId);
+        await admin.from('group_challenge_media').delete().eq('challenge_id', challengeId);
+        await admin.from('group_challenges').delete().eq('id', challengeId);
+        return NextResponse.json({ success: true });
+      }
+
+      // Try challenges table (member challenges)
+      const { data: cRow } = await admin.from('challenges').select('id').eq('id', challengeId).single();
+      if (cRow) {
+        await admin.from('challenge_participants').delete().eq('challenge_id', challengeId);
+        const { error } = await admin.from('challenges').delete().eq('id', challengeId);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ success: true });
+      }
+
+      return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
