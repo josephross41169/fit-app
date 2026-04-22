@@ -519,7 +519,7 @@ export default function GroupPage() {
   const [warLoading, setWarLoading] = useState(false);
   const [expandedChallenge, setExpandedChallenge] = useState<string|null>(null);
   const [showCreateWar, setShowCreateWar] = useState(false);
-  const [warForm, setWarForm] = useState({ title:"", metric:"miles_run", lift_type:"", duration_days:7 });
+  const [warForm, setWarForm] = useState({ title:"", description:"", metric:"miles_run", lift_type:"", duration_days:7, goal:0, stakes:"" });
   const [warSelectedMembers, setWarSelectedMembers] = useState<string[]>([]);
   const [warSaving, setWarSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -732,7 +732,7 @@ export default function GroupPage() {
         warSelectedMembers.map(uid => ({ challenge_id: chal.id, user_id: uid, group_id: dbId }))
       );
       setShowCreateWar(false);
-      setWarForm({ title:"", metric:"miles_run", lift_type:"", duration_days:7 });
+      setWarForm({ title:"", description:"", metric:"miles_run", lift_type:"", duration_days:7, goal:0, stakes:"" });
       setWarSelectedMembers([]);
       setWarPosted(true);
       setTimeout(() => setWarPosted(false), 5000);
@@ -1949,47 +1949,75 @@ export default function GroupPage() {
                       const meta = METRICS[chal.metric] || METRICS.miles_run;
                       const LIFT_LABELS: Record<string,string> = {bench_press:"Bench Press",squat:"Squat",deadlift:"Deadlift",dumbbell_curl:"Dumbbell Curl"};
                       return (
-                        <div key={chal.id} style={{background:"#111118",borderRadius:14,
-                          padding:"14px 16px",border:"1px solid #2D1F52",marginBottom:10}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                            <div>
-                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                                <span style={{fontSize:20}}>{meta.icon}</span>
-                                <div>
-                                  <div style={{fontWeight:800,fontSize:15,color:"#F0F0F0"}}>{chal.title}</div>
-                                  <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>
-                                    {chal.creator_group?.emoji} <span style={{color:"#9CA3AF",fontWeight:600}}>{chal.creator_group?.name}</span>
-                                  </div>
-                                </div>
+                        <div key={chal.id} style={{background:"#111118",borderRadius:16,
+                          border:"1px solid #2D1F52",marginBottom:12,overflow:"hidden"}}>
+                          {/* Header */}
+                          <div style={{padding:"14px 16px 10px"}}>
+                            {/* Challenger group */}
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                              <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                                {chal.creator_group?.emoji||"💪"}
                               </div>
-                              <div style={{display:"flex",gap:8,flexWrap:"wrap" as const,marginTop:6}}>
-                                <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
-                                  background:"rgba(6,182,212,0.15)",color:"#06B6D4"}}>
-                                  {meta.label}{chal.lift_type?` · ${LIFT_LABELS[chal.lift_type]||chal.lift_type}`:""}
-                                </span>
-                                <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
-                                  background:"rgba(124,58,237,0.15)",color:"#A78BFA"}}>
-                                  ⚔️ {chal.member_count}v{chal.member_count}
-                                </span>
-                                <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
-                                  background:"rgba(245,166,35,0.15)",color:"#F5A623"}}>
-                                  ⏱ {chal.duration_days} days
-                                </span>
+                              <div>
+                                <div style={{fontSize:11,color:"#6B7280",fontWeight:600}}>CHALLENGE FROM</div>
+                                <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0"}}>{chal.creator_group?.name||"Unknown Group"}</div>
                               </div>
                             </div>
+
+                            {/* Title + description */}
+                            <div style={{fontWeight:900,fontSize:17,color:"#F0F0F0",marginBottom:4}}>{chal.title}</div>
+                            {chal.description && (
+                              <div style={{fontSize:13,color:"#9CA3AF",marginBottom:10,lineHeight:1.5,
+                                fontStyle:"italic",padding:"8px 10px",background:"rgba(255,255,255,0.03)",
+                                borderRadius:8,borderLeft:"2px solid #7C3AED"}}>
+                                "{chal.description}"
+                              </div>
+                            )}
+
+                            {/* Stat pills */}
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap" as const,marginBottom:8}}>
+                              <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                background:"rgba(6,182,212,0.12)",color:"#06B6D4"}}>
+                                {meta.icon} {meta.label}{chal.lift_type?` · ${LIFT_LABELS[chal.lift_type]||""}` :""}
+                              </span>
+                              <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
+                                ⚔️ {chal.member_count}v{chal.member_count}
+                              </span>
+                              <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                background:"rgba(245,166,35,0.12)",color:"#F5A623"}}>
+                                ⏱ {chal.duration_days} days
+                              </span>
+                              {chal.goal>0 && (
+                                <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                  background:"rgba(74,222,128,0.12)",color:"#4ADE80"}}>
+                                  🎯 Goal: {chal.goal}{meta.unit}
+                                </span>
+                              )}
+                            </div>
+                            {chal.stakes && (
+                              <div style={{fontSize:11,color:"#F5A623",background:"rgba(245,166,35,0.08)",
+                                borderRadius:8,padding:"6px 10px"}}>
+                                🏅 Stakes: {chal.stakes}
+                              </div>
+                            )}
                           </div>
-                          {isOwnerOrMod && (
-                            <button onClick={()=>acceptWarChallenge(chal)} style={{
-                              width:"100%",padding:"10px 0",borderRadius:10,border:"none",
-                              background:"linear-gradient(135deg,#4ADE80,#16A34A)",
-                              color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
-                            }}>⚔️ Accept Challenge</button>
-                          )}
-                          {!isOwnerOrMod && (
-                            <div style={{fontSize:12,color:"#6B7280",textAlign:"center" as const,padding:"6px 0"}}>
-                              Only group admins can accept challenges
-                            </div>
-                          )}
+
+                          {/* Accept footer */}
+                          <div style={{padding:"10px 16px",borderTop:"1px solid #1E1E2E"}}>
+                            {isOwnerOrMod ? (
+                              <button onClick={()=>acceptWarChallenge(chal)} style={{
+                                width:"100%",padding:"11px 0",borderRadius:10,border:"none",
+                                background:"linear-gradient(135deg,#4ADE80,#16A34A)",
+                                color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",
+                              }}>⚔️ Accept This Challenge</button>
+                            ) : (
+                              <div style={{fontSize:12,color:"#6B7280",textAlign:"center" as const,padding:"4px 0"}}>
+                                Only group admins can accept challenges
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -2162,27 +2190,63 @@ export default function GroupPage() {
                         {open.map(chal=>{
                           const meta=METRICS[chal.metric]||METRICS.miles_run;
                           const isCreator=chal.creator_group_id===dbId;
+                          const LIFT_LABELS: Record<string,string> = {bench_press:"Bench Press",squat:"Squat",deadlift:"Deadlift",dumbbell_curl:"Dumbbell Curl"};
                           return (
-                            <div key={chal.id} style={{background:"#111118",borderRadius:14,
-                              padding:"14px 16px",border:"1px solid #2D1F52",marginBottom:8}}>
-                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                                <div>
-                                  <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:3}}>
-                                    {meta.icon} {chal.title}
+                            <div key={chal.id} style={{background:"#111118",borderRadius:16,
+                              border:`1px solid ${isCreator?"#7C3AED":"#2D1F52"}`,marginBottom:10,overflow:"hidden"}}>
+                              {/* Card header */}
+                              <div style={{background:isCreator?"rgba(124,58,237,0.1)":"transparent",padding:"14px 16px 10px"}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontWeight:900,fontSize:16,color:"#F0F0F0",marginBottom:2}}>{chal.title}</div>
+                                    {chal.description && (
+                                      <div style={{fontSize:12,color:"#9CA3AF",marginBottom:8,lineHeight:1.5,fontStyle:"italic"}}>"{chal.description}"</div>
+                                    )}
                                   </div>
-                                  <div style={{fontSize:11,color:"#6B7280"}}>
-                                    {meta.label} · {chal.member_count}v{chal.member_count} · {chal.duration_days}d
-                                  </div>
+                                  {isCreator && (
+                                    <span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:99,
+                                      background:"rgba(124,58,237,0.2)",color:"#A78BFA",flexShrink:0,marginLeft:8}}>YOUR WAR</span>
+                                  )}
                                 </div>
-                                {!isCreator && isOwnerOrMod && (
-                                  <button onClick={()=>acceptWarChallenge(chal)} style={{
-                                    padding:"8px 14px",borderRadius:10,border:"none",
-                                    background:"linear-gradient(135deg,#4ADE80,#16A34A)",
-                                    color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,
-                                  }}>⚔️ Accept</button>
+                                {/* Stat pills */}
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap" as const,marginBottom:8}}>
+                                  <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                    background:"rgba(6,182,212,0.12)",color:"#06B6D4",display:"flex",alignItems:"center",gap:4}}>
+                                    {meta.icon} {meta.label}{chal.lift_type?` · ${LIFT_LABELS[chal.lift_type]||""}` :""}
+                                  </span>
+                                  <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                    background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
+                                    ⚔️ {chal.member_count}v{chal.member_count}
+                                  </span>
+                                  <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                    background:"rgba(245,166,35,0.12)",color:"#F5A623"}}>
+                                    ⏱ {chal.duration_days} day{chal.duration_days!==1?"s":""}
+                                  </span>
+                                  {chal.goal>0 && (
+                                    <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                                      background:"rgba(74,222,128,0.12)",color:"#4ADE80"}}>
+                                      🎯 Goal: {chal.goal}{meta.unit}
+                                    </span>
+                                  )}
+                                </div>
+                                {chal.stakes && (
+                                  <div style={{fontSize:11,color:"#F5A623",background:"rgba(245,166,35,0.08)",
+                                    borderRadius:8,padding:"6px 10px",marginBottom:4}}>
+                                    🏅 Stakes: {chal.stakes}
+                                  </div>
                                 )}
-                                {isCreator && (
-                                  <span style={{fontSize:11,color:"#6B7280",fontStyle:"italic"}}>Awaiting opponent...</span>
+                              </div>
+                              {/* Footer */}
+                              <div style={{padding:"10px 16px",borderTop:"1px solid #1E1E2E",
+                                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                {isCreator ? (
+                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                    <div style={{width:8,height:8,borderRadius:"50%",background:"#F5A623",
+                                      animation:"pulse 1.5s ease-in-out infinite"}}/>
+                                    <span style={{fontSize:12,color:"#F5A623",fontWeight:600}}>Waiting for an opponent to accept...</span>
+                                  </div>
+                                ) : (
+                                  <span style={{fontSize:12,color:"#6B7280"}}>Posted by another group</span>
                                 )}
                               </div>
                             </div>
@@ -2233,29 +2297,43 @@ export default function GroupPage() {
                     onClick={e=>{if(e.target===e.currentTarget)setShowCreateWar(false);}}>
                     <div style={{background:"#111118",borderRadius:"24px 24px 0 0",width:"100%",
                       maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:"24px 20px 48px"}}>
-                      <div style={{fontWeight:900,fontSize:20,color:"#F0F0F0",marginBottom:20}}>⚔️ Create War</div>
+                      <div style={{fontWeight:900,fontSize:22,color:"#F0F0F0",marginBottom:4}}>⚔️ Create War</div>
+                      <div style={{fontSize:12,color:"#6B7280",marginBottom:20}}>The more detail you add, the more seriously opponents will take your challenge.</div>
 
-                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase"}}>Title</label>
+                      {/* Title */}
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8}}>War Title *</label>
                       <input value={warForm.title} onChange={e=>setWarForm(f=>({...f,title:e.target.value}))}
-                        placeholder="e.g. Spring Running Battle" style={{width:"100%",background:"#0A0A0F",
+                        placeholder="e.g. Spring Running Domination" style={{width:"100%",background:"#0A0A0F",
                           border:"1px solid #2D1F52",borderRadius:10,padding:"10px 12px",fontSize:14,
-                          color:"#F0F0F0",outline:"none",boxSizing:"border-box" as const,marginBottom:14}}/>
+                          color:"#F0F0F0",outline:"none",boxSizing:"border-box" as const,marginBottom:12}}/>
 
-                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>Challenge Type</label>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+                      {/* Description */}
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8}}>Description / Trash Talk</label>
+                      <textarea value={warForm.description} onChange={e=>setWarForm(f=>({...f,description:e.target.value}))}
+                        placeholder="Tell the opponent what this war is about. What are you proving? Who's going to lose?" 
+                        rows={3}
+                        style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+                          padding:"10px 12px",fontSize:13,color:"#F0F0F0",outline:"none",
+                          boxSizing:"border-box" as const,marginBottom:12,resize:"none" as const,fontFamily:"inherit"}}/>
+
+                      {/* Challenge Type */}
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.8}}>What Are You Competing For? *</label>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
                         {Object.entries(METRICS).map(([key,m])=>(
-                          <button key={key} onClick={()=>setWarForm(f=>({...f,metric:key}))} style={{
+                          <button key={key} onClick={()=>setWarForm(f=>({...f,metric:key,goal:0}))} style={{
                             padding:"10px 6px",borderRadius:10,border:`1.5px solid ${warForm.metric===key?"#7C3AED":"#2D1F52"}`,
-                            background:warForm.metric===key?"#2D1F52":"transparent",
+                            background:warForm.metric===key?"rgba(124,58,237,0.2)":"transparent",
                             color:warForm.metric===key?"#fff":"#6B7280",cursor:"pointer",fontSize:11,fontWeight:700,
-                          }}><div style={{fontSize:18,marginBottom:2}}>{m.icon}</div>{m.label}</button>
+                            transition:"all 0.15s",
+                          }}><div style={{fontSize:20,marginBottom:3}}>{m.icon}</div>{m.label}</button>
                         ))}
                       </div>
 
+                      {/* Lift Type */}
                       {warForm.metric==="weight_lifted" && (
                         <>
-                          <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>Lift Type</label>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                          <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.8}}>Lift *</label>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
                             {LIFT_TYPES.map(l=>(
                               <button key={l.key} onClick={()=>setWarForm(f=>({...f,lift_type:l.key}))} style={{
                                 padding:"10px",borderRadius:10,border:`1.5px solid ${warForm.lift_type===l.key?"#F5A623":"#2D1F52"}`,
@@ -2267,7 +2345,42 @@ export default function GroupPage() {
                         </>
                       )}
 
-                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>Duration</label>
+                      {/* Goal target */}
+                      {warForm.metric && (()=>{
+                        const m = METRICS[warForm.metric];
+                        const placeholder = warForm.metric==="total_workouts"?"e.g. 20 workouts"
+                          : warForm.metric.includes("weight")?"e.g. 500 lbs"
+                          : "e.g. 50 miles";
+                        return (
+                          <div style={{marginBottom:12}}>
+                            <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8}}>
+                              Team Goal Target {m.unit ? `(${m.unit})` : ""} <span style={{color:"#3D3D3D",fontWeight:400}}>(optional)</span>
+                            </label>
+                            <input type="number" min="0"
+                              value={warForm.goal||""} onChange={e=>setWarForm(f=>({...f,goal:parseFloat(e.target.value)||0}))}
+                              placeholder={placeholder}
+                              style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+                                padding:"10px 12px",fontSize:14,color:"#F0F0F0",outline:"none",
+                                boxSizing:"border-box" as const}}/>
+                            <div style={{fontSize:11,color:"#6B7280",marginTop:4}}>
+                              Set a total team target — e.g. "first team to {placeholder.split(" ").slice(2).join(" ")} wins"
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Stakes */}
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8}}>
+                        Stakes <span style={{color:"#3D3D3D",fontWeight:400}}>(optional)</span>
+                      </label>
+                      <input value={warForm.stakes} onChange={e=>setWarForm(f=>({...f,stakes:e.target.value}))}
+                        placeholder="e.g. Loser posts a congratulations to winner's page"
+                        style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+                          padding:"10px 12px",fontSize:13,color:"#F0F0F0",outline:"none",
+                          boxSizing:"border-box" as const,marginBottom:12}}/>
+
+                      {/* Duration */}
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.8}}>Duration *</label>
                       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" as const}}>
                         {[3,7,14,30].map(d=>(
                           <button key={d} onClick={()=>setWarForm(f=>({...f,duration_days:d}))} style={{
@@ -2278,7 +2391,8 @@ export default function GroupPage() {
                         ))}
                       </div>
 
-                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>
+                      {/* Team size */}
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.8}}>
                         Select Your Team ({warSelectedMembers.length} selected)
                       </label>
                       <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:20,maxHeight:200,overflowY:"auto"}}>
