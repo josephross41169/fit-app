@@ -2156,10 +2156,11 @@ export default function GroupPage() {
                         Select Your Team ({warSelectedMembers.length} selected)
                       </label>
                       <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:20,maxHeight:200,overflowY:"auto"}}>
-                        {dbMembers.map((m:any)=>{
-                          const sel=warSelectedMembers.includes(m.user_id||m.id);
-                          const name=m.name||m.username||m.full_name||"Member";
-                          const uid=m.user_id||m.id;
+                        {displayMembers.map((m:any)=>{
+                          const sel=warSelectedMembers.includes(m.userId);
+                          const name=m.name||"Member";
+                          const uid=m.userId;
+                          if (!uid) return null;
                           return (
                             <button key={uid} onClick={()=>setWarSelectedMembers(s=>sel?s.filter(id=>id!==uid):[...s,uid])}
                               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
@@ -2169,8 +2170,11 @@ export default function GroupPage() {
                                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}}>
                                 {name[0]?.toUpperCase()}
                               </div>
-                              <span style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>{name}</span>
-                              {sel && <div style={{marginLeft:"auto",color:"#7C3AED",fontWeight:800}}>✓</div>}
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>{name}</div>
+                                {m.username && <div style={{fontSize:11,color:"#6B7280"}}>@{m.username} · {m.role}</div>}
+                              </div>
+                              {sel && <div style={{color:"#7C3AED",fontWeight:800}}>✓</div>}
                             </button>
                           );
                         })}
