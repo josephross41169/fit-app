@@ -762,15 +762,41 @@ export default function GroupPage() {
 
   // ── Accept open challenge ────────────────────────────────────────────────────
   const acceptWarChallenge = async (chal: any) => {
-    const dbId = group._dbId;
-    if (!dbId || !currentUser) return;
-    const start = new Date();
-    const end = new Date(start); end.setDate(end.getDate() + (chal.duration_days || 7));
-    await supabase.from("group_challenges").update({
-      opponent_group_id: dbId, status: "active",
-      start_date: start.toISOString(), end_date: end.toISOString(),
-    }).eq("id", chal.id);
-    loadWarChallenges();
+    const dbId = group._dbId || (dbGroup as any)?.id;
+    if (!dbId || !currentUser) {
+      alert("Unable to accept — please make sure you are logged in and this is your group.");
+      return;
+    }
+    try {
+      const start = new Date();
+      const end = new Date(start); end.setDate(end.getDate() + (chal.duration_days || 7));
+      const { error } = await supabase.from("group_challenges").update({
+        opponent_group_id: dbId,
+        status: "active",
+        start_date: start.toISOString(),
+        end_date: end.toISOString(),
+      }).eq("id", chal.id);
+      if (error) { console.error(error); alert("Error accepting challenge: " + error.message); return; }
+
+      // Add accepting group members as challenge participants
+      const acceptingMembers = dbMembers.slice(0, chal.member_count || 1);
+      if (acceptingMembers.length > 0) {
+        await supabase.from("group_challenge_members").insert(
+          acceptingMembers.map((m: any) => ({
+            challenge_id: chal.id,
+            user_id: m.user_id || m.id,
+            group_id: dbId,
+          }))
+        );
+      }
+
+      // Switch to Our Wars tab to see the active challenge
+      setOpenBoardTab("ours");
+      await loadWarChallenges();
+    } catch(e: any) {
+      console.error(e);
+      alert("Something went wrong: " + e.message);
+    }
   };
 
   // ── Submit weight entry ───────────────────────────────────────────────────────
