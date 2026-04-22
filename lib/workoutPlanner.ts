@@ -98,8 +98,11 @@ function pickExercises(
     equipment,
   );
 
-  // Sort: compounds first for strength/athletic/hypertrophy goals
-  const sorted = [...pool].sort((a, b) => {
+  // Shuffle pool first so regenerate gives different exercises
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+
+  // Then sort: compounds first for strength/athletic/hypertrophy goals (stable within shuffle)
+  const sorted = shuffled.sort((a, b) => {
     const aComp = isCompound(a.name) ? 1 : 0;
     const bComp = isCompound(b.name) ? 1 : 0;
     if (preferCompound && (goal === "strength" || goal === "athletic" || goal === "hypertrophy")) {
