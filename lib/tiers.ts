@@ -259,3 +259,39 @@ export const LEVEL_COLORS: Record<number, {
 // Keep Tier type alias for backwards compat with any old imports
 export type { Tier as TierLegacy };
 export const TIER_COLORS = LEVEL_COLORS; // alias
+
+// ── Backwards compatibility shims ─────────────────────────────────────────────
+// feed/page.tsx and profile/page.tsx still call these — keep them working
+
+export type OldTier = "default" | "active" | "grinder" | "elite" | "untouchable";
+
+/** @deprecated Use computeLevel() instead */
+export function computeTier(logsLast28Days: number, _longestStreak: number): OldTier {
+  if (logsLast28Days >= 80) return "untouchable";
+  if (logsLast28Days >= 50) return "elite";
+  if (logsLast28Days >= 30) return "grinder";
+  if (logsLast28Days >= 12) return "active";
+  return "default";
+}
+
+/** @deprecated Use getProgressInfo() instead */
+export function getTierInfo(logsLast28Days: number, longestStreak: number) {
+  const tier = computeTier(logsLast28Days, longestStreak);
+  const ORDER: OldTier[] = ["default","active","grinder","elite","untouchable"];
+  const THRESHOLDS: Record<OldTier,number> = { default:0, active:12, grinder:30, elite:50, untouchable:80 };
+  const idx = ORDER.indexOf(tier);
+  const nextTier = idx < ORDER.length - 1 ? ORDER[idx + 1] : null;
+  const cur = THRESHOLDS[tier];
+  const nxt = nextTier ? THRESHOLDS[nextTier] : 80;
+  const progress = nextTier ? Math.min(100, Math.round(((logsLast28Days - cur) / (nxt - cur)) * 100)) : 100;
+  return {
+    tier,
+    label: tier.charAt(0).toUpperCase() + tier.slice(1),
+    icon: tier === "untouchable" ? "💀" : tier === "elite" ? "⚡" : tier === "grinder" ? "🔥" : tier === "active" ? "🟣" : "🩶",
+    title: tier === "grinder" ? "The Grinder" : tier === "untouchable" ? "Untouchable" : tier.charAt(0).toUpperCase() + tier.slice(1),
+    description: "",
+    nextTier,
+    nextDescription: nextTier ? `${nxt - logsLast28Days} more logs needed in 28 days to reach ${nextTier}` : null,
+    progress,
+  };
+}
