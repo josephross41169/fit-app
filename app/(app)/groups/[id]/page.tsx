@@ -513,6 +513,16 @@ export default function GroupPage() {
   const [noteCategory, setNoteCategory] = useState("General");
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [eventComments, setEventComments] = useState<Record<string,{user:string;text:string;time:string}[]>>({});
+
+  // ── War / Challenge state ──
+  const [warChallenges, setWarChallenges] = useState<any[]>([]);
+  const [warLoading, setWarLoading] = useState(false);
+  const [expandedChallenge, setExpandedChallenge] = useState<string|null>(null);
+  const [showCreateWar, setShowCreateWar] = useState(false);
+  const [warForm, setWarForm] = useState({ title:"", metric:"miles_run", lift_type:"", duration_days:7 });
+  const [warSelectedMembers, setWarSelectedMembers] = useState<string[]>([]);
+  const [warSaving, setWarSaving] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [commentInputs, setCommentInputs] = useState<Record<string,string>>({});
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
   const [shareCopied, setShareCopied] = useState(false);
@@ -659,6 +669,102 @@ export default function GroupPage() {
 
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
   const isOwnerOrMod = group._isOwner || isMemberDB;
+
+  // ── Load war challenges ──────────────────────────────────────────────────────
+  const loadWarChallenges = async () => {
+    const dbId = group._dbId;
+    if (!dbId) return;
+    setWarLoading(true);
+    try {
+      const { data } = await supabase
+        .from("group_challenges")
+        .select(`*, creator_group:creator_group_id(id,name), opponent_group:opponent_group_id(id,name),
+          winner_group:winner_group_id(id,name),
+          group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted,
+            users(id,username,full_name,avatar_url)),
+          group_challenge_media(id,media_url,media_type,caption,created_at,user_id,
+            users(username,full_name))`)
+        .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
+        .order("created_at", { ascending: false });
+      setWarChallenges(data || []);
+    } catch(e) { console.error(e); }
+    setWarLoading(false);
+  };
+
+  useEffect(() => {
+    if (tab === "war" && group._dbId) loadWarChallenges();
+  }, [tab, group._dbId]);
+
+  // ── Create challenge ─────────────────────────────────────────────────────────
+  const createWarChallenge = async () => {
+    const dbId = group._dbId;
+    if (!dbId || !currentUser) return;
+    if (!warForm.title.trim()) return alert("Add a title");
+    if (warSelectedMembers.length === 0) return alert("Select at least 1 team member");
+    if (warForm.metric === "weight_lifted" && !warForm.lift_type) return alert("Select a lift type");
+    setWarSaving(true);
+    try {
+      const { data: chal, error } = await supabase.from("group_challenges").insert({
+        creator_group_id: dbId,
+        title: warForm.title,
+        metric: warForm.metric,
+        lift_type: warForm.metric === "weight_lifted" ? warForm.lift_type : null,
+        duration_days: warForm.duration_days,
+        member_count: warSelectedMembers.length,
+        status: "open",
+      }).select().single();
+      if (error) throw error;
+      await supabase.from("group_challenge_members").insert(
+        warSelectedMembers.map(uid => ({ challenge_id: chal.id, user_id: uid, group_id: dbId }))
+      );
+      setShowCreateWar(false);
+      setWarForm({ title:"", metric:"miles_run", lift_type:"", duration_days:7 });
+      setWarSelectedMembers([]);
+      loadWarChallenges();
+    } catch(e) { console.error(e); alert("Error creating challenge"); }
+    setWarSaving(false);
+  };
+
+  // ── Upload media to challenge ─────────────────────────────────────────────────
+  const uploadWarMedia = async (chalId: string, file: File) => {
+    if (!currentUser) return;
+    const dbId = group._dbId;
+    setUploadingMedia(true);
+    try {
+      const path = `challenges/${chalId}/${currentUser.id}-${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage.from("activity").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from("activity").getPublicUrl(path);
+      await supabase.from("group_challenge_media").insert({
+        challenge_id: chalId, user_id: currentUser.id, group_id: dbId,
+        media_url: publicUrl, media_type: "photo",
+      });
+      loadWarChallenges();
+    } catch(e) { console.error(e); alert("Upload failed"); }
+    setUploadingMedia(false);
+  };
+
+  // ── Accept open challenge ────────────────────────────────────────────────────
+  const acceptWarChallenge = async (chal: any) => {
+    const dbId = group._dbId;
+    if (!dbId || !currentUser) return;
+    const start = new Date();
+    const end = new Date(start); end.setDate(end.getDate() + (chal.duration_days || 7));
+    await supabase.from("group_challenges").update({
+      opponent_group_id: dbId, status: "active",
+      start_date: start.toISOString(), end_date: end.toISOString(),
+    }).eq("id", chal.id);
+    loadWarChallenges();
+  };
+
+  // ── Submit weight entry ───────────────────────────────────────────────────────
+  const submitWeightEntry = async (chalId: string, value: number) => {
+    if (!currentUser) return;
+    await supabase.from("group_challenge_members")
+      .update({ weight_entry: value, weight_submitted: true })
+      .eq("challenge_id", chalId).eq("user_id", currentUser.id);
+    loadWarChallenges();
+  };
 
   // ── Merged notes (DB + local) ──
   const allNotes = [
@@ -1727,57 +1833,364 @@ export default function GroupPage() {
             </div>
           )}
 
-          {tab === "war" && (
-            <div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-                <div>
-                  <div style={{ fontWeight:900, fontSize:18, color:"#F0F0F0" }}>⚔️ Group Wars</div>
-                  <div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Challenge other groups. Compete. Win trophies.</div>
+          {tab === "war" && (() => {
+            const dbId = group._dbId;
+            const METRICS: Record<string,{label:string;icon:string;unit:string}> = {
+              miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},
+              miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
+              miles_cycled:{label:"Miles Cycled",icon:"🚴",unit:"mi"},
+              total_workouts:{label:"Total Workouts",icon:"💪",unit:""},
+              weight_lifted:{label:"Weight Lifted",icon:"🏋️",unit:"lbs"},
+              weight_lost:{label:"Weight Lost",icon:"⚖️",unit:"lbs"},
+            };
+            const LIFT_TYPES = [{key:"bench_press",label:"Bench Press"},{key:"squat",label:"Squat"},{key:"deadlift",label:"Deadlift"},{key:"dumbbell_curl",label:"Dumbbell Curl"}];
+            const active = warChallenges.filter(c => c.status === "active");
+            const open   = warChallenges.filter(c => c.status === "open");
+            const done   = warChallenges.filter(c => ["completed","cancelled"].includes(c.status));
+
+            return (
+              <div>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                  <div>
+                    <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>⚔️ Group Wars</div>
+                    <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>{warChallenges.length} challenge{warChallenges.length!==1?"s":""} total</div>
+                  </div>
+                  {isOwnerOrMod && (
+                    <button onClick={()=>setShowCreateWar(true)} style={{
+                      padding:"8px 16px",borderRadius:12,border:"none",
+                      background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                      color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
+                    }}>+ Create War</button>
+                  )}
                 </div>
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                <button
-                  onClick={() => router.push(`/groups/${groupId}/challenges`)}
-                  style={{
-                    width:"100%", padding:"16px 20px", borderRadius:16,
-                    background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
-                    border:"none", color:"#fff", fontWeight:800, fontSize:15, cursor:"pointer",
-                    display:"flex", alignItems:"center", justifyContent:"space-between",
-                  }}>
-                  <span>⚔️ View Our Challenges</span>
-                  <span style={{ fontSize:20 }}>→</span>
-                </button>
-                <button
-                  onClick={() => router.push("/challenges")}
-                  style={{
-                    width:"100%", padding:"16px 20px", borderRadius:16,
-                    background:"#111118", border:"1px solid #2D1F52",
-                    color:"#F0F0F0", fontWeight:700, fontSize:14, cursor:"pointer",
-                    display:"flex", alignItems:"center", justifyContent:"space-between",
-                  }}>
-                  <span>📋 Open Challenge Board</span>
-                  <span style={{ fontSize:12, color:"#6B7280" }}>Find opponents →</span>
-                </button>
-                <div style={{
-                  background:"#111118", borderRadius:14, padding:"16px",
-                  border:"1px solid #1E1E2E", marginTop:4,
-                }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#9CA3AF", marginBottom:8 }}>How it works</div>
-                  {[
-                    { icon:"1️⃣", text:"Admin creates a challenge and selects team members" },
-                    { icon:"2️⃣", text:"Challenge is posted to the open board for any group to accept" },
-                    { icon:"3️⃣", text:"Both groups compete — logs auto-track toward the goal" },
-                    { icon:"🏆", text:"Winning group earns a trophy displayed on their page" },
-                  ].map(({ icon, text }) => (
-                    <div key={text} style={{ display:"flex", gap:10, alignItems:"flex-start", marginBottom:8 }}>
-                      <span style={{ fontSize:16, flexShrink:0 }}>{icon}</span>
-                      <span style={{ fontSize:13, color:"#9CA3AF" }}>{text}</span>
+
+                {warLoading ? (
+                  <div style={{textAlign:"center",padding:40,color:"#6B7280"}}>Loading wars...</div>
+                ) : (
+                  <div>
+                    {/* Active challenges */}
+                    {active.map(chal => {
+                      const meta = METRICS[chal.metric] || METRICS.miles_run;
+                      const isCreator = chal.creator_group_id === dbId;
+                      const myScore = isCreator ? chal.creator_score : chal.opponent_score;
+                      const theirScore = isCreator ? chal.opponent_score : chal.creator_score;
+                      const myGroupName = isCreator ? chal.creator_group?.name : chal.opponent_group?.name;
+                      const theirGroupName = isCreator ? chal.opponent_group?.name : chal.creator_group?.name;
+                      const myMembers = (chal.group_challenge_members||[]).filter((m:any)=>m.group_id===dbId);
+                      const top5 = [...myMembers].sort((a:any,b:any)=>(b.contribution||b.weight_entry||0)-(a.contribution||a.weight_entry||0)).slice(0,5);
+                      const media = chal.group_challenge_media || [];
+                      const isExpanded = expandedChallenge === chal.id;
+                      const daysLeft = chal.end_date ? Math.max(0,Math.ceil((new Date(chal.end_date).getTime()-Date.now())/86400000)) : null;
+                      const total = (myScore||0)+(theirScore||0)||1;
+                      const myPct = Math.round(((myScore||0)/total)*100);
+
+                      return (
+                        <div key={chal.id} style={{marginBottom:14,borderRadius:18,overflow:"hidden",
+                          border:"2px solid #7C3AED",background:"#0D0820"}}>
+                          {/* Challenge header */}
+                          <button onClick={()=>setExpandedChallenge(isExpanded?null:chal.id)}
+                            style={{width:"100%",background:"linear-gradient(135deg,#2D1F52,#1A0F30)",
+                              padding:"14px 16px",border:"none",cursor:"pointer",textAlign:"left"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                              <div>
+                                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                                  <span style={{fontSize:18}}>{meta.icon}</span>
+                                  <span style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{chal.title}</span>
+                                  <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                                    background:"rgba(74,222,128,0.15)",color:"#4ADE80"}}>LIVE</span>
+                                </div>
+                                <div style={{fontSize:11,color:"#6B7280"}}>
+                                  {meta.label}{chal.lift_type?` · ${LIFT_TYPES.find(l=>l.key===chal.lift_type)?.label}`:""}
+                                  {daysLeft!==null?` · ${daysLeft}d left`:""}
+                                </div>
+                              </div>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5"
+                                style={{width:16,height:16,flexShrink:0,transform:isExpanded?"rotate(180deg)":"none",transition:"transform 0.2s"}}>
+                                <path d="M6 9l6 6 6-6"/>
+                              </svg>
+                            </div>
+
+                            {/* Score bar */}
+                            <div style={{marginTop:12}}>
+                              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,fontSize:12,fontWeight:700}}>
+                                <span style={{color:"#7C3AED"}}>{myGroupName||"Us"} — {myScore||0}{meta.unit}</span>
+                                <span style={{color:"#06B6D4"}}>{theirGroupName||"Them"} — {theirScore||0}{meta.unit}</span>
+                              </div>
+                              <div style={{height:10,borderRadius:99,background:"#1E1E2E",overflow:"hidden",display:"flex"}}>
+                                <div style={{width:`${myPct}%`,background:"#7C3AED",borderRadius:"99px 0 0 99px",transition:"width 0.5s"}}/>
+                                <div style={{flex:1,background:"#06B6D4",borderRadius:"0 99px 99px 0"}}/>
+                              </div>
+                              <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:10,color:"#6B7280"}}>
+                                <span>{myPct}%</span><span>{100-myPct}%</span>
+                              </div>
+                            </div>
+                          </button>
+
+                          {/* Expanded detail */}
+                          {isExpanded && (
+                            <div style={{padding:"14px 16px",borderTop:"1px solid #2D1F52"}}>
+
+                              {/* Top 5 contributors */}
+                              <div style={{marginBottom:14}}>
+                                <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase",
+                                  letterSpacing:1,marginBottom:8}}>Top Contributors — {myGroupName||"Your Group"}</div>
+                                {top5.length===0 && <div style={{fontSize:12,color:"#6B7280"}}>No contributions yet</div>}
+                                {top5.map((m:any,i:number)=>{
+                                  const u=m.users;
+                                  const val=chal.metric.includes("weight")?(m.weight_entry||0):(m.contribution||0);
+                                  const max=top5[0]?(chal.metric.includes("weight")?(top5[0].weight_entry||1):(top5[0].contribution||1)):1;
+                                  return (
+                                    <div key={m.user_id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                                      <span style={{fontSize:12,fontWeight:800,color:i===0?"#F5A623":"#6B7280",width:18}}>
+                                        {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}
+                                      </span>
+                                      <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0}}>
+                                        {(u?.full_name||u?.username||"?")[0]?.toUpperCase()}
+                                      </div>
+                                      <div style={{flex:1,minWidth:0}}>
+                                        <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                          {u?.full_name||u?.username||"Member"}
+                                        </div>
+                                        <div style={{height:4,background:"#1E1E2E",borderRadius:99,overflow:"hidden",marginTop:2}}>
+                                          <div style={{width:`${max>0?Math.round((val/max)*100):0}%`,
+                                            height:"100%",background:i===0?"#F5A623":"#7C3AED",borderRadius:99}}/>
+                                        </div>
+                                      </div>
+                                      <span style={{fontSize:12,fontWeight:800,color:i===0?"#F5A623":"#F0F0F0",flexShrink:0}}>
+                                        {val}{meta.unit}
+                                      </span>
+                                      {/* Weight submit button */}
+                                      {chal.metric.includes("weight") && m.user_id===currentUser?.id && !m.weight_submitted && (
+                                        <button onClick={()=>{
+                                          const v=parseFloat(prompt(`Enter your ${chal.lift_type||"weight"} in lbs:`)||"0");
+                                          if(v>0) submitWeightEntry(chal.id,v);
+                                        }} style={{padding:"4px 10px",borderRadius:8,border:"none",
+                                          background:"#7C3AED",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                          Submit
+                                        </button>
+                                      )}
+                                      {chal.metric.includes("weight") && m.weight_submitted && (
+                                        <span style={{fontSize:11,color:"#4ADE80"}}>✓</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Photo / media wall */}
+                              <div style={{marginBottom:14}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                  <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:1}}>
+                                    📸 Challenge Media ({media.length})
+                                  </div>
+                                  {/* Upload button */}
+                                  {myMembers.some((m:any)=>m.user_id===currentUser?.id) && (
+                                    <label style={{fontSize:11,fontWeight:700,color:"#7C3AED",cursor:"pointer",
+                                      padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",
+                                      border:"1px solid rgba(124,58,237,0.3)"}}>
+                                      {uploadingMedia?"Uploading...":"+ Add Photo"}
+                                      <input type="file" accept="image/*" style={{display:"none"}}
+                                        disabled={uploadingMedia}
+                                        onChange={e=>{
+                                          const f=e.target.files?.[0];
+                                          if(f) uploadWarMedia(chal.id,f);
+                                        }}/>
+                                    </label>
+                                  )}
+                                </div>
+                                {media.length===0 ? (
+                                  <div style={{textAlign:"center",padding:"20px",background:"#111118",
+                                    borderRadius:10,border:"1px dashed #2D1F52",color:"#6B7280",fontSize:12}}>
+                                    No photos yet — be the first to post!
+                                  </div>
+                                ) : (
+                                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                                    {media.map((m:any)=>(
+                                      <div key={m.id} style={{position:"relative",aspectRatio:"1",borderRadius:10,overflow:"hidden"}}>
+                                        <img src={m.media_url} alt={m.caption||""} style={{
+                                          width:"100%",height:"100%",objectFit:"cover"}}/>
+                                        <div style={{position:"absolute",bottom:0,left:0,right:0,
+                                          background:"linear-gradient(transparent,rgba(0,0,0,0.7))",
+                                          padding:"4px 6px",fontSize:9,color:"#fff",fontWeight:600}}>
+                                          {m.users?.username||""}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Open challenges looking for opponents */}
+                    {open.length>0 && (
+                      <div style={{marginBottom:14}}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",
+                          letterSpacing:1,marginBottom:10}}>📋 Looking for Opponent</div>
+                        {open.map(chal=>{
+                          const meta=METRICS[chal.metric]||METRICS.miles_run;
+                          const isCreator=chal.creator_group_id===dbId;
+                          return (
+                            <div key={chal.id} style={{background:"#111118",borderRadius:14,
+                              padding:"14px 16px",border:"1px solid #2D1F52",marginBottom:8}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <div>
+                                  <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:3}}>
+                                    {meta.icon} {chal.title}
+                                  </div>
+                                  <div style={{fontSize:11,color:"#6B7280"}}>
+                                    {meta.label} · {chal.member_count}v{chal.member_count} · {chal.duration_days}d
+                                  </div>
+                                </div>
+                                {!isCreator && isOwnerOrMod && (
+                                  <button onClick={()=>acceptWarChallenge(chal)} style={{
+                                    padding:"8px 14px",borderRadius:10,border:"none",
+                                    background:"linear-gradient(135deg,#4ADE80,#16A34A)",
+                                    color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,
+                                  }}>⚔️ Accept</button>
+                                )}
+                                {isCreator && (
+                                  <span style={{fontSize:11,color:"#6B7280",fontStyle:"italic"}}>Awaiting opponent...</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Completed wars */}
+                    {done.length>0 && (
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",
+                          letterSpacing:1,marginBottom:10}}>🏁 Past Wars</div>
+                        {done.map(chal=>{
+                          const meta=METRICS[chal.metric]||METRICS.miles_run;
+                          const weWon=chal.winner_group_id===dbId;
+                          return (
+                            <div key={chal.id} style={{background:"#111118",borderRadius:14,
+                              padding:"12px 16px",border:`1px solid ${weWon?"#F5A623":"#2D1F52"}`,
+                              marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <div>
+                                <div style={{fontWeight:800,fontSize:13,color:"#F0F0F0"}}>{chal.title}</div>
+                                <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>{meta.label}</div>
+                              </div>
+                              <div style={{fontSize:20}}>{weWon?"🏆":chal.winner_group_id?"🥈":"🤝"}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {warChallenges.length===0 && !warLoading && (
+                      <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
+                        <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
+                        <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>No wars yet</div>
+                        {isOwnerOrMod
+                          ? <div style={{fontSize:13}}>Create a challenge to find opponents from other groups.</div>
+                          : <div style={{fontSize:13}}>Only group admins can create challenges.</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Create War Modal */}
+                {showCreateWar && (
+                  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,
+                    display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+                    onClick={e=>{if(e.target===e.currentTarget)setShowCreateWar(false);}}>
+                    <div style={{background:"#111118",borderRadius:"24px 24px 0 0",width:"100%",
+                      maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:"24px 20px 48px"}}>
+                      <div style={{fontWeight:900,fontSize:20,color:"#F0F0F0",marginBottom:20}}>⚔️ Create War</div>
+
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase"}}>Title</label>
+                      <input value={warForm.title} onChange={e=>setWarForm(f=>({...f,title:e.target.value}))}
+                        placeholder="e.g. Spring Running Battle" style={{width:"100%",background:"#0A0A0F",
+                          border:"1px solid #2D1F52",borderRadius:10,padding:"10px 12px",fontSize:14,
+                          color:"#F0F0F0",outline:"none",boxSizing:"border-box" as const,marginBottom:14}}/>
+
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>Challenge Type</label>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+                        {Object.entries(METRICS).map(([key,m])=>(
+                          <button key={key} onClick={()=>setWarForm(f=>({...f,metric:key}))} style={{
+                            padding:"10px 6px",borderRadius:10,border:`1.5px solid ${warForm.metric===key?"#7C3AED":"#2D1F52"}`,
+                            background:warForm.metric===key?"#2D1F52":"transparent",
+                            color:warForm.metric===key?"#fff":"#6B7280",cursor:"pointer",fontSize:11,fontWeight:700,
+                          }}><div style={{fontSize:18,marginBottom:2}}>{m.icon}</div>{m.label}</button>
+                        ))}
+                      </div>
+
+                      {warForm.metric==="weight_lifted" && (
+                        <>
+                          <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>Lift Type</label>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                            {LIFT_TYPES.map(l=>(
+                              <button key={l.key} onClick={()=>setWarForm(f=>({...f,lift_type:l.key}))} style={{
+                                padding:"10px",borderRadius:10,border:`1.5px solid ${warForm.lift_type===l.key?"#F5A623":"#2D1F52"}`,
+                                background:warForm.lift_type===l.key?"rgba(245,166,35,0.12)":"transparent",
+                                color:warForm.lift_type===l.key?"#F5A623":"#6B7280",cursor:"pointer",fontSize:13,fontWeight:700,
+                              }}>{l.label}</button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>Duration</label>
+                      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" as const}}>
+                        {[3,7,14,30].map(d=>(
+                          <button key={d} onClick={()=>setWarForm(f=>({...f,duration_days:d}))} style={{
+                            padding:"8px 16px",borderRadius:20,border:`1px solid ${warForm.duration_days===d?"#7C3AED":"#2D1F52"}`,
+                            background:warForm.duration_days===d?"#2D1F52":"transparent",
+                            color:warForm.duration_days===d?"#fff":"#6B7280",cursor:"pointer",fontSize:13,fontWeight:700,
+                          }}>{d} days</button>
+                        ))}
+                      </div>
+
+                      <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase"}}>
+                        Select Your Team ({warSelectedMembers.length} selected)
+                      </label>
+                      <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:20,maxHeight:200,overflowY:"auto"}}>
+                        {dbMembers.map((m:any)=>{
+                          const sel=warSelectedMembers.includes(m.user_id||m.id);
+                          const name=m.name||m.username||m.full_name||"Member";
+                          const uid=m.user_id||m.id;
+                          return (
+                            <button key={uid} onClick={()=>setWarSelectedMembers(s=>sel?s.filter(id=>id!==uid):[...s,uid])}
+                              style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
+                                borderRadius:10,border:`1px solid ${sel?"#7C3AED":"#2D1F52"}`,
+                                background:sel?"#2D1F52":"transparent",cursor:"pointer",textAlign:"left" as const}}>
+                              <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}}>
+                                {name[0]?.toUpperCase()}
+                              </div>
+                              <span style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>{name}</span>
+                              {sel && <div style={{marginLeft:"auto",color:"#7C3AED",fontWeight:800}}>✓</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button onClick={createWarChallenge} disabled={warSaving} style={{
+                        width:"100%",padding:"13px 0",borderRadius:14,border:"none",
+                        background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                        color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",
+                      }}>{warSaving?"Creating...":"⚔️ Post Challenge"}</button>
+                      <button onClick={()=>setShowCreateWar(false)} style={{
+                        width:"100%",marginTop:10,padding:"11px 0",borderRadius:14,
+                        border:"1px solid #2D1F52",background:"transparent",
+                        color:"#6B7280",fontWeight:700,fontSize:14,cursor:"pointer",
+                      }}>Cancel</button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* ══ RIGHT: Sidebar — Desktop only ══ */}
