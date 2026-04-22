@@ -526,6 +526,7 @@ export default function GroupPage() {
   const [warPosted, setWarPosted] = useState(false);
   const [openBoardChallenges, setOpenBoardChallenges] = useState<any[]>([]);
   const [openBoardTab, setOpenBoardTab] = useState<"ours"|"discover">("ours");
+  const [challengeSubTab, setChallengeSubTab] = useState<"internal"|"wars">("internal");
   const [commentInputs, setCommentInputs] = useState<Record<string,string>>({});
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
   const [shareCopied, setShareCopied] = useState(false);
@@ -1629,17 +1630,152 @@ export default function GroupPage() {
           {/* ── CHALLENGES ── */}
           {tab==="challenges" && (
             <div>
-              {/* ⚔️ Weekly Group Challenge Section */}
-              <WeeklyChallengeSection groupName={group.name} catColor={catColor} />
+              {/* Sub-tabs: Internal vs Wars */}
+              <div style={{display:"flex",gap:6,marginBottom:16,background:"#1A1228",borderRadius:12,padding:4}}>
+                {([
+                  {key:"internal", label:"⚡ Group Challenges"},
+                  {key:"wars",     label:`⚔️ Wars (${warChallenges.length})`},
+                ] as const).map(t=>(
+                  <button key={t.key} onClick={()=>setChallengeSubTab(t.key)} style={{
+                    flex:1,padding:"9px 6px",borderRadius:9,border:"none",cursor:"pointer",
+                    fontWeight:700,fontSize:13,transition:"all 0.15s",
+                    background:challengeSubTab===t.key?`linear-gradient(135deg,${catColor},${catColor}CC)`:"transparent",
+                    color:challengeSubTab===t.key?"#fff":"#6B7280",
+                  }}>{t.label}</button>
+                ))}
+              </div>
 
-              {group._dbId && (
-                <div style={{ marginBottom:16, display:"flex", justifyContent:"flex-end" }}>
-                  <button onClick={() => setShowChallengeModal(true)}
-                    style={{ padding:"9px 18px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>
-                    + Create Challenge
-                  </button>
+              {challengeSubTab === "wars" ? (
+                /* ── WARS SUB-TAB ── */
+                <div>
+                  {warLoading ? (
+                    <div style={{textAlign:"center",padding:40,color:"#6B7280"}}>Loading wars...</div>
+                  ) : (
+                    <div>
+                      {/* Active wars */}
+                      {warChallenges.filter(c=>c.status==="active").length > 0 && (
+                        <div style={{marginBottom:20}}>
+                          <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                            🔴 Active Wars
+                            <span style={{background:"rgba(239,68,68,0.15)",color:"#EF4444",fontSize:11,padding:"2px 8px",borderRadius:99}}>
+                              {warChallenges.filter(c=>c.status==="active").length}
+                            </span>
+                          </div>
+                          {warChallenges.filter(c=>c.status==="active").map(chal=>{
+                            const METRICS_W: Record<string,{label:string;icon:string;unit:string}> = {
+                              miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
+                              miles_cycled:{label:"Miles Cycled",icon:"🚴",unit:"mi"},total_workouts:{label:"Total Workouts",icon:"💪",unit:""},
+                              weight_lifted:{label:"Weight Lifted",icon:"🏋️",unit:"lbs"},weight_lost:{label:"Weight Lost",icon:"⚖️",unit:"lbs"},
+                            };
+                            const meta=METRICS_W[chal.metric]||METRICS_W.miles_run;
+                            const dbId=group._dbId;
+                            const isCreator=chal.creator_group_id===dbId;
+                            const myScore=isCreator?chal.creator_score:chal.opponent_score;
+                            const theirScore=isCreator?chal.opponent_score:chal.creator_score;
+                            const myName=isCreator?chal.creator_group?.name:chal.opponent_group?.name;
+                            const theirName=isCreator?chal.opponent_group?.name:chal.creator_group?.name;
+                            const total=(myScore||0)+(theirScore||0)||1;
+                            const myPct=Math.round(((myScore||0)/total)*100);
+                            const daysLeft=chal.end_date?Math.max(0,Math.ceil((new Date(chal.end_date).getTime()-Date.now())/86400000)):null;
+                            return (
+                              <div key={chal.id} style={{background:"#0D0820",borderRadius:16,border:"2px solid #7C3AED",marginBottom:10,padding:"14px 16px"}}>
+                                <div style={{fontWeight:900,fontSize:15,color:"#F0F0F0",marginBottom:2}}>{chal.title}</div>
+                                {chal.description && <div style={{fontSize:12,color:"#9CA3AF",fontStyle:"italic",marginBottom:8}}>"{chal.description}"</div>}
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap" as const,marginBottom:10}}>
+                                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,background:"rgba(6,182,212,0.12)",color:"#06B6D4"}}>{meta.icon} {meta.label}</span>
+                                  {daysLeft!==null&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,background:"rgba(245,166,35,0.12)",color:"#F5A623"}}>⏱ {daysLeft}d left</span>}
+                                  {chal.goal>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,background:"rgba(74,222,128,0.12)",color:"#4ADE80"}}>🎯 Goal: {chal.goal}{meta.unit}</span>}
+                                </div>
+                                {chal.stakes&&<div style={{fontSize:11,color:"#F5A623",background:"rgba(245,166,35,0.08)",borderRadius:8,padding:"5px 8px",marginBottom:10}}>🏅 Stakes: {chal.stakes}</div>}
+                                {/* Score bar */}
+                                <div style={{marginBottom:4}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:700,marginBottom:4}}>
+                                    <span style={{color:"#7C3AED"}}>{myName||"Us"} — {myScore||0}{meta.unit}</span>
+                                    <span style={{color:"#06B6D4"}}>{theirName||"Them"} — {theirScore||0}{meta.unit}</span>
+                                  </div>
+                                  <div style={{height:8,borderRadius:99,background:"#1E1E2E",overflow:"hidden",display:"flex"}}>
+                                    <div style={{width:`${myPct}%`,background:"#7C3AED",transition:"width 0.5s"}}/>
+                                    <div style={{flex:1,background:"#06B6D4"}}/>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Open (waiting) wars */}
+                      {warChallenges.filter(c=>c.status==="open").length > 0 && (
+                        <div style={{marginBottom:20}}>
+                          <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                            🟡 Awaiting Opponent
+                            <span style={{background:"rgba(245,166,35,0.15)",color:"#F5A623",fontSize:11,padding:"2px 8px",borderRadius:99}}>
+                              {warChallenges.filter(c=>c.status==="open").length}
+                            </span>
+                          </div>
+                          {warChallenges.filter(c=>c.status==="open").map(chal=>(
+                            <div key={chal.id} style={{background:"#111118",borderRadius:14,border:"1px solid #2D1F52",marginBottom:8,padding:"12px 14px"}}>
+                              <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:4}}>{chal.title}</div>
+                              {chal.stakes&&<div style={{fontSize:11,color:"#F5A623",marginBottom:4}}>🏅 {chal.stakes}</div>}
+                              <div style={{fontSize:11,color:"#F5A623",display:"flex",alignItems:"center",gap:6}}>
+                                <div style={{width:7,height:7,borderRadius:"50%",background:"#F5A623"}}/>
+                                Searching for an opponent...
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Completed wars */}
+                      {warChallenges.filter(c=>["completed","cancelled"].includes(c.status)).length > 0 && (
+                        <div>
+                          <div style={{fontWeight:800,fontSize:14,color:"#9CA3AF",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                            🏁 Past Wars
+                            <span style={{background:"rgba(156,163,175,0.15)",color:"#9CA3AF",fontSize:11,padding:"2px 8px",borderRadius:99}}>
+                              {warChallenges.filter(c=>["completed","cancelled"].includes(c.status)).length}
+                            </span>
+                          </div>
+                          {warChallenges.filter(c=>["completed","cancelled"].includes(c.status)).map(chal=>{
+                            const weWon=chal.winner_group_id===group._dbId;
+                            return (
+                              <div key={chal.id} style={{background:"#111118",borderRadius:14,
+                                border:`1px solid ${weWon?"#F5A623":"#2D1F52"}`,marginBottom:8,
+                                padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <div>
+                                  <div style={{fontWeight:800,fontSize:13,color:"#F0F0F0"}}>{chal.title}</div>
+                                  {chal.stakes&&<div style={{fontSize:11,color:"#6B7280",marginTop:2}}>Stakes: {chal.stakes}</div>}
+                                </div>
+                                <div style={{fontSize:22}}>{weWon?"🏆":chal.winner_group_id?"🥈":"🤝"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {warChallenges.length === 0 && (
+                        <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
+                          <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
+                          <div style={{fontWeight:700,fontSize:15,color:"#F0F0F0",marginBottom:8}}>No wars yet</div>
+                          <div style={{fontSize:13}}>Go to the Wars tab to challenge another group.</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : (
+                /* ── INTERNAL CHALLENGES SUB-TAB ── */
+                <div>
+                  {/* ⚔️ Weekly Group Challenge Section */}
+                  <WeeklyChallengeSection groupName={group.name} catColor={catColor} />
+
+                  {group._dbId && (
+                    <div style={{ marginBottom:16, display:"flex", justifyContent:"flex-end" }}>
+                      <button onClick={() => setShowChallengeModal(true)}
+                        style={{ padding:"9px 18px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>
+                        + Create Challenge
+                      </button>
+                    </div>
+                  )}
               {(() => {
                 const now = new Date();
                 const activeChallenges = displayChallenges.filter((ch: any) =>
@@ -1748,6 +1884,8 @@ export default function GroupPage() {
                   </>
                 );
               })()}
+                </div>
+              )}
             </div>
           )}
 
