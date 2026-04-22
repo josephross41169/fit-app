@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -1870,28 +1870,130 @@ export default function ProfilePage() {
                     <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id }))} />
                   </div>
                 )}
-                {(realDays.length > 0 ? realDays : DAYS).map(day => {
-                const isReal = realDays.length > 0;
-                return (
-                  <DayCard
-                    key={day.id}
-                    day={day as any}
-                    workoutLogId={(day as any)._workoutLogId}
-                    nutritionLogIds={(day as any)._nutritionLogIds}
-                    earnedBadges={earnedBadges}
-                    onDelete={isReal ? async () => {
-                      const wid = (day as any)._workoutLogId;
-                      const nids: string[] = (day as any)._nutritionLogIds || [];
-                      const wids: string[] = (day as any)._wellnessLogIds || [];
-                      const allIds = [...(wid ? [wid] : []), ...nids, ...wids];
-                      if (allIds.length > 0) {
-                        await supabase.from('activity_logs').delete().in('id', allIds);
-                      }
-                      setRealDays(prev => prev.filter(d => d.id !== day.id));
-                    } : undefined}
-                  />
-                );
-              })}
+                {(()=>{
+                  const days = realDays.length > 0 ? realDays : DAYS;
+                  const isReal = realDays.length > 0;
+                  const now = new Date();
+                  const cutoff7 = new Date(now); cutoff7.setDate(now.getDate() - 7);
+                  const cutoff1yr = new Date(now); cutoff1yr.setFullYear(now.getFullYear() - 1);
+
+                  // Split into recent (last 7) and older
+                  const recent = days.filter((d:any) => new Date((d as any)._date || 0) >= cutoff7);
+                  const older  = days.filter((d:any) => new Date((d as any)._date || 0) < cutoff7);
+
+                  function makeCard(day: any) {
+                    return (
+                      <DayCard
+                        key={day.id}
+                        day={day as any}
+                        workoutLogId={(day as any)._workoutLogId}
+                        nutritionLogIds={(day as any)._nutritionLogIds}
+                        earnedBadges={earnedBadges}
+                        onDelete={isReal ? async () => {
+                          const wid = (day as any)._workoutLogId;
+                          const nids: string[] = (day as any)._nutritionLogIds || [];
+                          const wids: string[] = (day as any)._wellnessLogIds || [];
+                          const allIds = [...(wid ? [wid] : []), ...nids, ...wids];
+                          if (allIds.length > 0) {
+                            await supabase.from('activity_logs').delete().in('id', allIds);
+                          }
+                          setRealDays(prev => prev.filter(d => d.id !== day.id));
+                        } : undefined}
+                      />
+                    );
+                  }
+
+                  // Section header style
+                  function SectionHeader({ label }: { label: string }) {
+                    return (
+                      <div style={{
+                        display:"flex", alignItems:"center", gap:10,
+                        margin:"24px 0 10px",
+                      }}>
+                        <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                        <span style={{fontSize:11,fontWeight:800,color:C.sub,
+                          textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>
+                          {label}
+                        </span>
+                        <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                      </div>
+                    );
+                  }
+
+                  // Group older days by year → month → week
+                  function groupOlder(days: any[]) {
+                    const byYear: Record<string, any[]> = {};
+                    days.forEach(d => {
+                      const dt = new Date((d as any)._date || 0);
+                      const yr = dt.getFullYear().toString();
+                      if (!byYear[yr]) byYear[yr] = [];
+                      byYear[yr].push(d);
+                    });
+
+                    const currentYear = now.getFullYear().toString();
+                    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+                    return Object.entries(byYear).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr, yDays]) => {
+                      const isCurrentYr = yr === currentYear;
+                      // Group by month
+                      const byMonth: Record<string, any[]> = {};
+                      yDays.forEach(d => {
+                        const dt = new Date((d as any)._date || 0);
+                        const mk = `${dt.getFullYear()}-${dt.getMonth()}`;
+                        if (!byMonth[mk]) byMonth[mk] = [];
+                        byMonth[mk].push(d);
+                      });
+
+                      return (
+                        <div key={yr}>
+                          {!isCurrentYr && <SectionHeader label={yr}/>}
+                          {Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([mk, mDays]) => {
+                            const dt = new Date((mDays[0] as any)._date || 0);
+                            const monthName = MONTHS[dt.getMonth()];
+                            const headerLabel = isCurrentYr ? monthName : `${monthName} ${yr}`;
+                            // Group by week within month
+                            const byWeek: Record<string, any[]> = {};
+                            mDays.forEach(d => {
+                              const dt2 = new Date((d as any)._date || 0);
+                              const weekStart = new Date(dt2);
+                              weekStart.setDate(dt2.getDate() - dt2.getDay());
+                              const wk = weekStart.toISOString().slice(0,10);
+                              if (!byWeek[wk]) byWeek[wk] = [];
+                              byWeek[wk].push(d);
+                            });
+                            return (
+                              <div key={mk}>
+                                <SectionHeader label={headerLabel}/>
+                                {Object.entries(byWeek).sort((a,b)=>b[0].localeCompare(a[0])).map(([wk, wDays]) => {
+                                  const wStart = new Date(wk);
+                                  const wEnd = new Date(wk); wEnd.setDate(wEnd.getDate()+6);
+                                  const fmt = (d:Date) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+                                  return (
+                                    <div key={wk}>
+                                      <div style={{fontSize:10,fontWeight:700,color:C.sub,
+                                        textTransform:"uppercase",letterSpacing:0.8,
+                                        margin:"8px 0 4px",padding:"0 2px"}}>
+                                        Week of {fmt(wStart)} – {fmt(wEnd)}
+                                      </div>
+                                      {wDays.map(makeCard)}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    });
+                  }
+
+                  return (
+                    <>
+                      {recent.map(makeCard)}
+                      {older.length > 0 && groupOlder(older)}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>
@@ -1975,7 +2077,6 @@ export default function ProfilePage() {
     </div>
   );
 }
-
 
 
 
