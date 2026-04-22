@@ -212,7 +212,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
       {/* Time range */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         {(["1m","3m","6m","all"] as const).map(r => (
-          <button key={r} onClick={() => { setTimeRange(r); setShowAllExercises(false); }} style={{
+          <button key={r} onClick={() => { setTimeRange(r); }} style={{
             padding: "6px 12px", fontSize: 12, fontWeight: 700,
             background: timeRange === r ? C.purple : C.purpleDark,
             color: timeRange === r ? "#fff" : C.sub,
@@ -230,7 +230,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
           { key: "lifting" as const, icon: "💪", label: `Lifting${hasLifting ? ` (${liftingExercises.length})` : ""}` },
           { key: "cardio"  as const, icon: "🏃", label: `Cardio${hasCardio   ? ` (${cardioExercises.length})` : ""}`  },
         ].map(({ key, icon, label }) => (
-          <button key={key} onClick={() => { setActiveGraph(key); setExpandedExercise(null); setShowAllExercises(false); }} style={{
+          <button key={key} onClick={() => { setActiveGraph(key); }} style={{
             flex: 1, padding: "8px 0", border: "none", cursor: "pointer", borderRadius: 9,
             fontWeight: 700, fontSize: 13,
             background: activeGraph === key ? C.purple : "transparent",
