@@ -804,22 +804,25 @@ export default function GroupPage() {
   // ── Delete group goal ───────────────────────────────────────────────────────
   const deleteGroupGoal = async (goalId: string) => {
     if (!window.confirm("Delete this group goal? This cannot be undone.")) return;
-    try {
-      await supabase.from("group_challenge_members").delete().eq("challenge_id", goalId);
-      await supabase.from("group_challenges").delete().eq("id", goalId);
-      setGroupGoals(prev => prev.filter(g => g.id !== goalId));
-    } catch(e) { console.error(e); alert("Error deleting goal"); }
+    const { error: e1 } = await supabase
+      .from("group_challenge_members").delete().eq("challenge_id", goalId);
+    if (e1) { console.error("Delete members error:", e1); alert("Error: " + e1.message); return; }
+    const { error: e2 } = await supabase
+      .from("group_challenges").delete().eq("id", goalId);
+    if (e2) { console.error("Delete goal error:", e2); alert("Error: " + e2.message); return; }
+    setGroupGoals(prev => prev.filter(g => g.id !== goalId));
   };
 
   // ── Delete member challenge ──────────────────────────────────────────────────
   const deleteMemberChallenge = async (chalId: string) => {
     if (!window.confirm("Delete this challenge? This cannot be undone.")) return;
-    try {
-      await supabase.from("group_challenge_members").delete().eq("challenge_id", chalId);
-      await supabase.from("group_challenges").delete().eq("id", chalId);
-      // Remove from local state - trigger reload
-      window.location.reload();
-    } catch(e) { console.error(e); alert("Error deleting challenge"); }
+    const { error: e1 } = await supabase
+      .from("group_challenge_members").delete().eq("challenge_id", chalId);
+    if (e1) { console.error("Delete members error:", e1); alert("Error: " + e1.message); return; }
+    const { error: e2 } = await supabase
+      .from("group_challenges").delete().eq("id", chalId);
+    if (e2) { console.error("Delete challenge error:", e2); alert("Error: " + e2.message); return; }
+    window.location.reload();
   };
 
   // ── Create challenge ─────────────────────────────────────────────────────────
