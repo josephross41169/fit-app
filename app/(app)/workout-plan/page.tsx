@@ -382,12 +382,18 @@ export default function WorkoutPlanPage() {
           </div>
 
           {/* Regenerate */}
-          <button onClick={generate} style={{
-            width: "100%", marginTop: 16, padding: "12px", borderRadius: 12, cursor: "pointer",
-            background: "#161616", border: `1px solid ${C.border}`,
-            color: C.sub, fontSize: 13, fontWeight: 700,
+          <button onClick={generate} disabled={generating} style={{
+            width: "100%", marginTop: 16, padding: "13px", borderRadius: 12,
+            cursor: generating ? "not-allowed" : "pointer",
+            background: generating
+              ? "rgba(124,58,237,0.15)"
+              : `linear-gradient(135deg,${C.purple},#A78BFA)`,
+            border: `1px solid ${generating ? C.purple : "transparent"}`,
+            color: "#fff", fontSize: 14, fontWeight: 800,
+            opacity: generating ? 0.7 : 1,
+            transition: "all 0.2s",
           }}>
-            🔄 Regenerate Plan
+            {generating ? "⚡ Generating new plan..." : "🔄 Regenerate Plan"}
           </button>
         </div>
       )}
