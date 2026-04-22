@@ -673,15 +673,116 @@ export default function StatsPage(){
 
           {/* ═══════════════════════════════════════════════ TODAY ══ */}
           {tab==="today"&&(<>
-            {/* Streak */}
-            <div style={{background:`linear-gradient(135deg,${C.purpleDim},#1A0F30)`,borderRadius:18,padding:"18px 20px",border:`1px solid ${C.purpleBorder}`,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div>
-                <div style={{fontSize:11,color:C.subLight,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Current Streak</div>
-                <div style={{fontSize:42,fontWeight:900,color:C.gold,lineHeight:1}}>{streaks.current}<span style={{fontSize:18,color:C.sub,marginLeft:4}}>days</span></div>
-                <div style={{fontSize:12,color:C.sub,marginTop:4}}>Best ever: {streaks.longest} days</div>
-              </div>
-              <div style={{fontSize:52}}>🔥</div>
-            </div>
+            {/* Monthly Nutrition Goals Widget */}
+            {(()=>{
+              const now = new Date();
+              const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+              const dayOfMonth = now.getDate();
+
+              // Monthly nutrition logs (this month)
+              const monthLogs = nutritionLogs.filter((l:any) => {
+                const d = new Date(l.logged_at);
+                return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+              });
+              const monthCals = monthLogs.reduce((s:number,l:any)=>s+(l.calories_total||0),0);
+              const monthProt = monthLogs.reduce((s:number,l:any)=>s+(l.protein_g||0),0);
+
+              // Monthly targets based on daily goals
+              const monthCalGoal = goals ? goals.calories * daysInMonth : 0;
+              const monthProtGoal = goals ? goals.protein * daysInMonth : 0;
+
+              // Today's nutrition
+              const todayCals = todayNut?.calories || 0;
+              const todayProt = todayNut?.protein || 0;
+              const calGoal = goals?.calories || 2000;
+              const protGoal = goals?.protein || 150;
+
+              const calPct = monthCalGoal > 0 ? Math.min(100, Math.round((monthCals/monthCalGoal)*100)) : 0;
+              const protPct = monthProtGoal > 0 ? Math.min(100, Math.round((monthProt/monthProtGoal)*100)) : 0;
+              const todayCalPct = Math.min(100, Math.round((todayCals/calGoal)*100));
+              const todayProtPct = Math.min(100, Math.round((todayProt/protGoal)*100));
+
+              return (
+                <div style={{background:`linear-gradient(135deg,${C.purpleDim},#1A0F30)`,borderRadius:18,
+                  padding:"18px 20px",border:`1px solid ${C.purpleBorder}`,marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <div>
+                      <div style={{fontSize:11,color:C.subLight,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:1}}>
+                        Nutrition — {now.toLocaleString("default",{month:"long"})}
+                      </div>
+                      <div style={{fontSize:12,color:C.sub,marginTop:2}}>
+                        Day {dayOfMonth} of {daysInMonth} · {monthLogs.length} days logged
+                      </div>
+                    </div>
+                    <div style={{fontSize:36}}>🥗</div>
+                  </div>
+
+                  {/* Today's progress */}
+                  <div style={{marginBottom:14,padding:"10px 12px",background:"rgba(255,255,255,0.04)",borderRadius:12}}>
+                    <div style={{fontSize:10,fontWeight:700,color:C.subLight,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>Today</div>
+                    <div style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}>
+                        <span style={{color:C.sub}}>🔥 Calories</span>
+                        <span style={{fontWeight:800,color:todayCalPct>=100?C.green:C.text}}>
+                          {Math.round(todayCals)} / {calGoal} kcal
+                        </span>
+                      </div>
+                      <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${todayCalPct}%`,borderRadius:99,transition:"width 0.6s",
+                          background:todayCalPct>=100?"#4ADE80":C.gold}}/>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}>
+                        <span style={{color:C.sub}}>🥩 Protein</span>
+                        <span style={{fontWeight:800,color:todayProtPct>=100?C.green:C.text}}>
+                          {Math.round(todayProt)} / {protGoal}g
+                        </span>
+                      </div>
+                      <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${todayProtPct}%`,borderRadius:99,transition:"width 0.6s",
+                          background:todayProtPct>=100?"#4ADE80":C.green}}/>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Monthly totals */}
+                  {monthCalGoal > 0 && (
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.subLight,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>This Month</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                            <span style={{color:C.sub}}>Calories</span>
+                            <span style={{fontWeight:700,color:C.text}}>{calPct}%</span>
+                          </div>
+                          <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+                            <div style={{height:"100%",width:`${calPct}%`,background:C.gold,borderRadius:99}}/>
+                          </div>
+                          <div style={{fontSize:10,color:C.sub,marginTop:3}}>{Math.round(monthCals).toLocaleString()} / {Math.round(monthCalGoal).toLocaleString()} kcal</div>
+                        </div>
+                        <div>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                            <span style={{color:C.sub}}>Protein</span>
+                            <span style={{fontWeight:700,color:C.text}}>{protPct}%</span>
+                          </div>
+                          <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+                            <div style={{height:"100%",width:`${protPct}%`,background:C.green,borderRadius:99}}/>
+                          </div>
+                          <div style={{fontSize:10,color:C.sub,marginTop:3}}>{Math.round(monthProt)}g / {Math.round(monthProtGoal)}g</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!goals && (
+                    <div style={{fontSize:12,color:C.sub,textAlign:"center" as const,marginTop:4}}>
+                      Set nutrition goals in the Nutrition tab to see monthly tracking
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Today's workouts (all of them) */}
             <SecHead title="Today's Workouts"/>
