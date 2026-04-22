@@ -80,7 +80,7 @@ const tabs = [
         ⚔️
       </div>
     )
-  }
+  },
   {
     href: "/challenges", label: "Wars",
     icon: (active: boolean) => (
@@ -96,7 +96,7 @@ const tabs = [
         <path d="M8.5 15H10v-1.5c0-.83-.67-1.5-1.5-1.5S7 12.67 7 13.5 7.67 15 8.5 15z"/>
       </svg>
     ),
-  },,
+  },
   {
     href: "/workout-plan", label: "AI Plan",
     icon: (active: boolean) => (
