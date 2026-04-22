@@ -754,7 +754,13 @@ export default function GroupPage() {
         is_group_goal: true,
         member_count: dbMembers.length,
       }).select().single();
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes("schema cache") || error.message?.includes("column")) {
+          alert("Missing DB columns. Run in Supabase SQL Editor:\n\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS goal numeric DEFAULT 0;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS is_group_goal boolean DEFAULT false;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS description text;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS stakes text;");
+          setGoalSaving(false); return;
+        }
+        throw error;
+      }
       // Auto-enroll ALL group members
       if (dbMembers.length > 0) {
         await supabase.from("group_challenge_members").insert(
@@ -1863,10 +1869,55 @@ export default function GroupPage() {
                       </div>
                     );
                     if(completed.length===0) return null;
+                    const topPs = (ch:any) => Array.isArray(ch.challenge_participants)
+                      ? [...ch.challenge_participants].sort((a:any,b:any)=>(b.score||0)-(a.score||0)).slice(0,3)
+                      : [];
                     return (
                       <div>
                         <div style={{fontWeight:800,fontSize:14,color:"#9CA3AF",marginBottom:12}}>🏅 Past Member Challenges</div>
-                        {completed.map((ch:any)=>renderChallengeCard(ch,true))}
+                        {completed.map((ch:any)=>(
+                          <div key={ch.id} style={{background:"linear-gradient(135deg,#FFFBEE,#FEF3C7)",borderRadius:18,
+                            border:"2px solid #F5A623",marginBottom:16,overflow:"hidden"}}>
+                            <div style={{background:"linear-gradient(135deg,#F5A623,#FFD700)",padding:"16px 20px",
+                              borderBottom:"1px solid #F5A623",display:"flex",alignItems:"center",gap:12}}>
+                              <div style={{width:52,height:52,borderRadius:14,
+                                background:"linear-gradient(135deg,#F5A623,#FFD700)",
+                                display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>
+                                {ch.emoji||"🏆"}
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                                  <span style={{fontWeight:900,fontSize:16,color:"#92400E"}}>{ch.name}</span>
+                                  <span style={{background:"#F5A623",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99}}>✓ Ended</span>
+                                </div>
+                                <div style={{fontSize:12,color:"#92400E"}}>
+                                  👥 {ch.participant_count||ch.participants||0} participated
+                                  {ch.deadline&&<span> · Ended {new Date(ch.deadline).toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"})}</span>}
+                                </div>
+                                {ch.metric_label&&<div style={{fontSize:11,color:"#B45309",fontWeight:700,marginTop:2}}>📊 {ch.metric_label}</div>}
+                              </div>
+                            </div>
+                            <div style={{padding:"14px 20px"}}>
+                              <p style={{fontSize:13,color:"#92400E",lineHeight:1.6,marginBottom:14}}>{ch.description||ch.desc}</p>
+                              {topPs(ch).length>0&&(
+                                <div>
+                                  <div style={{fontSize:11,fontWeight:800,color:"#92400E",textTransform:"uppercase" as const,letterSpacing:0.8,marginBottom:8}}>🏅 Top Finishers</div>
+                                  {topPs(ch).map((p:any,idx:number)=>(
+                                    <div key={p.user_id||idx} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                                      <span style={{fontSize:14}}>{["🥇","🥈","🥉"][idx]||"🎖️"}</span>
+                                      <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#F5A623,#FFD700)",
+                                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
+                                        {p.users?.avatar_url?<img src={p.users.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(p.users?.full_name||p.users?.username||"?")[0]}
+                                      </div>
+                                      <span style={{fontSize:13,fontWeight:700,color:"#92400E",flex:1}}>{p.users?.full_name||p.users?.username||"Member"}</span>
+                                      <span style={{fontSize:12,fontWeight:800,color:"#F5A623"}}>{p.score} {ch.metric_unit||"pts"}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}
