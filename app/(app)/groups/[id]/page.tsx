@@ -801,6 +801,27 @@ export default function GroupPage() {
     setGoalSaving(false);
   };
 
+  // ── Delete group goal ───────────────────────────────────────────────────────
+  const deleteGroupGoal = async (goalId: string) => {
+    if (!window.confirm("Delete this group goal? This cannot be undone.")) return;
+    try {
+      await supabase.from("group_challenge_members").delete().eq("challenge_id", goalId);
+      await supabase.from("group_challenges").delete().eq("id", goalId);
+      setGroupGoals(prev => prev.filter(g => g.id !== goalId));
+    } catch(e) { console.error(e); alert("Error deleting goal"); }
+  };
+
+  // ── Delete member challenge ──────────────────────────────────────────────────
+  const deleteMemberChallenge = async (chalId: string) => {
+    if (!window.confirm("Delete this challenge? This cannot be undone.")) return;
+    try {
+      await supabase.from("group_challenge_members").delete().eq("challenge_id", chalId);
+      await supabase.from("group_challenges").delete().eq("id", chalId);
+      // Remove from local state - trigger reload
+      window.location.reload();
+    } catch(e) { console.error(e); alert("Error deleting challenge"); }
+  };
+
   // ── Create challenge ─────────────────────────────────────────────────────────
   const createWarChallenge = async () => {
     const dbId = group._dbId;
@@ -1938,6 +1959,14 @@ export default function GroupPage() {
                                   ))}
                                 </div>
                               )}
+                              {isOwnerOrMod && (
+                                <button onClick={()=>deleteMemberChallenge(ch.id)}
+                                  style={{marginTop:8,padding:"8px 0",width:"100%",borderRadius:10,
+                                    border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.08)",
+                                    color:"#EF4444",fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                                  🗑 Delete Challenge
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1978,16 +2007,26 @@ export default function GroupPage() {
                     {/* Header */}
                     <div style={{background:"linear-gradient(135deg,#2D1B69,#1A0D3E)",padding:"16px 20px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                        <div>
+                        <div style={{flex:1,minWidth:0}}>
                           <div style={{fontWeight:900,fontSize:17,color:"#fff",marginBottom:2}}>{goal.title}</div>
                           <div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>
                             {meta.icon} {meta.label} · {members.length} members enrolled
                             {daysLeft!==null && <span> · ⏱ {daysLeft}d left</span>}
                           </div>
                         </div>
-                        <div style={{textAlign:"center" as const,flexShrink:0}}>
-                          <div style={{fontSize:28,fontWeight:900,color:"#fff"}}>{totalContrib}</div>
-                          <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase" as const}}>/ {goalTarget} {meta.unit}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                          <div style={{textAlign:"center" as const}}>
+                            <div style={{fontSize:28,fontWeight:900,color:"#fff"}}>{totalContrib}</div>
+                            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase" as const}}>/ {goalTarget} {meta.unit}</div>
+                          </div>
+                          {isOwnerOrMod && (
+                            <button onClick={()=>deleteGroupGoal(goal.id)} style={{
+                              width:28,height:28,borderRadius:"50%",border:"none",
+                              background:"rgba(239,68,68,0.2)",color:"#EF4444",
+                              cursor:"pointer",fontSize:14,display:"flex",
+                              alignItems:"center",justifyContent:"center",flexShrink:0,
+                            }}>✕</button>
+                          )}
                         </div>
                       </div>
                       {/* Progress bar */}
@@ -2132,6 +2171,14 @@ export default function GroupPage() {
                               <button onClick={() => setLogProgressChallenge(ch)}
                                 style={{ padding:"10px 16px", borderRadius:12, border:`2px solid ${catColor}`, background:"transparent", color:catColor, fontWeight:800, fontSize:13, cursor:"pointer" }}>
                                 Log Progress
+                              </button>
+                            )}
+                            {isOwnerOrMod && (
+                              <button onClick={() => deleteMemberChallenge(ch.id)}
+                                style={{ padding:"10px 14px", borderRadius:12, border:"1px solid rgba(239,68,68,0.3)",
+                                  background:"rgba(239,68,68,0.1)", color:"#EF4444",
+                                  fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                                🗑
                               </button>
                             )}
                           </div>
