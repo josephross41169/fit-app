@@ -702,8 +702,8 @@ export default function GroupPage() {
   }, [dbGroup, tab]);
 
   useEffect(() => {
-    if (tab === "war" && (dbGroup as any)?.id) loadWarChallenges();
-  }, [tab, dbGroup, loadWarChallenges]);
+    if ((dbGroup as any)?.id) loadWarChallenges();
+  }, [dbGroup, loadWarChallenges]);
 
   // ── Group Goals hook (must be before early returns) ─────────────────────────
   const loadGroupGoals = useCallback(async () => {
