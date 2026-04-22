@@ -523,6 +523,7 @@ export default function GroupPage() {
   const [warSelectedMembers, setWarSelectedMembers] = useState<string[]>([]);
   const [warSaving, setWarSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [warPosted, setWarPosted] = useState(false);
   const [commentInputs, setCommentInputs] = useState<Record<string,string>>({});
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
   const [shareCopied, setShareCopied] = useState(false);
@@ -721,6 +722,8 @@ export default function GroupPage() {
       setShowCreateWar(false);
       setWarForm({ title:"", metric:"miles_run", lift_type:"", duration_days:7 });
       setWarSelectedMembers([]);
+      setWarPosted(true);
+      setTimeout(() => setWarPosted(false), 5000);
       await loadWarChallenges();
     } catch(e) { console.error(e); alert("Error creating challenge"); }
     setWarSaving(false);
@@ -1866,6 +1869,21 @@ export default function GroupPage() {
                   )}
                 </div>
 
+                {/* Success banner */}
+                {warPosted && (
+                  <div style={{
+                    background:"rgba(74,222,128,0.12)",border:"1px solid #4ADE80",
+                    borderRadius:12,padding:"12px 16px",marginBottom:16,
+                    display:"flex",alignItems:"center",gap:10,
+                  }}>
+                    <span style={{fontSize:20}}>🔍</span>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14,color:"#4ADE80"}}>War posted! Searching for an opponent...</div>
+                      <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Your challenge is now on the open board. Any group admin can accept it.</div>
+                    </div>
+                  </div>
+                )}
+
                 {warLoading ? (
                   <div style={{textAlign:"center",padding:40,color:"#6B7280"}}>Loading wars...</div>
                 ) : (
@@ -2166,9 +2184,12 @@ export default function GroupPage() {
                               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
                                 borderRadius:10,border:`1px solid ${sel?"#7C3AED":"#2D1F52"}`,
                                 background:sel?"#2D1F52":"transparent",cursor:"pointer",textAlign:"left" as const}}>
-                              <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
-                                display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}}>
-                                {name[0]?.toUpperCase()}
+                              <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",
+                                flexShrink:0,overflow:"hidden",border:`2px solid ${sel?"#7C3AED":"transparent"}`}}>
+                                {m.avatarUrl
+                                  ? <img src={m.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={name}/>
+                                  : name[0]?.toUpperCase()}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
                                 <div style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>{name}</div>
