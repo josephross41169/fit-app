@@ -1875,9 +1875,9 @@ export default function ProfilePage() {
                   const isReal = realDays.length > 0;
                   const now = new Date();
                   const cutoff7 = new Date(now); cutoff7.setDate(now.getDate() - 7);
-                  const cutoff1yr = new Date(now); cutoff1yr.setFullYear(now.getFullYear() - 1);
+                  const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-                  // Split into recent (last 7) and older
                   const recent = days.filter((d:any) => new Date((d as any)._date || 0) >= cutoff7);
                   const older  = days.filter((d:any) => new Date((d as any)._date || 0) < cutoff7);
 
@@ -1903,94 +1903,115 @@ export default function ProfilePage() {
                     );
                   }
 
-                  // Section header style
-                  function SectionHeader({ label }: { label: string }) {
+                  // Build collapsible month cards for older days
+                  function MonthCard({ monthKey, mDays }: { monthKey: string; mDays: any[] }) {
+                    const [open, setOpen] = React.useState(false);
+                    const dt = new Date((mDays[0] as any)._date || 0);
+                    const isCurrentYear = dt.getFullYear() === now.getFullYear();
+                    const label = isCurrentYear
+                      ? MONTHS_FULL[dt.getMonth()]
+                      : `${MONTHS_FULL[dt.getMonth()]} ${dt.getFullYear()}`;
+                    const totalWorkouts = mDays.filter((d:any) => d.workout).length;
+                    const totalNutrition = mDays.filter((d:any) => d.nutrition).length;
+                    const totalWellness = mDays.filter((d:any) => d.wellness).length;
+                    const firstDay = mDays[mDays.length-1];
+                    const lastDay = mDays[0];
+                    const dateRange = `${MONTHS_SHORT[new Date((firstDay as any)._date||0).getMonth()]} ${new Date((firstDay as any)._date||0).getDate()} – ${MONTHS_SHORT[new Date((lastDay as any)._date||0).getMonth()]} ${new Date((lastDay as any)._date||0).getDate()}`;
+
                     return (
-                      <div style={{
-                        display:"flex", alignItems:"center", gap:10,
-                        margin:"24px 0 10px",
-                      }}>
-                        <div style={{flex:1,height:1,background:C.purpleMid}}/>
-                        <span style={{fontSize:11,fontWeight:800,color:C.sub,
-                          textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>
-                          {label}
-                        </span>
-                        <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                      <div style={{marginBottom:10}}>
+                        {/* Month card header — click to expand */}
+                        <button onClick={() => setOpen(o => !o)} style={{
+                          width:"100%", background:open ? C.purpleDim : C.white,
+                          border:`2px solid ${open ? C.purple : C.purpleMid}`,
+                          borderRadius: open ? "16px 16px 0 0" : 16,
+                          padding:"14px 18px", cursor:"pointer", textAlign:"left",
+                          transition:"all 0.2s",
+                        }}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                            <div>
+                              <div style={{fontWeight:900,fontSize:17,color:C.text}}>{label}</div>
+                              <div style={{fontSize:12,color:C.sub,marginTop:3}}>{dateRange} · {mDays.length} day{mDays.length!==1?"s":""} logged</div>
+                              <div style={{display:"flex",gap:12,marginTop:6,flexWrap:"wrap"}}>
+                                {totalWorkouts>0 && <span style={{fontSize:11,color:C.sub}}>💪 {totalWorkouts} workout{totalWorkouts!==1?"s":""}</span>}
+                                {totalNutrition>0 && <span style={{fontSize:11,color:C.sub}}>🥗 {totalNutrition} nutrition</span>}
+                                {totalWellness>0 && <span style={{fontSize:11,color:C.sub}}>🌿 {totalWellness} wellness</span>}
+                              </div>
+                            </div>
+                            <div style={{
+                              width:32,height:32,borderRadius:"50%",
+                              background:open ? C.purple : C.purpleMid,
+                              display:"flex",alignItems:"center",justifyContent:"center",
+                              flexShrink:0,marginLeft:12,
+                              transform:open?"rotate(180deg)":"rotate(0deg)",
+                              transition:"transform 0.25s",
+                            }}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}>
+                                <path d="M6 9l6 6 6-6"/>
+                              </svg>
+                            </div>
+                          </div>
+                        </button>
+                        {/* Expanded day cards */}
+                        {open && (
+                          <div style={{
+                            border:`2px solid ${C.purple}`,borderTop:"none",
+                            borderRadius:"0 0 16px 16px",
+                            padding:"8px 10px 10px",
+                            background:"#0D0820",
+                          }}>
+                            {mDays.map(makeCard)}
+                          </div>
+                        )}
                       </div>
                     );
                   }
 
-                  // Group older days by year → month → week
-                  function groupOlder(days: any[]) {
-                    const byYear: Record<string, any[]> = {};
-                    days.forEach(d => {
+                  // Group older days by year → month
+                  function groupOlder(olderDays: any[]) {
+                    const byMonth: Record<string, any[]> = {};
+                    olderDays.forEach(d => {
                       const dt = new Date((d as any)._date || 0);
-                      const yr = dt.getFullYear().toString();
+                      const mk = `${dt.getFullYear()}-${String(dt.getMonth()).padStart(2,"0")}`;
+                      if (!byMonth[mk]) byMonth[mk] = [];
+                      byMonth[mk].push(d);
+                    });
+
+                    // Group months by year for year headers
+                    const byYear: Record<string, string[]> = {};
+                    Object.keys(byMonth).forEach(mk => {
+                      const yr = mk.split("-")[0];
                       if (!byYear[yr]) byYear[yr] = [];
-                      byYear[yr].push(d);
+                      byYear[yr].push(mk);
                     });
 
                     const currentYear = now.getFullYear().toString();
-                    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-                    return Object.entries(byYear).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr, yDays]) => {
-                      const isCurrentYr = yr === currentYear;
-                      // Group by month
-                      const byMonth: Record<string, any[]> = {};
-                      yDays.forEach(d => {
-                        const dt = new Date((d as any)._date || 0);
-                        const mk = `${dt.getFullYear()}-${dt.getMonth()}`;
-                        if (!byMonth[mk]) byMonth[mk] = [];
-                        byMonth[mk].push(d);
-                      });
-
-                      return (
-                        <div key={yr}>
-                          {!isCurrentYr && <SectionHeader label={yr}/>}
-                          {Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([mk, mDays]) => {
-                            const dt = new Date((mDays[0] as any)._date || 0);
-                            const monthName = MONTHS[dt.getMonth()];
-                            const headerLabel = isCurrentYr ? monthName : `${monthName} ${yr}`;
-                            // Group by week within month
-                            const byWeek: Record<string, any[]> = {};
-                            mDays.forEach(d => {
-                              const dt2 = new Date((d as any)._date || 0);
-                              const weekStart = new Date(dt2);
-                              weekStart.setDate(dt2.getDate() - dt2.getDay());
-                              const wk = weekStart.toISOString().slice(0,10);
-                              if (!byWeek[wk]) byWeek[wk] = [];
-                              byWeek[wk].push(d);
-                            });
-                            return (
-                              <div key={mk}>
-                                <SectionHeader label={headerLabel}/>
-                                {Object.entries(byWeek).sort((a,b)=>b[0].localeCompare(a[0])).map(([wk, wDays]) => {
-                                  const wStart = new Date(wk);
-                                  const wEnd = new Date(wk); wEnd.setDate(wEnd.getDate()+6);
-                                  const fmt = (d:Date) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
-                                  return (
-                                    <div key={wk}>
-                                      <div style={{fontSize:10,fontWeight:700,color:C.sub,
-                                        textTransform:"uppercase",letterSpacing:0.8,
-                                        margin:"8px 0 4px",padding:"0 2px"}}>
-                                        Week of {fmt(wStart)} – {fmt(wEnd)}
-                                      </div>
-                                      {wDays.map(makeCard)}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    });
+                    return Object.entries(byYear).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr, mks]) => (
+                      <div key={yr}>
+                        {yr !== currentYear && (
+                          <div style={{display:"flex",alignItems:"center",gap:10,margin:"20px 0 12px"}}>
+                            <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                            <span style={{fontSize:12,fontWeight:800,color:C.sub,
+                              textTransform:"uppercase",letterSpacing:1.5}}>{yr}</span>
+                            <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                          </div>
+                        )}
+                        {mks.sort((a,b)=>b.localeCompare(a)).map(mk => (
+                          <MonthCard key={mk} monthKey={mk} mDays={byMonth[mk]}/>
+                        ))}
+                      </div>
+                    ));
                   }
 
                   return (
                     <>
                       {recent.map(makeCard)}
-                      {older.length > 0 && groupOlder(older)}
+                      {older.length > 0 && (
+                        <div style={{marginTop:16}}>
+                          {groupOlder(older)}
+                        </div>
+                      )}
                     </>
                   );
                 })()}
