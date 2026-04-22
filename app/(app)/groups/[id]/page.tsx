@@ -663,7 +663,7 @@ export default function GroupPage() {
     if (!dbId) return;
     setWarLoading(true);
     try {
-      // Our group's challenges - simple select without ambiguous joins
+      // Our group's challenges
       const { data, error } = await supabase
         .from("group_challenges")
         .select(`*, 
@@ -675,19 +675,37 @@ export default function GroupPage() {
         .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
         .neq("is_group_goal", true)
         .order("created_at", { ascending: false });
-      if (error) {
-        console.error("loadWarChallenges error:", error.message);
-        // Try even simpler query as fallback
-        const { data: simple } = await supabase
-          .from("group_challenges")
-          .select("*")
-          .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
-          .order("created_at", { ascending: false });
-        setWarChallenges((simple || []).filter((c:any) => !c.is_group_goal));
-      } else {
-        console.log("War challenges loaded:", data?.length, data);
-        setWarChallenges(data || []);
+
+      let challenges = error ? [] : (data || []);
+      if (error) console.error("loadWarChallenges error:", error.message);
+
+      // Fetch user profiles for all members across all challenges
+      const allUserIds = [...new Set(
+        challenges.flatMap((c:any) =>
+          (c.group_challenge_members||[]).map((m:any) => m.user_id).filter(Boolean)
+        )
+      )];
+
+      if (allUserIds.length > 0) {
+        const { data: users } = await supabase
+          .from("users")
+          .select("id,username,full_name,avatar_url")
+          .in("id", allUserIds);
+
+        const userMap: Record<string,any> = {};
+        (users||[]).forEach((u:any) => { userMap[u.id] = u; });
+
+        // Attach user data to each member
+        challenges = challenges.map((c:any) => ({
+          ...c,
+          group_challenge_members: (c.group_challenge_members||[]).map((m:any) => ({
+            ...m,
+            users: userMap[m.user_id] || null,
+          }))
+        }));
       }
+
+      setWarChallenges(challenges);
 
       // All open challenges from OTHER groups (the discovery board)
       const { data: openData } = await supabase
@@ -2587,102 +2605,136 @@ export default function GroupPage() {
                             </div>
                           </button>
 
-                          {/* Expanded detail */}
-                          {isExpanded && (
-                            <div style={{padding:"14px 16px",borderTop:"1px solid #2D1F52"}}>
+                          {/* Expanded scoreboard */}
+                          {isExpanded && (()=>{
+                            const allMembers = chal.group_challenge_members || [];
+                            const myTeam = allMembers.filter((m:any)=>m.group_id===dbId)
+                              .sort((a:any,b:any)=>(b.contribution||0)-(a.contribution||0));
+                            const theirTeam = allMembers.filter((m:any)=>m.group_id!==dbId)
+                              .sort((a:any,b:any)=>(b.contribution||0)-(a.contribution||0));
+                            const maxVal = Math.max(...allMembers.map((m:any)=>m.contribution||0), 1);
+                            const isMember = myTeam.some((m:any)=>m.user_id===currentUser?.id);
 
-                              {/* Top 5 contributors */}
-                              <div style={{marginBottom:14}}>
-                                <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase",
-                                  letterSpacing:1,marginBottom:8}}>Top Contributors — {myGroupName||"Your Group"}</div>
-                                {top5.length===0 && <div style={{fontSize:12,color:"#6B7280"}}>No contributions yet</div>}
-                                {top5.map((m:any,i:number)=>{
-                                  const u=m.users;
-                                  const val=chal.metric.includes("weight")?(m.weight_entry||0):(m.contribution||0);
-                                  const max=top5[0]?(chal.metric.includes("weight")?(top5[0].weight_entry||1):(top5[0].contribution||1)):1;
-                                  return (
-                                    <div key={m.user_id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                                      <span style={{fontSize:12,fontWeight:800,color:i===0?"#F5A623":"#6B7280",width:18}}>
-                                        {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}
-                                      </span>
-                                      <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
-                                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0}}>
-                                        {(u?.full_name||u?.username||"?")[0]?.toUpperCase()}
-                                      </div>
-                                      <div style={{flex:1,minWidth:0}}>
-                                        <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                          {u?.full_name||u?.username||"Member"}
-                                        </div>
-                                        <div style={{height:4,background:"#1E1E2E",borderRadius:99,overflow:"hidden",marginTop:2}}>
-                                          <div style={{width:`${max>0?Math.round((val/max)*100):0}%`,
-                                            height:"100%",background:i===0?"#F5A623":"#7C3AED",borderRadius:99}}/>
-                                        </div>
-                                      </div>
-                                      <span style={{fontSize:12,fontWeight:800,color:i===0?"#F5A623":"#F0F0F0",flexShrink:0}}>
-                                        {val}{meta.unit}
-                                      </span>
-                                      {/* Weight submit button */}
-                                      {chal.metric.includes("weight") && m.user_id===currentUser?.id && !m.weight_submitted && (
-                                        <button onClick={()=>{
-                                          const v=parseFloat(prompt(`Enter your ${chal.lift_type||"weight"} in lbs:`)||"0");
-                                          if(v>0) submitWeightEntry(chal.id,v);
-                                        }} style={{padding:"4px 10px",borderRadius:8,border:"none",
-                                          background:"#7C3AED",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                                          Submit
-                                        </button>
-                                      )}
-                                      {chal.metric.includes("weight") && m.weight_submitted && (
-                                        <span style={{fontSize:11,color:"#4ADE80"}}>✓</span>
-                                      )}
+                            const MemberRow = ({m, rank, color}: {m:any, rank:number, color:string}) => {
+                              const u = m.users;
+                              const val = m.contribution || 0;
+                              const pct = Math.round((val/maxVal)*100);
+                              const medals = ["🥇","🥈","🥉"];
+                              return (
+                                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",
+                                  borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                                  <span style={{width:20,fontSize:13,textAlign:"center" as const,flexShrink:0}}>
+                                    {rank<=3 ? medals[rank-1] : <span style={{fontSize:11,color:"#6B7280"}}>#{rank}</span>}
+                                  </span>
+                                  <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,overflow:"hidden",
+                                    background:`linear-gradient(135deg,${color},${color}99)`,
+                                    display:"flex",alignItems:"center",justifyContent:"center",
+                                    fontSize:12,fontWeight:900,color:"#fff"}}>
+                                    {u?.avatar_url
+                                      ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                                      : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
+                                  </div>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0",
+                                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                      {u?.full_name||u?.username||"Member"}
+                                      {m.user_id===currentUser?.id && <span style={{fontSize:10,color:color,marginLeft:4}}>YOU</span>}
                                     </div>
-                                  );
-                                })}
-                              </div>
-
-                              {/* Photo / media wall */}
-                              <div style={{marginBottom:14}}>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                                  <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:1}}>
-                                    📸 Challenge Media ({media.length})
+                                    <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:99,marginTop:3,overflow:"hidden"}}>
+                                      <div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:99,
+                                        transition:"width 0.6s"}}/>
+                                    </div>
                                   </div>
-                                  {/* Upload button */}
-                                  {myMembers.some((m:any)=>m.user_id===currentUser?.id) && (
-                                    <label style={{fontSize:11,fontWeight:700,color:"#7C3AED",cursor:"pointer",
-                                      padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",
-                                      border:"1px solid rgba(124,58,237,0.3)"}}>
-                                      {uploadingMedia?"Uploading...":"+ Add Photo"}
-                                      <input type="file" accept="image/*" style={{display:"none"}}
-                                        disabled={uploadingMedia}
-                                        onChange={e=>{
-                                          const f=e.target.files?.[0];
-                                          if(f) uploadWarMedia(chal.id,f);
-                                        }}/>
-                                    </label>
-                                  )}
+                                  <span style={{fontSize:12,fontWeight:800,color:rank===1?color:"#9CA3AF",flexShrink:0}}>
+                                    {val}{meta.unit}
+                                  </span>
                                 </div>
-                                {media.length===0 ? (
-                                  <div style={{textAlign:"center",padding:"20px",background:"#111118",
-                                    borderRadius:10,border:"1px dashed #2D1F52",color:"#6B7280",fontSize:12}}>
-                                    No photos yet — be the first to post!
+                              );
+                            };
+
+                            return (
+                              <div style={{borderTop:"1px solid #2D1F52"}}>
+                                {/* Two-column scoreboard */}
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
+                                  {/* My team */}
+                                  <div style={{padding:"14px 12px",borderRight:"1px solid #2D1F52"}}>
+                                    <div style={{fontSize:10,fontWeight:800,color:"#7C3AED",
+                                      textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
+                                      🟣 {myGroupName||"Your Group"}
+                                    </div>
+                                    {myTeam.length===0
+                                      ? <div style={{fontSize:11,color:"#6B7280",padding:"8px 0"}}>No members yet</div>
+                                      : myTeam.map((m:any,i:number)=>(
+                                          <MemberRow key={m.user_id} m={m} rank={i+1} color="#7C3AED"/>
+                                        ))}
                                   </div>
-                                ) : (
-                                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-                                    {media.map((m:any)=>(
-                                      <div key={m.id} style={{position:"relative",aspectRatio:"1",borderRadius:10,overflow:"hidden"}}>
-                                        <img src={m.media_url} alt={m.caption||""} style={{
-                                          width:"100%",height:"100%",objectFit:"cover"}}/>
-                                        <div style={{position:"absolute",bottom:0,left:0,right:0,
-                                          background:"linear-gradient(transparent,rgba(0,0,0,0.7))",
-                                          padding:"4px 6px",fontSize:9,color:"#fff",fontWeight:600}}>
-                                          {m.users?.username||""}
-                                        </div>
+                                  {/* Their team */}
+                                  <div style={{padding:"14px 12px"}}>
+                                    <div style={{fontSize:10,fontWeight:800,color:"#06B6D4",
+                                      textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
+                                      🔵 {theirGroupName||"Opponents"}
+                                    </div>
+                                    {theirTeam.length===0
+                                      ? <div style={{fontSize:11,color:"#6B7280",padding:"8px 0"}}>No members yet</div>
+                                      : theirTeam.map((m:any,i:number)=>(
+                                          <MemberRow key={m.user_id} m={m} rank={i+1} color="#06B6D4"/>
+                                        ))}
+                                  </div>
+                                </div>
+
+                                {/* Details row */}
+                                {(chal.description||chal.stakes) && (
+                                  <div style={{padding:"10px 14px",borderTop:"1px solid #2D1F52",
+                                    display:"flex",flexDirection:"column" as const,gap:6}}>
+                                    {chal.description && (
+                                      <div style={{fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>
+                                        "{chal.description}"
                                       </div>
-                                    ))}
+                                    )}
+                                    {chal.stakes && (
+                                      <div style={{fontSize:12,color:"#F5A623"}}>
+                                        🏅 Stakes: {chal.stakes}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
+
+                                {/* Photo wall + upload */}
+                                <div style={{padding:"10px 14px",borderTop:"1px solid #2D1F52"}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:"#6B7280",
+                                      textTransform:"uppercase" as const,letterSpacing:1}}>
+                                      📸 War Photos ({media.length})
+                                    </div>
+                                    {isMember && (
+                                      <label style={{fontSize:11,fontWeight:700,color:"#7C3AED",cursor:"pointer",
+                                        padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",
+                                        border:"1px solid rgba(124,58,237,0.3)"}}>
+                                        {uploadingMedia?"Uploading...":"+ Photo"}
+                                        <input type="file" accept="image/*" style={{display:"none"}}
+                                          disabled={uploadingMedia}
+                                          onChange={e=>{const f=e.target.files?.[0];if(f)uploadWarMedia(chal.id,f);}}/>
+                                      </label>
+                                    )}
+                                  </div>
+                                  {media.length===0 ? (
+                                    <div style={{textAlign:"center" as const,padding:"16px",background:"#111118",
+                                      borderRadius:10,border:"1px dashed #2D1F52",color:"#6B7280",fontSize:12}}>
+                                      No photos yet — post your progress!
+                                    </div>
+                                  ) : (
+                                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                                      {media.map((m:any)=>(
+                                        <div key={m.id} style={{position:"relative",aspectRatio:"1",borderRadius:10,overflow:"hidden"}}>
+                                          <img src={m.media_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       );
                     })}
