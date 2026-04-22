@@ -697,14 +697,27 @@ export default function GroupPage() {
     const dbId = (dbGroup as any)?.id;
     if (!dbId) return;
     try {
-      const { data } = await supabase
+      // Use .neq(false) instead of .eq(true) to catch null values too
+      const { data, error } = await supabase
         .from("group_challenges")
         .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
         .eq("creator_group_id", dbId)
-        .eq("is_group_goal", true)
+        .neq("is_group_goal", false)
+        .not("is_group_goal", "is", null)
         .order("created_at", { ascending: false });
+      if (error) {
+        // Column might not exist yet — fallback: load all and filter client-side
+        console.warn("loadGroupGoals error, trying fallback:", error.message);
+        const { data: fallback } = await supabase
+          .from("group_challenges")
+          .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
+          .eq("creator_group_id", dbId)
+          .order("created_at", { ascending: false });
+        setGroupGoals((fallback || []).filter((c:any) => c.is_group_goal === true));
+        return;
+      }
       setGroupGoals(data || []);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("loadGroupGoals exception:", e); }
   }, [dbGroup]);
 
   useEffect(() => {
@@ -771,9 +784,13 @@ export default function GroupPage() {
           }))
         );
       }
+      console.log("Group goal created:", goal);
       setShowGoalModal(false);
       setGoalForm({ title:"", metric:"miles_run", target:0, duration_days:7 });
-      loadGroupGoals();
+      await loadGroupGoals();
+      // Force switch to challenges tab and reload
+      setTab("challenges");
+      setChallengeViewTab("active");
     } catch(e:any) { console.error(e); alert("Error: " + e.message); }
     setGoalSaving(false);
   };
