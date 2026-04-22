@@ -41,6 +41,28 @@ const tabs = [
     )
   },
   {
+    href: "/stats", label: "Stats",
+    icon: (active: boolean) => (
+      <div style={{
+        width: 24, height: 24,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: active ? 18 : 16,
+        filter: active ? "none" : "grayscale(0.4)",
+      }}>
+        📊
+      </div>
+    )
+  },
+  {
+    href: "/profile", label: "Profile",
+    icon: (active: boolean) => (
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    )
+  },
+  {
     href: "/notifications", label: "Alerts",
     icon: (active: boolean) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
@@ -108,28 +130,6 @@ const tabs = [
       }}>
         🤖
       </div>
-    )
-  },
-  {
-    href: "/stats", label: "Stats",
-    icon: (active: boolean) => (
-      <div style={{
-        width: 24, height: 24,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: active ? 18 : 16,
-        filter: active ? "none" : "grayscale(0.4)",
-      }}>
-        📊
-      </div>
-    )
-  },
-  {
-    href: "/profile", label: "Profile",
-    icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
     )
   },
 ];
