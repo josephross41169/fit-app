@@ -524,6 +524,8 @@ export default function GroupPage() {
   const [warSaving, setWarSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [warPosted, setWarPosted] = useState(false);
+  const [openBoardChallenges, setOpenBoardChallenges] = useState<any[]>([]);
+  const [openBoardTab, setOpenBoardTab] = useState<"ours"|"discover">("ours");
   const [commentInputs, setCommentInputs] = useState<Record<string,string>>({});
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
   const [shareCopied, setShareCopied] = useState(false);
@@ -655,6 +657,7 @@ export default function GroupPage() {
     if (!dbId) return;
     setWarLoading(true);
     try {
+      // Our group's challenges
       const { data } = await supabase
         .from("group_challenges")
         .select(`*, creator_group:creator_group_id(id,name), opponent_group:opponent_group_id(id,name),
@@ -666,6 +669,15 @@ export default function GroupPage() {
         .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
         .order("created_at", { ascending: false });
       setWarChallenges(data || []);
+
+      // All open challenges from OTHER groups (the discovery board)
+      const { data: openData } = await supabase
+        .from("group_challenges")
+        .select(`*, creator_group:creator_group_id(id,name,emoji,member_count)`)
+        .eq("status", "open")
+        .neq("creator_group_id", dbId)
+        .order("created_at", { ascending: false });
+      setOpenBoardChallenges(openData || []);
     } catch(e) { console.error(e); }
     setWarLoading(false);
   }, [dbGroup, tab]);
@@ -1855,18 +1867,30 @@ export default function GroupPage() {
             return (
               <div>
                 {/* Header */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <div>
-                    <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>⚔️ Group Wars</div>
-                    <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>{warChallenges.length} challenge{warChallenges.length!==1?"s":""} total</div>
-                  </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>⚔️ Group Wars</div>
                   {isOwnerOrMod && (
                     <button onClick={()=>setShowCreateWar(true)} style={{
-                      padding:"8px 16px",borderRadius:12,border:"none",
+                      padding:"8px 14px",borderRadius:12,border:"none",
                       background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
                       color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
                     }}>+ Create War</button>
                   )}
+                </div>
+
+                {/* Sub-tabs: Our Wars vs Find Opponents */}
+                <div style={{display:"flex",gap:6,marginBottom:16,background:"#1A1228",borderRadius:12,padding:4}}>
+                  {([
+                    {key:"ours",label:`⚔️ Our Wars (${warChallenges.length})`},
+                    {key:"discover",label:`🔍 Find Opponents (${openBoardChallenges.length})`},
+                  ] as const).map(t=>(
+                    <button key={t.key} onClick={()=>setOpenBoardTab(t.key)} style={{
+                      flex:1,padding:"8px 6px",borderRadius:9,border:"none",cursor:"pointer",
+                      fontWeight:700,fontSize:12,transition:"all 0.15s",
+                      background:openBoardTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                      color:openBoardTab===t.key?"#fff":"#6B7280",
+                    }}>{t.label}</button>
+                  ))}
                 </div>
 
                 {/* Success banner */}
@@ -1879,13 +1903,71 @@ export default function GroupPage() {
                     <span style={{fontSize:20}}>🔍</span>
                     <div>
                       <div style={{fontWeight:700,fontSize:14,color:"#4ADE80"}}>War posted! Searching for an opponent...</div>
-                      <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Your challenge is now on the open board. Any group admin can accept it.</div>
+                      <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Your challenge is now visible under "Find Opponents" for other groups to accept.</div>
                     </div>
                   </div>
                 )}
 
                 {warLoading ? (
                   <div style={{textAlign:"center",padding:40,color:"#6B7280"}}>Loading wars...</div>
+                ) : openBoardTab === "discover" ? (
+                  /* ── DISCOVER: Open challenges from other groups ── */
+                  <div>
+                    {openBoardChallenges.length === 0 ? (
+                      <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
+                        <div style={{fontSize:40,marginBottom:12}}>🏳️</div>
+                        <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>No open challenges</div>
+                        <div style={{fontSize:13}}>No other groups are looking for opponents right now. Check back later!</div>
+                      </div>
+                    ) : openBoardChallenges.map(chal => {
+                      const meta = METRICS[chal.metric] || METRICS.miles_run;
+                      const LIFT_LABELS: Record<string,string> = {bench_press:"Bench Press",squat:"Squat",deadlift:"Deadlift",dumbbell_curl:"Dumbbell Curl"};
+                      return (
+                        <div key={chal.id} style={{background:"#111118",borderRadius:14,
+                          padding:"14px 16px",border:"1px solid #2D1F52",marginBottom:10}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                                <span style={{fontSize:20}}>{meta.icon}</span>
+                                <div>
+                                  <div style={{fontWeight:800,fontSize:15,color:"#F0F0F0"}}>{chal.title}</div>
+                                  <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>
+                                    {chal.creator_group?.emoji} <span style={{color:"#9CA3AF",fontWeight:600}}>{chal.creator_group?.name}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{display:"flex",gap:8,flexWrap:"wrap" as const,marginTop:6}}>
+                                <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                                  background:"rgba(6,182,212,0.15)",color:"#06B6D4"}}>
+                                  {meta.label}{chal.lift_type?` · ${LIFT_LABELS[chal.lift_type]||chal.lift_type}`:""}
+                                </span>
+                                <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                                  background:"rgba(124,58,237,0.15)",color:"#A78BFA"}}>
+                                  ⚔️ {chal.member_count}v{chal.member_count}
+                                </span>
+                                <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                                  background:"rgba(245,166,35,0.15)",color:"#F5A623"}}>
+                                  ⏱ {chal.duration_days} days
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {isOwnerOrMod && (
+                            <button onClick={()=>acceptWarChallenge(chal)} style={{
+                              width:"100%",padding:"10px 0",borderRadius:10,border:"none",
+                              background:"linear-gradient(135deg,#4ADE80,#16A34A)",
+                              color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
+                            }}>⚔️ Accept Challenge</button>
+                          )}
+                          {!isOwnerOrMod && (
+                            <div style={{fontSize:12,color:"#6B7280",textAlign:"center" as const,padding:"6px 0"}}>
+                              Only group admins can accept challenges
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div>
                     {/* Active challenges */}
@@ -2111,7 +2193,7 @@ export default function GroupPage() {
                         <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
                         <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>No wars yet</div>
                         {isOwnerOrMod
-                          ? <div style={{fontSize:13}}>Create a challenge to find opponents from other groups.</div>
+                          ? <div style={{fontSize:13}}>Create a challenge or check "Find Opponents" to accept one.</div>
                           : <div style={{fontSize:13}}>Only group admins can create challenges.</div>}
                       </div>
                     )}
