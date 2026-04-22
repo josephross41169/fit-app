@@ -83,6 +83,75 @@ const iStyle = {background:"#0D0D0D",border:`1.5px solid #3D2A6E`,borderRadius:1
 const emptyCardio:CardioEntry  = {type:"",duration:"",distance:""};
 const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
 
+// ── Month Card (collapsible) ───────────────────────────────────────────────────
+const MONTHS_FULL_MC = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTHS_SHORT_MC = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const now = new Date();
+  const dt = new Date((mDays[0] as any)._date || 0);
+  const isCurrentYear = dt.getFullYear() === now.getFullYear();
+  const label = isCurrentYear
+    ? MONTHS_FULL_MC[dt.getMonth()]
+    : `${MONTHS_FULL_MC[dt.getMonth()]} ${dt.getFullYear()}`;
+  const totalWorkouts = mDays.filter((d:any) => d.workout).length;
+  const totalNutrition = mDays.filter((d:any) => d.nutrition).length;
+  const totalWellness  = mDays.filter((d:any) => d.wellness).length;
+  const firstDay = mDays[mDays.length - 1];
+  const lastDay  = mDays[0];
+  const dateRange = `${MONTHS_SHORT_MC[new Date((firstDay as any)._date||0).getMonth()]} ${new Date((firstDay as any)._date||0).getDate()} – ${MONTHS_SHORT_MC[new Date((lastDay as any)._date||0).getMonth()]} ${new Date((lastDay as any)._date||0).getDate()}`;
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%",
+        background: open ? "#2D1F52" : "#1A1228",
+        border: `2px solid ${open ? "#7C3AED" : "#3D2A6E"}`,
+        borderRadius: open ? "16px 16px 0 0" : 16,
+        padding: "14px 18px", cursor: "pointer", textAlign: "left",
+        transition: "all 0.2s",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontWeight:900, fontSize:17, color:"#F0F0F0" }}>{label}</div>
+            <div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>
+              {dateRange} · {mDays.length} day{mDays.length!==1?"s":""} logged
+            </div>
+            <div style={{ display:"flex", gap:12, marginTop:6, flexWrap:"wrap" }}>
+              {totalWorkouts>0 && <span style={{fontSize:11,color:"#9CA3AF"}}>💪 {totalWorkouts} workout{totalWorkouts!==1?"s":""}</span>}
+              {totalNutrition>0 && <span style={{fontSize:11,color:"#9CA3AF"}}>🥗 {totalNutrition} nutrition</span>}
+              {totalWellness>0  && <span style={{fontSize:11,color:"#9CA3AF"}}>🌿 {totalWellness} wellness</span>}
+            </div>
+          </div>
+          <div style={{
+            width:32, height:32, borderRadius:"50%",
+            background: open ? "#7C3AED" : "#2D1F52",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            flexShrink:0, marginLeft:12,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.25s",
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}>
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div style={{
+          border: "2px solid #7C3AED", borderTop:"none",
+          borderRadius:"0 0 16px 16px",
+          padding:"8px 10px 10px",
+          background:"#0D0820",
+        }}>
+          {mDays.map(makeCard)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Day Card ──────────────────────────────────────────────────────────────────
 type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; earnedBadges?: string[] };
 function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, earnedBadges = []}:DayCardProps) {
@@ -1875,141 +1944,64 @@ export default function ProfilePage() {
                   const isReal = realDays.length > 0;
                   const now = new Date();
                   const cutoff7 = new Date(now); cutoff7.setDate(now.getDate() - 7);
-                  const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-                  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
                   const recent = days.filter((d:any) => new Date((d as any)._date || 0) >= cutoff7);
                   const older  = days.filter((d:any) => new Date((d as any)._date || 0) < cutoff7);
 
-                  function makeCard(day: any) {
-                    return (
-                      <DayCard
-                        key={day.id}
-                        day={day as any}
-                        workoutLogId={(day as any)._workoutLogId}
-                        nutritionLogIds={(day as any)._nutritionLogIds}
-                        earnedBadges={earnedBadges}
-                        onDelete={isReal ? async () => {
-                          const wid = (day as any)._workoutLogId;
-                          const nids: string[] = (day as any)._nutritionLogIds || [];
-                          const wids: string[] = (day as any)._wellnessLogIds || [];
-                          const allIds = [...(wid ? [wid] : []), ...nids, ...wids];
-                          if (allIds.length > 0) {
-                            await supabase.from('activity_logs').delete().in('id', allIds);
-                          }
-                          setRealDays(prev => prev.filter(d => d.id !== day.id));
-                        } : undefined}
-                      />
-                    );
-                  }
-
-                  // Build collapsible month cards for older days
-                  function MonthCard({ monthKey, mDays }: { monthKey: string; mDays: any[] }) {
-                    const [open, setOpen] = React.useState(false);
-                    const dt = new Date((mDays[0] as any)._date || 0);
-                    const isCurrentYear = dt.getFullYear() === now.getFullYear();
-                    const label = isCurrentYear
-                      ? MONTHS_FULL[dt.getMonth()]
-                      : `${MONTHS_FULL[dt.getMonth()]} ${dt.getFullYear()}`;
-                    const totalWorkouts = mDays.filter((d:any) => d.workout).length;
-                    const totalNutrition = mDays.filter((d:any) => d.nutrition).length;
-                    const totalWellness = mDays.filter((d:any) => d.wellness).length;
-                    const firstDay = mDays[mDays.length-1];
-                    const lastDay = mDays[0];
-                    const dateRange = `${MONTHS_SHORT[new Date((firstDay as any)._date||0).getMonth()]} ${new Date((firstDay as any)._date||0).getDate()} – ${MONTHS_SHORT[new Date((lastDay as any)._date||0).getMonth()]} ${new Date((lastDay as any)._date||0).getDate()}`;
-
-                    return (
-                      <div style={{marginBottom:10}}>
-                        {/* Month card header — click to expand */}
-                        <button onClick={() => setOpen(o => !o)} style={{
-                          width:"100%", background:open ? C.purpleDim : C.white,
-                          border:`2px solid ${open ? C.purple : C.purpleMid}`,
-                          borderRadius: open ? "16px 16px 0 0" : 16,
-                          padding:"14px 18px", cursor:"pointer", textAlign:"left",
-                          transition:"all 0.2s",
-                        }}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                            <div>
-                              <div style={{fontWeight:900,fontSize:17,color:C.text}}>{label}</div>
-                              <div style={{fontSize:12,color:C.sub,marginTop:3}}>{dateRange} · {mDays.length} day{mDays.length!==1?"s":""} logged</div>
-                              <div style={{display:"flex",gap:12,marginTop:6,flexWrap:"wrap"}}>
-                                {totalWorkouts>0 && <span style={{fontSize:11,color:C.sub}}>💪 {totalWorkouts} workout{totalWorkouts!==1?"s":""}</span>}
-                                {totalNutrition>0 && <span style={{fontSize:11,color:C.sub}}>🥗 {totalNutrition} nutrition</span>}
-                                {totalWellness>0 && <span style={{fontSize:11,color:C.sub}}>🌿 {totalWellness} wellness</span>}
-                              </div>
-                            </div>
-                            <div style={{
-                              width:32,height:32,borderRadius:"50%",
-                              background:open ? C.purple : C.purpleMid,
-                              display:"flex",alignItems:"center",justifyContent:"center",
-                              flexShrink:0,marginLeft:12,
-                              transform:open?"rotate(180deg)":"rotate(0deg)",
-                              transition:"transform 0.25s",
-                            }}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}>
-                                <path d="M6 9l6 6 6-6"/>
-                              </svg>
-                            </div>
-                          </div>
-                        </button>
-                        {/* Expanded day cards */}
-                        {open && (
-                          <div style={{
-                            border:`2px solid ${C.purple}`,borderTop:"none",
-                            borderRadius:"0 0 16px 16px",
-                            padding:"8px 10px 10px",
-                            background:"#0D0820",
-                          }}>
-                            {mDays.map(makeCard)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
+                  const makeCard = (day: any) => (
+                    <DayCard
+                      key={day.id}
+                      day={day as any}
+                      workoutLogId={(day as any)._workoutLogId}
+                      nutritionLogIds={(day as any)._nutritionLogIds}
+                      earnedBadges={earnedBadges}
+                      onDelete={isReal ? async () => {
+                        const wid = (day as any)._workoutLogId;
+                        const nids: string[] = (day as any)._nutritionLogIds || [];
+                        const wids: string[] = (day as any)._wellnessLogIds || [];
+                        const allIds = [...(wid ? [wid] : []), ...nids, ...wids];
+                        if (allIds.length > 0) {
+                          await supabase.from('activity_logs').delete().in('id', allIds);
+                        }
+                        setRealDays(prev => prev.filter(d => d.id !== day.id));
+                      } : undefined}
+                    />
+                  );
 
                   // Group older days by year → month
-                  function groupOlder(olderDays: any[]) {
-                    const byMonth: Record<string, any[]> = {};
-                    olderDays.forEach(d => {
-                      const dt = new Date((d as any)._date || 0);
-                      const mk = `${dt.getFullYear()}-${String(dt.getMonth()).padStart(2,"0")}`;
-                      if (!byMonth[mk]) byMonth[mk] = [];
-                      byMonth[mk].push(d);
-                    });
-
-                    // Group months by year for year headers
-                    const byYear: Record<string, string[]> = {};
-                    Object.keys(byMonth).forEach(mk => {
-                      const yr = mk.split("-")[0];
-                      if (!byYear[yr]) byYear[yr] = [];
-                      byYear[yr].push(mk);
-                    });
-
-                    const currentYear = now.getFullYear().toString();
-
-                    return Object.entries(byYear).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr, mks]) => (
-                      <div key={yr}>
-                        {yr !== currentYear && (
-                          <div style={{display:"flex",alignItems:"center",gap:10,margin:"20px 0 12px"}}>
-                            <div style={{flex:1,height:1,background:C.purpleMid}}/>
-                            <span style={{fontSize:12,fontWeight:800,color:C.sub,
-                              textTransform:"uppercase",letterSpacing:1.5}}>{yr}</span>
-                            <div style={{flex:1,height:1,background:C.purpleMid}}/>
-                          </div>
-                        )}
-                        {mks.sort((a,b)=>b.localeCompare(a)).map(mk => (
-                          <MonthCard key={mk} monthKey={mk} mDays={byMonth[mk]}/>
-                        ))}
-                      </div>
-                    ));
-                  }
+                  const byMonth: Record<string, any[]> = {};
+                  older.forEach(d => {
+                    const dt = new Date((d as any)._date || 0);
+                    const mk = `${dt.getFullYear()}-${String(dt.getMonth()).padStart(2,"0")}`;
+                    if (!byMonth[mk]) byMonth[mk] = [];
+                    byMonth[mk].push(d);
+                  });
+                  const byYear: Record<string, string[]> = {};
+                  Object.keys(byMonth).forEach(mk => {
+                    const yr = mk.split("-")[0];
+                    if (!byYear[yr]) byYear[yr] = [];
+                    byYear[yr].push(mk);
+                  });
+                  const currentYear = now.getFullYear().toString();
 
                   return (
                     <>
                       {recent.map(makeCard)}
                       {older.length > 0 && (
                         <div style={{marginTop:16}}>
-                          {groupOlder(older)}
+                          {Object.entries(byYear).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr, mks]) => (
+                            <div key={yr}>
+                              {yr !== currentYear && (
+                                <div style={{display:"flex",alignItems:"center",gap:10,margin:"20px 0 12px"}}>
+                                  <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                                  <span style={{fontSize:12,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:1.5}}>{yr}</span>
+                                  <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                                </div>
+                              )}
+                              {mks.sort((a,b)=>b.localeCompare(a)).map(mk => (
+                                <MonthCard key={mk} mDays={byMonth[mk]} makeCard={makeCard}/>
+                              ))}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </>
