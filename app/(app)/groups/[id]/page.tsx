@@ -2795,13 +2795,21 @@ export default function GroupPage() {
                               </div>
                               {/* Footer */}
                               <div style={{padding:"10px 16px",borderTop:"1px solid #1E1E2E",
-                                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
                                 {isCreator ? (
-                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                    <div style={{width:8,height:8,borderRadius:"50%",background:"#F5A623",
-                                      animation:"pulse 1.5s ease-in-out infinite"}}/>
-                                    <span style={{fontSize:12,color:"#F5A623",fontWeight:600}}>Waiting for an opponent to accept...</span>
-                                  </div>
+                                  <>
+                                    <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+                                      <div style={{width:8,height:8,borderRadius:"50%",background:"#F5A623",
+                                        animation:"pulse 1.5s ease-in-out infinite"}}/>
+                                      <span style={{fontSize:12,color:"#F5A623",fontWeight:600}}>Waiting for an opponent...</span>
+                                    </div>
+                                    <button onClick={()=>deleteGroupGoal(chal.id)}
+                                      style={{padding:"6px 12px",borderRadius:9,border:"1px solid rgba(239,68,68,0.3)",
+                                        background:"rgba(239,68,68,0.1)",color:"#EF4444",
+                                        fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0}}>
+                                      🗑 Delete
+                                    </button>
+                                  </>
                                 ) : (
                                   <span style={{fontSize:12,color:"#6B7280"}}>Posted by another group</span>
                                 )}
