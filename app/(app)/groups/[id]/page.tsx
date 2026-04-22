@@ -669,9 +669,9 @@ export default function GroupPage() {
         .select(`*, creator_group:creator_group_id(id,name), opponent_group:opponent_group_id(id,name),
           winner_group:winner_group_id(id,name),
           group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted,
-            users(id,username,full_name,avatar_url)),
+            users!group_challenge_members_user_id_fkey(id,username,full_name,avatar_url)),
           group_challenge_media(id,media_url,media_type,caption,created_at,user_id,
-            users(username,full_name))`)
+            users!group_challenge_media_user_id_fkey(username,full_name))`)
         .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
         .order("created_at", { ascending: false });
       setWarChallenges(data || []);
@@ -699,15 +699,29 @@ export default function GroupPage() {
     console.log("loadGroupGoals: fetching for group", dbId);
     try {
       // Load ALL challenges for this group, filter client-side
+      // Specify foreign key explicitly to avoid ambiguous relationship error
       const { data, error } = await supabase
         .from("group_challenges")
-        .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
+        .select(`*, group_challenge_members(user_id,contribution,users!group_challenge_members_user_id_fkey(id,username,full_name,avatar_url))`)
         .eq("creator_group_id", dbId)
         .order("created_at", { ascending: false });
       console.log("loadGroupGoals raw data:", data, "error:", error);
-      if (error) { console.error("loadGroupGoals error:", error); return; }
+      if (error) {
+        // Try without the join if still failing
+        console.warn("Retrying without user join:", error.message);
+        const { data: simple, error: e2 } = await supabase
+          .from("group_challenges")
+          .select(`*, group_challenge_members(user_id,contribution)`)
+          .eq("creator_group_id", dbId)
+          .order("created_at", { ascending: false });
+        console.log("Simple query result:", simple, e2);
+        if (!e2) {
+          setGroupGoals((simple || []).filter((c:any) => c.is_group_goal === true));
+        }
+        return;
+      }
       const goals = (data || []).filter((c:any) => c.is_group_goal === true);
-      console.log("loadGroupGoals filtered goals:", goals);
+      console.log("loadGroupGoals filtered goals:", goals.length);
       setGroupGoals(goals);
     } catch(e) { console.error("loadGroupGoals exception:", e); }
   }, [dbGroup]);
