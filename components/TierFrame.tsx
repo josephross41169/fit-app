@@ -11,11 +11,11 @@ interface TierFrameProps {
 
 // Map old string tiers → numeric level, and numeric levels → display config
 function resolveLevel(tier: Tier): number {
-  if (tier === "default" || tier === "1") return 1;
-  if (tier === "active"  || tier === "2") return 2;
-  if (tier === "grinder" || tier === "3") return 3;
-  if (tier === "elite"   || tier === "4") return 4;
-  if (tier === "untouchable" || tier === "5") return 5;
+  if (tier === "default")     return 1;
+  if (tier === "active")      return 2;
+  if (tier === "grinder")     return 3;
+  if (tier === "elite")       return 4;
+  if (tier === "untouchable") return 5;
   return 1;
 }
 
