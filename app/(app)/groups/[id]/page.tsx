@@ -663,28 +663,41 @@ export default function GroupPage() {
     if (!dbId) return;
     setWarLoading(true);
     try {
-      // Our group's challenges
-      const { data } = await supabase
+      // Our group's challenges - simple select without ambiguous joins
+      const { data, error } = await supabase
         .from("group_challenges")
-        .select(`*, creator_group:creator_group_id(id,name), opponent_group:opponent_group_id(id,name),
+        .select(`*, 
+          creator_group:creator_group_id(id,name,emoji),
+          opponent_group:opponent_group_id(id,name,emoji),
           winner_group:winner_group_id(id,name),
-          group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted,
-            users!group_challenge_members_user_id_fkey(id,username,full_name,avatar_url)),
-          group_challenge_media(id,media_url,media_type,caption,created_at,user_id,
-            users!group_challenge_media_user_id_fkey(username,full_name))`)
+          group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted),
+          group_challenge_media(id,media_url,media_type,caption,created_at,user_id)`)
         .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
+        .neq("is_group_goal", true)
         .order("created_at", { ascending: false });
-      setWarChallenges(data || []);
+      if (error) {
+        console.error("loadWarChallenges error:", error.message);
+        // Try even simpler query as fallback
+        const { data: simple } = await supabase
+          .from("group_challenges")
+          .select("*")
+          .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
+          .order("created_at", { ascending: false });
+        setWarChallenges((simple || []).filter((c:any) => !c.is_group_goal));
+      } else {
+        console.log("War challenges loaded:", data?.length, data);
+        setWarChallenges(data || []);
+      }
 
       // All open challenges from OTHER groups (the discovery board)
       const { data: openData } = await supabase
         .from("group_challenges")
-        .select(`*, creator_group:creator_group_id(id,name,emoji,member_count)`)
+        .select(`*, creator_group:creator_group_id(id,name,emoji)`)
         .eq("status", "open")
         .neq("creator_group_id", dbId)
         .order("created_at", { ascending: false });
       setOpenBoardChallenges(openData || []);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("loadWarChallenges exception:", e); }
     setWarLoading(false);
   }, [dbGroup, tab]);
 
@@ -804,25 +817,47 @@ export default function GroupPage() {
   // ── Delete group goal ───────────────────────────────────────────────────────
   const deleteGroupGoal = async (goalId: string) => {
     if (!window.confirm("Delete this group goal? This cannot be undone.")) return;
-    const { error: e1 } = await supabase
-      .from("group_challenge_members").delete().eq("challenge_id", goalId);
-    if (e1) { console.error("Delete members error:", e1); alert("Error: " + e1.message); return; }
-    const { error: e2 } = await supabase
-      .from("group_challenges").delete().eq("id", goalId);
-    if (e2) { console.error("Delete goal error:", e2); alert("Error: " + e2.message); return; }
-    setGroupGoals(prev => prev.filter(g => g.id !== goalId));
+    try {
+      const res = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_group_challenge",
+          payload: { challengeId: goalId, userId: currentUser?.id }
+        }),
+      });
+      const result = await res.json();
+      if (result.error) {
+        // Fallback: direct delete
+        await supabase.from("group_challenge_members").delete().eq("challenge_id", goalId);
+        const { error } = await supabase.from("group_challenges").delete().eq("id", goalId);
+        if (error) { alert("Error deleting: " + error.message); return; }
+      }
+      setGroupGoals(prev => prev.filter(g => g.id !== goalId));
+    } catch(e:any) { alert("Error: " + e.message); }
   };
 
   // ── Delete member challenge ──────────────────────────────────────────────────
   const deleteMemberChallenge = async (chalId: string) => {
     if (!window.confirm("Delete this challenge? This cannot be undone.")) return;
-    const { error: e1 } = await supabase
-      .from("group_challenge_members").delete().eq("challenge_id", chalId);
-    if (e1) { console.error("Delete members error:", e1); alert("Error: " + e1.message); return; }
-    const { error: e2 } = await supabase
-      .from("group_challenges").delete().eq("id", chalId);
-    if (e2) { console.error("Delete challenge error:", e2); alert("Error: " + e2.message); return; }
-    window.location.reload();
+    try {
+      const res = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_group_challenge",
+          payload: { challengeId: chalId, userId: currentUser?.id }
+        }),
+      });
+      const result = await res.json();
+      if (result.error) {
+        // Fallback: try direct supabase delete
+        await supabase.from("group_challenge_members").delete().eq("challenge_id", chalId);
+        const { error } = await supabase.from("group_challenges").delete().eq("id", chalId);
+        if (error) { alert("Error deleting: " + error.message); return; }
+      }
+      window.location.reload();
+    } catch(e:any) { alert("Error: " + e.message); }
   };
 
   // ── Create challenge ─────────────────────────────────────────────────────────
