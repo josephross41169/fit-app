@@ -834,7 +834,7 @@ export default function GroupPage() {
 
   // ── Delete group goal ───────────────────────────────────────────────────────
   const deleteGroupGoal = async (goalId: string) => {
-    if (!window.confirm("Delete this group goal? This cannot be undone.")) return;
+    if (!window.confirm("Delete this? This cannot be undone.")) return;
     try {
       const res = await fetch("/api/db", {
         method: "POST",
@@ -845,13 +845,14 @@ export default function GroupPage() {
         }),
       });
       const result = await res.json();
+      console.log("Delete result:", result);
       if (result.error) {
-        // Fallback: direct delete
-        await supabase.from("group_challenge_members").delete().eq("challenge_id", goalId);
-        const { error } = await supabase.from("group_challenges").delete().eq("id", goalId);
-        if (error) { alert("Error deleting: " + error.message); return; }
+        alert("API error: " + result.error);
+        return;
       }
+      // Remove from all local state and reload
       setGroupGoals(prev => prev.filter(g => g.id !== goalId));
+      setWarChallenges(prev => prev.filter((c:any) => c.id !== goalId));
     } catch(e:any) { alert("Error: " + e.message); }
   };
 
