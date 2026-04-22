@@ -145,7 +145,37 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
           padding:"8px 10px 10px",
           background:"#0D0820",
         }}>
-          {mDays.map(makeCard)}
+          {(()=>{
+            // Group days by week (Sun–Sat)
+            const byWeek: Record<string, any[]> = {};
+            mDays.forEach(d => {
+              const dt = new Date((d as any)._date || 0);
+              const weekStart = new Date(dt);
+              weekStart.setDate(dt.getDate() - dt.getDay());
+              const wk = weekStart.toISOString().slice(0,10);
+              if (!byWeek[wk]) byWeek[wk] = [];
+              byWeek[wk].push(d);
+            });
+            return Object.entries(byWeek)
+              .sort((a,b) => b[0].localeCompare(a[0]))
+              .map(([wk, wDays]) => {
+                const wStart = new Date(wk);
+                const wEnd = new Date(wk); wEnd.setDate(wEnd.getDate() + 6);
+                const fmt = (d: Date) => `${MONTHS_SHORT_MC[d.getMonth()]} ${d.getDate()}`;
+                return (
+                  <div key={wk}>
+                    <div style={{
+                      fontSize:10, fontWeight:700, color:"#6B7280",
+                      textTransform:"uppercase", letterSpacing:1,
+                      padding:"10px 4px 5px",
+                    }}>
+                      Week of {fmt(wStart)} – {fmt(wEnd)}
+                    </div>
+                    {wDays.map(makeCard)}
+                  </div>
+                );
+              });
+          })()}
         </div>
       )}
     </div>
