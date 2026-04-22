@@ -190,16 +190,51 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
 
       {/* Key stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        {[
-          { label: "Workouts",     value: String(totalWorkouts), color: C.purple },
-          { label: "Total Volume", value: totalVolume > 0 ? `${(totalVolume/1000).toFixed(0)}k lbs` : "—", color: C.gold },
-          { label: "Avg/Week",     value: avgPerWeek, color: C.green },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: value.length > 5 ? 14 : 20, fontWeight: 800, color }}>{value}</div>
-          </div>
-        ))}
+        {(()=>{
+          // Get this week's workout types (Mon–Sun)
+          const weekStart = new Date();
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          weekStart.setHours(0,0,0,0);
+          const thisWeekWorkouts = workouts.filter((w:any) => {
+            const d = new Date(w.created_at || w.id || 0);
+            return d >= weekStart;
+          });
+          // Collect workout types logged this week
+          const weekTypes = [...new Set(
+            thisWeekWorkouts
+              .map((w:any) => w.workout?.type || w.workout_type)
+              .filter(Boolean)
+              .map((t:string) => t.replace(/\s*(Day|day)\s*$/,'').trim())
+          )].slice(0, 4);
+
+          return (
+            <>
+              <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Workouts</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.purple }}>{totalWorkouts}</div>
+              </div>
+              <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center", gridColumn: "span 1" }}>
+                <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>This Week</div>
+                {weekTypes.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {weekTypes.map((t:string) => (
+                      <div key={t} style={{ fontSize: 11, fontWeight: 700, color: C.gold,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.sub }}>—</div>
+                )}
+              </div>
+              <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Avg/Week</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>{avgPerWeek}</div>
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {totalCalories > 0 && (
