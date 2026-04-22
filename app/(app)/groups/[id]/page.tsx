@@ -1406,6 +1406,7 @@ export default function GroupPage() {
               { key:"leaderboard", label:"🏆 Board" },
               { key:"challenges", label:"⚡ Challenges" },
               { key:"notes", label:"💬 Notes" },
+              { key:"war", label:"⚔️ Wars" },
             ] as const).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} style={{
                 flex:1, padding:"9px 4px", borderRadius:10, border:"none",
@@ -1417,7 +1418,6 @@ export default function GroupPage() {
             {([
               { key:"events", label:"🗓️ Events" },
               { key:"members", label:"👥 Members" },
-              { key:"war", label:"⚔️ Wars" },
             ] as const).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className="groups-mobile-tabs-extra"
