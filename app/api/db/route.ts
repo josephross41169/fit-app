@@ -775,9 +775,13 @@ export async function POST(req: NextRequest) {
       // Try group_challenges table first (wars + group goals)
       const { data: gcRow } = await admin.from('group_challenges').select('id').eq('id', challengeId).single();
       if (gcRow) {
-        await admin.from('group_challenge_members').delete().eq('challenge_id', challengeId);
-        await admin.from('group_challenge_media').delete().eq('challenge_id', challengeId);
-        await admin.from('group_challenges').delete().eq('id', challengeId);
+        // Delete members (ignore errors if table doesn't exist)
+        try { await admin.from('group_challenge_members').delete().eq('challenge_id', challengeId); } catch(e) {}
+        // Delete media (ignore errors if table doesn't exist)
+        try { await admin.from('group_challenge_media').delete().eq('challenge_id', challengeId); } catch(e) {}
+        // Delete the challenge itself
+        const { error: delErr } = await admin.from('group_challenges').delete().eq('id', challengeId);
+        if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
         return NextResponse.json({ success: true });
       }
 
