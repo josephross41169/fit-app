@@ -891,10 +891,65 @@ export default function StatsPage(){
               <MiniNum label="🏃 Cardio Sessions" value={cardioSessions} color={C.cyan}/>
             </div>
 
-            {/* Heatmap */}
-            <SecHead title="Activity Heatmap (12 Weeks)"/>
+            {/* Weekly Frequency Chart */}
+            <SecHead title="Workouts Per Week (12 Weeks)"/>
             <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-              {allWorkoutDates.length>0?<Heatmap dates={allWorkoutDates}/>:<div style={{color:C.sub,fontSize:13,textAlign:"center"}}>No workouts logged yet</div>}
+              {allWorkoutDates.length>0?(()=>{
+                // Build 12-week buckets
+                const now = new Date();
+                const weeks: {label:string; count:number}[] = [];
+                for(let i=11; i>=0; i--) {
+                  const wStart = new Date(now);
+                  wStart.setDate(now.getDate() - now.getDay() - i*7);
+                  wStart.setHours(0,0,0,0);
+                  const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+                  const count = allWorkoutDates.filter(d => {
+                    const dt = new Date(d);
+                    return dt >= wStart && dt < wEnd;
+                  }).length;
+                  const mo = wStart.toLocaleString("default",{month:"short"});
+                  const day = wStart.getDate();
+                  weeks.push({ label: `${mo} ${day}`, count });
+                }
+                const maxCount = Math.max(...weeks.map(w=>w.count), 1);
+                const isCurrentWeek = (idx:number) => idx === 11;
+                return (
+                  <div>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80,marginBottom:8}}>
+                      {weeks.map((w,i)=>(
+                        <div key={i} style={{flex:1,display:"flex",flexDirection:"column" as const,alignItems:"center",gap:3}}>
+                          {w.count>0&&(
+                            <div style={{fontSize:9,fontWeight:700,color:isCurrentWeek(i)?C.purple:C.sub}}>{w.count}</div>
+                          )}
+                          <div style={{
+                            width:"100%",
+                            height:`${Math.max(4, Math.round((w.count/maxCount)*64))}px`,
+                            borderRadius:4,
+                            background: w.count===0
+                              ? "rgba(255,255,255,0.06)"
+                              : isCurrentWeek(i)
+                              ? C.purple
+                              : `${C.purple}99`,
+                            transition:"height 0.3s",
+                          }}/>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.sub}}>
+                      <span>{weeks[0].label}</span>
+                      <span style={{color:C.purple,fontWeight:700}}>This week</span>
+                    </div>
+                    <div style={{marginTop:10,display:"flex",gap:16,justifyContent:"center"}}>
+                      <span style={{fontSize:12,color:C.sub}}>
+                        Best week: <strong style={{color:C.text}}>{Math.max(...weeks.map(w=>w.count))} workouts</strong>
+                      </span>
+                      <span style={{fontSize:12,color:C.sub}}>
+                        Avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/week</strong>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })():<div style={{color:C.sub,fontSize:13,textAlign:"center" as const,padding:"20px 0"}}>No workouts logged yet</div>}
             </div>
 
 
@@ -1397,10 +1452,58 @@ export default function StatsPage(){
               </div>
             )}
 
-            {/* Wellness heatmap */}
-            <SecHead title="Wellness Consistency (12 Weeks)"/>
+            {/* Wellness weekly frequency */}
+            <SecHead title="Wellness Sessions Per Week (12 Weeks)"/>
             <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-              {wellnessLogs.length>0?<Heatmap dates={wellnessLogs.map(l=>l.logged_at)}/>:<div style={{color:C.sub,fontSize:13,textAlign:"center"}}>Log wellness activities to track consistency</div>}
+              {wellnessLogs.length>0?(()=>{
+                const now = new Date();
+                const weeks: {label:string; count:number}[] = [];
+                for(let i=11; i>=0; i--) {
+                  const wStart = new Date(now);
+                  wStart.setDate(now.getDate() - now.getDay() - i*7);
+                  wStart.setHours(0,0,0,0);
+                  const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+                  const count = wellnessLogs.filter((l:any) => {
+                    const dt = new Date(l.logged_at);
+                    return dt >= wStart && dt < wEnd;
+                  }).length;
+                  weeks.push({ label: `${wStart.toLocaleString("default",{month:"short"})} ${wStart.getDate()}`, count });
+                }
+                const maxCount = Math.max(...weeks.map(w=>w.count), 1);
+                return (
+                  <div>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80,marginBottom:8}}>
+                      {weeks.map((w,i)=>(
+                        <div key={i} style={{flex:1,display:"flex",flexDirection:"column" as const,alignItems:"center",gap:3}}>
+                          {w.count>0&&(
+                            <div style={{fontSize:9,fontWeight:700,color:i===11?C.green:C.sub}}>{w.count}</div>
+                          )}
+                          <div style={{
+                            width:"100%",
+                            height:`${Math.max(4, Math.round((w.count/maxCount)*64))}px`,
+                            borderRadius:4,
+                            background: w.count===0
+                              ? "rgba(255,255,255,0.06)"
+                              : i===11 ? C.green : `${C.green}99`,
+                          }}/>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.sub}}>
+                      <span>{weeks[0].label}</span>
+                      <span style={{color:C.green,fontWeight:700}}>This week</span>
+                    </div>
+                    <div style={{marginTop:10,display:"flex",gap:16,justifyContent:"center"}}>
+                      <span style={{fontSize:12,color:C.sub}}>
+                        Best week: <strong style={{color:C.text}}>{Math.max(...weeks.map(w=>w.count))} sessions</strong>
+                      </span>
+                      <span style={{fontSize:12,color:C.sub}}>
+                        Avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/week</strong>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })():<div style={{color:C.sub,fontSize:13,textAlign:"center" as const,padding:"20px 0"}}>Log wellness activities to track consistency</div>}
             </div>
 
             {/* Activity breakdown */}
