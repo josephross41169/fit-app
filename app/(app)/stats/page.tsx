@@ -893,58 +893,110 @@ export default function StatsPage(){
 
             {/* Weekly Frequency Chart */}
             <SecHead title="Workouts Per Week (12 Weeks)"/>
-            <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
+            <div style={{background:C.card,borderRadius:14,padding:"16px 16px 12px",border:`1px solid ${C.border}`,marginBottom:20}}>
               {allWorkoutDates.length>0?(()=>{
-                // Build 12-week buckets
                 const now = new Date();
-                const weeks: {label:string; count:number}[] = [];
+                const weeks: {label:string; monthLabel:string; count:number; isNewMonth:boolean}[] = [];
+                let lastMonth = -1;
                 for(let i=11; i>=0; i--) {
                   const wStart = new Date(now);
                   wStart.setDate(now.getDate() - now.getDay() - i*7);
                   wStart.setHours(0,0,0,0);
                   const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
-                  const count = allWorkoutDates.filter(d => {
-                    const dt = new Date(d);
-                    return dt >= wStart && dt < wEnd;
-                  }).length;
-                  const mo = wStart.toLocaleString("default",{month:"short"});
-                  const day = wStart.getDate();
-                  weeks.push({ label: `${mo} ${day}`, count });
+                  const count = allWorkoutDates.filter(d=>{const dt=new Date(d);return dt>=wStart&&dt<wEnd;}).length;
+                  const mo = wStart.getMonth();
+                  const isNewMonth = mo !== lastMonth;
+                  if(isNewMonth) lastMonth = mo;
+                  weeks.push({
+                    label: `${wStart.toLocaleString("default",{month:"short"})} ${wStart.getDate()}`,
+                    monthLabel: wStart.toLocaleString("default",{month:"short"}),
+                    count, isNewMonth
+                  });
                 }
                 const maxCount = Math.max(...weeks.map(w=>w.count), 1);
-                const isCurrentWeek = (idx:number) => idx === 11;
+                // Y-axis ticks
+                const yTicks = [0,1,2,3,4,5].filter(v=>v<=maxCount+1).slice(0,5);
+
                 return (
                   <div>
-                    <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80,marginBottom:8}}>
+                    {/* Chart area */}
+                    <div style={{display:"flex",gap:8}}>
+                      {/* Y axis */}
+                      <div style={{display:"flex",flexDirection:"column" as const,justifyContent:"space-between",
+                        height:100,paddingBottom:2,flexShrink:0}}>
+                        {[...yTicks].reverse().map(v=>(
+                          <div key={v} style={{fontSize:9,color:C.sub,textAlign:"right" as const,lineHeight:1}}>{v}</div>
+                        ))}
+                      </div>
+                      {/* Bars */}
+                      <div style={{flex:1,position:"relative" as const}}>
+                        {/* Grid lines */}
+                        <div style={{position:"absolute" as const,inset:0,display:"flex",
+                          flexDirection:"column" as const,justifyContent:"space-between",pointerEvents:"none" as const}}>
+                          {yTicks.map(v=>(
+                            <div key={v} style={{width:"100%",height:1,background:"rgba(255,255,255,0.05)"}}/>
+                          ))}
+                        </div>
+                        {/* Bars row */}
+                        <div style={{display:"flex",alignItems:"flex-end",gap:4,height:100}}>
+                          {weeks.map((w,i)=>{
+                            const isCurrent = i===11;
+                            const barH = w.count===0 ? 4 : Math.max(8, Math.round((w.count/maxCount)*92));
+                            return (
+                              <div key={i} title={`${w.label}: ${w.count} workout${w.count!==1?"s":""}`}
+                                style={{flex:1,display:"flex",flexDirection:"column" as const,
+                                  alignItems:"center",height:"100%",justifyContent:"flex-end",gap:2,
+                                  cursor:"default"}}>
+                                {/* Count label above bar */}
+                                {w.count>0&&(
+                                  <div style={{fontSize:9,fontWeight:800,
+                                    color:isCurrent?C.purple:"rgba(255,255,255,0.5)",
+                                    lineHeight:1}}>
+                                    {w.count}
+                                  </div>
+                                )}
+                                <div style={{
+                                  width:"100%",height:`${barH}px`,borderRadius:"3px 3px 0 0",
+                                  background: w.count===0
+                                    ? "rgba(255,255,255,0.05)"
+                                    : isCurrent
+                                    ? C.purple
+                                    : `${C.purple}88`,
+                                  border: isCurrent&&w.count>0 ? `1px solid ${C.purple}` : "none",
+                                  boxShadow: isCurrent&&w.count>0 ? `0 0 8px ${C.purple}55` : "none",
+                                }}/>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* X axis — month labels */}
+                    <div style={{display:"flex",gap:4,marginLeft:24,marginTop:4}}>
                       {weeks.map((w,i)=>(
-                        <div key={i} style={{flex:1,display:"flex",flexDirection:"column" as const,alignItems:"center",gap:3}}>
-                          {w.count>0&&(
-                            <div style={{fontSize:9,fontWeight:700,color:isCurrentWeek(i)?C.purple:C.sub}}>{w.count}</div>
+                        <div key={i} style={{flex:1,textAlign:"center" as const}}>
+                          {w.isNewMonth&&(
+                            <div style={{fontSize:9,color:C.sub,fontWeight:600,overflow:"hidden",whiteSpace:"nowrap" as const}}>
+                              {w.monthLabel}
+                            </div>
                           )}
-                          <div style={{
-                            width:"100%",
-                            height:`${Math.max(4, Math.round((w.count/maxCount)*64))}px`,
-                            borderRadius:4,
-                            background: w.count===0
-                              ? "rgba(255,255,255,0.06)"
-                              : isCurrentWeek(i)
-                              ? C.purple
-                              : `${C.purple}99`,
-                            transition:"height 0.3s",
-                          }}/>
                         </div>
                       ))}
                     </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.sub}}>
-                      <span>{weeks[0].label}</span>
-                      <span style={{color:C.purple,fontWeight:700}}>This week</span>
-                    </div>
-                    <div style={{marginTop:10,display:"flex",gap:16,justifyContent:"center"}}>
+
+                    {/* Current week callout */}
+                    <div style={{marginTop:10,padding:"8px 12px",background:"rgba(124,58,237,0.08)",
+                      borderRadius:8,border:`1px solid ${C.purpleBorder}`,
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <span style={{fontSize:12,color:C.sub}}>
-                        Best week: <strong style={{color:C.text}}>{Math.max(...weeks.map(w=>w.count))} workouts</strong>
+                        📅 This week: <strong style={{color:C.purple}}>{weeks[11].count} workout{weeks[11].count!==1?"s":""}</strong>
                       </span>
                       <span style={{fontSize:12,color:C.sub}}>
-                        Avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/week</strong>
+                        12-wk avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/wk</strong>
+                      </span>
+                      <span style={{fontSize:12,color:C.sub}}>
+                        Best: <strong style={{color:C.gold}}>{Math.max(...weeks.map(w=>w.count))}</strong>
                       </span>
                     </div>
                   </div>
