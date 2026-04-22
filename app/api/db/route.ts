@@ -767,6 +767,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // ── Delete group challenge (bypasses RLS as service role) ────────────
+    if (action === 'delete_group_challenge') {
+      const { challengeId } = payload;
+      if (!challengeId) return NextResponse.json({ error: 'Missing challengeId' }, { status: 400 });
+      // Delete members first (foreign key)
+      await admin.from('group_challenge_members').delete().eq('challenge_id', challengeId);
+      // Delete media
+      await admin.from('group_challenge_media').delete().eq('challenge_id', challengeId);
+      // Delete the challenge itself
+      const { error } = await admin.from('group_challenges').delete().eq('id', challengeId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
