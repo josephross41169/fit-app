@@ -1,9 +1,7 @@
 "use client";
 import React from "react";
 import { TIER_COLORS } from "@/lib/tiers";
-
-// Accept both old string tiers and new numeric levels
-export type Tier = "default" | "active" | "grinder" | "elite" | "untouchable" | "1" | "2" | "3" | "4" | "5";
+import type { Tier } from "@/lib/tiers";
 
 interface TierFrameProps {
   tier: Tier;
