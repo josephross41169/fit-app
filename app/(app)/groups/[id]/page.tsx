@@ -981,6 +981,29 @@ export default function GroupPage() {
           body: JSON.stringify({ action: 'join_group', payload: { userId: currentUser.id, groupId: group._dbId } }),
         });
         setIsMemberDB(true);
+
+        // Auto-enroll in any active group goals
+        try {
+          const { data: activeGoals } = await supabase
+            .from("group_challenges")
+            .select("id")
+            .eq("creator_group_id", group._dbId)
+            .eq("is_group_goal", true)
+            .eq("status", "active");
+
+          if (activeGoals && activeGoals.length > 0) {
+            // Insert member entries (ignore conflicts if already enrolled)
+            await supabase.from("group_challenge_members").upsert(
+              activeGoals.map((g:any) => ({
+                challenge_id: g.id,
+                user_id: currentUser.id,
+                group_id: group._dbId,
+                contribution: 0,
+              })),
+              { onConflict: "challenge_id,user_id", ignoreDuplicates: true }
+            );
+          }
+        } catch(e) { console.error("Goal auto-enroll error:", e); }
       }
       setJoined(true);
     } finally {
