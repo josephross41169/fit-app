@@ -691,6 +691,25 @@ export default function GroupPage() {
     if (tab === "war" && (dbGroup as any)?.id) loadWarChallenges();
   }, [tab, dbGroup, loadWarChallenges]);
 
+  // ── Group Goals hook (must be before early returns) ─────────────────────────
+  const loadGroupGoals = useCallback(async () => {
+    const dbId = (dbGroup as any)?.id;
+    if (!dbId) return;
+    try {
+      const { data } = await supabase
+        .from("group_challenges")
+        .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
+        .eq("creator_group_id", dbId)
+        .eq("is_group_goal", true)
+        .order("created_at", { ascending: false });
+      setGroupGoals(data || []);
+    } catch(e) { console.error(e); }
+  }, [dbGroup]);
+
+  useEffect(() => {
+    if (tab === "challenges" && (dbGroup as any)?.id) loadGroupGoals();
+  }, [tab, dbGroup, loadGroupGoals]);
+
   if (!loading && !group) {
     return (
       <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
@@ -713,25 +732,6 @@ export default function GroupPage() {
 
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
   const isOwnerOrMod = group._isOwner || isMemberDB;
-
-  // ── Group Goals (internal challenges auto-applied to all members) ──────────────
-  const loadGroupGoals = useCallback(async () => {
-    const dbId = (dbGroup as any)?.id;
-    if (!dbId) return;
-    try {
-      const { data } = await supabase
-        .from("group_challenges")
-        .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
-        .eq("creator_group_id", dbId)
-        .eq("is_group_goal", true)
-        .order("created_at", { ascending: false });
-      setGroupGoals(data || []);
-    } catch(e) { console.error(e); }
-  }, [dbGroup]);
-
-  useEffect(() => {
-    if (tab === "challenges" && (dbGroup as any)?.id) loadGroupGoals();
-  }, [tab, dbGroup, loadGroupGoals]);
 
   const createGroupGoal = async () => {
     const dbId = group._dbId || (dbGroup as any)?.id;
