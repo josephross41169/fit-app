@@ -716,7 +716,7 @@ export default function PostPage() {
           mood: mood || null,
           notes: wellnessNotes || null,
           photo_url: wellnessUploadedUrl || null,
-          wellness_data: Object.keys(wellnessData).length > 0 ? wellnessData : null,
+          // wellness_data omitted — column requires migration: lib/migration-wellness-data.sql
         });
         error = res.error;
       }
@@ -1045,8 +1045,8 @@ export default function PostPage() {
             flex-direction: column;
             width: 220px;
             flex-shrink: 0;
-            background: white;
-            border-right: 2px solid #DDD6FE;
+            background: #0D0D0D;
+            border-right: 2px solid #2D1F52;
             padding: 32px 16px;
             position: sticky;
             top: 0;
@@ -1107,7 +1107,7 @@ export default function PostPage() {
               <button key={m} onClick={() => setMainMode(m)} style={{
                 width: "100%", padding: "12px 14px", borderRadius: 14, border: "none", cursor: "pointer",
                 marginBottom: 6, textAlign: "left", fontWeight: 800, fontSize: 14,
-                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : C.greenLight,
+                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "#1A1228",
                 color: mainMode === m ? "#fff" : C.sub,
                 transition: "all 0.15s",
               }}>
@@ -1124,7 +1124,7 @@ export default function PostPage() {
                 <button key={t.key} onClick={() => setLogTab(t.key)} style={{
                   width: "100%", padding: "16px 18px", borderRadius: 16, border: "none", cursor: "pointer",
                   marginBottom: 8, textAlign: "left", fontWeight: 800, fontSize: 16,
-                  background: logTab === t.key ? t.color : C.greenLight,
+                  background: logTab === t.key ? t.color : "#1A1228",
                   color: logTab === t.key ? "#fff" : C.sub,
                   transition: "all 0.15s",
                   boxShadow: logTab === t.key ? `0 4px 16px ${t.color}40` : "none",
