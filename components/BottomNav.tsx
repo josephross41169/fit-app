@@ -124,19 +124,6 @@ const tabs = [
     )
   },
   {
-    href: "/leaderboard", label: "Ranks",
-    icon: (active: boolean) => (
-      <div style={{
-        width: 24, height: 24,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: active ? 18 : 16,
-        filter: active ? "none" : "grayscale(0.4)",
-      }}>
-        🏆
-      </div>
-    )
-  },
-  {
     href: "/profile", label: "Profile",
     icon: (active: boolean) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
@@ -237,6 +224,7 @@ export default function BottomNav() {
   const { user } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sidebar_collapsed") === "true";
@@ -343,14 +331,54 @@ export default function BottomNav() {
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t"
         style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
+
+        {/* More drawer — slides up when open */}
+        {moreOpen && (
+          <>
+            {/* Backdrop */}
+            <div onClick={() => setMoreOpen(false)}
+              style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:40 }}/>
+            {/* Drawer */}
+            <div style={{
+              position:"fixed", bottom:60, left:0, right:0, zIndex:41,
+              background:"#111118", borderTop:"1px solid #2D1F52",
+              borderRadius:"20px 20px 0 0", padding:"16px 12px 8px",
+            }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:4 }}>
+                {tabs.slice(5).map((tab) => {
+                  const active = pathname === tab.href;
+                  const badge = getBadge(tab.href);
+                  return (
+                    <Link key={tab.href} href={tab.href}
+                      onClick={() => setMoreOpen(false)}
+                      style={{ display:"flex",flexDirection:"column",alignItems:"center",
+                        gap:3,padding:"10px 4px",borderRadius:12,textDecoration:"none",
+                        background: active ? "rgba(124,58,237,0.15)" : "transparent" }}>
+                      <div style={{ position:"relative" }}>
+                        {tab.icon(active)}
+                        {badge > 0 && <Badge count={badge} />}
+                      </div>
+                      <span style={{ fontSize:10, fontWeight:600,
+                        color: active ? PURPLE : "#9CA3AF" }}>
+                        {tab.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* 5 primary tabs + More button */}
         <div className="flex items-center justify-around px-2 pb-safe">
-          {tabs.map((tab) => {
+          {tabs.slice(0, 5).map((tab) => {
             const active = pathname === tab.href;
             const badge = getBadge(tab.href);
             return (
               <Link key={tab.href} href={tab.href}
                 className="flex flex-col items-center gap-0.5 py-2 px-3 min-w-[44px]"
-                style={{ position: "relative" }}>
+                style={{ position: "relative", textDecoration:"none" }}>
                 <div style={{ position: "relative" }}>
                   {tab.icon(active)}
                   {badge > 0 && <Badge count={badge} />}
@@ -364,6 +392,25 @@ export default function BottomNav() {
               </Link>
             );
           })}
+
+          {/* More button */}
+          <button onClick={() => setMoreOpen(o => !o)}
+            style={{ display:"flex",flexDirection:"column",alignItems:"center",
+              gap:2,padding:"8px 12px",background:"none",border:"none",cursor:"pointer",
+              minWidth:44, position:"relative" }}>
+            {/* Badge if any hidden tab has notifications */}
+            {tabs.slice(5).some(t => getBadge(t.href) > 0) && (
+              <div style={{ position:"absolute",top:6,right:8,width:8,height:8,
+                borderRadius:"50%",background:"#EF4444",border:"2px solid #0D0D0D" }}/>
+            )}
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <circle cx="5"  cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
+              <circle cx="12" cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
+              <circle cx="19" cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
+            </svg>
+            <span style={{ fontSize:10, fontWeight:600,
+              color: moreOpen ? PURPLE : "#6B7280" }}>More</span>
+          </button>
         </div>
       </nav>
 
