@@ -695,28 +695,20 @@ export default function GroupPage() {
   // ── Group Goals hook (must be before early returns) ─────────────────────────
   const loadGroupGoals = useCallback(async () => {
     const dbId = (dbGroup as any)?.id;
-    if (!dbId) return;
+    if (!dbId) { console.log("loadGroupGoals: no dbId"); return; }
+    console.log("loadGroupGoals: fetching for group", dbId);
     try {
-      // Use .neq(false) instead of .eq(true) to catch null values too
+      // Load ALL challenges for this group, filter client-side
       const { data, error } = await supabase
         .from("group_challenges")
         .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
         .eq("creator_group_id", dbId)
-        .neq("is_group_goal", false)
-        .not("is_group_goal", "is", null)
         .order("created_at", { ascending: false });
-      if (error) {
-        // Column might not exist yet — fallback: load all and filter client-side
-        console.warn("loadGroupGoals error, trying fallback:", error.message);
-        const { data: fallback } = await supabase
-          .from("group_challenges")
-          .select(`*, group_challenge_members(user_id,contribution,users(id,username,full_name,avatar_url))`)
-          .eq("creator_group_id", dbId)
-          .order("created_at", { ascending: false });
-        setGroupGoals((fallback || []).filter((c:any) => c.is_group_goal === true));
-        return;
-      }
-      setGroupGoals(data || []);
+      console.log("loadGroupGoals raw data:", data, "error:", error);
+      if (error) { console.error("loadGroupGoals error:", error); return; }
+      const goals = (data || []).filter((c:any) => c.is_group_goal === true);
+      console.log("loadGroupGoals filtered goals:", goals);
+      setGroupGoals(goals);
     } catch(e) { console.error("loadGroupGoals exception:", e); }
   }, [dbGroup]);
 
