@@ -971,6 +971,7 @@ export default function ProfilePage() {
   const [bannerImg,setBanner] = useState<string|null>(null);
   const [profileImg,setAvatar]= useState<string|null>(null);
   const [editProfile,setEditProfile] = useState(false);
+  const [showLevelModal,setShowLevelModal] = useState(false);
   const [repositionMode, setRepositionMode] = useState(false);
   const [bannerPosition, setBannerPosition] = useState(50); // 0-100, default center
   const [bannerHovered, setBannerHovered] = useState(false);
@@ -1681,6 +1682,112 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Level Progress Modal */}
+      {showLevelModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
+          display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={e=>{if(e.target===e.currentTarget)setShowLevelModal(false);}}>
+          <div style={{background:"#111118",borderRadius:"24px 24px 0 0",width:"100%",
+            maxWidth:560,maxHeight:"85vh",overflowY:"auto",padding:"24px 20px 48px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontWeight:900,fontSize:22,color:"#F0F0F0"}}>⚡ Your Level</div>
+              <button onClick={()=>setShowLevelModal(false)} style={{background:"none",border:"none",
+                color:"#6B7280",fontSize:26,cursor:"pointer",lineHeight:1}}>×</button>
+            </div>
+
+            {/* Current level display */}
+            <div style={{background:"linear-gradient(135deg,#2D1F52,#1A0F30)",borderRadius:16,
+              padding:"20px",border:"1px solid #3D2A6E",marginBottom:20,textAlign:"center" as const}}>
+              <div style={{fontSize:48,fontWeight:900,color:"#7C3AED",lineHeight:1}}>
+                {tierInfo.tier === "default" ? 1 : tierInfo.tier === "active" ? 2 :
+                 tierInfo.tier === "grinder" ? 3 : tierInfo.tier === "elite" ? 4 : 5}
+              </div>
+              <div style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Current Level</div>
+              {tierInfo.progress < 100 && tierInfo.nextTier && (
+                <>
+                  <div style={{margin:"14px 0 6px",height:8,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:99,background:"#7C3AED",
+                      width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
+                  </div>
+                  <div style={{fontSize:11,color:"#6B7280"}}>{tierInfo.progress}% toward Level {
+                    tierInfo.tier === "default" ? 2 : tierInfo.tier === "active" ? 3 :
+                    tierInfo.tier === "grinder" ? 4 : 5
+                  }</div>
+                </>
+              )}
+            </div>
+
+            {/* XP explanation for levels 1-2 */}
+            {(tierInfo.tier === "default" || tierInfo.tier === "active") && (
+              <div style={{marginBottom:20}}>
+                <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12}}>
+                  🎯 How to earn XP
+                </div>
+                <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
+                  {[
+                    {icon:"💪",label:"Log a Workout",xp:"+3 XP"},
+                    {icon:"🏃",label:"Log a Run / Cardio",xp:"+3 XP"},
+                    {icon:"🥗",label:"Log Nutrition",xp:"+3 XP"},
+                    {icon:"🌿",label:"Log Wellness",xp:"+3 XP"},
+                    {icon:"📸",label:"Post to Feed",xp:"+3 XP"},
+                  ].map(({icon,label,xp})=>(
+                    <div key={label} style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"center",padding:"10px 14px",background:"#1A1228",
+                      borderRadius:10,border:"1px solid #2D1F52"}}>
+                      <span style={{fontSize:13,color:"#F0F0F0"}}>{icon} {label}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:"#7C3AED"}}>{xp} / day</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:11,color:"#6B7280",marginTop:8,textAlign:"center" as const}}>
+                  Max 15 XP per day · One award per category per day
+                </div>
+              </div>
+            )}
+
+            {/* Task gates for levels 3-4 */}
+            {(tierInfo.tier === "active" || tierInfo.tier === "grinder") && (
+              <div>
+                <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12}}>
+                  ✅ Tasks to reach Level {tierInfo.tier === "active" ? 3 : 4}
+                </div>
+                <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
+                  {(tierInfo.tier === "active" ? [
+                    {icon:"🥊",label:"Win 2 Rivalries"},
+                    {icon:"👥",label:"Join a Group"},
+                    {icon:"➕",label:"Follow 5 People"},
+                    {icon:"🥗",label:"Log Nutrition 7 Days in a Row"},
+                    {icon:"💪",label:"Log 4 Workouts in One Week"},
+                  ] : [
+                    {icon:"🥊",label:"Win 5 Rivalries"},
+                    {icon:"🧘",label:"Log a Yoga Session"},
+                    {icon:"📸",label:"Post 3 Photos to Feed"},
+                    {icon:"🏆",label:"Top 3 in a Group Challenge × 3"},
+                    {icon:"🧠",label:"Log 3 Meditation Sessions"},
+                    {icon:"🥗",label:"Log Nutrition 14 Days in a Row"},
+                    {icon:"💪",label:"Log 8 Workouts in 14 Days"},
+                  ]).map(({icon,label})=>(
+                    <div key={label} style={{display:"flex",alignItems:"center",gap:10,
+                      padding:"10px 14px",background:"#1A1228",borderRadius:10,border:"1px solid #2D1F52"}}>
+                      <span style={{fontSize:16,flexShrink:0}}>{icon}</span>
+                      <span style={{fontSize:13,color:"#F0F0F0"}}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tierInfo.tier === "untouchable" && (
+              <div style={{textAlign:"center" as const,padding:"20px 0"}}>
+                <div style={{fontSize:48,marginBottom:12}}>💀</div>
+                <div style={{fontWeight:900,fontSize:18,color:"#E879F9"}}>MAX LEVEL</div>
+                <div style={{fontSize:13,color:"#6B7280",marginTop:8}}>You've reached the top. Legendary status.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Edit Profile Modal */}
       {editProfile && (
         <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -1797,21 +1904,26 @@ export default function ProfilePage() {
               {profile.city && (
                 <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>
               )}
-              {/* Tier progress bar */}
-              {userTier !== "untouchable" && tierInfo.nextTier && (
-                <div style={{marginTop:8,padding:"5px 10px",background:"rgba(0,0,0,0.3)",borderRadius:8,border:"1px solid rgba(255,255,255,0.06)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                    <span style={{fontSize:9,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.5}}>Progress</span>
-                    <span style={{fontSize:9,fontWeight:700,color:C.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}}>{tierInfo.nextDescription}</span>
-                  </div>
-                  <div style={{height:3,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
-                    <div style={{height:"100%",borderRadius:2,background:"#7C3AED",width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
-                  </div>
-                </div>
-              )}
-              {userTier === "untouchable" && (
-                <div style={{marginTop:8,fontSize:11,color:"#E879F9",fontWeight:700,letterSpacing:0.5}}>Untouchable — MAX TIER</div>
-              )}
+              {/* Level progress — click to open detail modal */}
+              <button onClick={()=>setShowLevelModal(true)} style={{
+                marginTop:8, background:"rgba(124,58,237,0.12)", border:"1px solid rgba(124,58,237,0.3)",
+                borderRadius:10, padding:"6px 14px", cursor:"pointer", width:"100%",
+              }}>
+                {userTier !== "untouchable" && tierInfo.nextTier ? (
+                  <>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                      <span style={{fontSize:9,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.5}}>Level Progress</span>
+                      <span style={{fontSize:9,fontWeight:700,color:"#7C3AED"}}>{tierInfo.progress}%</span>
+                    </div>
+                    <div style={{height:3,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:2,background:"#7C3AED",width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
+                    </div>
+                    <div style={{fontSize:9,color:C.sub,marginTop:4,textAlign:"center" as const}}>Tap to see what's next →</div>
+                  </>
+                ) : (
+                  <div style={{fontSize:11,color:"#E879F9",fontWeight:700,letterSpacing:0.5}}>MAX LEVEL ✦ Tap for details</div>
+                )}
+              </button>
               {(user?.profile as any)?.account_type === 'business' && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
                   <span style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
