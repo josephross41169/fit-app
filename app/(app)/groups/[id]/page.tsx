@@ -648,26 +648,6 @@ export default function GroupPage() {
   } : mockGroup;
 
 
-  if (!loading && !group) {
-    return (
-      <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
-        <div style={{ background:C.white, borderRadius:24, border:`2px solid ${C.blueMid}`, padding:"48px 40px", maxWidth:440, width:"100%", textAlign:"center" }}>
-          <div style={{ fontSize:48, marginBottom:16 }}>🤝</div>
-          <div style={{ fontWeight:900, fontSize:20, color:C.text, marginBottom:8 }}>Group not found</div>
-          <button onClick={() => router.push("/connect")} style={{ color:C.blue, fontWeight:700, fontSize:14, background:"none", border:"none", cursor:"pointer" }}>← Back to Connect</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading || !group) {
-    return (
-      <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <div style={{ fontWeight:700, fontSize:16, color:C.sub }}>Loading group...</div>
-      </div>
-    );
-  }
-
   // ── Load war challenges (must be hook, before any conditional returns) ────────
   const loadWarChallenges = useCallback(async () => {
     const dbId = (dbGroup as any)?.id;
