@@ -1147,8 +1147,8 @@ export default function PostPage() {
         }
       `}</style>
 
-      {/* Mobile header */}
-      <div className="post-mobile-header" style={{ background: C.white, borderBottom: `2px solid ${C.greenMid}`, padding: "20px 20px 0" }}>
+      {/* Mobile header — safe-top pushes below the iPhone notch/Dynamic Island */}
+      <div className="post-mobile-header safe-top" style={{ background: C.white, borderBottom: `2px solid ${C.greenMid}`, padding: "0 20px 0" }}>
         <div style={{ fontWeight: 900, fontSize: 22, color: C.text, marginBottom: 14 }}>
           {mainMode === "log" ? "📋 Log Activity" : "📢 Share to Feed"}
         </div>
