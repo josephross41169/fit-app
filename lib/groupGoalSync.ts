@@ -187,35 +187,72 @@ async function computeContribution(userId: string, challenge: ActiveChallenge): 
 
 /** After a user logs a workout/wellness/nutrition entry, call this to sync
  *  their contribution to every active group challenge they're a member of.
+ *
+ *  IMPORTANT: This also auto-enrolls the user in goals their group created
+ *  AFTER they joined. Without that, `group_challenge_members` might not have
+ *  a row for (user, challenge), so a plain UPDATE would silently do nothing
+ *  and the user's activity would never show up on the group goal.
+ *
  *  Best-effort — errors are logged but not thrown so they can't block saves. */
 export async function syncGroupChallengeProgressFor(userId: string): Promise<void> {
   try {
-    // 1. Find every active group challenge this user is a member of
+    // 1. Find the groups this user belongs to
     const { data: memberships } = await supabase
-      .from("group_challenge_members")
-      .select("challenge_id, group_challenges!inner(id,metric,status,start_date,end_date,created_at)")
+      .from("group_members")
+      .select("group_id")
       .eq("user_id", userId);
 
-    if (!memberships?.length) return;
+    const groupIds = (memberships ?? []).map((m: any) => m.group_id).filter(Boolean);
+    if (groupIds.length === 0) return;
 
+    // 2. Find every active group goal in those groups
     const nowIso = new Date().toISOString();
+    const { data: goals } = await supabase
+      .from("group_challenges")
+      .select("id, creator_group_id, metric, status, start_date, end_date, created_at, is_group_goal")
+      .in("creator_group_id", groupIds)
+      .eq("status", "active");
 
-    // 2. For each active challenge, recompute this user's contribution
-    for (const m of memberships as any[]) {
-      const ch = m.group_challenges;
-      if (!ch) continue;
-      if (ch.status !== "active") continue;
+    if (!goals?.length) return;
+
+    // 3. For each goal, upsert the user's contribution
+    for (const ch of goals as any[]) {
+      // Skip non-goal challenges (wars, member challenges) — they use manual logging
+      if (!ch.is_group_goal) continue;
       if (ch.end_date && ch.end_date < nowIso) continue; // expired
 
       const contribution = await computeContribution(userId, ch);
 
-      // 3. Upsert the new value — only updating if it actually changed avoids
-      // pointless writes that could rate-limit
-      await supabase
+      // Check if enrollment row already exists. Using a read-then-write pattern
+      // instead of a raw upsert because group_challenge_members may not have
+      // a unique constraint on (challenge_id, user_id) — avoid depending on it.
+      const { data: existing } = await supabase
         .from("group_challenge_members")
-        .update({ contribution })
+        .select("challenge_id")
         .eq("challenge_id", ch.id)
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (existing) {
+        // Already enrolled → just update their contribution
+        await supabase
+          .from("group_challenge_members")
+          .update({ contribution })
+          .eq("challenge_id", ch.id)
+          .eq("user_id", userId);
+      } else {
+        // Not enrolled yet → create the row. Auto-enrolls users in goals that
+        // were created before they joined, or goals where the creator forgot
+        // to enroll everyone.
+        await supabase
+          .from("group_challenge_members")
+          .insert({
+            challenge_id: ch.id,
+            user_id: userId,
+            group_id: ch.creator_group_id,
+            contribution,
+          });
+      }
     }
   } catch (err) {
     console.error("[groupGoalSync] failed:", err);
