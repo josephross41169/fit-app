@@ -355,8 +355,11 @@ export default function BottomNav() {
           </>
         )}
 
-        {/* 5 primary tabs + More button */}
-        <div className="flex items-center justify-around px-2 pb-safe">
+        {/* 5 primary tabs + More button.
+            safe-nav adds bottom padding equal to env(safe-area-inset-bottom)
+            so the tab row sits above the iPhone home indicator — previously
+            used `pb-safe` which was a non-existent Tailwind class. */}
+        <div className="flex items-center justify-around px-2 safe-nav">
           {tabs.slice(0, 5).map((tab) => {
             const active = pathname === tab.href;
             const badge = getBadge(tab.href);
