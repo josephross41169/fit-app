@@ -1520,25 +1520,6 @@ export default function PostPage() {
                 )}
               </div>
 
-              {/* Cardio */}
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🏃 Cardio (optional)</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
-                    <input style={iStyle} placeholder="e.g. Running" value={cardioType} onChange={e => setCardioType(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
-                    <input style={iStyle} placeholder="e.g. 20 min" value={cardioDuration} onChange={e => setCardioDuration(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance</label>
-                    <input style={iStyle} placeholder="e.g. 2 miles" value={cardioDistance} onChange={e => setCardioDistance(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-
               {/* Notes & Photo */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes & Photo</div>
