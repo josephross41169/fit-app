@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import {
-  joinQueue, leaveQueue, isQueued,
+  joinQueue, leaveQueue, getQueueEntry,
   getActiveRivalry, getLiveScores, getUserRecord,
   getMessages, sendTextMessage, sendPhotoMessage,
   unblurPhoto, subscribeToMessages,
@@ -626,7 +626,7 @@ export default function RivalsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      const [rivalry, queued] = await Promise.all([getActiveRivalry(), isQueued()]);
+      const [rivalry, queueEntry] = await Promise.all([getActiveRivalry(), getQueueEntry()]);
       if (rivalry) {
         setActiveRivalry(rivalry);
         setMatchStep("active");
@@ -636,11 +636,18 @@ export default function RivalsPage() {
         ]);
         setMyRecord(mine);
         setTheirRecord(theirs);
+      } else if (queueEntry) {
+        // User is waiting in the queue — restore their picks so the UI is consistent
+        setActiveRivalry(null);
+        setQueuedAlready(true);
+        setRivalCategory(queueEntry.category);
+        setRivalCompetition(queueEntry.competition_type);
+        setRivalTier(queueEntry.tier);
+        setMatchStep("matching");
       } else {
         setActiveRivalry(null);
-        setQueuedAlready(queued);
-        if (queued) setMatchStep("matching");
-        else setMatchStep("category");
+        setQueuedAlready(false);
+        setMatchStep("category");
       }
     } catch (e) {
       console.error("Failed to load rivals state:", e);
