@@ -362,10 +362,12 @@ export default function StatsPage(){
       } else setTodayNut(null);
 
       // Latest weight (all time, not range-limited)
-      const {data:lwData}=await supabase.from("weight_logs")
-        .select("weight_lbs,logged_at").eq("user_id",user.id)
-        .order("logged_at",{ascending:false}).limit(1);
-      if(lwData&&lwData.length>0) setLatestWeight(Number(lwData[0].weight_lbs));
+      try {
+        const {data:lwData,error:lwErr}=await supabase.from("weight_logs")
+          .select("weight_lbs,logged_at").eq("user_id",user.id)
+          .order("logged_at",{ascending:false}).limit(1);
+        if(!lwErr && lwData&&lwData.length>0) setLatestWeight(Number(lwData[0].weight_lbs));
+      } catch(e) { console.warn("weight_logs table not ready:", e); }
 
       // Range logs
       const {data:logs}=await supabase.from("activity_logs")
@@ -385,10 +387,12 @@ export default function StatsPage(){
       if(prs) setPrList(prs);
 
       // Weight logs (range)
-      const {data:wl}=await supabase.from("weight_logs")
-        .select("weight_lbs,logged_at").eq("user_id",user.id)
-        .gte("logged_at",since).order("logged_at",{ascending:true});
-      if(wl) setWeightLogs(wl);
+      try {
+        const {data:wl,error:wlErr}=await supabase.from("weight_logs")
+          .select("weight_lbs,logged_at").eq("user_id",user.id)
+          .gte("logged_at",since).order("logged_at",{ascending:true});
+        if(!wlErr && wl) setWeightLogs(wl);
+      } catch(e) { console.warn("weight_logs table not ready:", e); }
 
       // All workout dates for streak/heatmap
       const {data:allW}=await supabase.from("activity_logs")
@@ -401,6 +405,29 @@ export default function StatsPage(){
   },[user,range]);
 
   useEffect(()=>{load();},[load]);
+
+  async function saveWeight() {
+    const lbs = parseFloat(weightInput);
+    if (!lbs || !user) return;
+    setWeightSaving(true);
+    try {
+      const { error } = await supabase.from('weight_logs').insert({
+        user_id: user.id,
+        weight_lbs: lbs,
+        notes: weightNotes || null,
+        is_public: weightPublic,
+        logged_at: new Date().toISOString(),
+      });
+      if (error) { alert("Error saving weight: " + error.message); setWeightSaving(false); return; }
+      setLatestWeight(lbs);
+      setWeightLogs((prev:any) => [{ weight_lbs: lbs, logged_at: new Date().toISOString() }, ...prev]);
+      setWeightInput("");
+      setWeightNotes("");
+      setWeightPublic(false);
+      setShowWeightModal(false);
+    } catch(e:any) { alert("Error: " + e.message); }
+    setWeightSaving(false);
+  }
 
   async function saveGoals(){
     if(!user) return;
