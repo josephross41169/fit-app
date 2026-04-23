@@ -330,7 +330,7 @@ export default function StatsPage(){
 
       // Today workouts (no throwOnError!)
       const {data:twData}=await supabase.from("activity_logs")
-        .select("workout_type,workout_duration_min,workout_calories,exercises,cardio,logged_at")
+        .select("workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,logged_at")
         .eq("user_id",user.id).eq("log_type","workout")
         .gte("logged_at",todayStart.toISOString()).lte("logged_at",todayEnd.toISOString());
       const tw=twData||[];
@@ -371,7 +371,7 @@ export default function StatsPage(){
 
       // Range logs
       const {data:logs}=await supabase.from("activity_logs")
-        .select("id,log_type,logged_at,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes")
+        .select("id,log_type,logged_at,workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes")
         .eq("user_id",user.id).gte("logged_at",since)
         .order("logged_at",{ascending:true});
       if(logs){
@@ -491,8 +491,23 @@ export default function StatsPage(){
     }));
   })();
   const workoutTypes=(()=>{
+    // Group by the standardized workout_category when present, falling back
+    // to the free-text workout_type name for legacy rows that haven't been
+    // backfilled. The category gives reliable bucketing ("Push Day A" and
+    // "Push Day B" both count as lifting), while the name stays as the
+    // user's personal label.
     const t:Record<string,number>={};
-    workoutLogs.forEach(l=>{const tp=l.workout_type||"Workout";t[tp]=(t[tp]||0)+1;});
+    const CATEGORY_LABELS: Record<string,string> = {
+      running:"Running", walking:"Walking", biking:"Biking", swimming:"Swimming",
+      rowing:"Rowing", lifting:"Lifting", hiit:"HIIT", yoga:"Yoga",
+      pilates:"Pilates", boxing:"Boxing", sports:"Sports", other:"Other",
+    };
+    workoutLogs.forEach(l=>{
+      const tp = l.workout_category
+        ? (CATEGORY_LABELS[l.workout_category] || l.workout_category)
+        : (l.workout_type || "Workout");
+      t[tp]=(t[tp]||0)+1;
+    });
     return Object.entries(t).sort((a,b)=>b[1]-a[1]).map(([type,count])=>({type,count}));
   })();
 
