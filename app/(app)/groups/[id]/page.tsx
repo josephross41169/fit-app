@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
 
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
@@ -551,7 +552,7 @@ export default function GroupPage() {
 
   // ── Create Challenge modal ──
   const [showChallengeModal, setShowChallengeModal] = useState(false);
-  const [challengeForm, setChallengeForm] = useState({ name:'', description:'', emoji:'🏆', metric_label:'', metric_unit:'', difficulty:'Medium', deadline:'' });
+  const [challengeForm, setChallengeForm] = useState({ name:'', description:'', emoji:'🏆', metric_key:'', metric_label:'', metric_unit:'', difficulty:'Medium', deadline:'' });
   const [challengeSubmitting, setChallengeSubmitting] = useState(false);
 
   // ── Log Progress modal ──
@@ -1174,6 +1175,7 @@ export default function GroupPage() {
   // ── Submit challenge ──
   async function submitChallenge(e: React.FormEvent) {
     e.preventDefault();
+    // metric_label is always required (either user-typed for custom, or auto-filled from catalog)
     if (!challengeForm.name.trim() || !challengeForm.metric_label.trim() || challengeSubmitting) return;
     setChallengeSubmitting(true);
     try {
@@ -1187,7 +1189,7 @@ export default function GroupPage() {
         if (data.challenge) setDbChallenges(prev => [...prev, data.challenge]);
       }
       setShowChallengeModal(false);
-      setChallengeForm({ name:'', description:'', emoji:'🏆', metric_label:'', metric_unit:'', difficulty:'Medium', deadline:'' });
+      setChallengeForm({ name:'', description:'', emoji:'🏆', metric_key:'', metric_label:'', metric_unit:'', difficulty:'Medium', deadline:'' });
     } finally {
       setChallengeSubmitting(false);
     }
@@ -1532,11 +1534,10 @@ export default function GroupPage() {
                   ))}
                 </div>
               </div>
+              {/* Name + Description — always free-text */}
               {[
                 { label:"Challenge Name *", key:"name", placeholder:"e.g. 30 Day Workout Streak" },
                 { label:"Description", key:"description", placeholder:"What's this challenge about?" },
-                { label:"What to Track (Metric) *", key:"metric_label", placeholder:"e.g. Workouts Completed, Miles Run" },
-                { label:"Unit (optional)", key:"metric_unit", placeholder:"e.g. sessions, mi, lbs" },
               ].map(f => (
                 <div key={f.key} style={{ marginBottom:12 }}>
                   <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>{f.label}</label>
@@ -1544,6 +1545,62 @@ export default function GroupPage() {
                     style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
                 </div>
               ))}
+
+              {/* ── Metric picker — dropdown of auto-tracked metrics + custom option ── */}
+              {/* Picking an auto-tracked metric fills in metric_label/metric_unit so those */}
+              {/* fields aren't needed — that's why we only show them when "custom" is picked. */}
+              <div style={{ marginBottom:12 }}>
+                <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>What to Track *</label>
+                <select
+                  value={challengeForm.metric_key || ""}
+                  onChange={e => {
+                    const key = e.target.value;
+                    if (key === "") {
+                      // Custom (manual) → clear key, let user fill free-text fields
+                      setChallengeForm(p => ({ ...p, metric_key: "", metric_label: "", metric_unit: "" }));
+                    } else {
+                      // Auto-tracked → auto-fill label and unit from catalog
+                      const metric = TRACKED_METRICS.find(m => m.key === key);
+                      setChallengeForm(p => ({
+                        ...p,
+                        metric_key: key,
+                        metric_label: metric?.label || "",
+                        metric_unit: metric?.unit || "",
+                      }));
+                    }
+                  }}
+                  style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
+                  <option value="">📝 Custom (manual logging)</option>
+                  {Object.entries(metricsByCategory()).map(([cat, metrics]) => (
+                    <optgroup key={cat} label={`⚡ ${cat.charAt(0).toUpperCase() + cat.slice(1)}`}>
+                      {metrics.map(m => (
+                        <option key={m.key} value={m.key}>{m.emoji}  {m.label} ({m.unit})</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <div style={{ fontSize:11, color:"#8892A4", marginTop:6, lineHeight:1.4 }}>
+                  {challengeForm.metric_key
+                    ? "⚡ Auto-tracked from members' activity logs — no manual logging needed."
+                    : "📝 Members log their own progress with the built-in logger."}
+                </div>
+              </div>
+
+              {/* Only shown for custom (manual) challenges — auto-tracked ones get these from the catalog */}
+              {!challengeForm.metric_key && (
+                <>
+                  <div style={{ marginBottom:12 }}>
+                    <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Metric Label *</label>
+                    <input value={challengeForm.metric_label} onChange={e => setChallengeForm(p=>({...p,metric_label:e.target.value}))} placeholder="e.g. Acts of Service, Journal Entries"
+                      style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                  </div>
+                  <div style={{ marginBottom:12 }}>
+                    <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Unit (optional)</label>
+                    <input value={challengeForm.metric_unit} onChange={e => setChallengeForm(p=>({...p,metric_unit:e.target.value}))} placeholder="e.g. entries, acts, hours"
+                      style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                  </div>
+                </>
+              )}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
                 <div>
                   <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Difficulty</label>
