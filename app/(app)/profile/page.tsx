@@ -1394,19 +1394,30 @@ export default function ProfilePage() {
     e.target.value = "";
   }
 
-  function removeHighlight(idx:number) {
-    setHighlights(h => {
-      const next = h.filter((_,i) => i !== idx);
-      // persist outside render cycle
-      setTimeout(() => {
-        if (user) {
-          supabase.from('users').update({ highlights: next } as any).eq('id', user!.id).catch(() => {});
-          try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(next)); } catch {}
-        }
-        if (next.length === 0) setEditingHighlights(false);
-      }, 0);
-      return next;
-    });
+  async function removeHighlight(idx:number) {
+    const urlToRemove = highlights[idx];
+    if (!urlToRemove) return;
+
+    // Update local state immediately
+    const next = highlights.filter((_,i) => i !== idx);
+    setHighlights(next);
+    if (next.length === 0) setEditingHighlights(false);
+
+    if (!user) return;
+
+    // Update DB array
+    await supabase.from('users').update({ highlights: next } as any).eq('id', user.id).catch(() => {});
+
+    // Update localStorage
+    try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
+
+    // Permanently delete the file from Supabase storage
+    try {
+      const match = urlToRemove.match(/avatars\/(.+?)(\?|$)/);
+      if (match) {
+        await supabase.storage.from('avatars').remove([decodeURIComponent(match[1])]);
+      }
+    } catch {}
   }
 
   async function claimBadge() {
