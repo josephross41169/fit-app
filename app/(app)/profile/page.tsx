@@ -1857,9 +1857,9 @@ export default function ProfilePage() {
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
             >
-              <TierFrame tier={userTier} size={128}>
+              <TierFrame tier={userTier} size={160}>
               {profileImg
-                ? <img src={profileImg} style={{width:128,height:128,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                ? <img src={profileImg} style={{width:160,height:160,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
                 : <div style={{width:128,height:128,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:50,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
@@ -1904,26 +1904,7 @@ export default function ProfilePage() {
               {profile.city && (
                 <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>
               )}
-              {/* Level progress — click to open detail modal */}
-              <button onClick={()=>setShowLevelModal(true)} style={{
-                marginTop:8, background:"rgba(124,58,237,0.12)", border:"1px solid rgba(124,58,237,0.3)",
-                borderRadius:10, padding:"6px 14px", cursor:"pointer", width:"100%",
-              }}>
-                {userTier !== "untouchable" && tierInfo.nextTier ? (
-                  <>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <span style={{fontSize:9,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.5}}>Level Progress</span>
-                      <span style={{fontSize:9,fontWeight:700,color:"#7C3AED"}}>{tierInfo.progress}%</span>
-                    </div>
-                    <div style={{height:3,borderRadius:2,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:2,background:"#7C3AED",width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
-                    </div>
-                    <div style={{fontSize:9,color:C.sub,marginTop:4,textAlign:"center" as const}}>Tap to see what's next →</div>
-                  </>
-                ) : (
-                  <div style={{fontSize:11,color:"#E879F9",fontWeight:700,letterSpacing:0.5}}>MAX LEVEL ✦ Tap for details</div>
-                )}
-              </button>
+
               {(user?.profile as any)?.account_type === 'business' && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
                   <span style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
@@ -2017,8 +1998,35 @@ export default function ProfilePage() {
         {/* 3-column */}
         <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(200px,240px) 1fr minmax(200px,240px)",gap:16,alignItems:"start"}}>
 
-          {/* LEFT — Highlights */}
+          {/* LEFT — Highlights + Level Progress */}
           <div style={{paddingTop:44}}>
+            {/* Level progress card */}
+            <button onClick={()=>setShowLevelModal(true)} style={{
+              width:"100%",marginBottom:12,background:"rgba(124,58,237,0.10)",
+              border:"1.5px solid rgba(124,58,237,0.35)",borderRadius:16,
+              padding:"14px 16px",cursor:"pointer",textAlign:"left" as const,
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:13,color:C.text}}>
+                  ⚡ Level {userTier==="default"?1:userTier==="active"?2:userTier==="grinder"?3:userTier==="elite"?4:5} Progress
+                </div>
+                <span style={{fontSize:11,fontWeight:700,color:"#7C3AED"}}>{tierInfo.progress}%</span>
+              </div>
+              <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden",marginBottom:6}}>
+                <div style={{height:"100%",borderRadius:99,background:"linear-gradient(90deg,#7C3AED,#A78BFA)",
+                  width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
+              </div>
+              {userTier !== "untouchable" && tierInfo.nextTier ? (
+                <div style={{fontSize:10,color:C.sub,textAlign:"center" as const}}>
+                  Tap to see what's needed for next level →
+                </div>
+              ) : (
+                <div style={{fontSize:10,color:"#E879F9",fontWeight:700,textAlign:"center" as const}}>
+                  MAX LEVEL ✦ Tap for details
+                </div>
+              )}
+            </button>
+
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
