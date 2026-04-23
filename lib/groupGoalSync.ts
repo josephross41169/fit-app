@@ -284,6 +284,77 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
         else console.log("[groupGoalSync]   INSERT ok, contribution =", contribution);
       }
     }
+
+    // ── 4. Sync auto-tracked CHALLENGES (opt-in, one row per participant) ──
+    // Challenges differ from goals: users opt in via challenge_participants.
+    // We only update existing participant rows — never auto-enroll, because
+    // that would break the opt-in nature. If a user joined, their score gets
+    // auto-computed from activity_logs. If they didn't join, we don't touch them.
+    console.log("[groupGoalSync] → checking enrolled challenges");
+    const { data: enrollments, error: enrErr } = await supabase
+      .from("challenge_participants")
+      .select("challenge_id, challenges!inner(id,metric_key,is_active,deadline,created_at,name,group_id)")
+      .eq("user_id", userId);
+
+    if (enrErr) {
+      console.error("[groupGoalSync] challenge_participants query error:", enrErr);
+    } else if (enrollments?.length) {
+      console.log("[groupGoalSync] user is enrolled in", enrollments.length, "challenges");
+      for (const row of enrollments as any[]) {
+        const ch = row.challenges;
+        if (!ch) continue;
+        console.log("[groupGoalSync] → challenge:", ch.name, "| metric_key:", ch.metric_key);
+
+        // Only auto-sync challenges that picked a standard metric from the catalog.
+        // Custom (manual) challenges have metric_key = null and keep using the
+        // log_challenge_progress flow — we leave them alone.
+        if (!ch.metric_key) {
+          console.log("[groupGoalSync]   skipped (custom manual challenge)");
+          continue;
+        }
+        if (!ch.is_active) {
+          console.log("[groupGoalSync]   skipped (inactive)");
+          continue;
+        }
+        if (ch.deadline && ch.deadline < nowIso) {
+          console.log("[groupGoalSync]   skipped (past deadline)");
+          continue;
+        }
+
+        // Re-use computeContribution by shaping the challenge like a goal
+        const score = await computeContribution(userId, {
+          id: ch.id,
+          metric: ch.metric_key,
+          start_date: null,          // challenges don't track a start date — use created_at
+          end_date: ch.deadline,
+          created_at: ch.created_at,
+        });
+        console.log("[groupGoalSync]   computed score:", score);
+
+        const { error: updErr } = await supabase
+          .from("challenge_participants")
+          .update({ score })
+          .eq("challenge_id", ch.id)
+          .eq("user_id", userId);
+        if (updErr) console.error("[groupGoalSync]   UPDATE failed:", updErr);
+        else console.log("[groupGoalSync]   UPDATE ok, score =", score);
+
+        // Also update leaderboard_entries so the challenge leaderboard reflects it
+        const { error: lbErr } = await supabase
+          .from("leaderboard_entries")
+          .upsert({
+            group_id: ch.group_id,
+            user_id: userId,
+            challenge_id: ch.id,
+            score,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "group_id,user_id,challenge_id" });
+        if (lbErr) console.warn("[groupGoalSync]   leaderboard upsert failed (non-fatal):", lbErr);
+      }
+    } else {
+      console.log("[groupGoalSync] user isn't enrolled in any challenges");
+    }
+
     console.log("[groupGoalSync] DONE");
   } catch (err) {
     console.error("[groupGoalSync] unexpected error:", err);
