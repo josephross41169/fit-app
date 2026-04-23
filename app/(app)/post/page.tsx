@@ -254,7 +254,42 @@ function FoodSearchInput({
 }
 
 const MOOD_EMOJIS = ["😊", "💪", "😴", "😤", "🔥"];
-const WELLNESS_TYPES = ["Sleep", "Yoga", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Walk", "Other"];
+// Standardized workout categories — the source of truth for stats, badges, rivalries.
+// Each category defines which detail fields the form should show.
+//    distance: show a distance input (mi/km/laps/meters)
+//    pace:     auto-compute and display pace from distance/duration
+//    sets:     show the full exercises/sets/reps/weight UI
+//    paceUnit: how to label the auto-computed pace
+type WorkoutCategory = {
+  id: string;        // stored in workout_category column
+  label: string;     // shown in dropdown
+  emoji: string;
+  distance?: boolean;
+  distanceUnit?: string;
+  pace?: boolean;
+  paceUnit?: string;
+  sets?: boolean;
+};
+
+const WORKOUT_CATEGORIES: WorkoutCategory[] = [
+  { id: "running",  label: "Running",  emoji: "🏃", distance: true,  distanceUnit: "miles", pace: true, paceUnit: "min/mi"   },
+  { id: "walking",  label: "Walking",  emoji: "🚶", distance: true,  distanceUnit: "miles" },
+  { id: "biking",   label: "Biking",   emoji: "🚴", distance: true,  distanceUnit: "miles", pace: true, paceUnit: "mph"      },
+  { id: "swimming", label: "Swimming", emoji: "🏊", distance: true,  distanceUnit: "yards", pace: true, paceUnit: "min/100yd"},
+  { id: "rowing",   label: "Rowing",   emoji: "🚣", distance: true,  distanceUnit: "meters" },
+  { id: "lifting",  label: "Lifting",  emoji: "🏋️", sets: true                                                               },
+  { id: "hiit",     label: "HIIT",     emoji: "🔥",                                                                           },
+  { id: "yoga",     label: "Yoga",     emoji: "🧘",                                                                           },
+  { id: "pilates",  label: "Pilates",  emoji: "🤸",                                                                           },
+  { id: "boxing",   label: "Boxing",   emoji: "🥊",                                                                           },
+  { id: "sports",   label: "Sports",   emoji: "🏀",                                                                           },
+  { id: "other",    label: "Other",    emoji: "💪", distance: true,  distanceUnit: "miles", sets: true                        },
+];
+
+// Wellness kept for recovery / mindfulness / passive activities. Yoga and
+// Walking moved to workout categories since they burn calories and improve
+// fitness. Sleep stays here — it's tracking, not exercise.
+const WELLNESS_TYPES = ["Sleep", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Steam Room", "Foam Rolling", "Other"];
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
 
@@ -271,9 +306,10 @@ export default function PostPage() {
   const submittingRef = useRef(false); // hard lock · prevents double-submit even with rapid clicks
 
   // Workout state
-  const [woType, setWoType] = useState("");
+  const [woCategory, setWoCategory] = useState("lifting"); // standardized category; drives form fields
+  const [woType, setWoType] = useState("");                 // user-facing workout NAME ("Push Day A")
   const [woDuration, setWoDuration] = useState("");
-  const [woCalories, setWoCalories] = useState("");
+  const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [prevSessions, setPrevSessions] = useState<Record<string, PrevSession | null>>({});
   const [cardioType, setCardioType] = useState("");
@@ -313,7 +349,7 @@ export default function PostPage() {
   const [editGoals, setEditGoals] = useState<NutritionGoals>({ calories: 2500, protein: 180, carbs: 250, fat: 70, water_oz: 100 });
 
   // Wellness state
-  const [wellnessType, setWellnessType] = useState("Yoga");
+  const [wellnessType, setWellnessType] = useState("Meditation");
   const [wellnessDuration, setWellnessDuration] = useState("");
   const [wellnessNotes, setWellnessNotes] = useState("");
   const [mood, setMood] = useState("");
@@ -421,7 +457,7 @@ export default function PostPage() {
       const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
       const { data } = await supabase
         .from('activity_logs')
-        .select('id, workout_type, exercises, workout_duration_min, workout_calories, notes, cardio')
+        .select('id, workout_category, workout_type, exercises, workout_duration_min, notes, cardio')
         .eq('user_id', user.id)
         .eq('log_type', 'workout')
         .gte('logged_at', start)
@@ -439,15 +475,20 @@ export default function PostPage() {
     try {
       const { data } = await supabase
         .from('activity_logs')
-        .select('id, workout_type, exercises, workout_duration_min, workout_calories, notes, cardio')
+        .select('id, workout_category, workout_type, exercises, workout_duration_min, notes, cardio')
         .eq('id', todayLog.id)
         .single();
       if (!data) return;
       setTodayLogId(data.id);
+      setWoCategory(data.workout_category || 'lifting');
       setWoType(data.workout_type || '');
       setWoDuration(data.workout_duration_min ? String(data.workout_duration_min) : '');
-      setWoCalories(data.workout_calories ? String(data.workout_calories) : '');
       setWoNotes(data.notes || '');
+      // If the stored cardio array has a distance, restore it into the new single-distance field
+      const firstCardio = Array.isArray(data.cardio) ? data.cardio[0] : null;
+      if (firstCardio && (firstCardio.miles || firstCardio.distance)) {
+        setWoDistance(String(firstCardio.miles ?? firstCardio.distance ?? ''));
+      }
       // Restore exercises with per-set weights
       const exs: Exercise[] = (data.exercises || []).map((ex: any) => ({
         name: ex.name || '',
@@ -636,14 +677,49 @@ export default function PostPage() {
           weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
           notes: ex.notes || undefined,
         }));
+
+        // Build the cardio array based on the selected category's fields.
+        // For distance-based categories (running/walking/biking/swimming/rowing),
+        // save {miles, duration, pace} — matching what the rivalry scoring
+        // function and legacy code already expect (cardio.miles, cardio.pace_min_per_mile).
+        const selectedCat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
+        let cardioPayload: any = null;
+        if (selectedCat?.distance && (woDistance || woDuration)) {
+          const distNum = parseFloat(woDistance) || 0;
+          const durNum  = parseFloat(woDuration)  || 0;
+          const cardioEntry: any = {
+            type: woCategory,
+            distance: woDistance || null,
+            duration: woDuration || null,
+          };
+          if (distNum > 0) cardioEntry.miles = distNum;
+          if (distNum > 0 && durNum > 0) {
+            // Auto-compute pace when both fields are present
+            if (woCategory === "running") {
+              cardioEntry.pace_min_per_mile = durNum / distNum;
+            } else if (woCategory === "biking") {
+              cardioEntry.mph = (distNum / durNum) * 60;
+            } else if (woCategory === "swimming") {
+              // min per 100 yards
+              cardioEntry.pace_min_per_100 = (durNum / distNum) * 100;
+            }
+          }
+          cardioPayload = [cardioEntry];
+        }
+        // Preserve legacy standalone cardio fields if user filled them (backwards compat)
+        else if (cardioType || cardioDuration || cardioDistance) {
+          cardioPayload = [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }];
+        }
+
         const workoutPayload = {
-          workout_type: woType || null,
+          workout_category: woCategory,                 // standardized — drives stats/badges/rivalries
+          workout_type: woType || null,                  // user's name for this workout ("Push Day A")
           workout_duration_min: woDuration ? parseInt(woDuration) : null,
-          workout_calories: woCalories ? parseInt(woCalories) : null,
           exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
-          cardio: cardioType ? [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }] : null,
+          cardio: cardioPayload,
           notes: woNotes || null,
           photo_url: woPhotoUrl,
+          source: 'manual',                              // future wearables will set 'fitbit'/'apple-watch'/etc.
         };
         // If resuming today's log, update it instead of inserting a new one
         const res = todayLogId
@@ -1174,26 +1250,85 @@ export default function PostPage() {
               {todayLogId && (
                 <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>✏️ Editing today's {todayLog?.type || 'workout'} · save will update it</div>
-                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoDuration(''); setWoCalories(''); setWoNotes(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
+                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoCategory('lifting'); setWoDuration(''); setWoDistance(''); setWoNotes(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
                 </div>
               )}
 
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💪 Workout Details</div>
+
+                {/* Category — drives which fields appear below */}
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Workout Type</label>
-                  <input style={iStyle} placeholder="e.g. Push Day, Leg Day, HIIT..." value={woType} onChange={e => setWoType(e.target.value)} />
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Category</label>
+                  <select style={iStyle} value={woCategory} onChange={e => setWoCategory(e.target.value)}>
+                    {WORKOUT_CATEGORIES.map(c => (
+                      <option key={c.id} value={c.id}>{c.emoji}  {c.label}</option>
+                    ))}
+                  </select>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
-                    <input style={iStyle} placeholder="e.g. 45 min" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Calories Burned</label>
-                    <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 450" value={woCalories} onChange={e => setWoCalories(e.target.value)} />
-                  </div>
+
+                {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                  </label>
+                  <input style={iStyle} placeholder={`e.g. ${woCategory === 'lifting' ? 'Push Day A' : woCategory === 'running' ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
                 </div>
+
+                {(() => {
+                  const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
+                  if (!cat) return null;
+                  // Pace auto-calculated from distance + duration
+                  const distNum = parseFloat(woDistance) || 0;
+                  const durNum  = parseFloat(woDuration)  || 0;
+                  let paceText = "";
+                  if (cat.pace && distNum > 0 && durNum > 0) {
+                    if (cat.id === "running") {
+                      const p = durNum / distNum;
+                      const m = Math.floor(p);
+                      const s = Math.round((p - m) * 60);
+                      paceText = `${m}:${s.toString().padStart(2, "0")} min/mi`;
+                    } else if (cat.id === "biking") {
+                      paceText = `${((distNum / durNum) * 60).toFixed(1)} mph`;
+                    } else if (cat.id === "swimming") {
+                      const p = (durNum / distNum) * 100;
+                      const m = Math.floor(p);
+                      const s = Math.round((p - m) * 60);
+                      paceText = `${m}:${s.toString().padStart(2, "0")} min/100yd`;
+                    }
+                  }
+                  return (
+                    <>
+                      {/* Duration — every category uses this */}
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
+                        <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
+                      </div>
+
+                      {/* Distance — only for categories that support it */}
+                      {cat.distance && (
+                        <div style={{ marginBottom: 12 }}>
+                          <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                            Distance ({cat.distanceUnit})
+                          </label>
+                          <input style={iStyle} type="text" inputMode="decimal" placeholder={cat.id === "swimming" ? "e.g. 1000" : cat.id === "rowing" ? "e.g. 2000" : "e.g. 3.2"} value={woDistance} onChange={e => setWoDistance(e.target.value)} />
+                        </div>
+                      )}
+
+                      {/* Auto-computed pace — read-only display */}
+                      {cat.pace && (
+                        <div style={{ marginBottom: 12, background: "#0D0D0D", borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.greenMid}` }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>
+                            Pace · auto-calculated
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: paceText ? C.gold : C.sub }}>
+                            {paceText || "Enter distance + duration"}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Workout Templates */}
