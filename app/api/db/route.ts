@@ -530,7 +530,7 @@ export async function POST(req: NextRequest) {
 
     // ── Create challenge ───────────────────────────────────────────────────
     if (action === 'create_challenge') {
-      const { userId, groupId, name, description, emoji, metric_label, metric_unit, difficulty, deadline } = payload;
+      const { userId, groupId, name, description, emoji, metric_key, metric_label, metric_unit, difficulty, deadline } = payload;
       if (!userId || !groupId || !name || !metric_label) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
       const { data, error } = await admin.from('challenges').insert({
@@ -539,6 +539,7 @@ export async function POST(req: NextRequest) {
         name,
         description: description || null,
         emoji: emoji || '🏆',
+        metric_key: metric_key || null,   // null = custom manual; set = auto-tracked
         metric_label,
         metric_unit: metric_unit || null,
         difficulty: difficulty || 'Medium',
