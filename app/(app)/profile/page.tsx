@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
+import { groupBadgesIntoFamilies, TIER_STYLES, type GroupedBadge } from "@/lib/badgeFamilies";
+import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
@@ -60,6 +62,18 @@ const DAYS = [
 
 // ── Badge definitions ─────────────────────────────────────────────────────────
 // BADGES imported from @/lib/badges
+
+// ── Rivalry badge catalog (keep in sync with rivals/page.tsx) ─────────────────
+const RIVALRY_BADGE_DISPLAY: Record<string, { emoji: string; label: string }> = {
+  first_blood:  { emoji: "⚔️", label: "First Blood"  },
+  early_bird:   { emoji: "🌅", label: "Early Bird"   },
+  dominant:     { emoji: "😤", label: "Dominant"     },
+  comeback:     { emoji: "🔄", label: "Comeback"     },
+  untouchable:  { emoji: "💀", label: "Untouchable"  },
+};
+function rivalryBadgeEmoji(key: string) { return RIVALRY_BADGE_DISPLAY[key]?.emoji ?? "🏅"; }
+function rivalryBadgeLabel(key: string) { return RIVALRY_BADGE_DISPLAY[key]?.label ?? key; }
+
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 function Lightbox({src,onClose}:{src:string;onClose:()=>void}) {
@@ -1268,6 +1282,13 @@ export default function ProfilePage() {
   const [badgeNote,setBadgeNote] = useState("");
   const [badgeToast,setBadgeToast] = useState<string|null>(null);
   const [showAllBadgesModal,setShowAllBadgesModal] = useState(false);
+  const [badgesTab,setBadgesTab] = useState<"fitness"|"rivals">("fitness");
+  const [rivalryBadges,setRivalryBadges] = useState<RivalryBadgeWithContext[]>([]);
+
+  useEffect(() => {
+    if (!user || !showAllBadgesModal) return;
+    getAllUserRivalryBadges(user.id).then(setRivalryBadges).catch(() => setRivalryBadges([]));
+  }, [user, showAllBadgesModal]);
 
   // 🏆 Tier state — computed from activity logs
   const [userTier, setUserTier] = useState<Tier>("default");
@@ -1633,71 +1654,175 @@ export default function ProfilePage() {
       )}
 
       {/* ── All Badges Modal ── */}
-      {showAllBadgesModal && (
+      {showAllBadgesModal && (() => {
+        // Group fitness badges into families (only shows peak tier per achievement)
+        const grouped: GroupedBadge[] = groupBadgesIntoFamilies(earnedBadges);
+        const fitnessCount = grouped.length;
+        const rivalryCount = rivalryBadges.length;
+
+        return (
         <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:560,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 28px",borderBottom:`2px solid ${C.purpleMid}`}}>
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 28px 16px",borderBottom:`2px solid ${C.purpleMid}`}}>
               <div>
                 <div style={{fontWeight:900,fontSize:20,color:C.text}}>🏆 All Badges</div>
-                <div style={{fontSize:12,color:C.sub,marginTop:2}}>You have earned {earnedBadges.length + completedChallenges.length} badge{earnedBadges.length + completedChallenges.length === 1 ? "" : "s"}</div>
+                <div style={{fontSize:12,color:C.sub,marginTop:2}}>
+                  {badgesTab === "fitness"
+                    ? `${fitnessCount} achievement${fitnessCount === 1 ? "" : "s"} unlocked`
+                    : `${rivalryCount} rival badge${rivalryCount === 1 ? "" : "s"} earned`}
+                </div>
               </div>
               <button onClick={()=>setShowAllBadgesModal(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#2D1F52",color:C.text,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
+
+            {/* Tabs */}
+            <div style={{display:"flex",gap:0,padding:"0 28px",borderBottom:`1px solid ${C.purpleMid}`}}>
+              {([
+                { id: "fitness", label: "💪 Fitness", count: fitnessCount },
+                { id: "rivals",  label: "⚔️ Rivals",  count: rivalryCount },
+              ] as const).map(tab => {
+                const isActive = badgesTab === tab.id;
+                return (
+                  <button key={tab.id} onClick={()=>setBadgesTab(tab.id)}
+                    style={{flex:1,padding:"12px 16px",background:"none",border:"none",
+                      borderBottom:`2px solid ${isActive ? C.purple : "transparent"}`,
+                      color: isActive ? C.text : C.sub, fontWeight: isActive ? 900 : 700,
+                      fontSize: 14, cursor:"pointer",fontFamily:"inherit",
+                      display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                    {tab.label}
+                    <span style={{fontSize:11,padding:"2px 8px",borderRadius:99,
+                      background: isActive ? C.purple : "#2D1F52",
+                      color: isActive ? "#fff" : C.sub, fontWeight: 800}}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Content */}
             <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
-              {earnedBadges.length === 0 && completedChallenges.length === 0 ? (
-                <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
-                  <div style={{fontSize:40,marginBottom:12}}>🏆</div>
-                  <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No badges earned yet</div>
-                  <div style={{fontSize:13}}>Complete fitness milestones to earn badges and unlock achievements</div>
-                </div>
-              ) : (
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
-                  {/* Earned badges grid */}
-                  {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b => (
-                    <div key={b.id} style={{
-                      borderRadius:16,
-                      padding:"16px 10px",
-                      textAlign:"center",
-                      border:"1.5px solid #F5A623",
-                      background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
-                      boxShadow:"0 0 16px rgba(245,166,35,0.4)",
-                      transition:"all 0.2s",
-                    }}>
-                      <div style={{fontSize:32,marginBottom:6}}>{b.emoji}</div>
-                      <div style={{fontWeight:800,fontSize:12,color:"#FFD700",lineHeight:1.3,marginBottom:4}}>{b.label}</div>
-                      <div style={{fontSize:10,color:"#B8860B",lineHeight:1.3}}>{b.desc}</div>
-                    </div>
-                  ))}
-                  {/* Challenge completion badges in grid */}
-                  {completedChallenges.map((cp: any, i: number) => {
-                    const ch = cp.challenges;
-                    if (!ch) return null;
-                    return (
-                      <div key={`challenge-${i}`} style={{
-                        borderRadius:16,
-                        padding:"16px 10px",
-                        textAlign:"center",
-                        border:"1.5px solid #F5A623",
-                        background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
-                        boxShadow:"0 0 16px rgba(245,166,35,0.4)",
-                        transition:"all 0.2s",
-                        display:"flex",
-                        flexDirection:"column",
-                        alignItems:"center",
-                        justifyContent:"center",
-                      }}>
-                        <div style={{fontSize:32,marginBottom:6}}>{ch.emoji || '🏆'}</div>
-                        <div style={{fontWeight:800,fontSize:11,color:"#FFD700",lineHeight:1.3,marginBottom:4}}>{ch.name}</div>
-                        <div style={{fontSize:9,color:"#F5A623",lineHeight:1.3}}>Score: {cp.score}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+              {badgesTab === "fitness" && (
+                fitnessCount === 0 ? (
+                  <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
+                    <div style={{fontSize:40,marginBottom:12}}>🏆</div>
+                    <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No badges earned yet</div>
+                    <div style={{fontSize:13}}>Complete fitness milestones to earn badges and unlock achievements</div>
+                  </div>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
+                    {grouped.map(g => {
+                      const style = TIER_STYLES[g.tier];
+                      return (
+                        <div key={g.familyKey} style={{
+                          borderRadius:16,
+                          padding:"16px 10px",
+                          textAlign:"center",
+                          border:`1.5px solid ${style.border}`,
+                          background: style.gradient,
+                          boxShadow:`0 0 16px ${style.glow}`,
+                          position:"relative",
+                          transition:"all 0.2s",
+                        }}>
+                          {/* Tier progress pill (only show if there are multiple tiers) */}
+                          {g.maxTier > 1 && (
+                            <div style={{position:"absolute",top:8,right:8,
+                              background:"rgba(0,0,0,0.4)",
+                              borderRadius:99,padding:"2px 6px",
+                              fontSize:9,fontWeight:800,color:style.accentColor}}>
+                              {g.earnedCount}/{g.maxTier}
+                            </div>
+                          )}
+                          <div style={{fontSize:32,marginBottom:6}}>{g.peakBadgeEmoji}</div>
+                          <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{g.peakBadgeLabel}</div>
+                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:6}}>{g.peakBadgeDesc}</div>
+                          {/* Tier label */}
+                          <div style={{display:"inline-block",background:"rgba(0,0,0,0.4)",
+                            borderRadius:99,padding:"2px 8px",
+                            fontSize:9,fontWeight:900,color:style.accentColor,letterSpacing:0.5}}>
+                            {style.name}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Challenge completion badges still get their own tiles */}
+                    {completedChallenges.map((cp: any, i: number) => {
+                      const ch = cp.challenges;
+                      if (!ch) return null;
+                      const style = TIER_STYLES[3]; // gold tier for completed challenges
+                      return (
+                        <div key={`challenge-${i}`} style={{
+                          borderRadius:16,
+                          padding:"16px 10px",
+                          textAlign:"center",
+                          border:`1.5px solid ${style.border}`,
+                          background: style.gradient,
+                          boxShadow:`0 0 16px ${style.glow}`,
+                          display:"flex",flexDirection:"column",
+                          alignItems:"center",justifyContent:"center",
+                        }}>
+                          <div style={{fontSize:32,marginBottom:6}}>{ch.emoji || '🏆'}</div>
+                          <div style={{fontWeight:800,fontSize:11,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{ch.name}</div>
+                          <div style={{fontSize:9,color:style.accentColor,lineHeight:1.3}}>Score: {cp.score}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {badgesTab === "rivals" && (
+                rivalryCount === 0 ? (
+                  <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
+                    <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
+                    <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No rival badges yet</div>
+                    <div style={{fontSize:13}}>Badges earned in 1v1 rivalries will show here. One person per badge per rivalry.</div>
+                  </div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {rivalryBadges.map(rb => {
+                      // Rivalry badges use a fixed crimson/purple style (from the rivals page catalog)
+                      return (
+                        <div key={rb.id} style={{
+                          borderRadius:16,
+                          padding:"14px 16px",
+                          border:"1.5px solid #B91C1C",
+                          background:"linear-gradient(135deg,#1A0000,#3B0A0A)",
+                          boxShadow:"0 0 16px rgba(239,68,68,0.3)",
+                          display:"flex",alignItems:"center",gap:14,
+                        }}>
+                          <div style={{
+                            width:48,height:48,borderRadius:12,flexShrink:0,
+                            background:"rgba(239,68,68,0.15)",
+                            border:"1px solid rgba(239,68,68,0.4)",
+                            display:"flex",alignItems:"center",justifyContent:"center",
+                            fontSize:22,
+                          }}>
+                            {rivalryBadgeEmoji(rb.badge_key)}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:900,fontSize:13,color:"#FCA5A5",marginBottom:2}}>
+                              {rivalryBadgeLabel(rb.badge_key)}
+                            </div>
+                            <div style={{fontSize:11,color:"#9CA3AF",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                              vs {rb.opponent_name} · {rb.category}
+                            </div>
+                            <div style={{fontSize:10,color:"#6B7280"}}>
+                              {new Date(rb.earned_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Level Progress Modal */}
       {showLevelModal && (
