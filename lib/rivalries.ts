@@ -369,6 +369,56 @@ export async function getRivalryBadges(rivalryId: string): Promise<RivalryBadge[
   return (data as RivalryBadge[]) || [];
 }
 
+/** All rivalry badges a user has ever earned, across every rivalry they've been in.
+ *  Includes the rivalry context (opponent name, category) for display. */
+export interface RivalryBadgeWithContext extends RivalryBadge {
+  opponent_name: string;
+  category: string;
+  rivalry_ended_at: string | null;
+}
+
+export async function getAllUserRivalryBadges(userId: string): Promise<RivalryBadgeWithContext[]> {
+  // Fetch all badge rows for the user, joining the rivalry for context
+  const { data: badges } = await supabase
+    .from("rivalry_badges")
+    .select("*")
+    .eq("user_id", userId)
+    .order("earned_at", { ascending: false });
+
+  if (!badges || badges.length === 0) return [];
+
+  // Pull the unique rivalry IDs and fetch their metadata in one batch
+  const rivalryIds = [...new Set(badges.map((b) => b.rivalry_id))];
+  const { data: rivalries } = await supabase
+    .from("rivalries")
+    .select("id, user_a_id, user_b_id, category, resolved_at")
+    .in("id", rivalryIds);
+
+  const rivalryMap = new Map((rivalries || []).map((r) => [r.id, r]));
+
+  // Collect all opponent IDs so we can resolve names in one query
+  const opponentIds = [...new Set(
+    (rivalries || []).map((r) => r.user_a_id === userId ? r.user_b_id : r.user_a_id)
+  )];
+  const { data: opponents } = await supabase
+    .from("users")
+    .select("id, full_name")
+    .in("id", opponentIds);
+
+  const opponentMap = new Map((opponents || []).map((u) => [u.id, u.full_name]));
+
+  return badges.map((b) => {
+    const r = rivalryMap.get(b.rivalry_id);
+    const oppId = r ? (r.user_a_id === userId ? r.user_b_id : r.user_a_id) : null;
+    return {
+      ...b,
+      opponent_name: oppId ? (opponentMap.get(oppId) || "Unknown") : "Unknown",
+      category: r?.category || "unknown",
+      rivalry_ended_at: r?.resolved_at || null,
+    } as RivalryBadgeWithContext;
+  });
+}
+
 // ── UTILITIES ───────────────────────────────────────────────────────────────
 
 /** Human-readable time remaining string for an active rivalry. */
