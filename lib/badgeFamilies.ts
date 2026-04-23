@@ -1,16 +1,42 @@
 // ── lib/badgeFamilies.ts ────────────────────────────────────────────────────
-// Groups related badges into "families" so the profile only shows one evolving
-// badge slot per achievement. Example: earning "First Run" + "5 Runs" + "20 Runs"
-// shows up as a single "Runs" badge at tier 3, not three separate squares.
+// Groups earned badges into display slots for the profile.
 //
-// This is a PURE DISPLAY LAYER. The database is untouched — every earned badge
-// row still exists. We just group them at render time.
+// Three rendering styles:
+//
+//  1. PROGRESSION (tiered)
+//     Stackable achievements you can keep doing — runs, lifts, cold plunges.
+//     Rendered with bronze/silver/gold/platinum/diamond tiers based on how
+//     many of the family's milestones you've cleared. Tier is capped at the
+//     family's size, so a 1-tier family never shows DIAMOND.
+//
+//  2. CREDENTIAL (prestige)
+//     Things about you that can only happen once in your life — veteran,
+//     personal trainer certification, body transformation. Rendered with a
+//     holographic "rare card" look, no tier pill.
+//
+//  3. YEARLY (year-stamped)
+//     Events that recur every year — the birthday workout. Each year is its
+//     own row (enabled by the badges.year column). Rendered with the year
+//     stamped on the badge itself. Holidays will join this category in a
+//     future update with per-holiday theming.
+//
+// This is a DISPLAY LAYER. The database keeps every earned badge row.
 
 import { BADGES } from "./badges";
 
-export type BadgeTier = 1 | 2 | 3 | 4 | 5;
+// ── TYPE DEFINITIONS ────────────────────────────────────────────────────────
 
-// Visual style per tier — higher tiers get more dramatic treatment.
+export type BadgeTier = 1 | 2 | 3 | 4 | 5;
+export type BadgeRenderType = "progression" | "credential" | "yearly";
+
+// An earned badge row as it comes back from the DB. We need year here so
+// yearly badges can stamp the year on their display.
+export interface EarnedBadge {
+  badge_id: string;
+  year: number | null;
+}
+
+// Visual style per progression tier. Higher tiers = more dramatic.
 export const TIER_STYLES: Record<BadgeTier, {
   name: string;
   gradient: string;
@@ -61,13 +87,28 @@ export const TIER_STYLES: Record<BadgeTier, {
   },
 };
 
-// ── FAMILY DEFINITIONS ──────────────────────────────────────────────────────
-// Maps each earned badge_id to a family. Badges in the same family share a
-// single display slot; the slot's tier = how many of that family's badges
-// the user has earned.
-//
-// Tier numbers (1-5) are assigned by the order of badge_ids in each array.
-// First entry = tier 1, last entry = highest tier.
+// ── CREDENTIAL & YEARLY BADGE CLASSIFICATION ────────────────────────────────
+
+// Credentials are things about *you* that can only happen once in your life.
+// These never tier up — they're one-and-done. Rendered with holographic look.
+const CREDENTIAL_BADGE_IDS = new Set<string>([
+  "veteran",
+  "coach",
+  "personal-trainer",
+  "transformation",
+  "comeback-story",
+]);
+
+// Yearly badges recur each year — you can earn the "same" badge multiple
+// years in a row. DB stores each year as its own row. The year column on
+// badges table distinguishes them.
+const YEARLY_BADGE_IDS = new Set<string>([
+  "birthday-workout",
+]);
+
+// ── PROGRESSION FAMILIES ────────────────────────────────────────────────────
+// Maps related badges into evolving tiers. Order matters — the first entry
+// is tier 1, last entry is the peak tier of the family.
 
 export const BADGE_FAMILIES: { key: string; name: string; category: string; members: string[] }[] = [
   // ── STRENGTH ────────────────────────────────────────────
@@ -94,7 +135,7 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "streaks",             name: "Streak",           category: "consistency", members: ["7day-streak", "30day-streak", "90day-streak", "365day"] },
   { key: "no-days-off",         name: "No Days Off",      category: "consistency", members: ["no-days-off", "weekend-warrior"] },
   { key: "early-bird-general",  name: "Early Bird",       category: "consistency", members: ["early-bird"] },
-  { key: "comeback",            name: "Comeback",         category: "consistency", members: ["comeback"] },
+  { key: "comeback-streak",     name: "Comeback",         category: "consistency", members: ["comeback"] },
 
   // ── WELLNESS ────────────────────────────────────────────
   { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-10", "yoga-lover", "yoga-queen"] },
@@ -116,7 +157,7 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "barcode-scanner",     name: "Scanner",          category: "nutrition", members: ["barcode-10", "barcode-100"] },
   { key: "fasting",             name: "Fasting",          category: "nutrition", members: ["fasting"] },
 
-  // ── CHALLENGES ──────────────────────────────────────────
+  // ── CHALLENGES & EVENTS ─────────────────────────────────
   { key: "challenges-programs", name: "Programs",         category: "challenges", members: ["iron-will", "75-hard"] },
   { key: "challenges-events",   name: "Events",           category: "challenges", members: ["murph", "spartan", "tough-mudder", "crossfit-open"] },
   { key: "pushup",              name: "Push-Ups",         category: "challenges", members: ["pushup-100"] },
@@ -130,12 +171,9 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "groups",              name: "Groups",           category: "social",    members: ["group-member", "group-leader"] },
   { key: "likes",               name: "Likes",            category: "social",    members: ["first-like", "motivator"] },
 
-  // ── SPECIAL (all standalone, 1-tier families) ───────────
-  { key: "veteran",             name: "Veteran",          category: "special",   members: ["veteran"] },
+  // ── SPECIAL (progression) ───────────────────────────────
+  // Credentials are handled separately below, not here.
   { key: "gym-rat",             name: "Gym Rat",          category: "special",   members: ["first-gym"] },
-  { key: "coaching",            name: "Coaching",         category: "special",   members: ["coach", "personal-trainer"] },
-  { key: "transformation",      name: "Transformation",   category: "special",   members: ["transformation", "comeback-story"] },
-  { key: "birthday",            name: "Birthday",         category: "special",   members: ["birthday-workout"] },
   { key: "new-year",            name: "New Year",         category: "special",   members: ["new-years"] },
   { key: "holiday",             name: "Holiday",          category: "special",   members: ["holiday-hustle"] },
   { key: "workout-partner",     name: "Workout Partner",  category: "special",   members: ["collab"] },
@@ -143,7 +181,7 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "competitor",          name: "Competitor",       category: "special",   members: ["sport-competitor"] },
 ];
 
-// Build a reverse lookup: badge_id -> family
+// Reverse lookup for quick membership checks
 const BADGE_TO_FAMILY: Map<string, string> = new Map();
 for (const family of BADGE_FAMILIES) {
   for (const memberId of family.members) {
@@ -151,92 +189,154 @@ for (const family of BADGE_FAMILIES) {
   }
 }
 
-// ── GROUPING LOGIC ──────────────────────────────────────────────────────────
+// ── DISPLAY OUTPUT TYPES ────────────────────────────────────────────────────
 
-export interface GroupedBadge {
-  familyKey: string;
-  familyName: string;
+export interface DisplayBadge {
+  key: string;                    // unique key for React rendering
+  renderType: BadgeRenderType;
+  emoji: string;
+  label: string;
+  desc: string;
   category: string;
-  peakBadgeId: string;        // the highest tier member they've earned
-  peakBadgeEmoji: string;
-  peakBadgeLabel: string;
-  peakBadgeDesc: string;
-  tier: BadgeTier;            // 1-5
-  maxTier: number;            // total possible tiers in this family
-  earnedCount: number;        // how many of the family members they've earned
-  orphan: boolean;            // true if this badge isn't in any family (safety fallback)
+
+  // Progression-only
+  tier?: BadgeTier;
+  earnedCount?: number;
+  maxTier?: number;
+
+  // Yearly-only
+  year?: number;
 }
 
-/** Group a list of earned badge IDs into family slots.
- *  Returns one GroupedBadge per family with at least one earned member.
- *  Orphan badges (not in any family definition) get their own 1-tier slot. */
-export function groupBadgesIntoFamilies(earnedIds: string[]): GroupedBadge[] {
-  const earnedSet = new Set(earnedIds);
-  const result: GroupedBadge[] = [];
+// ── GROUPING LOGIC ──────────────────────────────────────────────────────────
 
-  // Process defined families
+/** Turn an earned-badges list (from DB) into display-ready slots.
+ *  Accepts either string[] (badge_id only, for backwards compat) or
+ *  EarnedBadge[] (with year). */
+export function groupBadgesIntoFamilies(
+  earned: string[] | EarnedBadge[]
+): DisplayBadge[] {
+  // Normalize input: turn legacy string[] into EarnedBadge[]
+  const earnedBadges: EarnedBadge[] = (earned as any[]).map((e) =>
+    typeof e === "string" ? { badge_id: e, year: null } : e
+  );
+  const earnedIds = new Set(earnedBadges.map((e) => e.badge_id));
+
+  const result: DisplayBadge[] = [];
+  const consumedIds = new Set<string>(); // track what we've already placed
+
+  // 1. Yearly badges — each (badge_id, year) combo is its own slot
+  for (const eb of earnedBadges) {
+    if (!YEARLY_BADGE_IDS.has(eb.badge_id)) continue;
+    const badge = BADGES.find((b) => b.id === eb.badge_id);
+    if (!badge) continue;
+
+    // Use the earned year, or fall back to "Undated" if missing
+    const year = eb.year;
+    const yearLabel = year ? `${year}` : "Unknown Year";
+
+    result.push({
+      key: `${eb.badge_id}-${year ?? "null"}`,
+      renderType: "yearly",
+      emoji: badge.emoji,
+      label: `${yearLabel} ${badge.label}`,
+      desc: badge.desc,
+      category: badge.category,
+      year: year ?? undefined,
+    });
+    consumedIds.add(eb.badge_id);
+  }
+
+  // 2. Credential badges — one slot each, no tier
+  for (const credId of CREDENTIAL_BADGE_IDS) {
+    if (!earnedIds.has(credId)) continue;
+    const badge = BADGES.find((b) => b.id === credId);
+    if (!badge) continue;
+
+    result.push({
+      key: credId,
+      renderType: "credential",
+      emoji: badge.emoji,
+      label: badge.label,
+      desc: badge.desc,
+      category: badge.category,
+    });
+    consumedIds.add(credId);
+  }
+
+  // 3. Progression families — group related milestones into one slot
   for (const family of BADGE_FAMILIES) {
-    // Find which members are earned, preserving the family's tier order
-    const earnedMembers = family.members.filter((id) => earnedSet.has(id));
+    const earnedMembers = family.members.filter((id) => earnedIds.has(id));
     if (earnedMembers.length === 0) continue;
 
-    // Peak tier = the last earned member in the family's defined order.
-    // This handles out-of-order earning (e.g. user earned "marathon" before "5k").
+    // Peak = furthest-along member in family order (handles out-of-order earning)
     const maxDefinedIndex = earnedMembers.reduce((max, id) => {
       const idx = family.members.indexOf(id);
       return idx > max ? idx : max;
     }, -1);
     const peakId = family.members[maxDefinedIndex];
 
-    // Normalize tier to 1-5 range based on position within the family
-    const tierRatio = (maxDefinedIndex + 1) / family.members.length;
-    const tier: BadgeTier = Math.max(1, Math.min(5, Math.ceil(tierRatio * 5))) as BadgeTier;
+    // IMPORTANT: tier is capped at family size — a 1-member family never
+    // shows DIAMOND. A 3-member family caps at GOLD. Only families with
+    // 5+ tiers can reach DIAMOND.
+    const familySize = family.members.length;
+    const maxTierForFamily = Math.min(5, familySize) as BadgeTier;
+    const positionInFamily = maxDefinedIndex + 1;
+    const tier = Math.max(1, Math.min(maxTierForFamily, positionInFamily)) as BadgeTier;
 
     const peakBadge = BADGES.find((b) => b.id === peakId);
     if (!peakBadge) continue;
 
     result.push({
-      familyKey: family.key,
-      familyName: family.name,
+      key: family.key,
+      renderType: "progression",
+      emoji: peakBadge.emoji,
+      label: peakBadge.label,
+      desc: peakBadge.desc,
       category: family.category,
-      peakBadgeId: peakBadge.id,
-      peakBadgeEmoji: peakBadge.emoji,
-      peakBadgeLabel: peakBadge.label,
-      peakBadgeDesc: peakBadge.desc,
       tier,
-      maxTier: family.members.length,
       earnedCount: earnedMembers.length,
-      orphan: false,
+      maxTier: familySize,
+    });
+
+    // Mark all family members as consumed (even unearned ones — they can't orphan)
+    for (const memberId of family.members) consumedIds.add(memberId);
+  }
+
+  // 4. Orphans — earned badges that aren't in any family and aren't credentials/yearly
+  for (const eb of earnedBadges) {
+    if (consumedIds.has(eb.badge_id)) continue;
+    const badge = BADGES.find((b) => b.id === eb.badge_id);
+    if (!badge) continue;
+
+    // Treat orphans as single-tier progression badges
+    result.push({
+      key: `orphan-${eb.badge_id}`,
+      renderType: "progression",
+      emoji: badge.emoji,
+      label: badge.label,
+      desc: badge.desc,
+      category: badge.category,
+      tier: 1,
+      earnedCount: 1,
+      maxTier: 1,
     });
   }
 
-  // Handle orphans: earned badges not mapped to any family.
-  // This protects against new badges being added without updating BADGE_FAMILIES.
-  for (const earnedId of earnedIds) {
-    if (!BADGE_TO_FAMILY.has(earnedId)) {
-      const badge = BADGES.find((b) => b.id === earnedId);
-      if (!badge) continue;
-      result.push({
-        familyKey: earnedId, // use badge id as family key for orphans
-        familyName: badge.label,
-        category: badge.category,
-        peakBadgeId: badge.id,
-        peakBadgeEmoji: badge.emoji,
-        peakBadgeLabel: badge.label,
-        peakBadgeDesc: badge.desc,
-        tier: 1,
-        maxTier: 1,
-        earnedCount: 1,
-        orphan: true,
-      });
-    }
-  }
-
-  // Sort: higher tier first, then by category, then by name
+  // Sort: credentials first (most prestigious), then yearly (newest first), then progression by tier
   result.sort((a, b) => {
-    if (b.tier !== a.tier) return b.tier - a.tier;
-    if (a.category !== b.category) return a.category.localeCompare(b.category);
-    return a.familyName.localeCompare(b.familyName);
+    const typeOrder = { credential: 0, yearly: 1, progression: 2 };
+    if (typeOrder[a.renderType] !== typeOrder[b.renderType]) {
+      return typeOrder[a.renderType] - typeOrder[b.renderType];
+    }
+    if (a.renderType === "yearly" && b.renderType === "yearly") {
+      return (b.year ?? 0) - (a.year ?? 0);
+    }
+    if (a.renderType === "progression" && b.renderType === "progression") {
+      if ((b.tier ?? 0) !== (a.tier ?? 0)) return (b.tier ?? 0) - (a.tier ?? 0);
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+    }
+    return a.label.localeCompare(b.label);
   });
 
   return result;
