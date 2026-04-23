@@ -21,6 +21,9 @@ export const BADGES = [
   { id:"lifts-25",       emoji:"🔩", label:"Iron Regular",        desc:"Logged 25 lifting sessions",              category:"strength" },
   { id:"lifts-50",       emoji:"⚡", label:"Iron Veteran",        desc:"Logged 50 lifting sessions",              category:"strength" },
   { id:"lifts-100",      emoji:"👑", label:"Iron Legend",         desc:"Logged 100 lifting sessions",             category:"strength" },
+  { id:"lifts-200",      emoji:"💎", label:"Iron Dynasty",        desc:"Logged 200 lifting sessions",             category:"strength" },
+  { id:"lifts-500",      emoji:"🗿", label:"Iron Immortal",       desc:"Logged 500 lifting sessions",             category:"strength" },
+  { id:"lifts-1000",     emoji:"🌋", label:"Iron God",            desc:"Logged 1,000 lifting sessions",           category:"strength" },
 
   // ── CARDIO ────────────────────────────────────────────────────────────────
   { id:"marathon",       emoji:"🏅", label:"Marathon Runner",     desc:"Completed a 26.2 mile run",               category:"cardio" },
@@ -40,6 +43,9 @@ export const BADGES = [
   { id:"runs-20",        emoji:"🌟", label:"20 Runs",             desc:"Logged 20 runs",                          category:"cardio" },
   { id:"runs-50",        emoji:"🔥", label:"50 Runs",             desc:"Logged 50 runs",                          category:"cardio" },
   { id:"runs-100",       emoji:"🏆", label:"100 Run Club",        desc:"Logged 100 runs",                         category:"cardio" },
+  { id:"runs-200",       emoji:"💎", label:"200 Run Society",     desc:"Logged 200 runs",                         category:"cardio" },
+  { id:"runs-500",       emoji:"🗿", label:"500 Run Immortal",    desc:"Logged 500 runs",                         category:"cardio" },
+  { id:"runs-1000",      emoji:"🌋", label:"1,000 Run Legend",    desc:"Logged 1,000 runs",                       category:"cardio" },
 
   // ── CONSISTENCY ───────────────────────────────────────────────────────────
   { id:"7day-streak",    emoji:"🔥", label:"7 Day Streak",        desc:"Logged activity 7 days in a row",         category:"consistency" },
@@ -56,7 +62,9 @@ export const BADGES = [
   { id:"workouts-10",    emoji:"📈", label:"10 Workouts",         desc:"Logged 10 total workouts",                category:"consistency" },
   { id:"workouts-25",    emoji:"⭐", label:"25 Workouts",         desc:"Logged 25 total workouts",                category:"consistency" },
   { id:"centurion-half", emoji:"🥈", label:"50 Strong",           desc:"Logged 50 total workouts",                category:"consistency" },
+  { id:"centurion-2x",   emoji:"💎", label:"200 Titan",           desc:"Logged 200 total workouts",               category:"consistency" },
   { id:"500-workouts",   emoji:"👑", label:"500 Legend",          desc:"Logged 500 total workouts",               category:"consistency" },
+  { id:"1000-workouts",  emoji:"🌋", label:"1,000 Immortal",      desc:"Logged 1,000 total workouts",             category:"consistency" },
 
   // ── WELLNESS ──────────────────────────────────────────────────────────────
   { id:"yoga-lover",     emoji:"🧘", label:"Yoga Lover",          desc:"Logged 30 yoga sessions",                 category:"wellness" },
