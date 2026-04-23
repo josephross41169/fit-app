@@ -1,36 +1,11 @@
 -- ============================================================
 -- FIT APP — Backfill missing badges based on existing activity
--- Run this ONCE in Supabase SQL Editor after deploying the
--- workout_category migration.
---
--- Scans every user's activity_logs and inserts any missing
--- badge rows. Existing badges are not touched (upsert with
--- ON CONFLICT DO NOTHING).
+-- v2 — Fixed ON CONFLICT target to use the (user_id, badge_id, year)
+-- unique constraint added by migration-badge-year.sql. Year stays
+-- null for all of these since none of them are yearly badges.
 -- ============================================================
 
 -- ── Total workouts (1 / 10 / 25 / 50 / 100 / 200 / 500 / 1000) ──
-insert into public.badges (user_id, badge_id)
-select user_id, badge_id from (
-  select a.user_id,
-    case
-      when count(*) >= 1000 then '1000-workouts'
-      when count(*) >= 500  then '500-workouts'
-      when count(*) >= 200  then 'centurion-2x'
-      when count(*) >= 100  then 'centurion'
-      when count(*) >= 50   then 'centurion-half'
-      when count(*) >= 25   then 'workouts-25'
-      when count(*) >= 10   then 'workouts-10'
-      when count(*) >= 1    then 'first-workout'
-    end as badge_id
-  from public.activity_logs a
-  where a.log_type = 'workout'
-  group by a.user_id
-) t where t.badge_id is not null
-on conflict (user_id, badge_id) do nothing;
-
--- Also insert EVERY lower-tier badge the user qualifies for
--- (the query above only picks the highest, but all lower ones
---  should also be granted). Loop via generate_series over thresholds.
 do $$
 declare
   tiers int[] := array[1,10,25,50,100,200,500,1000];
@@ -43,7 +18,7 @@ begin
     where log_type = 'workout'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -60,7 +35,7 @@ begin
     where log_type = 'workout' and workout_category = 'running'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -77,7 +52,7 @@ begin
     where log_type = 'workout' and workout_category = 'lifting'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -94,7 +69,7 @@ begin
     where log_type = 'workout' and workout_category = 'yoga'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -111,7 +86,7 @@ begin
     where log_type = 'workout' and workout_category = 'walking'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -129,7 +104,7 @@ begin
       and (wellness_type ilike 'cold%' or wellness_type ilike 'ice%' or wellness_type ilike '%plunge%')
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -146,7 +121,7 @@ begin
     where log_type = 'wellness' and wellness_type ilike 'sauna'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -163,7 +138,7 @@ begin
     where log_type = 'wellness' and wellness_type ilike 'meditation'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -180,7 +155,7 @@ begin
     where log_type = 'wellness' and wellness_type ilike 'breathwork'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
@@ -188,12 +163,12 @@ end $$;
 insert into public.badges (user_id, badge_id)
 select user_id, 'wellness-10' from public.activity_logs
 where log_type = 'wellness' group by user_id having count(*) >= 10
-on conflict (user_id, badge_id) do nothing;
+on conflict (user_id, badge_id, year) do nothing;
 
 insert into public.badges (user_id, badge_id)
 select user_id, 'wellness-50' from public.activity_logs
 where log_type = 'wellness' group by user_id having count(*) >= 50
-on conflict (user_id, badge_id) do nothing;
+on conflict (user_id, badge_id, year) do nothing;
 
 -- ── Nutrition ──────────────────────────────────────────────
 do $$
@@ -208,18 +183,18 @@ begin
     where log_type = 'nutrition'
     group by user_id
     having count(*) >= tiers[i]
-    on conflict (user_id, badge_id) do nothing;
+    on conflict (user_id, badge_id, year) do nothing;
   end loop;
 end $$;
 
 -- ── Posts ──────────────────────────────────────────────────
 insert into public.badges (user_id, badge_id)
 select user_id, 'first-post' from public.posts group by user_id having count(*) >= 1
-on conflict (user_id, badge_id) do nothing;
+on conflict (user_id, badge_id, year) do nothing;
 
 insert into public.badges (user_id, badge_id)
 select user_id, '10-posts' from public.posts group by user_id having count(*) >= 10
-on conflict (user_id, badge_id) do nothing;
+on conflict (user_id, badge_id, year) do nothing;
 
 -- ── Verify with: ───────────────────────────────────────────
 -- select badge_id, count(*) from badges group by badge_id order by count desc;
