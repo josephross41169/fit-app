@@ -1540,15 +1540,22 @@ export default function ProfilePage() {
             flex-direction: column !important;
             grid-template-columns: unset !important;
             padding: 0 !important;
-            gap: 16px !important;
+            gap: 12px !important;
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
           .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
-          .profile-avatar-col { order: 2 !important; margin-top: -48px !important; z-index: 2 !important; position: relative !important; }
+          /* Avatar now lifts a bit less so it overlaps the banner more naturally
+             instead of floating in empty space between banner and info card. */
+          .profile-avatar-col { order: 2 !important; margin-top: -56px !important; z-index: 2 !important; position: relative !important; padding: 0 16px !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
-          .profile-banner-label { border-radius: 0 !important; height: 320px !important; }
-          .profile-outer { padding: 0 0 80px !important; max-width: 100% !important; margin: 0 !important; }
+          /* Shorter banner on mobile — 320px was eating half the viewport */
+          .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
+          .profile-outer { padding: 0 0 100px !important; max-width: 100% !important; margin: 0 !important; }
           .profile-stats-bio { padding: 0 16px !important; }
+          /* Stats row — keep the two big numbers on one horizontal line, tighter */
+          .profile-stats-row { gap: 8px !important; margin-top: 12px !important; }
+          /* Remove the weird pill wrapping around the avatar row on mobile */
+          .profile-header-wrap .profile-avatar-col > div:first-child { background: transparent !important; }
         }
         @media (min-width: 768px) and (max-width: 1100px) {
           .profile-layout {
