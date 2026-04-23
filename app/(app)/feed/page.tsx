@@ -19,6 +19,183 @@ const C = {
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// ── Emoji Reaction Config ─────────────────────────────────────────────────────
+const REACTION_EMOJIS = [
+  { key: "heart",  emoji: "❤️",  label: "Heart"  },
+  { key: "fire",   emoji: "🔥",  label: "Fire"   },
+  { key: "flex",   emoji: "💪",  label: "Strong" },
+  { key: "clap",   emoji: "👏",  label: "Clap"   },
+  { key: "rocket", emoji: "🚀",  label: "LFG"    },
+] as const;
+type ReactionKey = "heart" | "fire" | "flex" | "clap" | "rocket";
+type ReactionCounts = Record<ReactionKey, number>;
+type MyReactions = Set<ReactionKey>;
+
+// ── Reaction Bar Component ────────────────────────────────────────────────────
+function ReactionBar({
+  postId,
+  currentUserId,
+  initialCounts,
+  initialMine,
+}: {
+  postId: string | number;
+  currentUserId?: string;
+  initialCounts: ReactionCounts;
+  initialMine: MyReactions;
+}) {
+  const [counts, setCounts] = useState<ReactionCounts>(initialCounts);
+  const [mine, setMine] = useState<MyReactions>(new Set(initialMine));
+  const [loading, setLoading] = useState<ReactionKey | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const isDbPost = typeof postId === 'string' && postId.includes('-');
+
+  // Load reaction counts from Supabase on mount (for real db posts)
+  useEffect(() => {
+    if (!isDbPost) return;
+    async function loadCounts() {
+      const { data } = await supabase
+        .from('reactions')
+        .select('emoji, user_id')
+        .eq('post_id', postId as string);
+      if (!data) return;
+      const c: ReactionCounts = { heart: 0, fire: 0, flex: 0, clap: 0, rocket: 0 };
+      const m: MyReactions = new Set();
+      for (const row of data) {
+        if (row.emoji in c) c[row.emoji as ReactionKey]++;
+        if (row.user_id === currentUserId) m.add(row.emoji as ReactionKey);
+      }
+      setCounts(c);
+      setMine(m);
+    }
+    loadCounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]);
+
+  const totalReactions = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  async function toggleReaction(key: ReactionKey) {
+    if (!currentUserId || loading) return;
+    setLoading(key);
+    const had = mine.has(key);
+    // Optimistic update
+    const newMine = new Set(mine);
+    const newCounts = { ...counts };
+    if (had) {
+      newMine.delete(key);
+      newCounts[key] = Math.max(0, newCounts[key] - 1);
+    } else {
+      newMine.add(key);
+      newCounts[key]++;
+    }
+    setMine(newMine);
+    setCounts(newCounts);
+    setShowPicker(false);
+
+    if (isDbPost) {
+      if (had) {
+        await supabase.from('reactions').delete()
+          .eq('post_id', postId as string)
+          .eq('user_id', currentUserId)
+          .eq('emoji', key);
+      } else {
+        await supabase.from('reactions').upsert({
+          post_id: postId as string,
+          user_id: currentUserId,
+          emoji: key,
+        }, { onConflict: 'post_id,user_id,emoji' });
+      }
+    }
+    setLoading(null);
+  }
+
+  // Which emojis have any reactions?
+  const activeEmojis = REACTION_EMOJIS.filter(r => counts[r.key] > 0 || mine.has(r.key));
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative" }}>
+      {/* Active reaction pills */}
+      {activeEmojis.map(r => (
+        <button
+          key={r.key}
+          onClick={() => toggleReaction(r.key)}
+          disabled={!!loading}
+          title={r.label}
+          style={{
+            display: "flex", alignItems: "center", gap: 4,
+            padding: "4px 10px", borderRadius: 99,
+            border: mine.has(r.key) ? "1.5px solid #7C3AED" : "1.5px solid #2D1F52",
+            background: mine.has(r.key) ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.04)",
+            cursor: loading ? "default" : "pointer",
+            transition: "all 0.15s",
+            opacity: loading === r.key ? 0.6 : 1,
+          }}
+        >
+          <span style={{ fontSize: 14, lineHeight: 1 }}>{r.emoji}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: mine.has(r.key) ? "#A78BFA" : "#9CA3AF" }}>
+            {counts[r.key]}
+          </span>
+        </button>
+      ))}
+
+      {/* Add reaction button */}
+      <div style={{ position: "relative" }}>
+        <button
+          onClick={() => setShowPicker(p => !p)}
+          title="Add reaction"
+          style={{
+            display: "flex", alignItems: "center", gap: 4,
+            padding: "4px 10px", borderRadius: 99,
+            border: "1.5px solid #2D1F52",
+            background: showPicker ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.04)",
+            cursor: "pointer",
+            color: "#9CA3AF", fontSize: 14,
+          }}
+        >
+          {totalReactions === 0 ? "😄 React" : "＋"}
+        </button>
+
+        {/* Picker dropdown */}
+        {showPicker && (
+          <div style={{
+            position: "absolute", bottom: "calc(100% + 8px)", left: 0,
+            background: "#1A1228", border: "1.5px solid #2D1F52",
+            borderRadius: 16, padding: "8px 10px",
+            display: "flex", gap: 6,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            zIndex: 100,
+            animation: "fadeIn 0.1s ease",
+          }}>
+            {REACTION_EMOJIS.map(r => (
+              <button
+                key={r.key}
+                onClick={() => toggleReaction(r.key)}
+                title={r.label}
+                style={{
+                  background: mine.has(r.key) ? "rgba(124,58,237,0.25)" : "transparent",
+                  border: mine.has(r.key) ? "1.5px solid #7C3AED" : "1.5px solid transparent",
+                  borderRadius: 10, padding: "6px 8px",
+                  cursor: "pointer", fontSize: 20,
+                  transition: "transform 0.1s",
+                  transform: "scale(1)",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.3)")}
+                onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+              >
+                {r.emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Total if >0 */}
+      {totalReactions > 0 && activeEmojis.length === 0 && (
+        <span style={{ fontSize: 12, color: "#9CA3AF" }}>{totalReactions} reactions</span>
+      )}
+    </div>
+  );
+}
+
 type Comment = { id: number; user: string; avatar: string; text: string; time: string; };
 type Exercise = { name: string; sets: number; reps: number; weight: string; };
 type Meal = { key: string; emoji: string; name: string; cal: number; };
@@ -637,25 +814,30 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
         )}
 
         {/* Actions */}
-        <div style={{ padding:"12px 18px",display:"flex",alignItems:"center",gap:20,borderTop:"1px solid #2D1F52",marginTop:12 }}>
-          <button onClick={toggleLike} disabled={likeLoading} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:likeLoading?"default":"pointer",padding:0,opacity:likeLoading?0.7:1 }}>
-            <svg viewBox="0 0 24 24" fill={post.liked?"#FF6B6B":"none"} stroke={post.liked?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:24,height:24,transition:"all 0.15s",transform:post.liked?"scale(1.15)":"scale(1)" }}>
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            <span style={{ fontSize:14,fontWeight:700,color:post.liked?"#FF6B6B":C.sub }}>{post.likes}</span>
-          </button>
-          <button onClick={() => document.getElementById(`ci-${post.id}`)?.focus()} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:22,height:22 }}>
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span style={{ fontSize:14,fontWeight:700,color:C.sub }}>{post.comments.length}</span>
-          </button>
-          <button style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:22,height:22 }}>
-              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-          </button>
+        <div style={{ padding:"12px 18px 8px",borderTop:"1px solid #2D1F52",marginTop:12 }}>
+          {/* Reaction bar */}
+          <ReactionBar
+            postId={post.id}
+            currentUserId={currentUser?.id}
+            initialCounts={{ heart: post.likes, fire: 0, flex: 0, clap: 0, rocket: 0 }}
+            initialMine={post.liked ? new Set<ReactionKey>(["heart"]) : new Set<ReactionKey>()}
+          />
+          {/* Comment + Share row */}
+          <div style={{ display:"flex",alignItems:"center",gap:16,marginTop:10 }}>
+            <button onClick={() => document.getElementById(`ci-${post.id}`)?.focus()} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>{post.comments.length > 0 ? post.comments.length : ""} {post.comments.length === 1 ? "comment" : post.comments.length > 1 ? "comments" : "Comment"}</span>
+            </button>
+            <button style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>Share</span>
+            </button>
+          </div>
         </div>
 
         {/* Comments */}
