@@ -1745,37 +1745,194 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Task gates for levels 3-4 */}
-            {(tierInfo.tier === "active" || tierInfo.tier === "grinder") && (
-              <div>
-                <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12}}>
-                  ✅ Tasks to reach Level {tierInfo.tier === "active" ? 3 : 4}
-                </div>
-                <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
-                  {(tierInfo.tier === "active" ? [
-                    {icon:"🥊",label:"Win 2 Rivalries"},
-                    {icon:"👥",label:"Join a Group"},
-                    {icon:"➕",label:"Follow 5 People"},
-                    {icon:"🥗",label:"Log Nutrition 7 Days in a Row"},
-                    {icon:"💪",label:"Log 4 Workouts in One Week"},
-                  ] : [
-                    {icon:"🥊",label:"Win 5 Rivalries"},
-                    {icon:"🧘",label:"Log a Yoga Session"},
-                    {icon:"📸",label:"Post 3 Photos to Feed"},
-                    {icon:"🏆",label:"Top 3 in a Group Challenge × 3"},
-                    {icon:"🧠",label:"Log 3 Meditation Sessions"},
-                    {icon:"🥗",label:"Log Nutrition 14 Days in a Row"},
-                    {icon:"💪",label:"Log 8 Workouts in 14 Days"},
-                  ]).map(({icon,label})=>(
-                    <div key={label} style={{display:"flex",alignItems:"center",gap:10,
-                      padding:"10px 14px",background:"#1A1228",borderRadius:10,border:"1px solid #2D1F52"}}>
-                      <span style={{fontSize:16,flexShrink:0}}>{icon}</span>
-                      <span style={{fontSize:13,color:"#F0F0F0"}}>{label}</span>
+            {/* Task gates for levels 3-4 — with live progress */}
+            {(tierInfo.tier === "active" || tierInfo.tier === "grinder") && (()=>{
+              // ── Compute live task progress from realDays ──────────────────
+              const now = new Date();
+
+              // Nutrition streak — consecutive days with nutrition logged (no reset on 15th+ day)
+              const nutDates = [...new Set(
+                realDays.filter((d:any)=>d.nutrition).map((d:any)=>{
+                  const dt = new Date(d._date||0);
+                  return `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+                })
+              )].sort();
+              let nutStreak = 0;
+              if (nutDates.length > 0) {
+                // Count consecutive days backward from most recent
+                let checkDate = new Date(realDays.filter((d:any)=>d.nutrition)
+                  .reduce((latest:any, d:any) => (d._date||0) > (latest._date||0) ? d : latest, realDays[0])?._date||0);
+                for (let i = 0; i < 60; i++) {
+                  const key = `${checkDate.getFullYear()}-${checkDate.getMonth()}-${checkDate.getDate()}`;
+                  if (nutDates.includes(key)) { nutStreak++; checkDate.setDate(checkDate.getDate()-1); }
+                  else break;
+                }
+              }
+
+              // Workouts in last 7 days
+              const weekAgo = new Date(now); weekAgo.setDate(now.getDate()-7);
+              const workoutsThisWeek = realDays.filter((d:any)=>d.workout && new Date(d._date||0)>=weekAgo).length;
+
+              // Workouts in last 14 days
+              const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate()-14);
+              const workoutsLast14 = realDays.filter((d:any)=>d.workout && new Date(d._date||0)>=twoWeeksAgo).length;
+
+              // Wellness by type
+              const allWellness = realDays.flatMap((d:any)=>d.wellness?.entries||[]);
+              const yogaSessions = allWellness.filter((e:any)=>e.type?.toLowerCase().includes('yoga')).length;
+              const meditationSessions = allWellness.filter((e:any)=>
+                e.type?.toLowerCase().includes('meditat')||e.type?.toLowerCase().includes('mindful')).length;
+
+              // Following count
+              const followingCount = user?.profile?.following_count ?? 0;
+
+              // Feed posts with photos
+              const photoPosts = realDays.filter((d:any)=>d.photo_url).length;
+
+              // Group membership (we know if they're a member from groups joined)
+              const inGroup = (user?.profile as any)?.group_count > 0;
+
+              // Rival wins (from profile if tracked)
+              const rivalWins = (user?.profile as any)?.rival_wins || 0;
+
+              const isLvl2 = tierInfo.tier === "active";
+
+              const tasks = isLvl2 ? [
+                {
+                  icon:"🥊", label:"Win 2 Rivalries",
+                  current: rivalWins, goal: 2,
+                  done: rivalWins >= 2,
+                  detail: rivalWins >= 2 ? "Complete!" : `${rivalWins}/2 wins`,
+                },
+                {
+                  icon:"👥", label:"Join a Group",
+                  current: inGroup ? 1 : 0, goal: 1,
+                  done: inGroup,
+                  detail: inGroup ? "Complete!" : "Not yet joined",
+                },
+                {
+                  icon:"➕", label:"Follow 5 People",
+                  current: Math.min(followingCount, 5), goal: 5,
+                  done: followingCount >= 5,
+                  detail: followingCount >= 5 ? "Complete!" : `${followingCount}/5 following`,
+                },
+                {
+                  icon:"🥗", label:"Log Nutrition 7 Days in a Row",
+                  current: Math.min(nutStreak, 7), goal: 7,
+                  done: nutStreak >= 7,
+                  detail: nutStreak >= 7 ? "Complete! ✓ Locked in" : nutStreak === 0 ? "Start today!" : `${nutStreak}/7 days — ${7-nutStreak} more to go`,
+                  streak: true,
+                },
+                {
+                  icon:"💪", label:"Log 4 Workouts This Week",
+                  current: Math.min(workoutsThisWeek, 4), goal: 4,
+                  done: workoutsThisWeek >= 4,
+                  detail: workoutsThisWeek >= 4 ? "Complete!" : `${workoutsThisWeek}/4 this week — ${4-workoutsThisWeek} more needed`,
+                },
+              ] : [
+                {
+                  icon:"🥊", label:"Win 5 Rivalries",
+                  current: rivalWins, goal: 5,
+                  done: rivalWins >= 5,
+                  detail: rivalWins >= 5 ? "Complete!" : `${rivalWins}/5 wins`,
+                },
+                {
+                  icon:"🧘", label:"Log a Yoga Session",
+                  current: Math.min(yogaSessions, 1), goal: 1,
+                  done: yogaSessions >= 1,
+                  detail: yogaSessions >= 1 ? "Complete!" : "Log a yoga session in Wellness",
+                },
+                {
+                  icon:"📸", label:"Post 3 Photos to Feed",
+                  current: Math.min(photoPosts, 3), goal: 3,
+                  done: photoPosts >= 3,
+                  detail: photoPosts >= 3 ? "Complete!" : `${photoPosts}/3 photos posted`,
+                },
+                {
+                  icon:"🧠", label:"Log 3 Meditation Sessions",
+                  current: Math.min(meditationSessions, 3), goal: 3,
+                  done: meditationSessions >= 3,
+                  detail: meditationSessions >= 3 ? "Complete!" : `${meditationSessions}/3 — ${3-meditationSessions} more to go`,
+                },
+                {
+                  icon:"🥗", label:"Log Nutrition 14 Days in a Row",
+                  current: Math.min(nutStreak, 14), goal: 14,
+                  done: nutStreak >= 14,
+                  detail: nutStreak >= 14 ? "Complete! ✓ Locked in" : nutStreak === 0 ? "Start today!" : `${nutStreak}/14 days — ${14-nutStreak} more to go`,
+                  streak: true,
+                },
+                {
+                  icon:"💪", label:"Log 8 Workouts in 14 Days",
+                  current: Math.min(workoutsLast14, 8), goal: 8,
+                  done: workoutsLast14 >= 8,
+                  detail: workoutsLast14 >= 8 ? "Complete!" : `${workoutsLast14}/8 workouts in last 14 days`,
+                },
+              ];
+
+              const completedCount = tasks.filter(t=>t.done).length;
+
+              return (
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0"}}>
+                      ✅ Tasks to reach Level {isLvl2 ? 3 : 4}
                     </div>
-                  ))}
+                    <span style={{fontSize:12,fontWeight:700,
+                      color:completedCount===tasks.length?"#4ADE80":"#6B7280"}}>
+                      {completedCount}/{tasks.length} done
+                    </span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
+                    {tasks.map((t)=>(
+                      <div key={t.label} style={{
+                        padding:"12px 14px",background:t.done?"rgba(74,222,128,0.08)":"#1A1228",
+                        borderRadius:12,border:`1px solid ${t.done?"#4ADE80":"#2D1F52"}`,
+                      }}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:t.done?0:6}}>
+                          <span style={{fontSize:18,flexShrink:0}}>{t.done?"✅":t.icon}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:700,
+                              color:t.done?"#4ADE80":"#F0F0F0",
+                              textDecoration:t.done?"line-through":"none",
+                              opacity:t.done?0.8:1}}>
+                              {t.label}
+                            </div>
+                            <div style={{fontSize:11,color:t.done?"#4ADE80":"#9CA3AF",marginTop:2}}>
+                              {t.detail}
+                            </div>
+                          </div>
+                          {!t.done && (
+                            <span style={{fontSize:11,fontWeight:800,color:"#7C3AED",
+                              flexShrink:0,whiteSpace:"nowrap" as const}}>
+                              {t.current}/{t.goal}
+                            </span>
+                          )}
+                        </div>
+                        {/* Progress bar for incomplete tasks */}
+                        {!t.done && t.goal > 1 && (
+                          <div style={{height:4,borderRadius:99,background:"rgba(255,255,255,0.06)",
+                            overflow:"hidden",marginLeft:28}}>
+                            <div style={{height:"100%",borderRadius:99,
+                              background: (t as any).streak ? "#F5A623" : "#7C3AED",
+                              width:`${Math.round((t.current/t.goal)*100)}%`,
+                              transition:"width 0.5s"}}/>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {completedCount === tasks.length && (
+                    <div style={{marginTop:14,padding:"12px",background:"rgba(74,222,128,0.1)",
+                      border:"1px solid #4ADE80",borderRadius:12,textAlign:"center" as const}}>
+                      <div style={{fontWeight:800,color:"#4ADE80",fontSize:14}}>🎉 All tasks complete!</div>
+                      <div style={{fontSize:12,color:"#6B7280",marginTop:4}}>
+                        Your level will update automatically.
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {tierInfo.tier === "untouchable" && (
               <div style={{textAlign:"center" as const,padding:"20px 0"}}>
