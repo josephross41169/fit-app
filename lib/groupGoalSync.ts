@@ -195,56 +195,84 @@ async function computeContribution(userId: string, challenge: ActiveChallenge): 
  *
  *  Best-effort — errors are logged but not thrown so they can't block saves. */
 export async function syncGroupChallengeProgressFor(userId: string): Promise<void> {
+  // Verbose logging so issues are easy to diagnose from the browser console.
+  console.log("[groupGoalSync] START for user:", userId);
   try {
     // 1. Find the groups this user belongs to
-    const { data: memberships } = await supabase
+    const { data: memberships, error: mErr } = await supabase
       .from("group_members")
       .select("group_id")
       .eq("user_id", userId);
 
+    if (mErr) {
+      console.error("[groupGoalSync] group_members query error:", mErr);
+      return;
+    }
+
     const groupIds = (memberships ?? []).map((m: any) => m.group_id).filter(Boolean);
+    console.log("[groupGoalSync] user is in", groupIds.length, "groups:", groupIds);
     if (groupIds.length === 0) return;
 
     // 2. Find every active group goal in those groups
     const nowIso = new Date().toISOString();
-    const { data: goals } = await supabase
+    const { data: goals, error: gErr } = await supabase
       .from("group_challenges")
-      .select("id, creator_group_id, metric, status, start_date, end_date, created_at, is_group_goal")
+      .select("id, creator_group_id, metric, status, start_date, end_date, created_at, is_group_goal, title")
       .in("creator_group_id", groupIds)
       .eq("status", "active");
 
+    if (gErr) {
+      console.error("[groupGoalSync] group_challenges query error:", gErr);
+      return;
+    }
+
+    console.log("[groupGoalSync] found", goals?.length ?? 0, "active challenges");
     if (!goals?.length) return;
 
     // 3. For each goal, upsert the user's contribution
     for (const ch of goals as any[]) {
+      console.log("[groupGoalSync] → challenge:", ch.title, "| metric:", ch.metric, "| is_group_goal:", ch.is_group_goal);
+
       // Skip non-goal challenges (wars, member challenges) — they use manual logging
-      if (!ch.is_group_goal) continue;
-      if (ch.end_date && ch.end_date < nowIso) continue; // expired
+      if (!ch.is_group_goal) {
+        console.log("[groupGoalSync]   skipped (not a group goal)");
+        continue;
+      }
+      if (ch.end_date && ch.end_date < nowIso) {
+        console.log("[groupGoalSync]   skipped (expired)");
+        continue;
+      }
 
       const contribution = await computeContribution(userId, ch);
+      console.log("[groupGoalSync]   computed contribution:", contribution);
 
       // Check if enrollment row already exists. Using a read-then-write pattern
       // instead of a raw upsert because group_challenge_members may not have
       // a unique constraint on (challenge_id, user_id) — avoid depending on it.
-      const { data: existing } = await supabase
+      const { data: existing, error: exErr } = await supabase
         .from("group_challenge_members")
         .select("challenge_id")
         .eq("challenge_id", ch.id)
         .eq("user_id", userId)
         .maybeSingle();
 
+      if (exErr) {
+        console.error("[groupGoalSync]   existing-row check failed:", exErr);
+        continue;
+      }
+
       if (existing) {
         // Already enrolled → just update their contribution
-        await supabase
+        const { error: updErr } = await supabase
           .from("group_challenge_members")
           .update({ contribution })
           .eq("challenge_id", ch.id)
           .eq("user_id", userId);
+        if (updErr) console.error("[groupGoalSync]   UPDATE failed:", updErr);
+        else console.log("[groupGoalSync]   UPDATE ok, contribution =", contribution);
       } else {
-        // Not enrolled yet → create the row. Auto-enrolls users in goals that
-        // were created before they joined, or goals where the creator forgot
-        // to enroll everyone.
-        await supabase
+        // Not enrolled yet → create the row.
+        const { error: insErr } = await supabase
           .from("group_challenge_members")
           .insert({
             challenge_id: ch.id,
@@ -252,9 +280,12 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
             group_id: ch.creator_group_id,
             contribution,
           });
+        if (insErr) console.error("[groupGoalSync]   INSERT failed:", insErr);
+        else console.log("[groupGoalSync]   INSERT ok, contribution =", contribution);
       }
     }
+    console.log("[groupGoalSync] DONE");
   } catch (err) {
-    console.error("[groupGoalSync] failed:", err);
+    console.error("[groupGoalSync] unexpected error:", err);
   }
 }
