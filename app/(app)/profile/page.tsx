@@ -1412,12 +1412,18 @@ export default function ProfilePage() {
     try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
 
     // Permanently delete the file from Supabase storage
+    console.log("Deleting highlight URL:", urlToRemove);
     try {
       const match = urlToRemove.match(/avatars\/(.+?)(\?|$)/);
+      console.log("Storage path match:", match?.[1]);
       if (match) {
-        await supabase.storage.from('avatars').remove([decodeURIComponent(match[1])]);
+        const path = decodeURIComponent(match[1]);
+        const { data, error } = await supabase.storage.from('avatars').remove([path]);
+        console.log("Storage delete result:", data, error);
+      } else {
+        console.warn("Could not extract storage path from URL:", urlToRemove);
       }
-    } catch {}
+    } catch(e) { console.error("Storage delete error:", e); }
   }
 
   async function claimBadge() {
@@ -1456,7 +1462,7 @@ export default function ProfilePage() {
           .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
           .profile-avatar-col { order: 2 !important; margin-top: -48px !important; z-index: 2 !important; position: relative !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
-          .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
+          .profile-banner-label { border-radius: 0 !important; height: 320px !important; }
           .profile-outer { padding: 0 0 80px !important; max-width: 100% !important; margin: 0 !important; }
           .profile-stats-bio { padding: 0 16px !important; }
         }
@@ -2093,7 +2099,7 @@ export default function ProfilePage() {
           <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:140,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
+              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
