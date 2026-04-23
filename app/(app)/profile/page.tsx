@@ -1310,19 +1310,20 @@ export default function ProfilePage() {
           sauna, breathwork, walks, stretching, totalWellness, nutritionLogs,
           postCount, followerCount,
         ] = await Promise.all([
-          // Running — no standard category yet; counts 0 until workout types are standardized
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').ilike('workout_type', '%run%'),
-          // Lifting — loose match on common lifting keywords; replace with standard category later
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').or('workout_type.ilike.%lift%,workout_type.ilike.%deadlift%,workout_type.ilike.%squat%,workout_type.ilike.%bench%,workout_type.ilike.%chest%,workout_type.ilike.%arm%,workout_type.ilike.%leg%,workout_type.ilike.%back%,workout_type.ilike.%shoulder%'),
+          // Running — now uses the standardized workout_category column
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
+          // Lifting — standardized category
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
           // Total workouts — any log_type=workout row
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout'),
-          // Wellness — Title Case values matching actual DB content
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'yoga'),
+          // Wellness categories — still read from log_type='wellness' with Title Case strings
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'yoga'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'meditation'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.cold plunge,wellness_type.ilike.ice bath'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'sauna'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'breathwork'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'walking'),
+          // Walking is now a workout category (moved out of wellness)
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'walking'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'stretching'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'nutrition'),
