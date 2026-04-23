@@ -79,6 +79,27 @@ function getCompetitionLabel(cat: RivalCategory, id: string) {
   return COMPETITIONS[cat].find((c) => c.id === id)?.label ?? id;
 }
 
+// Draft picks are stored in localStorage so users don't lose progress when they
+// navigate away mid-selection. Cleared when they actually enter the queue.
+const DRAFT_KEY = "rivals:draft";
+type Draft = {
+  step: MatchStep;
+  category: RivalCategory | null;
+  competition: string | null;
+};
+function saveDraft(d: Draft) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {}
+}
+function loadDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) as Draft : null;
+  } catch { return null; }
+}
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch {}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CATEGORY SELECT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -636,6 +657,7 @@ export default function RivalsPage() {
         ]);
         setMyRecord(mine);
         setTheirRecord(theirs);
+        clearDraft();
       } else if (queueEntry) {
         // User is waiting in the queue — restore their picks so the UI is consistent
         setActiveRivalry(null);
@@ -644,10 +666,19 @@ export default function RivalsPage() {
         setRivalCompetition(queueEntry.competition_type);
         setRivalTier(queueEntry.tier);
         setMatchStep("matching");
+        clearDraft();
       } else {
+        // Not in queue — check for a saved in-progress draft
         setActiveRivalry(null);
         setQueuedAlready(false);
-        setMatchStep("category");
+        const draft = loadDraft();
+        if (draft && (draft.step === "competition" || draft.step === "tier")) {
+          setRivalCategory(draft.category);
+          setRivalCompetition(draft.competition);
+          setMatchStep(draft.step);
+        } else {
+          setMatchStep("category");
+        }
       }
     } catch (e) {
       console.error("Failed to load rivals state:", e);
@@ -664,6 +695,7 @@ export default function RivalsPage() {
     setRivalTier(t);
     setMatchStep("matching");
     setError(null);
+    clearDraft(); // they're in the queue now, no need for a draft
     try {
       const matched = await joinQueue({ category: rivalCategory, competition_type: rivalCompetition, tier: t });
       if (matched) {
@@ -683,6 +715,7 @@ export default function RivalsPage() {
     setRivalCompetition(null);
     setRivalTier(null);
     setQueuedAlready(false);
+    clearDraft();
   }
 
   const isActive = matchStep === "active" && activeRivalry && user;
@@ -743,18 +776,34 @@ export default function RivalsPage() {
         )}
 
         {matchStep === "category" && (
-          <CategorySelect onSelect={(c) => { setRivalCategory(c); setMatchStep("competition"); }} />
+          <CategorySelect onSelect={(c) => {
+            setRivalCategory(c);
+            setMatchStep("competition");
+            saveDraft({ step: "competition", category: c, competition: null });
+          }} />
         )}
 
         {matchStep === "competition" && rivalCategory && (
           <CompetitionSelect category={rivalCategory}
-            onBack={() => setMatchStep("category")}
-            onSelect={(id) => { setRivalCompetition(id); setMatchStep("tier"); }} />
+            onBack={() => {
+              setMatchStep("category");
+              setRivalCategory(null);
+              clearDraft();
+            }}
+            onSelect={(id) => {
+              setRivalCompetition(id);
+              setMatchStep("tier");
+              saveDraft({ step: "tier", category: rivalCategory, competition: id });
+            }} />
         )}
 
         {matchStep === "tier" && rivalCategory && rivalCompetition && (
           <TierSelect category={rivalCategory} competition={rivalCompetition}
-            onBack={() => setMatchStep("competition")}
+            onBack={() => {
+              setMatchStep("competition");
+              setRivalCompetition(null);
+              saveDraft({ step: "competition", category: rivalCategory, competition: null });
+            }}
             onSelect={handleSelectTier} />
         )}
 
