@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
-import { groupBadgesIntoFamilies, TIER_STYLES, type GroupedBadge } from "@/lib/badgeFamilies";
+import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
@@ -1268,13 +1268,15 @@ export default function ProfilePage() {
   }, [user?.id]);
 
   // ── Badge state ──
-  const [earnedBadges,setEarnedBadges] = useState<string[]>([]);
+  // Badges are fetched with the year column so yearly badges (like
+  // "2026 Birthday Workout") can display the correct year.
+  const [earnedBadges,setEarnedBadges] = useState<EarnedBadge[]>([]);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('badges').select('badge_id').eq('user_id', user.id)
+    supabase.from('badges').select('badge_id, year').eq('user_id', user.id)
       .then(({ data }) => {
-        if (data) setEarnedBadges(data.map((b: any) => b.badge_id));
+        if (data) setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null })));
       });
   }, [user]);
   const [showBadgeModal,setShowBadgeModal] = useState(false);
@@ -1621,7 +1623,7 @@ export default function ProfilePage() {
             <div style={{fontSize:13,color:C.sub,marginBottom:20}}>Honor system — we trust you. Earn it for real 💪</div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
               {manualBadges.map(b => {
-                const earned = earnedBadges.includes(b.id);
+                const earned = earnedBadges.some(eb => eb.badge_id === b.id);
                 const sel = selectedBadge === b.id;
                 return (
                   <button key={b.id} onClick={()=>setSelectedBadge(b.id)}
@@ -1655,14 +1657,27 @@ export default function ProfilePage() {
 
       {/* ── All Badges Modal ── */}
       {showAllBadgesModal && (() => {
-        // Group fitness badges into families (only shows peak tier per achievement)
-        const grouped: GroupedBadge[] = groupBadgesIntoFamilies(earnedBadges);
+        // Group fitness badges — three render types: progression, credential, yearly.
+        const grouped: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges);
         const fitnessCount = grouped.length;
         const rivalryCount = rivalryBadges.length;
 
         return (
         <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:560,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
+            {/* Holographic shimmer + birthday sparkle keyframes, only need to be defined once */}
+            <style>{`
+              @keyframes holoShimmer {
+                0%   { background-position: 0% 50%; }
+                50%  { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+              @keyframes birthdayPulse {
+                0%,100% { box-shadow: 0 0 20px rgba(255,182,193,0.5), 0 0 40px rgba(135,206,235,0.3); }
+                50%     { box-shadow: 0 0 30px rgba(255,182,193,0.8), 0 0 60px rgba(135,206,235,0.5); }
+              }
+            `}</style>
+
             {/* Header */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 28px 16px",borderBottom:`2px solid ${C.purpleMid}`}}>
               <div>
@@ -1704,7 +1719,7 @@ export default function ProfilePage() {
             {/* Content */}
             <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
               {badgesTab === "fitness" && (
-                fitnessCount === 0 ? (
+                fitnessCount === 0 && completedChallenges.length === 0 ? (
                   <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
                     <div style={{fontSize:40,marginBottom:12}}>🏆</div>
                     <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No badges earned yet</div>
@@ -1713,9 +1728,85 @@ export default function ProfilePage() {
                 ) : (
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
                     {grouped.map(g => {
-                      const style = TIER_STYLES[g.tier];
+                      // ── CREDENTIAL: holographic prestige look ──
+                      if (g.renderType === "credential") {
+                        return (
+                          <div key={g.key} style={{
+                            borderRadius:16,
+                            padding:"16px 10px",
+                            textAlign:"center",
+                            position:"relative",
+                            overflow:"hidden",
+                            border:"2px solid transparent",
+                            background: `
+                              linear-gradient(#0A0A14, #0A0A14) padding-box,
+                              linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
+                            `,
+                            boxShadow:"0 0 24px rgba(120, 115, 245, 0.4)",
+                          }}>
+                            {/* Holographic overlay */}
+                            <div style={{
+                              position:"absolute",inset:0,pointerEvents:"none",
+                              background:"linear-gradient(125deg, rgba(255,110,196,0.08), rgba(120,115,245,0.12), rgba(74,222,128,0.08), rgba(250,204,21,0.1))",
+                              backgroundSize:"200% 200%",
+                              animation:"holoShimmer 5s ease infinite",
+                            }} />
+                            <div style={{position:"relative"}}>
+                              <div style={{fontSize:34,marginBottom:6}}>{g.emoji}</div>
+                              <div style={{fontWeight:900,fontSize:13,color:"#F0F0F0",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
+                              <div style={{fontSize:10,color:"#A78BFA",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+                              <div style={{display:"inline-block",
+                                background:"linear-gradient(90deg, #ff6ec4, #7873f5, #4ade80, #facc15)",
+                                backgroundSize:"200% 200%",
+                                animation:"holoShimmer 5s ease infinite",
+                                borderRadius:99,padding:"2px 10px",
+                                fontSize:9,fontWeight:900,color:"#0A0A14",letterSpacing:0.8}}>
+                                CREDENTIAL
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // ── YEARLY: year-stamped birthday/etc badges ──
+                      if (g.renderType === "yearly") {
+                        return (
+                          <div key={g.key} style={{
+                            borderRadius:16,
+                            padding:"16px 10px",
+                            textAlign:"center",
+                            position:"relative",
+                            overflow:"hidden",
+                            border:"2px solid #F472B6",
+                            background:"linear-gradient(135deg, #4C1D4D, #2B1550, #183B4E)",
+                            animation:"birthdayPulse 3s ease-in-out infinite",
+                          }}>
+                            {/* Big year stamp */}
+                            {g.year && (
+                              <div style={{position:"absolute",top:6,right:8,
+                                fontSize:11,fontWeight:900,
+                                color:"#FFD1E6",letterSpacing:1,
+                                textShadow:"0 0 8px rgba(244,114,182,0.6)"}}>
+                                {g.year}
+                              </div>
+                            )}
+                            <div style={{fontSize:34,marginBottom:6}}>{g.emoji}</div>
+                            <div style={{fontWeight:900,fontSize:12,color:"#FFE5F1",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
+                            <div style={{fontSize:10,color:"#F9A8D4",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+                            <div style={{display:"inline-block",
+                              background:"rgba(244,114,182,0.25)",
+                              borderRadius:99,padding:"2px 10px",
+                              fontSize:9,fontWeight:900,color:"#FFD1E6",letterSpacing:0.8}}>
+                              🎂 YEARLY
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // ── PROGRESSION: tiered bronze/silver/gold/platinum/diamond ──
+                      const style = TIER_STYLES[g.tier ?? 1];
                       return (
-                        <div key={g.familyKey} style={{
+                        <div key={g.key} style={{
                           borderRadius:16,
                           padding:"16px 10px",
                           textAlign:"center",
@@ -1725,8 +1816,8 @@ export default function ProfilePage() {
                           position:"relative",
                           transition:"all 0.2s",
                         }}>
-                          {/* Tier progress pill (only show if there are multiple tiers) */}
-                          {g.maxTier > 1 && (
+                          {/* Tier progress pill (only if family has >1 tier) */}
+                          {(g.maxTier ?? 1) > 1 && (
                             <div style={{position:"absolute",top:8,right:8,
                               background:"rgba(0,0,0,0.4)",
                               borderRadius:99,padding:"2px 6px",
@@ -1734,10 +1825,9 @@ export default function ProfilePage() {
                               {g.earnedCount}/{g.maxTier}
                             </div>
                           )}
-                          <div style={{fontSize:32,marginBottom:6}}>{g.peakBadgeEmoji}</div>
-                          <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{g.peakBadgeLabel}</div>
-                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:6}}>{g.peakBadgeDesc}</div>
-                          {/* Tier label */}
+                          <div style={{fontSize:32,marginBottom:6}}>{g.emoji}</div>
+                          <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{g.label}</div>
+                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:6}}>{g.desc}</div>
                           <div style={{display:"inline-block",background:"rgba(0,0,0,0.4)",
                             borderRadius:99,padding:"2px 8px",
                             fontSize:9,fontWeight:900,color:style.accentColor,letterSpacing:0.5}}>
@@ -1746,11 +1836,11 @@ export default function ProfilePage() {
                         </div>
                       );
                     })}
-                    {/* Challenge completion badges still get their own tiles */}
+                    {/* Challenge completion badges still get their own gold tiles */}
                     {completedChallenges.map((cp: any, i: number) => {
                       const ch = cp.challenges;
                       if (!ch) return null;
-                      const style = TIER_STYLES[3]; // gold tier for completed challenges
+                      const style = TIER_STYLES[3];
                       return (
                         <div key={`challenge-${i}`} style={{
                           borderRadius:16,
@@ -2402,7 +2492,7 @@ export default function ProfilePage() {
                       day={day as any}
                       workoutLogId={(day as any)._workoutLogId}
                       nutritionLogIds={(day as any)._nutritionLogIds}
-                      earnedBadges={earnedBadges}
+                      earnedBadges={earnedBadges.map(b => b.badge_id)}
                       onDelete={isReal ? async () => {
                         const wid = (day as any)._workoutLogId;
                         const nids: string[] = (day as any)._nutritionLogIds || [];
@@ -2474,7 +2564,7 @@ export default function ProfilePage() {
                 <>
                   {/* Preview grid - show only first 4-6 badges */}
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
-                    {BADGES.filter(b=>earnedBadges.includes(b.id)).slice(0,6).map(b => (
+                    {BADGES.filter(b=>earnedBadges.some(eb=>eb.badge_id===b.id)).slice(0,6).map(b => (
                       <div key={b.id} style={{
                         borderRadius:14,
                         padding:"12px 6px",
