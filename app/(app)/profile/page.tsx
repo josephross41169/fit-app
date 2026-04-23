@@ -1295,6 +1295,11 @@ export default function ProfilePage() {
 
   // Fetch current counts for each badge family so we can show progress like
   // "14 / 20 runs" on badges. One parallel batch when the modal opens.
+  //
+  // NOTE: wellness_type values use Title Case ("Cold Plunge", "Sauna") matching
+  // what the logging UI actually writes. workout_type is currently free-text
+  // (e.g. "Chest", "Deadlift day") so running/lifting counts return 0 until we
+  // add proper category dropdowns to the workout logger (Fix 2).
   useEffect(() => {
     if (!user || !showAllBadgesModal) return;
     (async () => {
@@ -1305,16 +1310,20 @@ export default function ProfilePage() {
           sauna, breathwork, walks, stretching, totalWellness, nutritionLogs,
           postCount, followerCount,
         ] = await Promise.all([
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_type', 'running'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_type', 'lifting'),
+          // Running — no standard category yet; counts 0 until workout types are standardized
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').ilike('workout_type', '%run%'),
+          // Lifting — loose match on common lifting keywords; replace with standard category later
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').or('workout_type.ilike.%lift%,workout_type.ilike.%deadlift%,workout_type.ilike.%squat%,workout_type.ilike.%bench%,workout_type.ilike.%chest%,workout_type.ilike.%arm%,workout_type.ilike.%leg%,workout_type.ilike.%back%,workout_type.ilike.%shoulder%'),
+          // Total workouts — any log_type=workout row
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'yoga'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'meditation'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').in('wellness_type', ['cold-plunge', 'ice-bath']),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'sauna'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'breathwork'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'walking'),
-          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'stretching'),
+          // Wellness — Title Case values matching actual DB content
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'yoga'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'meditation'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.cold plunge,wellness_type.ilike.ice bath'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'sauna'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'breathwork'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'walking'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'stretching'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'nutrition'),
           supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', uid),
@@ -1335,8 +1344,6 @@ export default function ProfilePage() {
           nutritionLogs: nutritionLogs.count ?? 0,
           postCount: postCount.count ?? 0,
           followerCount: followerCount.count ?? 0,
-          // currentStreak isn't a direct count — skipped for now, would need
-          // separate day-bucket query. Streaks badge will show tier-only progress.
         });
       } catch (e) {
         console.error('Failed to fetch badge counters:', e);
