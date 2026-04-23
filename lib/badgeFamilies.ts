@@ -109,10 +109,27 @@ const YEARLY_BADGE_IDS = new Set<string>([
 // ── PROGRESSION FAMILIES ────────────────────────────────────────────────────
 // Maps related badges into evolving tiers. Order matters — the first entry
 // is tier 1, last entry is the peak tier of the family.
+//
+// `thresholds` parallels `members`: thresholds[i] is the number required to
+// earn members[i]. When provided, the UI can show "14 / 20 runs" style
+// progress text instead of just "2/5 tiers earned".
+//
+// `counterSource` tells the profile page which SQL-backed counter to use
+// to compute the user's current total. Matches the keys returned by
+// `fetchBadgeCounters()` (in the profile page).
 
-export const BADGE_FAMILIES: { key: string; name: string; category: string; members: string[] }[] = [
+export interface BadgeFamily {
+  key: string;
+  name: string;
+  category: string;
+  members: string[];
+  thresholds?: number[];
+  counterSource?: string; // key into the counters map
+}
+
+export const BADGE_FAMILIES: BadgeFamily[] = [
   // ── STRENGTH ────────────────────────────────────────────
-  { key: "lifting-progression", name: "Lifter",           category: "strength",  members: ["first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100"] },
+  { key: "lifting-progression", name: "Lifter",           category: "strength",  members: ["first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100"], thresholds: [1, 10, 25, 50, 100], counterSource: "liftSessions" },
   { key: "bench-progression",   name: "Bench Press",      category: "strength",  members: ["bench-200", "heavy-lifter"] },
   { key: "squat-progression",   name: "Squat",            category: "strength",  members: ["squat-300"] },
   { key: "deadlift-progression",name: "Deadlift",         category: "strength",  members: ["deadlift-400", "iron-maiden"] },
@@ -122,7 +139,7 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "powerlifting",        name: "Powerlifter",      category: "strength",  members: ["powerlifter", "1k-club"] },
 
   // ── CARDIO / RUNNING ─────────────────────────────────────
-  { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100"] },
+  { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100"], thresholds: [1, 5, 20, 50, 100], counterSource: "runs" },
   { key: "run-distance",        name: "Distance Runner",  category: "cardio",    members: ["5k", "10k", "half-marathon", "marathon", "ultra"] },
   { key: "speed",               name: "Speed",            category: "cardio",    members: ["6min-mile"] },
   { key: "biking",              name: "Cyclist",          category: "cardio",    members: ["century-ride"] },
@@ -131,25 +148,25 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "multi-sport",         name: "Multi-Sport",      category: "cardio",    members: ["triathlon", "ironman"] },
 
   // ── CONSISTENCY ─────────────────────────────────────────
-  { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "500-workouts"] },
-  { key: "streaks",             name: "Streak",           category: "consistency", members: ["7day-streak", "30day-streak", "90day-streak", "365day"] },
+  { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "500-workouts"], thresholds: [1, 10, 25, 50, 100, 500], counterSource: "totalWorkouts" },
+  { key: "streaks",             name: "Streak",           category: "consistency", members: ["7day-streak", "30day-streak", "90day-streak", "365day"], thresholds: [7, 30, 90, 365], counterSource: "currentStreak" },
   { key: "no-days-off",         name: "No Days Off",      category: "consistency", members: ["no-days-off", "weekend-warrior"] },
   { key: "early-bird-general",  name: "Early Bird",       category: "consistency", members: ["early-bird"] },
   { key: "comeback-streak",     name: "Comeback",         category: "consistency", members: ["comeback"] },
 
   // ── WELLNESS ────────────────────────────────────────────
-  { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-10", "yoga-lover", "yoga-queen"] },
-  { key: "meditation",          name: "Meditation",       category: "wellness",  members: ["first-meditation", "meditation-10", "meditation-master"] },
-  { key: "cold-plunge",         name: "Cold Plunge",      category: "wellness",  members: ["first-cold-plunge", "ice-bath", "cold-plunge-20"] },
-  { key: "sauna",               name: "Sauna",            category: "wellness",  members: ["first-sauna"] },
-  { key: "breathwork",          name: "Breathwork",       category: "wellness",  members: ["first-breathwork"] },
-  { key: "walking",             name: "Walking",          category: "wellness",  members: ["first-walk"] },
-  { key: "stretching",          name: "Stretching",       category: "wellness",  members: ["first-stretch", "stretch-it-out"] },
-  { key: "wellness-general",    name: "Wellness",         category: "wellness",  members: ["wellness-50"] },
+  { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-10", "yoga-lover", "yoga-queen"], thresholds: [1, 10, 30, 100], counterSource: "yogaSessions" },
+  { key: "meditation",          name: "Meditation",       category: "wellness",  members: ["first-meditation", "meditation-10", "meditation-master"], thresholds: [1, 10, 30], counterSource: "meditationSessions" },
+  { key: "cold-plunge",         name: "Cold Plunge",      category: "wellness",  members: ["first-cold-plunge", "ice-bath", "cold-plunge-20"], thresholds: [1, 5, 20], counterSource: "coldPlunges" },
+  { key: "sauna",               name: "Sauna",            category: "wellness",  members: ["first-sauna"], thresholds: [1], counterSource: "saunaSessions" },
+  { key: "breathwork",          name: "Breathwork",       category: "wellness",  members: ["first-breathwork"], thresholds: [1], counterSource: "breathworkSessions" },
+  { key: "walking",             name: "Walking",          category: "wellness",  members: ["first-walk"], thresholds: [1], counterSource: "walks" },
+  { key: "stretching",          name: "Stretching",       category: "wellness",  members: ["first-stretch", "stretch-it-out"], thresholds: [1, 20], counterSource: "stretchingSessions" },
+  { key: "wellness-general",    name: "Wellness",         category: "wellness",  members: ["wellness-50"], thresholds: [50], counterSource: "totalWellness" },
   { key: "recovery",            name: "Recovery",         category: "wellness",  members: ["sleep-champ", "hydration-hero"] },
 
   // ── NUTRITION ───────────────────────────────────────────
-  { key: "nutrition-logging",   name: "Nutrition Logs",   category: "nutrition", members: ["first-nutrition-log", "nutrition-week", "nutrition-pro", "nutrition-100"] },
+  { key: "nutrition-logging",   name: "Nutrition Logs",   category: "nutrition", members: ["first-nutrition-log", "nutrition-week", "nutrition-pro", "nutrition-100"], thresholds: [1, 7, 14, 100], counterSource: "nutritionLogs" },
   { key: "nutrition-goals",     name: "Nutrition Goals",  category: "nutrition", members: ["calorie-goals", "protein-streak", "macro-master"] },
   { key: "meal-prep",           name: "Meal Prep",        category: "nutrition", members: ["meal-prep"] },
   { key: "plant-based",         name: "Plant-Based",      category: "nutrition", members: ["plant-week"] },
@@ -166,8 +183,8 @@ export const BADGE_FAMILIES: { key: string; name: string; category: string; memb
   { key: "pullup",              name: "Pull-Ups",         category: "challenges", members: ["pullup-20"] },
 
   // ── SOCIAL ──────────────────────────────────────────────
-  { key: "posts",               name: "Posts",            category: "social",    members: ["first-post", "10-posts"] },
-  { key: "followers",           name: "Followers",        category: "social",    members: ["first-follower", "100-followers"] },
+  { key: "posts",               name: "Posts",            category: "social",    members: ["first-post", "10-posts"], thresholds: [1, 10], counterSource: "postCount" },
+  { key: "followers",           name: "Followers",        category: "social",    members: ["first-follower", "100-followers"], thresholds: [1, 100], counterSource: "followerCount" },
   { key: "groups",              name: "Groups",           category: "social",    members: ["group-member", "group-leader"] },
   { key: "likes",               name: "Likes",            category: "social",    members: ["first-like", "motivator"] },
 
@@ -191,6 +208,10 @@ for (const family of BADGE_FAMILIES) {
 
 // ── DISPLAY OUTPUT TYPES ────────────────────────────────────────────────────
 
+// Map of counter source keys to current user counts. Profile page fills this.
+// Keys match `counterSource` values on BadgeFamily entries.
+export type BadgeCounters = Record<string, number>;
+
 export interface DisplayBadge {
   key: string;                    // unique key for React rendering
   renderType: BadgeRenderType;
@@ -204,17 +225,44 @@ export interface DisplayBadge {
   earnedCount?: number;
   maxTier?: number;
 
+  // Progression progress — only set when the family has thresholds + a counter
+  currentValue?: number;     // current user count (e.g. 14 runs)
+  currentThreshold?: number; // threshold for the tier they're at (e.g. 5 for runs-5)
+  nextThreshold?: number;    // threshold for the next tier (e.g. 20 for runs-20)
+  isMaxed?: boolean;         // true if they've hit the top tier
+  progressLabel?: string;    // e.g. "runs", "sessions", "workouts"
+
   // Yearly-only
   year?: number;
 }
+
+// What label to show as the progress unit. Falls back to "earned".
+const PROGRESS_LABEL_BY_COUNTER: Record<string, string> = {
+  runs: "runs",
+  liftSessions: "sessions",
+  totalWorkouts: "workouts",
+  currentStreak: "day streak",
+  yogaSessions: "sessions",
+  meditationSessions: "sessions",
+  coldPlunges: "plunges",
+  saunaSessions: "sessions",
+  breathworkSessions: "sessions",
+  walks: "walks",
+  stretchingSessions: "sessions",
+  totalWellness: "activities",
+  nutritionLogs: "logs",
+  postCount: "posts",
+  followerCount: "followers",
+};
 
 // ── GROUPING LOGIC ──────────────────────────────────────────────────────────
 
 /** Turn an earned-badges list (from DB) into display-ready slots.
  *  Accepts either string[] (badge_id only, for backwards compat) or
- *  EarnedBadge[] (with year). */
+ *  EarnedBadge[] (with year). Optional counters map adds progress info. */
 export function groupBadgesIntoFamilies(
-  earned: string[] | EarnedBadge[]
+  earned: string[] | EarnedBadge[],
+  counters: BadgeCounters = {}
 ): DisplayBadge[] {
   // Normalize input: turn legacy string[] into EarnedBadge[]
   const earnedBadges: EarnedBadge[] = (earned as any[]).map((e) =>
@@ -231,7 +279,6 @@ export function groupBadgesIntoFamilies(
     const badge = BADGES.find((b) => b.id === eb.badge_id);
     if (!badge) continue;
 
-    // Use the earned year, or fall back to "Undated" if missing
     const year = eb.year;
     const yearLabel = year ? `${year}` : "Unknown Year";
 
@@ -269,16 +316,14 @@ export function groupBadgesIntoFamilies(
     const earnedMembers = family.members.filter((id) => earnedIds.has(id));
     if (earnedMembers.length === 0) continue;
 
-    // Peak = furthest-along member in family order (handles out-of-order earning)
+    // Peak = furthest-along member in family order
     const maxDefinedIndex = earnedMembers.reduce((max, id) => {
       const idx = family.members.indexOf(id);
       return idx > max ? idx : max;
     }, -1);
     const peakId = family.members[maxDefinedIndex];
 
-    // IMPORTANT: tier is capped at family size — a 1-member family never
-    // shows DIAMOND. A 3-member family caps at GOLD. Only families with
-    // 5+ tiers can reach DIAMOND.
+    // Tier capped at family size
     const familySize = family.members.length;
     const maxTierForFamily = Math.min(5, familySize) as BadgeTier;
     const positionInFamily = maxDefinedIndex + 1;
@@ -286,6 +331,21 @@ export function groupBadgesIntoFamilies(
 
     const peakBadge = BADGES.find((b) => b.id === peakId);
     if (!peakBadge) continue;
+
+    // Compute progress if the family has thresholds + a counter
+    let currentValue: number | undefined;
+    let currentThreshold: number | undefined;
+    let nextThreshold: number | undefined;
+    let isMaxed: boolean | undefined;
+    let progressLabel: string | undefined;
+
+    if (family.thresholds && family.counterSource && counters[family.counterSource] !== undefined) {
+      currentValue = counters[family.counterSource];
+      currentThreshold = family.thresholds[positionInFamily - 1];
+      nextThreshold = family.thresholds[positionInFamily]; // undefined if maxed
+      isMaxed = positionInFamily >= familySize;
+      progressLabel = PROGRESS_LABEL_BY_COUNTER[family.counterSource] ?? "earned";
+    }
 
     result.push({
       key: family.key,
@@ -297,9 +357,13 @@ export function groupBadgesIntoFamilies(
       tier,
       earnedCount: earnedMembers.length,
       maxTier: familySize,
+      currentValue,
+      currentThreshold,
+      nextThreshold,
+      isMaxed,
+      progressLabel,
     });
 
-    // Mark all family members as consumed (even unearned ones — they can't orphan)
     for (const memberId of family.members) consumedIds.add(memberId);
   }
 
@@ -309,7 +373,6 @@ export function groupBadgesIntoFamilies(
     const badge = BADGES.find((b) => b.id === eb.badge_id);
     if (!badge) continue;
 
-    // Treat orphans as single-tier progression badges
     result.push({
       key: `orphan-${eb.badge_id}`,
       renderType: "progression",
@@ -323,7 +386,7 @@ export function groupBadgesIntoFamilies(
     });
   }
 
-  // Sort: credentials first (most prestigious), then yearly (newest first), then progression by tier
+  // Sort: credentials first, then yearly (newest first), then progression by tier
   result.sort((a, b) => {
     const typeOrder = { credential: 0, yearly: 1, progression: 2 };
     if (typeOrder[a.renderType] !== typeOrder[b.renderType]) {
