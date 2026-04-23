@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { EXERCISES } from "@/lib/exercises";
+import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
@@ -806,7 +807,14 @@ export default function PostPage() {
       setSaveError(error.message || "Something went wrong. Please try again.");
     } else {
       // -- Auto-award activity badges ----------------------------------------
-      try { await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, exercises); } catch {}
+      // NOTE: now passes woCategory (standardized) so badge-award can reliably
+      // detect category (running/lifting/etc.) instead of keyword-matching
+      // the free-text workout name.
+      try { await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, woCategory, exercises); } catch {}
+      // -- Sync group-challenge progress from activity_logs ------------------
+      // Scans the user's active group goals and updates their contribution
+      // based on what's actually in activity_logs right now. Best-effort.
+      try { await syncGroupChallengeProgressFor(user.id); } catch {}
       // -- PR Detection (workout only) ---------------------------------------
       if (logTab === 'workout' && exercises.length > 0) {
         try {
@@ -819,20 +827,30 @@ export default function PostPage() {
   }
 
   // -- Badge auto-award engine -----------------------------------------------
+  // Called after every successful activity log. Reads the user's counts from
+  // activity_logs and awards any new tier badges they've earned.
+  //
+  // Uses the standardized workout_category column (not free-text workout_type)
+  // to reliably identify running / lifting / yoga / etc. Also aware of the
+  // expanded 8-tier ladder: 1 / 5 / 20 / 50 / 100 / 200 / 500 / 1000.
   async function awardActivityBadges(
     userId: string,
     tab: LogTab,
     wType: string,
     cType: string,
     woT: string,
+    woCat: string,
     exs: any[]
   ) {
-    // Helper: insert badge only if not already earned (upsert ignores duplicates)
+    // Upsert helper — a no-op if the badge row already exists
     async function award(badgeId: string) {
-      await supabase.from('badges').upsert({ user_id: userId, badge_id: badgeId }, { onConflict: 'user_id,badge_id', ignoreDuplicates: true });
+      await supabase.from('badges').upsert(
+        { user_id: userId, badge_id: badgeId },
+        { onConflict: 'user_id,badge_id', ignoreDuplicates: true }
+      );
     }
 
-    // Helper: count logs matching a filter
+    // Count logs matching a filter. Supports eq and ilike via 'ilike:' prefix.
     async function countLogs(filters: Record<string, any>): Promise<number> {
       let q = supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', userId);
       for (const [key, val] of Object.entries(filters)) {
@@ -847,62 +865,66 @@ export default function PostPage() {
     }
 
     if (tab === 'workout') {
-      // -- Total workouts --------------------------------------------------
+      // ── Total workouts (8 tiers: 1/10/25/50/100/200/500/1000) ─────────
       const totalWorkouts = await countLogs({ log_type: 'workout' });
-      if (totalWorkouts >= 1)   await award('first-workout');
-      if (totalWorkouts >= 10)  await award('workouts-10');
-      if (totalWorkouts >= 25)  await award('workouts-25');
-      if (totalWorkouts >= 50)  await award('centurion-half');
-      if (totalWorkouts >= 100) await award('centurion');
-      if (totalWorkouts >= 500) await award('500-workouts');
+      if (totalWorkouts >= 1)    await award('first-workout');
+      if (totalWorkouts >= 10)   await award('workouts-10');
+      if (totalWorkouts >= 25)   await award('workouts-25');
+      if (totalWorkouts >= 50)   await award('centurion-half');
+      if (totalWorkouts >= 100)  await award('centurion');
+      if (totalWorkouts >= 200)  await award('centurion-2x');
+      if (totalWorkouts >= 500)  await award('500-workouts');
+      if (totalWorkouts >= 1000) await award('1000-workouts');
 
-      // -- Running (cardio type contains "run" or workout type contains "run") --
-      const isRun = cType.toLowerCase().includes('run') || cType.toLowerCase().includes('jog') ||
-                    woT.toLowerCase().includes('run') || woT.toLowerCase().includes('jog');
-      if (isRun) {
-        // Count all run logs: workout logs where workout_type ilike %run% OR has cardio with run
-        const { data: runLogs } = await supabase
-          .from('activity_logs')
-          .select('id, workout_type, cardio')
-          .eq('user_id', userId)
-          .eq('log_type', 'workout');
-        const runCount = (runLogs || []).filter((l: any) => {
-          const hasRunType = (l.workout_type || '').toLowerCase().includes('run') || (l.workout_type || '').toLowerCase().includes('jog');
-          const hasRunCardio = Array.isArray(l.cardio) && l.cardio.some((c: any) =>
-            (c.type || '').toLowerCase().includes('run') || (c.type || '').toLowerCase().includes('jog')
-          );
-          return hasRunType || hasRunCardio;
-        }).length;
-        if (runCount >= 1)   await award('first-run');
-        if (runCount >= 5)   await award('runs-5');
-        if (runCount >= 20)  await award('runs-20');
-        if (runCount >= 50)  await award('runs-50');
-        if (runCount >= 100) await award('runs-100');
+      // ── Running (8 tiers: 1/5/20/50/100/200/500/1000) ─────────────────
+      if (woCat === 'running') {
+        const runCount = await countLogs({ log_type: 'workout', workout_category: 'running' });
+        if (runCount >= 1)    await award('first-run');
+        if (runCount >= 5)    await award('runs-5');
+        if (runCount >= 20)   await award('runs-20');
+        if (runCount >= 50)   await award('runs-50');
+        if (runCount >= 100)  await award('runs-100');
+        if (runCount >= 200)  await award('runs-200');
+        if (runCount >= 500)  await award('runs-500');
+        if (runCount >= 1000) await award('runs-1000');
       }
 
-      // -- Lifting (has exercises logged) ----------------------------------
-      const hasLifts = exs && exs.length > 0;
-      if (hasLifts) {
-        const { data: liftLogs } = await supabase
-          .from('activity_logs')
-          .select('id, exercises')
-          .eq('user_id', userId)
-          .eq('log_type', 'workout');
-        const liftCount = (liftLogs || []).filter((l: any) =>
-          Array.isArray(l.exercises) && l.exercises.length > 0
-        ).length;
-        if (liftCount >= 1)   await award('first-lift');
-        if (liftCount >= 10)  await award('lifts-10');
-        if (liftCount >= 25)  await award('lifts-25');
-        if (liftCount >= 50)  await award('lifts-50');
-        if (liftCount >= 100) await award('lifts-100');
+      // ── Lifting (8 tiers: 1/10/25/50/100/200/500/1000) ────────────────
+      if (woCat === 'lifting') {
+        const liftCount = await countLogs({ log_type: 'workout', workout_category: 'lifting' });
+        if (liftCount >= 1)    await award('first-lift');
+        if (liftCount >= 10)   await award('lifts-10');
+        if (liftCount >= 25)   await award('lifts-25');
+        if (liftCount >= 50)   await award('lifts-50');
+        if (liftCount >= 100)  await award('lifts-100');
+        if (liftCount >= 200)  await award('lifts-200');
+        if (liftCount >= 500)  await award('lifts-500');
+        if (liftCount >= 1000) await award('lifts-1000');
+      }
+
+      // ── Yoga (now a workout category) ─────────────────────────────────
+      if (woCat === 'yoga') {
+        const yogaCount = await countLogs({ log_type: 'workout', workout_category: 'yoga' });
+        if (yogaCount >= 1)   await award('first-yoga');
+        if (yogaCount >= 10)  await award('yoga-10');
+        if (yogaCount >= 30)  await award('yoga-lover');
+        if (yogaCount >= 100) await award('yoga-queen');
+      }
+
+      // ── Walking (now a workout category) ──────────────────────────────
+      if (woCat === 'walking') {
+        const walkCount = await countLogs({ log_type: 'workout', workout_category: 'walking' });
+        if (walkCount >= 1)   await award('first-walk');
+        if (walkCount >= 10)  await award('nature-walk');
+        if (walkCount >= 50)  await award('walks-50');
       }
     }
 
     if (tab === 'wellness') {
-      // -- Per-wellness-type streak badges ---------------------------------
+      // Wellness still uses free-text wellness_type (Title Case values like
+      // "Cold Plunge", "Sauna"). We match case-insensitively to handle
+      // whatever the form writes.
       const wTypeLower = wType.toLowerCase();
-
       const { count: wCount } = await supabase
         .from('activity_logs')
         .select('id', { count: 'exact', head: true })
@@ -911,48 +933,35 @@ export default function PostPage() {
         .ilike('wellness_type', `%${wType}%`);
       const typeCount = wCount || 0;
 
-      // Yoga
-      if (wTypeLower.includes('yoga')) {
-        if (typeCount >= 1)  await award('first-yoga');
-        if (typeCount >= 10) await award('yoga-10');
-        if (typeCount >= 30) await award('yoga-lover');
-        if (typeCount >= 100) await award('yoga-queen');
-      }
       // Meditation
       if (wTypeLower.includes('meditat')) {
-        if (typeCount >= 1)  await award('first-meditation');
-        if (typeCount >= 10) await award('meditation-10');
-        if (typeCount >= 30) await award('meditation-master');
+        if (typeCount >= 1)   await award('first-meditation');
+        if (typeCount >= 10)  await award('meditation-10');
+        if (typeCount >= 30)  await award('meditation-master');
       }
       // Cold Plunge / Ice Bath
       if (wTypeLower.includes('cold') || wTypeLower.includes('ice') || wTypeLower.includes('plunge')) {
-        if (typeCount >= 1)  await award('first-cold-plunge');
-        if (typeCount >= 5)  await award('ice-bath');
-        if (typeCount >= 20) await award('cold-plunge-20');
-        if (typeCount >= 50) await award('ice-warrior');
+        if (typeCount >= 1)   await award('first-cold-plunge');
+        if (typeCount >= 5)   await award('ice-bath');
+        if (typeCount >= 20)  await award('cold-plunge-20');
+        if (typeCount >= 50)  await award('ice-warrior');
       }
       // Sauna
       if (wTypeLower.includes('sauna')) {
-        if (typeCount >= 1)  await award('first-sauna');
-        if (typeCount >= 10) await award('sauna');
-        if (typeCount >= 30) await award('sauna-30');
+        if (typeCount >= 1)   await award('first-sauna');
+        if (typeCount >= 10)  await award('sauna');
+        if (typeCount >= 30)  await award('sauna-30');
       }
       // Breathwork
       if (wTypeLower.includes('breath')) {
-        if (typeCount >= 1)  await award('first-breathwork');
-        if (typeCount >= 10) await award('breathwork');
-        if (typeCount >= 30) await award('breathwork-30');
-      }
-      // Walk
-      if (wTypeLower.includes('walk')) {
-        if (typeCount >= 1)  await award('first-walk');
-        if (typeCount >= 10) await award('nature-walk');
-        if (typeCount >= 50) await award('walks-50');
+        if (typeCount >= 1)   await award('first-breathwork');
+        if (typeCount >= 10)  await award('breathwork');
+        if (typeCount >= 30)  await award('breathwork-30');
       }
       // Stretching
       if (wTypeLower.includes('stretch')) {
-        if (typeCount >= 1)  await award('first-stretch');
-        if (typeCount >= 20) await award('stretch-it-out');
+        if (typeCount >= 1)   await award('first-stretch');
+        if (typeCount >= 20)  await award('stretch-it-out');
       }
 
       // Total wellness logs
@@ -965,7 +974,7 @@ export default function PostPage() {
       const totalNutrition = await countLogs({ log_type: 'nutrition' });
       if (totalNutrition >= 1)   await award('first-nutrition-log');
       if (totalNutrition >= 7)   await award('nutrition-week');
-      if (totalNutrition >= 30)  await award('nutrition-pro');
+      if (totalNutrition >= 14)  await award('nutrition-pro');
       if (totalNutrition >= 100) await award('nutrition-100');
     }
   }
