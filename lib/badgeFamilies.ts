@@ -1,405 +1,243 @@
-// ── lib/rivalries.ts ────────────────────────────────────────────────────────
-// All rivalry-system queries live here. Page components should never call
-// supabase directly for rivalry data — always go through this module so types
-// and error handling are consistent.
+// ── lib/badgeFamilies.ts ────────────────────────────────────────────────────
+// Groups related badges into "families" so the profile only shows one evolving
+// badge slot per achievement. Example: earning "First Run" + "5 Runs" + "20 Runs"
+// shows up as a single "Runs" badge at tier 3, not three separate squares.
+//
+// This is a PURE DISPLAY LAYER. The database is untouched — every earned badge
+// row still exists. We just group them at render time.
 
-import { supabase } from "./supabase";
-import { uploadPhoto } from "./uploadPhoto";
+import { BADGES } from "./badges";
 
-// ── TYPES ───────────────────────────────────────────────────────────────────
+export type BadgeTier = 1 | 2 | 3 | 4 | 5;
 
-export type RivalCategory =
-  | "running" | "walking" | "biking" | "lifting"
-  | "swimming" | "combat" | "wellness";
-
-export type RivalTier = "beginner" | "intermediate" | "mayhem";
-
-export type RivalryStatus = "active" | "completed" | "cancelled";
-
-// Metrics each category supports. Keep this in sync with compute_rivalry_score()
-// in migration-rivalries.sql — if you add a new metric in one place, add it here.
-export const COMPETITIONS: Record<RivalCategory, { id: string; label: string }[]> = {
-  running:  [
-    { id: "most_miles",    label: "Most miles"      },
-    { id: "fastest_mile",  label: "Fastest mile"    },
-    { id: "longest_run",   label: "Longest run"     },
-    { id: "most_runs",     label: "Most runs"       },
-  ],
-  walking:  [
-    { id: "most_steps",    label: "Most steps"      },
-    { id: "most_miles",    label: "Most miles"      },
-    { id: "most_sessions", label: "Most walks"      },
-  ],
-  biking:   [
-    { id: "most_miles",    label: "Most miles"      },
-    { id: "most_sessions", label: "Most rides"      },
-  ],
-  lifting:  [
-    { id: "most_volume",   label: "Most volume"     },
-    { id: "most_sessions", label: "Most sessions"   },
-    { id: "1rm_bench",     label: "Top bench"       },
-    { id: "1rm_squat",     label: "Top squat"       },
-    { id: "1rm_deadlift",  label: "Top deadlift"    },
-  ],
-  swimming: [
-    { id: "most_distance", label: "Most distance"   },
-    { id: "most_sessions", label: "Most sessions"   },
-  ],
-  combat:   [
-    { id: "most_rounds",   label: "Most rounds"     },
-    { id: "most_sessions", label: "Most sessions"   },
-    { id: "most_minutes",  label: "Most minutes"    },
-  ],
-  wellness: [
-    { id: "most_sessions",   label: "Most sessions"     },
-    { id: "most_minutes",    label: "Most minutes"      },
-    { id: "longest_session", label: "Longest session"   },
-  ],
+// Visual style per tier — higher tiers get more dramatic treatment.
+export const TIER_STYLES: Record<BadgeTier, {
+  name: string;
+  gradient: string;
+  border: string;
+  glow: string;
+  textColor: string;
+  accentColor: string;
+}> = {
+  1: {
+    name: "BRONZE",
+    gradient: "linear-gradient(135deg, #3D2A1F, #6B4423)",
+    border: "#B87333",
+    glow: "rgba(184,115,51,0.35)",
+    textColor: "#F5A76B",
+    accentColor: "#B87333",
+  },
+  2: {
+    name: "SILVER",
+    gradient: "linear-gradient(135deg, #3A3A42, #5C5C66)",
+    border: "#C0C0C0",
+    glow: "rgba(192,192,192,0.4)",
+    textColor: "#E8E8E8",
+    accentColor: "#C0C0C0",
+  },
+  3: {
+    name: "GOLD",
+    gradient: "linear-gradient(135deg, #3D2D00, #6B5000)",
+    border: "#FFD700",
+    glow: "rgba(255,215,0,0.5)",
+    textColor: "#FFE55C",
+    accentColor: "#FFD700",
+  },
+  4: {
+    name: "PLATINUM",
+    gradient: "linear-gradient(135deg, #1A1F3A, #2D3D6B)",
+    border: "#7CC4FF",
+    glow: "rgba(124,196,255,0.55)",
+    textColor: "#A8D9FF",
+    accentColor: "#7CC4FF",
+  },
+  5: {
+    name: "DIAMOND",
+    gradient: "linear-gradient(135deg, #1A0F30, #4A2D8A, #1A0F30)",
+    border: "#C084FC",
+    glow: "rgba(192,132,252,0.6)",
+    textColor: "#E9D5FF",
+    accentColor: "#C084FC",
+  },
 };
 
-export interface Rivalry {
-  id: string;
-  user_a_id: string;
-  user_b_id: string;
-  category: RivalCategory;
-  competition_type: string;
-  tier: RivalTier;
-  status: RivalryStatus;
-  started_at: string;
-  ends_at: string;
-  resolved_at: string | null;
-  user_a_score: number | null;
-  user_b_score: number | null;
-  winner_id: string | null;
-}
+// ── FAMILY DEFINITIONS ──────────────────────────────────────────────────────
+// Maps each earned badge_id to a family. Badges in the same family share a
+// single display slot; the slot's tier = how many of that family's badges
+// the user has earned.
+//
+// Tier numbers (1-5) are assigned by the order of badge_ids in each array.
+// First entry = tier 1, last entry = highest tier.
 
-export interface RivalUser {
-  id: string;
-  username: string;
-  full_name: string;
-  avatar_url: string | null;
-}
+export const BADGE_FAMILIES: { key: string; name: string; category: string; members: string[] }[] = [
+  // ── STRENGTH ────────────────────────────────────────────
+  { key: "lifting-progression", name: "Lifter",           category: "strength",  members: ["first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100"] },
+  { key: "bench-progression",   name: "Bench Press",      category: "strength",  members: ["bench-200", "heavy-lifter"] },
+  { key: "squat-progression",   name: "Squat",            category: "strength",  members: ["squat-300"] },
+  { key: "deadlift-progression",name: "Deadlift",         category: "strength",  members: ["deadlift-400", "iron-maiden"] },
+  { key: "one-rep-max",         name: "One Rep Max",      category: "strength",  members: ["1rm-pr", "pb-crusher"] },
+  { key: "overhead-pull",       name: "Overhead & Pull",  category: "strength",  members: ["overhead-bw", "weighted-pullup"] },
+  { key: "kettlebell",          name: "Kettlebell",       category: "strength",  members: ["kettlebell-king"] },
+  { key: "powerlifting",        name: "Powerlifter",      category: "strength",  members: ["powerlifter", "1k-club"] },
 
-export interface RivalryWithOpponent extends Rivalry {
-  // "opponent" is whichever participant isn't the currently logged-in user
-  opponent: RivalUser;
-  my_score: number;
-  their_score: number;
-  i_am_winner: boolean | null; // null if tie / unresolved / cancelled
-}
+  // ── CARDIO / RUNNING ─────────────────────────────────────
+  { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100"] },
+  { key: "run-distance",        name: "Distance Runner",  category: "cardio",    members: ["5k", "10k", "half-marathon", "marathon", "ultra"] },
+  { key: "speed",               name: "Speed",            category: "cardio",    members: ["6min-mile"] },
+  { key: "biking",              name: "Cyclist",          category: "cardio",    members: ["century-ride"] },
+  { key: "swimming",            name: "Swimmer",          category: "cardio",    members: ["swim-mile"] },
+  { key: "rowing",              name: "Rower",            category: "cardio",    members: ["rowing-10k"] },
+  { key: "multi-sport",         name: "Multi-Sport",      category: "cardio",    members: ["triathlon", "ironman"] },
 
-export interface RivalMessage {
-  id: string;
-  rivalry_id: string;
-  sender_id: string;
-  content: string | null;
-  photo_url: string | null;
-  is_blurred: boolean;
-  created_at: string;
-}
+  // ── CONSISTENCY ─────────────────────────────────────────
+  { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "500-workouts"] },
+  { key: "streaks",             name: "Streak",           category: "consistency", members: ["7day-streak", "30day-streak", "90day-streak", "365day"] },
+  { key: "no-days-off",         name: "No Days Off",      category: "consistency", members: ["no-days-off", "weekend-warrior"] },
+  { key: "early-bird-general",  name: "Early Bird",       category: "consistency", members: ["early-bird"] },
+  { key: "comeback",            name: "Comeback",         category: "consistency", members: ["comeback"] },
 
-export interface RivalryBadge {
-  id: string;
-  rivalry_id: string;
-  user_id: string;
-  badge_key: string;
-  earned_at: string;
-}
+  // ── WELLNESS ────────────────────────────────────────────
+  { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-10", "yoga-lover", "yoga-queen"] },
+  { key: "meditation",          name: "Meditation",       category: "wellness",  members: ["first-meditation", "meditation-10", "meditation-master"] },
+  { key: "cold-plunge",         name: "Cold Plunge",      category: "wellness",  members: ["first-cold-plunge", "ice-bath", "cold-plunge-20"] },
+  { key: "sauna",               name: "Sauna",            category: "wellness",  members: ["first-sauna"] },
+  { key: "breathwork",          name: "Breathwork",       category: "wellness",  members: ["first-breathwork"] },
+  { key: "walking",             name: "Walking",          category: "wellness",  members: ["first-walk"] },
+  { key: "stretching",          name: "Stretching",       category: "wellness",  members: ["first-stretch", "stretch-it-out"] },
+  { key: "wellness-general",    name: "Wellness",         category: "wellness",  members: ["wellness-50"] },
+  { key: "recovery",            name: "Recovery",         category: "wellness",  members: ["sleep-champ", "hydration-hero"] },
 
-export interface UserRivalryRecord {
-  wins: number;
-  losses: number;
-  ties: number;
-  cancelled: number;
-  active: number;
-}
+  // ── NUTRITION ───────────────────────────────────────────
+  { key: "nutrition-logging",   name: "Nutrition Logs",   category: "nutrition", members: ["first-nutrition-log", "nutrition-week", "nutrition-pro", "nutrition-100"] },
+  { key: "nutrition-goals",     name: "Nutrition Goals",  category: "nutrition", members: ["calorie-goals", "protein-streak", "macro-master"] },
+  { key: "meal-prep",           name: "Meal Prep",        category: "nutrition", members: ["meal-prep"] },
+  { key: "plant-based",         name: "Plant-Based",      category: "nutrition", members: ["plant-week"] },
+  { key: "clean-eating",        name: "Clean Eating",     category: "nutrition", members: ["sugar-free", "clean-30"] },
+  { key: "barcode-scanner",     name: "Scanner",          category: "nutrition", members: ["barcode-10", "barcode-100"] },
+  { key: "fasting",             name: "Fasting",          category: "nutrition", members: ["fasting"] },
 
-// ── QUEUE / MATCHMAKING ─────────────────────────────────────────────────────
+  // ── CHALLENGES ──────────────────────────────────────────
+  { key: "challenges-programs", name: "Programs",         category: "challenges", members: ["iron-will", "75-hard"] },
+  { key: "challenges-events",   name: "Events",           category: "challenges", members: ["murph", "spartan", "tough-mudder", "crossfit-open"] },
+  { key: "pushup",              name: "Push-Ups",         category: "challenges", members: ["pushup-100"] },
+  { key: "plank",               name: "Plank",            category: "challenges", members: ["plank-5min"] },
+  { key: "burpee",              name: "Burpees",          category: "challenges", members: ["burpee-100"] },
+  { key: "pullup",              name: "Pull-Ups",         category: "challenges", members: ["pullup-20"] },
 
-/** Join the matchmaking queue. Returns an active rivalry if matched instantly,
- *  otherwise null (user is now waiting). Throws if already in an active rivalry. */
-export async function joinQueue(params: {
-  category: RivalCategory;
-  competition_type: string;
-  tier: RivalTier;
-}): Promise<RivalryWithOpponent | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  // ── SOCIAL ──────────────────────────────────────────────
+  { key: "posts",               name: "Posts",            category: "social",    members: ["first-post", "10-posts"] },
+  { key: "followers",           name: "Followers",        category: "social",    members: ["first-follower", "100-followers"] },
+  { key: "groups",              name: "Groups",           category: "social",    members: ["group-member", "group-leader"] },
+  { key: "likes",               name: "Likes",            category: "social",    members: ["first-like", "motivator"] },
 
-  // The DB trigger creates the rivalry + deletes queue rows atomically if a
-  // match exists. Either way, we insert then check for a fresh active rivalry.
-  const { error } = await supabase
-    .from("rivalry_queue")
-    .insert({ user_id: user.id, ...params });
+  // ── SPECIAL (all standalone, 1-tier families) ───────────
+  { key: "veteran",             name: "Veteran",          category: "special",   members: ["veteran"] },
+  { key: "gym-rat",             name: "Gym Rat",          category: "special",   members: ["first-gym"] },
+  { key: "coaching",            name: "Coaching",         category: "special",   members: ["coach", "personal-trainer"] },
+  { key: "transformation",      name: "Transformation",   category: "special",   members: ["transformation", "comeback-story"] },
+  { key: "birthday",            name: "Birthday",         category: "special",   members: ["birthday-workout"] },
+  { key: "new-year",            name: "New Year",         category: "special",   members: ["new-years"] },
+  { key: "holiday",             name: "Holiday",          category: "special",   members: ["holiday-hustle"] },
+  { key: "workout-partner",     name: "Workout Partner",  category: "special",   members: ["collab"] },
+  { key: "outdoor",             name: "Outdoor",          category: "special",   members: ["outdoor-adventurer"] },
+  { key: "competitor",          name: "Competitor",       category: "special",   members: ["sport-competitor"] },
+];
 
-  // The trigger returns NULL to cancel the insert when it made a match; that
-  // surfaces as an error with code "P0002" or similar. Either way we check
-  // below — don't throw on insert errors that might be legitimate match wins.
-  if (error && !error.message.includes("already has an active rivalry")) {
-    // Silently continue — match may have been made
+// Build a reverse lookup: badge_id -> family
+const BADGE_TO_FAMILY: Map<string, string> = new Map();
+for (const family of BADGE_FAMILIES) {
+  for (const memberId of family.members) {
+    BADGE_TO_FAMILY.set(memberId, family.key);
   }
-  if (error?.message.includes("already has an active rivalry")) {
-    throw new Error("You already have an active rivalry.");
-  }
-
-  return getActiveRivalry();
 }
 
-/** Leave the matchmaking queue. Safe to call if not queued. */
-export async function leaveQueue(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase.from("rivalry_queue").delete().eq("user_id", user.id);
+// ── GROUPING LOGIC ──────────────────────────────────────────────────────────
+
+export interface GroupedBadge {
+  familyKey: string;
+  familyName: string;
+  category: string;
+  peakBadgeId: string;        // the highest tier member they've earned
+  peakBadgeEmoji: string;
+  peakBadgeLabel: string;
+  peakBadgeDesc: string;
+  tier: BadgeTier;            // 1-5
+  maxTier: number;            // total possible tiers in this family
+  earnedCount: number;        // how many of the family members they've earned
+  orphan: boolean;            // true if this badge isn't in any family (safety fallback)
 }
 
-export interface QueueEntry {
-  user_id: string;
-  category: RivalCategory;
-  competition_type: string;
-  tier: RivalTier;
-  queued_at: string;
-}
+/** Group a list of earned badge IDs into family slots.
+ *  Returns one GroupedBadge per family with at least one earned member.
+ *  Orphan badges (not in any family definition) get their own 1-tier slot. */
+export function groupBadgesIntoFamilies(earnedIds: string[]): GroupedBadge[] {
+  const earnedSet = new Set(earnedIds);
+  const result: GroupedBadge[] = [];
 
-/** Get the current user's queue entry if they're waiting for a match, else null.
- *  Used to restore matchmaking state when the user navigates back to the page. */
-export async function getQueueEntry(): Promise<QueueEntry | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await supabase
-    .from("rivalry_queue")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  return (data as QueueEntry) || null;
-}
+  // Process defined families
+  for (const family of BADGE_FAMILIES) {
+    // Find which members are earned, preserving the family's tier order
+    const earnedMembers = family.members.filter((id) => earnedSet.has(id));
+    if (earnedMembers.length === 0) continue;
 
-/** Is the current user currently queued (not yet matched)? */
-export async function isQueued(): Promise<boolean> {
-  const entry = await getQueueEntry();
-  return !!entry;
-}
+    // Peak tier = the last earned member in the family's defined order.
+    // This handles out-of-order earning (e.g. user earned "marathon" before "5k").
+    const maxDefinedIndex = earnedMembers.reduce((max, id) => {
+      const idx = family.members.indexOf(id);
+      return idx > max ? idx : max;
+    }, -1);
+    const peakId = family.members[maxDefinedIndex];
 
-// ── ACTIVE RIVALRY ──────────────────────────────────────────────────────────
+    // Normalize tier to 1-5 range based on position within the family
+    const tierRatio = (maxDefinedIndex + 1) / family.members.length;
+    const tier: BadgeTier = Math.max(1, Math.min(5, Math.ceil(tierRatio * 5))) as BadgeTier;
 
-/** Get the current user's active rivalry (or null). */
-export async function getActiveRivalry(): Promise<RivalryWithOpponent | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+    const peakBadge = BADGES.find((b) => b.id === peakId);
+    if (!peakBadge) continue;
 
-  const { data, error } = await supabase
-    .from("rivalries")
-    .select("*")
-    .eq("status", "active")
-    .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return hydrateRivalry(data as Rivalry, user.id);
-}
-
-/** Attach opponent profile + orient scores from the current user's POV. */
-async function hydrateRivalry(r: Rivalry, myId: string): Promise<RivalryWithOpponent> {
-  const opponentId = r.user_a_id === myId ? r.user_b_id : r.user_a_id;
-
-  const { data: opp } = await supabase
-    .from("users")
-    .select("id, username, full_name, avatar_url")
-    .eq("id", opponentId)
-    .single();
-
-  const iAmA = r.user_a_id === myId;
-  const my_score    = (iAmA ? r.user_a_score : r.user_b_score) ?? 0;
-  const their_score = (iAmA ? r.user_b_score : r.user_a_score) ?? 0;
-
-  let i_am_winner: boolean | null = null;
-  if (r.status === "completed") {
-    if (r.winner_id === myId) i_am_winner = true;
-    else if (r.winner_id && r.winner_id !== myId) i_am_winner = false;
-    // winner_id null on completed = tie → leave as null
+    result.push({
+      familyKey: family.key,
+      familyName: family.name,
+      category: family.category,
+      peakBadgeId: peakBadge.id,
+      peakBadgeEmoji: peakBadge.emoji,
+      peakBadgeLabel: peakBadge.label,
+      peakBadgeDesc: peakBadge.desc,
+      tier,
+      maxTier: family.members.length,
+      earnedCount: earnedMembers.length,
+      orphan: false,
+    });
   }
 
-  return {
-    ...r,
-    opponent: opp || { id: opponentId, username: "?", full_name: "Unknown", avatar_url: null },
-    my_score,
-    their_score,
-    i_am_winner,
-  };
-}
+  // Handle orphans: earned badges not mapped to any family.
+  // This protects against new badges being added without updating BADGE_FAMILIES.
+  for (const earnedId of earnedIds) {
+    if (!BADGE_TO_FAMILY.has(earnedId)) {
+      const badge = BADGES.find((b) => b.id === earnedId);
+      if (!badge) continue;
+      result.push({
+        familyKey: earnedId, // use badge id as family key for orphans
+        familyName: badge.label,
+        category: badge.category,
+        peakBadgeId: badge.id,
+        peakBadgeEmoji: badge.emoji,
+        peakBadgeLabel: badge.label,
+        peakBadgeDesc: badge.desc,
+        tier: 1,
+        maxTier: 1,
+        earnedCount: 1,
+        orphan: true,
+      });
+    }
+  }
 
-// ── LIVE SCORE (pre-resolution) ─────────────────────────────────────────────
-
-/** Current score snapshot for an active rivalry. Calls the same DB function
- *  the resolver uses, so what you see here is exactly what gets stamped at
- *  the end of the week. */
-export async function getLiveScores(rivalry: Rivalry): Promise<{ my_score: number; their_score: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { my_score: 0, their_score: 0 };
-
-  const myId = user.id;
-  const oppId = rivalry.user_a_id === myId ? rivalry.user_b_id : rivalry.user_a_id;
-
-  const [{ data: mine }, { data: theirs }] = await Promise.all([
-    supabase.rpc("compute_rivalry_score", {
-      uid: myId,
-      p_category: rivalry.category,
-      p_metric: rivalry.competition_type,
-      p_from: rivalry.started_at,
-      p_to: rivalry.ends_at,
-    }),
-    supabase.rpc("compute_rivalry_score", {
-      uid: oppId,
-      p_category: rivalry.category,
-      p_metric: rivalry.competition_type,
-      p_from: rivalry.started_at,
-      p_to: rivalry.ends_at,
-    }),
-  ]);
-
-  return {
-    my_score:    Number(mine ?? 0),
-    their_score: Number(theirs ?? 0),
-  };
-}
-
-// ── ALL-TIME RECORD ─────────────────────────────────────────────────────────
-
-export async function getUserRecord(userId: string): Promise<UserRivalryRecord> {
-  const { data } = await supabase
-    .from("user_rivalry_records")
-    .select("wins, losses, ties, cancelled, active")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return data ?? { wins: 0, losses: 0, ties: 0, cancelled: 0, active: 0 };
-}
-
-// ── CHAT ────────────────────────────────────────────────────────────────────
-
-/** All messages in a rivalry's chat, ordered oldest-first. */
-export async function getMessages(rivalryId: string): Promise<RivalMessage[]> {
-  const { data } = await supabase
-    .from("rival_messages")
-    .select("*")
-    .eq("rivalry_id", rivalryId)
-    .order("created_at", { ascending: true });
-  return (data as RivalMessage[]) || [];
-}
-
-/** Send a text-only message. */
-export async function sendTextMessage(rivalryId: string, content: string): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-  const trimmed = content.trim();
-  if (!trimmed) return;
-
-  const { error } = await supabase.from("rival_messages").insert({
-    rivalry_id: rivalryId,
-    sender_id: user.id,
-    content: trimmed,
-    photo_url: null,
-    is_blurred: false, // text isn't blurred
+  // Sort: higher tier first, then by category, then by name
+  result.sort((a, b) => {
+    if (b.tier !== a.tier) return b.tier - a.tier;
+    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    return a.familyName.localeCompare(b.familyName);
   });
-  if (error) throw error;
-}
 
-/** Send a photo message. Photo is stored blurred until receiver taps to reveal.
- *  Accepts base64 data URL or File. */
-export async function sendPhotoMessage(
-  rivalryId: string,
-  source: string | File,
-): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-
-  const path = `rivals/${rivalryId}/${user.id}-${Date.now()}.jpg`;
-  const url = await uploadPhoto(source, "activity", path);
-  if (!url) throw new Error("Photo upload failed");
-
-  const { error } = await supabase.from("rival_messages").insert({
-    rivalry_id: rivalryId,
-    sender_id: user.id,
-    content: null,
-    photo_url: url,
-    is_blurred: true, // receiver sees blurred until they tap
-  });
-  if (error) throw error;
-}
-
-/** Receiver taps a blurred photo to reveal it. RLS only allows the non-sender. */
-export async function unblurPhoto(messageId: string): Promise<void> {
-  const { error } = await supabase
-    .from("rival_messages")
-    .update({ is_blurred: false })
-    .eq("id", messageId);
-  if (error) throw error;
-}
-
-/** Subscribe to new messages in a rivalry. Returns an unsubscribe function. */
-export function subscribeToMessages(
-  rivalryId: string,
-  onInsert: (msg: RivalMessage) => void,
-  onUpdate?: (msg: RivalMessage) => void,
-): () => void {
-  const channel = supabase
-    .channel(`rival_messages:${rivalryId}`)
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "rival_messages", filter: `rivalry_id=eq.${rivalryId}` },
-      (payload) => onInsert(payload.new as RivalMessage),
-    )
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "rival_messages", filter: `rivalry_id=eq.${rivalryId}` },
-      (payload) => onUpdate?.(payload.new as RivalMessage),
-    )
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
-}
-
-// ── BADGES ──────────────────────────────────────────────────────────────────
-
-/** Badges earned within a specific rivalry, by either participant. */
-export async function getRivalryBadges(rivalryId: string): Promise<RivalryBadge[]> {
-  const { data } = await supabase
-    .from("rivalry_badges")
-    .select("*")
-    .eq("rivalry_id", rivalryId)
-    .order("earned_at", { ascending: true });
-  return (data as RivalryBadge[]) || [];
-}
-
-// ── UTILITIES ───────────────────────────────────────────────────────────────
-
-/** Human-readable time remaining string for an active rivalry. */
-export function formatTimeLeft(endsAt: string): string {
-  const ms = new Date(endsAt).getTime() - Date.now();
-  if (ms <= 0) return "Ended";
-  const days  = Math.floor(ms / (24 * 60 * 60 * 1000));
-  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-  const mins  = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
-  if (days >= 1) return `${days}d ${hours}h left`;
-  if (hours >= 1) return `${hours}h ${mins}m left`;
-  return `${mins}m left`;
-}
-
-/** Format score for display — some metrics want a unit. */
-export function formatScore(category: RivalCategory, competition_type: string, value: number): string {
-  if (value === 0) return "—";
-  if (competition_type === "fastest_mile") {
-    // stored as (1000 - pace); invert back
-    const pace = 1000 - value;
-    const min = Math.floor(pace);
-    const sec = Math.round((pace - min) * 60);
-    return `${min}:${String(sec).padStart(2, "0")}/mi`;
-  }
-  if (competition_type.startsWith("1rm_"))      return `${Math.round(value)} lbs`;
-  if (competition_type === "most_volume")       return `${Math.round(value).toLocaleString()} lbs`;
-  if (competition_type === "most_steps")        return `${Math.round(value).toLocaleString()}`;
-  if (competition_type === "most_miles" ||
-      competition_type === "most_distance" ||
-      competition_type === "longest_run")       return `${value.toFixed(1)} mi`;
-  if (competition_type === "most_minutes" ||
-      competition_type === "longest_session")   return `${Math.round(value)} min`;
-  return `${Math.round(value)}`;
+  return result;
 }
