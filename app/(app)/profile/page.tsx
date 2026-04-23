@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES } from "@/lib/badges";
-import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge } from "@/lib/badgeFamilies";
+import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
@@ -1286,10 +1286,63 @@ export default function ProfilePage() {
   const [showAllBadgesModal,setShowAllBadgesModal] = useState(false);
   const [badgesTab,setBadgesTab] = useState<"fitness"|"rivals">("fitness");
   const [rivalryBadges,setRivalryBadges] = useState<RivalryBadgeWithContext[]>([]);
+  const [badgeCounters,setBadgeCounters] = useState<BadgeCounters>({});
 
   useEffect(() => {
     if (!user || !showAllBadgesModal) return;
     getAllUserRivalryBadges(user.id).then(setRivalryBadges).catch(() => setRivalryBadges([]));
+  }, [user, showAllBadgesModal]);
+
+  // Fetch current counts for each badge family so we can show progress like
+  // "14 / 20 runs" on badges. One parallel batch when the modal opens.
+  useEffect(() => {
+    if (!user || !showAllBadgesModal) return;
+    (async () => {
+      const uid = user.id;
+      try {
+        const [
+          runs, liftSessions, totalWorkouts, yoga, meditation, coldPlunges,
+          sauna, breathwork, walks, stretching, totalWellness, nutritionLogs,
+          postCount, followerCount,
+        ] = await Promise.all([
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_type', 'running'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_type', 'lifting'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'yoga'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'meditation'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').in('wellness_type', ['cold-plunge', 'ice-bath']),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'sauna'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'breathwork'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'walking'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').eq('wellness_type', 'stretching'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'nutrition'),
+          supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+          supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', uid),
+        ]);
+        setBadgeCounters({
+          runs: runs.count ?? 0,
+          liftSessions: liftSessions.count ?? 0,
+          totalWorkouts: totalWorkouts.count ?? 0,
+          yogaSessions: yoga.count ?? 0,
+          meditationSessions: meditation.count ?? 0,
+          coldPlunges: coldPlunges.count ?? 0,
+          saunaSessions: sauna.count ?? 0,
+          breathworkSessions: breathwork.count ?? 0,
+          walks: walks.count ?? 0,
+          stretchingSessions: stretching.count ?? 0,
+          totalWellness: totalWellness.count ?? 0,
+          nutritionLogs: nutritionLogs.count ?? 0,
+          postCount: postCount.count ?? 0,
+          followerCount: followerCount.count ?? 0,
+          // currentStreak isn't a direct count — skipped for now, would need
+          // separate day-bucket query. Streaks badge will show tier-only progress.
+        });
+      } catch (e) {
+        console.error('Failed to fetch badge counters:', e);
+        setBadgeCounters({});
+      }
+    })();
   }, [user, showAllBadgesModal]);
 
   // 🏆 Tier state — computed from activity logs
@@ -1658,7 +1711,7 @@ export default function ProfilePage() {
       {/* ── All Badges Modal ── */}
       {showAllBadgesModal && (() => {
         // Group fitness badges — three render types: progression, credential, yearly.
-        const grouped: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges);
+        const grouped: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
         const fitnessCount = grouped.length;
         const rivalryCount = rivalryBadges.length;
 
@@ -1805,6 +1858,10 @@ export default function ProfilePage() {
 
                       // ── PROGRESSION: tiered bronze/silver/gold/platinum/diamond ──
                       const style = TIER_STYLES[g.tier ?? 1];
+                      const hasProgress = g.currentValue !== undefined && g.currentThreshold !== undefined;
+                      const progressToNext = hasProgress && g.nextThreshold !== undefined
+                        ? Math.min(100, Math.max(0, ((g.currentValue! - g.currentThreshold!) / (g.nextThreshold - g.currentThreshold!)) * 100))
+                        : 100; // maxed
                       return (
                         <div key={g.key} style={{
                           borderRadius:16,
@@ -1816,7 +1873,7 @@ export default function ProfilePage() {
                           position:"relative",
                           transition:"all 0.2s",
                         }}>
-                          {/* Tier progress pill (only if family has >1 tier) */}
+                          {/* Tier count pill (how many tiers cleared) */}
                           {(g.maxTier ?? 1) > 1 && (
                             <div style={{position:"absolute",top:8,right:8,
                               background:"rgba(0,0,0,0.4)",
@@ -1827,11 +1884,34 @@ export default function ProfilePage() {
                           )}
                           <div style={{fontSize:32,marginBottom:6}}>{g.emoji}</div>
                           <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{g.label}</div>
-                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:6}}>{g.desc}</div>
+                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+
+                          {/* Progress display — current count + bar to next tier */}
+                          {hasProgress && (
+                            <div style={{marginBottom:8}}>
+                              <div style={{fontSize:10,fontWeight:800,color:style.textColor,marginBottom:4}}>
+                                {g.isMaxed
+                                  ? `${g.currentValue} ${g.progressLabel} · MAXED`
+                                  : `${g.currentValue} / ${g.nextThreshold} ${g.progressLabel}`
+                                }
+                              </div>
+                              <div style={{height:4,borderRadius:99,background:"rgba(0,0,0,0.4)",overflow:"hidden"}}>
+                                <div style={{
+                                  height:"100%",
+                                  width:`${progressToNext}%`,
+                                  background: g.isMaxed
+                                    ? `linear-gradient(90deg, ${style.accentColor}, #fff, ${style.accentColor})`
+                                    : style.accentColor,
+                                  transition:"width 0.5s ease",
+                                }} />
+                              </div>
+                            </div>
+                          )}
+
                           <div style={{display:"inline-block",background:"rgba(0,0,0,0.4)",
                             borderRadius:99,padding:"2px 8px",
                             fontSize:9,fontWeight:900,color:style.accentColor,letterSpacing:0.5}}>
-                            {style.name}
+                            {g.isMaxed ? `${style.name} · MAXED` : style.name}
                           </div>
                         </div>
                       );
