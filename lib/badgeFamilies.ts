@@ -26,7 +26,7 @@ import { BADGES } from "./badges";
 
 // ── TYPE DEFINITIONS ────────────────────────────────────────────────────────
 
-export type BadgeTier = 1 | 2 | 3 | 4 | 5;
+export type BadgeTier = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type BadgeRenderType = "progression" | "credential" | "yearly";
 
 // An earned badge row as it comes back from the DB. We need year here so
@@ -37,6 +37,8 @@ export interface EarnedBadge {
 }
 
 // Visual style per progression tier. Higher tiers = more dramatic.
+// Updated Oct 2026: expanded from 5 → 8 tiers to support 1/5/20/50/100/200/500/1000
+// progression for the big-grind families (runs, workouts, nutrition, etc.)
 export const TIER_STYLES: Record<BadgeTier, {
   name: string;
   gradient: string;
@@ -85,6 +87,33 @@ export const TIER_STYLES: Record<BadgeTier, {
     textColor: "#E9D5FF",
     accentColor: "#C084FC",
   },
+  6: {
+    // Emerald — lush green with gold accents, reminds of elite gem
+    name: "EMERALD",
+    gradient: "linear-gradient(135deg, #022C1B, #0B5C3A, #022C1B)",
+    border: "#34D399",
+    glow: "rgba(52,211,153,0.7)",
+    textColor: "#A7F3D0",
+    accentColor: "#34D399",
+  },
+  7: {
+    // Onyx — jet black with fire-red/orange edge, intimidating look
+    name: "ONYX",
+    gradient: "linear-gradient(135deg, #050505, #1A0707, #050505)",
+    border: "#EF4444",
+    glow: "rgba(239,68,68,0.75)",
+    textColor: "#FCA5A5",
+    accentColor: "#F87171",
+  },
+  8: {
+    // Obsidian — prismatic max tier, reserved for 1000+ achievements
+    name: "OBSIDIAN",
+    gradient: "linear-gradient(135deg, #000, #1F0033, #000, #330033, #000)",
+    border: "#F472B6",
+    glow: "rgba(244,114,182,0.85)",
+    textColor: "#FDF2F8",
+    accentColor: "#F0ABFC",
+  },
 };
 
 // ── CREDENTIAL & YEARLY BADGE CLASSIFICATION ────────────────────────────────
@@ -129,7 +158,7 @@ export interface BadgeFamily {
 
 export const BADGE_FAMILIES: BadgeFamily[] = [
   // ── STRENGTH ────────────────────────────────────────────
-  { key: "lifting-progression", name: "Lifter",           category: "strength",  members: ["first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100"], thresholds: [1, 10, 25, 50, 100], counterSource: "liftSessions" },
+  { key: "lifting-progression", name: "Lifter",           category: "strength",  members: ["first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100", "lifts-200", "lifts-500", "lifts-1000"], thresholds: [1, 10, 25, 50, 100, 200, 500, 1000], counterSource: "liftSessions" },
   { key: "bench-progression",   name: "Bench Press",      category: "strength",  members: ["bench-200", "heavy-lifter"] },
   { key: "squat-progression",   name: "Squat",            category: "strength",  members: ["squat-300"] },
   { key: "deadlift-progression",name: "Deadlift",         category: "strength",  members: ["deadlift-400", "iron-maiden"] },
@@ -139,7 +168,7 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "powerlifting",        name: "Powerlifter",      category: "strength",  members: ["powerlifter", "1k-club"] },
 
   // ── CARDIO / RUNNING ─────────────────────────────────────
-  { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100"], thresholds: [1, 5, 20, 50, 100], counterSource: "runs" },
+  { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100", "runs-200", "runs-500", "runs-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "runs" },
   { key: "run-distance",        name: "Distance Runner",  category: "cardio",    members: ["5k", "10k", "half-marathon", "marathon", "ultra"] },
   { key: "speed",               name: "Speed",            category: "cardio",    members: ["6min-mile"] },
   { key: "biking",              name: "Cyclist",          category: "cardio",    members: ["century-ride"] },
@@ -148,7 +177,7 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "multi-sport",         name: "Multi-Sport",      category: "cardio",    members: ["triathlon", "ironman"] },
 
   // ── CONSISTENCY ─────────────────────────────────────────
-  { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "500-workouts"], thresholds: [1, 10, 25, 50, 100, 500], counterSource: "totalWorkouts" },
+  { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "centurion-2x", "500-workouts", "1000-workouts"], thresholds: [1, 10, 25, 50, 100, 200, 500, 1000], counterSource: "totalWorkouts" },
   { key: "streaks",             name: "Streak",           category: "consistency", members: ["7day-streak", "30day-streak", "90day-streak", "365day"], thresholds: [7, 30, 90, 365], counterSource: "currentStreak" },
   { key: "no-days-off",         name: "No Days Off",      category: "consistency", members: ["no-days-off", "weekend-warrior"] },
   { key: "early-bird-general",  name: "Early Bird",       category: "consistency", members: ["early-bird"] },
@@ -321,13 +350,29 @@ export function groupBadgesIntoFamilies(
       const idx = family.members.indexOf(id);
       return idx > max ? idx : max;
     }, -1);
-    const peakId = family.members[maxDefinedIndex];
 
     // Tier capped at family size
     const familySize = family.members.length;
-    const maxTierForFamily = Math.min(5, familySize) as BadgeTier;
-    const positionInFamily = maxDefinedIndex + 1;
+    const maxTierForFamily = Math.min(8, familySize) as BadgeTier;
+    let positionInFamily = maxDefinedIndex + 1;
+
+    // If we have a live counter, recompute tier from actual count — this catches
+    // cases where the user's activity has outpaced the badge-award job, e.g.
+    // user has 19 nutrition logs but the DB only granted them 2 of the 4 tiers.
+    // The actual count is the source of truth; badge rows are DB lag.
+    if (family.thresholds && family.counterSource && counters[family.counterSource] !== undefined) {
+      const count = counters[family.counterSource];
+      let actualPosition = 0;
+      for (let i = 0; i < family.thresholds.length; i++) {
+        if (count >= family.thresholds[i]) actualPosition = i + 1;
+      }
+      // Use whichever is higher: earned-badge position or counter-computed position
+      positionInFamily = Math.max(positionInFamily, actualPosition);
+    }
+
     const tier = Math.max(1, Math.min(maxTierForFamily, positionInFamily)) as BadgeTier;
+    const adjustedPeakIndex = Math.max(0, positionInFamily - 1);
+    const peakId = family.members[Math.min(adjustedPeakIndex, familySize - 1)];
 
     const peakBadge = BADGES.find((b) => b.id === peakId);
     if (!peakBadge) continue;
@@ -341,7 +386,7 @@ export function groupBadgesIntoFamilies(
 
     if (family.thresholds && family.counterSource && counters[family.counterSource] !== undefined) {
       currentValue = counters[family.counterSource];
-      currentThreshold = family.thresholds[positionInFamily - 1];
+      currentThreshold = family.thresholds[Math.max(0, positionInFamily - 1)];
       nextThreshold = family.thresholds[positionInFamily]; // undefined if maxed
       isMaxed = positionInFamily >= familySize;
       progressLabel = PROGRESS_LABEL_BY_COUNTER[family.counterSource] ?? "earned";
