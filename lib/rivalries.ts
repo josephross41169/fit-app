@@ -152,16 +152,31 @@ export async function leaveQueue(): Promise<void> {
   await supabase.from("rivalry_queue").delete().eq("user_id", user.id);
 }
 
-/** Is the current user currently queued (not yet matched)? */
-export async function isQueued(): Promise<boolean> {
+export interface QueueEntry {
+  user_id: string;
+  category: RivalCategory;
+  competition_type: string;
+  tier: RivalTier;
+  queued_at: string;
+}
+
+/** Get the current user's queue entry if they're waiting for a match, else null.
+ *  Used to restore matchmaking state when the user navigates back to the page. */
+export async function getQueueEntry(): Promise<QueueEntry | null> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  if (!user) return null;
   const { data } = await supabase
     .from("rivalry_queue")
-    .select("user_id")
+    .select("*")
     .eq("user_id", user.id)
     .maybeSingle();
-  return !!data;
+  return (data as QueueEntry) || null;
+}
+
+/** Is the current user currently queued (not yet matched)? */
+export async function isQueued(): Promise<boolean> {
+  const entry = await getQueueEntry();
+  return !!entry;
 }
 
 // ── ACTIVE RIVALRY ──────────────────────────────────────────────────────────
