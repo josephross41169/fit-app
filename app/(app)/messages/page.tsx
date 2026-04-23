@@ -117,36 +117,66 @@ export default function MessagesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load conversations via server API (bypasses RLS) ───────────────────────
-  const loadConversations = useCallback(async () => {
+  // loadConversations
+  // Accepts a `silent` flag so background polls don't flip the global loading
+  // state (which re-layouts the list and causes visible flicker). Only the
+  // initial load sets loading=true.
+  const loadConversations = useCallback(async (silent: boolean = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/db', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_conversations', payload: { userId: user.id } }),
       });
       const json = await res.json();
-      setConversations(json.conversations || []);
+      setConversations(prev => {
+        // Avoid unnecessary state updates — only swap if the list actually changed.
+        // Prevents flicker when polling returns the same data.
+        const next = json.conversations || [];
+        if (prev.length !== next.length) return next;
+        const changed = next.some((c: Conversation, i: number) =>
+          c.id !== prev[i]?.id ||
+          c.last_message !== prev[i]?.last_message ||
+          c.last_message_at !== prev[i]?.last_message_at ||
+          c.unread_count !== prev[i]?.unread_count
+        );
+        return changed ? next : prev;
+      });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [user]);
 
-  // ── Load messages via server API (bypasses RLS) ─────────────────────────────
+  // loadMessages
+  // Fetches via server API to bypass RLS. Diffs the result and only swaps
+  // state when something actually changed — critical because realtime
+  // subscriptions can fire faster than HTTP polls and we don't want to
+  // thrash re-renders.
   const loadMessages = useCallback(async (convId: string) => {
     const res = await fetch('/api/db', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_messages', payload: { conversationId: convId } }),
     });
     const json = await res.json();
-    if (json.messages) setMessages(json.messages as Message[]);
+    if (!json.messages) return;
+    const next: Message[] = json.messages;
+    setMessages(prev => {
+      if (prev.length !== next.length) return next;
+      // Only compare last message — if it's the same ID, the list is identical.
+      // Avoids full-array compare on every poll while catching any append.
+      const lastPrev = prev[prev.length - 1];
+      const lastNext = next[next.length - 1];
+      if (lastPrev?.id === lastNext?.id) return prev; // no change
+      return next;
+    });
   }, []);
 
   // ── Realtime subscription ───────────────────────────────────────────────────
   useEffect(() => {
     if (!activeConvId) return;
 
-    // Unsubscribe old channel
+    // Tear down old channel before subscribing to new one
     if (channelRef.current) {
       channelRef.current.unsubscribe();
     }
@@ -167,7 +197,10 @@ export default function MessagesPage() {
             if (prev.find((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          loadConversations();
+          // NOTE: previously this also called loadConversations() to refresh
+          // the preview snippet in the sidebar. Removed because the 8s silent
+          // poll handles that, and calling it here on every message was
+          // re-rendering the whole page and causing the "shifting" bug.
         }
       )
       .subscribe();
@@ -177,26 +210,33 @@ export default function MessagesPage() {
     return () => {
       channel.unsubscribe();
     };
-  }, [activeConvId, loadConversations]);
+  }, [activeConvId]); // removed loadConversations from deps — it's no longer called from here
 
-  // ── Poll messages in active conversation ────────────────────────────────────
-  useEffect(() => {
-    if (!activeConvId) return;
-    const poll = setInterval(() => loadMessages(activeConvId), 3000);
-    return () => clearInterval(poll);
-  }, [activeConvId, loadMessages]);
+  // ── Realtime handles new messages — no more polling needed here ────────────
+  // Removed the 3s setInterval poll: it was causing the "shifting" bug because
+  // every poll triggered a messages refetch → state swap → scroll animation,
+  // even when nothing changed. The realtime subscription below now does the
+  // same job on-demand.
 
   // ── Scroll to bottom on new messages ───────────────────────────────────────
+  // Only scrolls when message COUNT increases (a new message arrived).
+  // Previous version used [messages] which fires on every state reference
+  // change, causing visible scroll jank during polls.
+  const prevMsgCountRef = useRef(0);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (messages.length > prevMsgCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages.length]);
 
-  // ── Initial load ────────────────────────────────────────────────────────────
+  // ── Initial load + silent background refresh ───────────────────────────────
+  // Silent polling keeps the conversation list fresh (incoming messages from
+  // other convs, new conversations started by others) without flickering.
   useEffect(() => {
     if (user) {
-      loadConversations();
-      // Poll every 5s so new convs/messages appear even without realtime
-      const poll = setInterval(() => loadConversations(), 5000);
+      loadConversations(false); // initial load shows spinner
+      const poll = setInterval(() => loadConversations(true), 8000); // silent every 8s
       return () => clearInterval(poll);
     }
   }, [user, loadConversations]);
@@ -244,7 +284,7 @@ export default function MessagesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'send_message', payload: { conversationId: activeConvId, senderId: user.id, content } }),
     });
-    loadConversations();
+    loadConversations(true); // silent refresh — no spinner flicker
   };
 
   // ── Handle photo selection ───────────────────────────────────────────────────
@@ -315,7 +355,7 @@ export default function MessagesPage() {
     setMessages([]);
     setMobileShowThread(true);
     loadMessages(convId);
-    loadConversations(); // refresh in background
+    loadConversations(true); // silent background refresh
   };
 
   const activeConv = conversations.find((c) => c.id === activeConvId);
