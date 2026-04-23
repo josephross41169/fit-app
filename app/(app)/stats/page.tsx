@@ -290,6 +290,11 @@ export default function StatsPage(){
   const [loading,setLoading]=useState(true);
   const [expandedPR,setExpandedPR]=useState<string|null>(null);
   const [showGoalEditor,setShowGoalEditor]=useState(false);
+  const [showWeightModal,setShowWeightModal]=useState(false);
+  const [weightInput,setWeightInput]=useState("");
+  const [weightNotes,setWeightNotes]=useState("");
+  const [weightPublic,setWeightPublic]=useState(false);
+  const [weightSaving,setWeightSaving]=useState(false);
   const [savingGoals,setSavingGoals]=useState(false);
 
   // Goals
@@ -843,7 +848,7 @@ export default function StatsPage(){
                 <div style={{fontSize:11,color:C.sub,fontWeight:600,marginBottom:4}}>LAST RECORDED</div>
                 <div style={{fontSize:28,fontWeight:900,color:C.cyan}}>{latestWeight?`${latestWeight} lbs`:"—"}</div>
               </div>
-              <button onClick={()=>router.push("/profile")} style={{fontSize:12,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:10,padding:"7px 14px",cursor:"pointer"}}>+ Log Weight</button>
+              <button onClick={()=>setShowWeightModal(true)} style={{fontSize:12,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:10,padding:"7px 14px",cursor:"pointer"}}>+ Log Weight</button>
             </div>
 
             {/* Today's nutrition */}
@@ -1481,7 +1486,7 @@ export default function StatsPage(){
 
             {/* Weight chart */}
             <SecHead title="Body Weight Trend" right={
-              <button onClick={()=>router.push("/profile")} style={{fontSize:11,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>+ Log Weight</button>
+              <button onClick={()=>setShowWeightModal(true)} style={{fontSize:11,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>+ Log Weight</button>
             }/>
             {weightLogs.length>1?(
               <ChartWrap>
@@ -1615,6 +1620,82 @@ export default function StatsPage(){
 
         </>)}
       </div>
+    {/* ── Weight Log Modal ── */}
+    {showWeightModal && (
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
+        display:"flex",alignItems:"center",justifyContent:"center",padding:"0 16px"}}
+        onClick={e=>{if(e.target===e.currentTarget)setShowWeightModal(false);}}>
+        <div style={{background:"#111118",borderRadius:24,width:"100%",maxWidth:400,padding:"28px 24px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+            <div style={{fontWeight:900,fontSize:20,color:"#F0F0F0"}}>⚖️ Log Weight</div>
+            <button onClick={()=>setShowWeightModal(false)}
+              style={{background:"none",border:"none",color:"#6B7280",fontSize:26,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+
+          {/* Weight input */}
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+              Weight (lbs)
+            </div>
+            <input
+              type="number" step="0.1" placeholder="e.g. 185.5"
+              value={weightInput} onChange={e=>setWeightInput(e.target.value)}
+              style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid #2D1F52",
+                background:"#1A1228",color:"#F0F0F0",fontSize:18,fontWeight:800,boxSizing:"border-box"}}
+              autoFocus
+            />
+          </div>
+
+          {/* Notes */}
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+              Notes (optional)
+            </div>
+            <input
+              type="text" placeholder="e.g. Morning, before breakfast"
+              value={weightNotes} onChange={e=>setWeightNotes(e.target.value)}
+              style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid #2D1F52",
+                background:"#1A1228",color:"#F0F0F0",fontSize:13,boxSizing:"border-box"}}
+            />
+          </div>
+
+          {/* Privacy toggle */}
+          <div style={{marginBottom:24,padding:"12px 14px",background:"#1A1228",
+            borderRadius:12,border:"1px solid #2D1F52",
+            display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>
+                {weightPublic ? "🌍 Public" : "🔒 Private"}
+              </div>
+              <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>
+                {weightPublic ? "Visible on your profile" : "Only you can see this"}
+              </div>
+            </div>
+            <button onClick={()=>setWeightPublic(p=>!p)} style={{
+              width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",
+              background:weightPublic?"#7C3AED":"#2D1F52",
+              position:"relative",transition:"background 0.2s",flexShrink:0,
+            }}>
+              <div style={{
+                width:18,height:18,borderRadius:"50%",background:"#fff",
+                position:"absolute",top:3,
+                left:weightPublic?23:3,
+                transition:"left 0.2s",
+              }}/>
+            </button>
+          </div>
+
+          <button onClick={saveWeight} disabled={!weightInput||weightSaving} style={{
+            width:"100%",padding:"14px",borderRadius:14,border:"none",
+            background:!weightInput||weightSaving?"#2D1F52":"linear-gradient(135deg,#7C3AED,#A78BFA)",
+            color:"#fff",fontWeight:900,fontSize:15,cursor:!weightInput||weightSaving?"not-allowed":"pointer",
+          }}>
+            {weightSaving ? "Saving..." : "Save Weight"}
+          </button>
+        </div>
+      </div>
+    )}
+
     </div>
   );
 }
