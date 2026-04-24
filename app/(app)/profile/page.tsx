@@ -1544,9 +1544,11 @@ export default function ProfilePage() {
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
           .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
-          /* Avatar now lifts a bit less so it overlaps the banner more naturally
-             instead of floating in empty space between banner and info card. */
-          .profile-avatar-col { order: 2 !important; margin-top: -56px !important; z-index: 2 !important; position: relative !important; padding: 0 16px !important; }
+          /* Lift avatar enough that it cleanly overlaps the bottom edge of the banner.
+             Half of the 160px avatar sits on the banner (80px) minus 4px for the border.
+             Previously tried -56px which left the avatar floating in dead space between
+             the banner bottom and the info card, making it look like a loose purple bar. */
+          .profile-avatar-col { order: 2 !important; margin-top: -80px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
@@ -1554,8 +1556,11 @@ export default function ProfilePage() {
           .profile-stats-bio { padding: 0 16px !important; }
           /* Stats row — keep the two big numbers on one horizontal line, tighter */
           .profile-stats-row { gap: 8px !important; margin-top: 12px !important; }
-          /* Remove the weird pill wrapping around the avatar row on mobile */
-          .profile-header-wrap .profile-avatar-col > div:first-child { background: transparent !important; }
+          /* Hide desktop-only hover affordances on touch screens.
+             Reposition buttons require hover on desktop; on mobile they just
+             sit there cluttering the layout. Users can long-press the image
+             later — for now, hide them on the touch-primary breakpoint. */
+          .hide-on-mobile { display: none !important; }
         }
         @media (min-width: 768px) and (max-width: 1100px) {
           .profile-layout {
@@ -2360,9 +2365,10 @@ export default function ProfilePage() {
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
               )}
-              {/* Reposition button — show when image exists and not in reposition mode */}
+              {/* Reposition button — show when image exists and not in reposition mode.
+                  Hidden on mobile via .hide-on-mobile — touch UX will handle this differently later. */}
               {profileImg && !avatarRepositionMode && user && (
-                <button onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
+                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
                   style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
                   <span style={{fontSize:11}}>↕</span>
                   <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
@@ -2422,9 +2428,11 @@ export default function ProfilePage() {
               {bannerImg
                 ? <img src={bannerImg} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transition:dragState?"none":"object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
-              {/* Reposition button — show on hover or when in reposition mode */}
+              {/* Reposition button — show on hover or when in reposition mode.
+                  Hidden on mobile via .hide-on-mobile (touch UX later). */}
               {bannerImg && !repositionMode && (bannerHovered || true) && user && (
                 <button
+                  className="hide-on-mobile"
                   onClick={e=>{e.preventDefault();setRepositionMode(true);}}
                   style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:6,zIndex:5}}
                 >
