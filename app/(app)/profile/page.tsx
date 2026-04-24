@@ -1738,7 +1738,7 @@ export default function ProfilePage() {
         return (
         <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:560,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
-            {/* Holographic shimmer + birthday sparkle keyframes, only need to be defined once */}
+            {/* Holographic shimmer + birthday sparkle + metallic shine keyframes */}
             <style>{`
               @keyframes holoShimmer {
                 0%   { background-position: 0% 50%; }
@@ -1748,6 +1748,13 @@ export default function ProfilePage() {
               @keyframes birthdayPulse {
                 0%,100% { box-shadow: 0 0 20px rgba(255,182,193,0.5), 0 0 40px rgba(135,206,235,0.3); }
                 50%     { box-shadow: 0 0 30px rgba(255,182,193,0.8), 0 0 60px rgba(135,206,235,0.5); }
+              }
+              /* badgeShimmer — moves a diagonal white band across the tile. Paired
+                 with backgroundSize:"200% 100%" the band slides from left to right
+                 and loops. Only applied to Platinum+ tiers via the style.shimmer flag. */
+              @keyframes badgeShimmer {
+                0%   { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
               }
             `}</style>
 
@@ -1877,6 +1884,9 @@ export default function ProfilePage() {
                       }
 
                       // ── PROGRESSION: tiered bronze/silver/gold/platinum/diamond ──
+                      // Each tier renders with a metallic 3-stop gradient + double glow
+                      // (close halo + wide soft light) to simulate shine. Top tiers
+                      // (platinum+) get an animated shimmer sweep on top of the gradient.
                       const style = TIER_STYLES[g.tier ?? 1];
                       const hasProgress = g.currentValue !== undefined && g.currentThreshold !== undefined;
                       const progressToNext = hasProgress && g.nextThreshold !== undefined
@@ -1887,50 +1897,90 @@ export default function ProfilePage() {
                           borderRadius:16,
                           padding:"16px 10px",
                           textAlign:"center",
-                          border:`1.5px solid ${style.border}`,
+                          border:`2px solid ${style.border}`,
                           background: style.gradient,
-                          boxShadow:`0 0 16px ${style.glow}`,
+                          // Double box-shadow: tight halo + wide glow. Creates depth.
+                          boxShadow:`0 0 12px ${style.glow}, 0 0 32px ${style.glow}, inset 0 1px 0 rgba(255,255,255,0.25)`,
                           position:"relative",
                           transition:"all 0.2s",
+                          overflow:"hidden",
                         }}>
+                          {/* Top highlight strip — simulates light hitting the top edge
+                              of a curved metal surface. Gradient fades L→R so it looks
+                              like a specular highlight, not a solid bar. */}
+                          <div style={{
+                            position:"absolute", top:0, left:0, right:0, height:"35%",
+                            background:"linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)",
+                            pointerEvents:"none",
+                            borderRadius:"14px 14px 0 0",
+                          }}/>
+
+                          {/* Animated shimmer sweep — only for Platinum+ to avoid
+                              visual noise on common badges. The diagonal band moves
+                              across the badge every 3s giving a living-metal feel. */}
+                          {style.shimmer && (
+                            <div style={{
+                              position:"absolute", inset:0,
+                              background:"linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)",
+                              backgroundSize:"200% 100%",
+                              animation:"badgeShimmer 3s ease-in-out infinite",
+                              pointerEvents:"none",
+                              mixBlendMode:"overlay",
+                            }}/>
+                          )}
+
                           {/* Tier count pill (how many tiers cleared) */}
                           {(g.maxTier ?? 1) > 1 && (
                             <div style={{position:"absolute",top:8,right:8,
-                              background:"rgba(0,0,0,0.4)",
+                              background:"rgba(0,0,0,0.55)",
+                              backdropFilter:"blur(4px)",
                               borderRadius:99,padding:"2px 6px",
-                              fontSize:9,fontWeight:800,color:style.accentColor}}>
+                              fontSize:9,fontWeight:800,color:style.accentColor,
+                              zIndex:2,
+                              border:`1px solid ${style.border}`,
+                            }}>
                               {g.earnedCount}/{g.maxTier}
                             </div>
                           )}
-                          <div style={{fontSize:32,marginBottom:6}}>{g.emoji}</div>
-                          <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{g.label}</div>
-                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+                          <div style={{fontSize:32,marginBottom:6,position:"relative",zIndex:1,
+                            filter:`drop-shadow(0 2px 4px rgba(0,0,0,0.6))`}}>{g.emoji}</div>
+                          <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4,position:"relative",zIndex:1,
+                            textShadow:"0 1px 3px rgba(0,0,0,0.8)"}}>{g.label}</div>
+                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:8,position:"relative",zIndex:1,
+                            textShadow:"0 1px 2px rgba(0,0,0,0.7)"}}>{g.desc}</div>
 
                           {/* Progress display — current count + bar to next tier */}
                           {hasProgress && (
-                            <div style={{marginBottom:8}}>
-                              <div style={{fontSize:10,fontWeight:800,color:style.textColor,marginBottom:4}}>
+                            <div style={{marginBottom:8,position:"relative",zIndex:1}}>
+                              <div style={{fontSize:10,fontWeight:800,color:style.textColor,marginBottom:4,
+                                textShadow:"0 1px 2px rgba(0,0,0,0.8)"}}>
                                 {g.isMaxed
                                   ? `${g.currentValue} ${g.progressLabel} · MAXED`
                                   : `${g.currentValue} / ${g.nextThreshold} ${g.progressLabel}`
                                 }
                               </div>
-                              <div style={{height:4,borderRadius:99,background:"rgba(0,0,0,0.4)",overflow:"hidden"}}>
+                              <div style={{height:5,borderRadius:99,background:"rgba(0,0,0,0.55)",overflow:"hidden",
+                                border:`1px solid rgba(0,0,0,0.3)`}}>
                                 <div style={{
                                   height:"100%",
                                   width:`${progressToNext}%`,
                                   background: g.isMaxed
                                     ? `linear-gradient(90deg, ${style.accentColor}, #fff, ${style.accentColor})`
-                                    : style.accentColor,
+                                    : `linear-gradient(90deg, ${style.accentColor}, ${style.border})`,
+                                  boxShadow:`0 0 6px ${style.glow}`,
                                   transition:"width 0.5s ease",
                                 }} />
                               </div>
                             </div>
                           )}
 
-                          <div style={{display:"inline-block",background:"rgba(0,0,0,0.4)",
-                            borderRadius:99,padding:"2px 8px",
-                            fontSize:9,fontWeight:900,color:style.accentColor,letterSpacing:0.5}}>
+                          <div style={{display:"inline-block",background:"rgba(0,0,0,0.55)",
+                            backdropFilter:"blur(4px)",
+                            borderRadius:99,padding:"3px 10px",
+                            fontSize:9,fontWeight:900,color:style.accentColor,letterSpacing:0.8,
+                            border:`1px solid ${style.border}`,
+                            position:"relative",zIndex:1,
+                            textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>
                             {g.isMaxed ? `${style.name} · MAXED` : style.name}
                           </div>
                         </div>
