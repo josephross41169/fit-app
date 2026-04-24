@@ -345,9 +345,24 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t"
-        style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
+      {/* Mobile bottom nav.
+
+          iOS Safari pinning notes:
+          - transform:translateZ(0) puts this on its own GPU layer so the URL
+            bar show/hide doesn't make it lag behind the viewport
+          - bottom uses env(safe-area-inset-bottom) fallback to 0 so on iOS
+            we sit above the home indicator AND above where the floating URL
+            bar appears */}
+      <nav className="md:hidden fixed left-0 right-0 z-50 border-t"
+        style={{
+          bottom: 0,
+          background: "#0D0D0D",
+          borderColor: "#1A1228",
+          transform: "translateZ(0)",
+          WebkitTransform: "translateZ(0)",
+          willChange: "transform",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}>
 
         {/* More drawer — slides up when open */}
         {moreOpen && (
