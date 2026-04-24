@@ -2,9 +2,12 @@
 // ── app/(app)/events/new/page.tsx ──────────────────────────────────────────
 // Create event form. Single page, all fields visible (no multi-step wizard).
 // Saves to public.events then redirects to /events/[id].
+//
+// Accepts ?group_id=X in URL — when present, the new event is tied to that
+// group and shows up under the group's events tab.
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -14,6 +17,10 @@ import { EVENT_CATEGORIES, getEventCategory } from "@/lib/eventCategories";
 export default function CreateEventPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // If routed from a group page, the group_id is preserved so the event
+  // shows up under that group's events tab too.
+  const groupId = searchParams?.get("group_id") || null;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -101,6 +108,7 @@ export default function CreateEventPage() {
         .from("events")
         .insert({
           creator_id: user.id,
+          group_id: groupId,  // tie to group if routed from a group page
           title: title.trim(),
           description: description.trim() || null,
           category,
