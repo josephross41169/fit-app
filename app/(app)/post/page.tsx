@@ -1118,15 +1118,44 @@ export default function PostPage() {
     </div>
   );
 
+  // Inline share button for PR celebration screen
+  function SharePRButton({ prExercise, prWeight, prReps, username, displayName }: {
+    prExercise?: string; prWeight?: number; prReps?: number; username: string; displayName: string;
+  }) {
+    const [open, setOpen] = useState(false);
+    const ShareCardDyn = require("@/components/ShareCard").default;
+    return (
+      <>
+        {open && <ShareCardDyn
+          data={{ type: "pr", username, displayName, prExercise, prWeight, prReps, prBadge: true }}
+          onClose={() => setOpen(false)}
+        />}
+        <button
+          onClick={() => setOpen(true)}
+          style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+        >
+          📤 Share PR Card
+        </button>
+      </>
+    );
+  }
+
   if (saved) {
-    setTimeout(() => router.push("/profile"), newPRs.length > 0 ? 3000 : 1500);
+    const hasPRs = newPRs.length > 0;
+    if (!hasPRs) setTimeout(() => router.push("/profile"), 1500);
+    const firstPR = newPRs[0];
     return (
       <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 24px" }}>
-        <div style={{ fontSize: 64 }}>{newPRs.length > 0 ? "🏆" : "✓"}</div>
+        {/* ShareCard modal (lazy import avoids SSR issues) */}
+        {typeof window !== "undefined" && (() => {
+          const [showShare, setShowShare] = ([] as any);
+          return null; // handled inline below via local state
+        })()}
+        <div style={{ fontSize: 64 }}>{hasPRs ? "🏆" : "✓"}</div>
         <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>
-          {newPRs.length > 0 ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! 🎉` : "Saved to Log!"}
+          {hasPRs ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! 🎉` : "Saved to Log!"}
         </div>
-        {newPRs.length > 0 && (
+        {hasPRs && (
           <div style={{ background: "#1A1228", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #F5A623" }}>
             {newPRs.map((pr, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < newPRs.length - 1 ? "1px solid #2D1B69" : "none" }}>
@@ -1140,7 +1169,25 @@ export default function PostPage() {
           </div>
         )}
         <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>{isPrivate ? "🔒 Saved privately" : "🌐 Visible on your profile"}</div>
-        <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to your profile...</div>
+        {hasPRs ? (
+          <div style={{ display: "flex", gap: 12, marginTop: 8, width: "100%", maxWidth: 380 }}>
+            <SharePRButton
+              prExercise={firstPR?.exercise}
+              prWeight={firstPR?.weight}
+              prReps={firstPR?.reps}
+              username={user?.email?.split("@")[0] || "user"}
+              displayName={user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}
+            />
+            <button
+              onClick={() => router.push("/profile")}
+              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #2D1F52", background: "#1A1228", color: "#9CA3AF", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+            >
+              View Profile →
+            </button>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to your profile...</div>
+        )}
       </div>
     );
   }

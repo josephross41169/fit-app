@@ -630,6 +630,7 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
   const [commentLoading, setCommentLoading] = useState(false);
   const [brokenImage, setBrokenImage] = useState(false);
   const [replyTo, setReplyTo] = useState<{id:number|string;user:string}|null>(null);
+  const [showShareCard, setShowShareCard] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [m, d] = post.dateShort.split(".").map(Number);
 
@@ -830,13 +831,38 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
               </svg>
               <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>{post.comments.length > 0 ? post.comments.length : ""} {post.comments.length === 1 ? "comment" : post.comments.length > 1 ? "comments" : "Comment"}</span>
             </button>
-            <button style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
+            <button onClick={() => setShowShareCard(true)} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
               <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
               </svg>
               <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>Share</span>
             </button>
+            {showShareCard && (() => {
+              const ShareCardDyn = require("@/components/ShareCard").default;
+              const shareType = post.workout ? "workout" : post.nutrition ? "nutrition" : "wellness";
+              return (
+                <ShareCardDyn
+                  data={{
+                    type: shareType,
+                    username: post.username,
+                    displayName: post.user,
+                    tier: post.tier || "default",
+                    workoutType: post.workout?.type,
+                    duration: post.workout?.duration,
+                    calories: post.workout?.calories || post.nutrition?.calories,
+                    exercises: post.workout?.exercises?.map(e => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight })),
+                    totalVolume: post.workout?.exercises?.reduce((acc, e) => acc + (parseFloat(e.weight) || 0) * e.sets * e.reps, 0) || 0,
+                    totalSets: post.workout?.exercises?.reduce((acc, e) => acc + e.sets, 0) || 0,
+                    totalCalories: post.nutrition?.calories,
+                    protein: post.nutrition?.protein,
+                    carbs: post.nutrition?.carbs,
+                    fat: post.nutrition?.fat,
+                  }}
+                  onClose={() => setShowShareCard(false)}
+                />
+              );
+            })()}
           </div>
         </div>
 

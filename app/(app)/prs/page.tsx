@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import ShareCard, { type ShareCardData } from "@/components/ShareCard";
 
 const C = {
   purple: "#7C3AED",
@@ -99,6 +100,7 @@ export default function PRsPage() {
   const [selectedMuscle, setSelectedMuscle] = useState<string>("All");
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"volume" | "date" | "alpha">("volume");
+  const [shareData, setShareData] = useState<ShareCardData | null>(null);
 
   const fetchPRs = useCallback(async () => {
     if (!user) return;
@@ -161,6 +163,7 @@ export default function PRsPage() {
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh", paddingBottom: 100 }}>
+      {shareData && <ShareCard data={shareData} onClose={() => setShareData(null)} />}
       {/* Header */}
       <div style={{
         background: C.card, borderBottom: `1px solid ${C.border}`,
@@ -348,8 +351,30 @@ export default function PRsPage() {
                     </div>
                   </div>
 
-                  <div style={{ fontSize: 16, color: C.sub, flexShrink: 0 }}>
-                    {isExpanded ? "▲" : "▼"}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShareData({
+                          type: "pr",
+                          username: user?.email?.split("@")[0] || "user",
+                          displayName: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User",
+                          prExercise: pr.exercise,
+                          prWeight: pr.best.weight,
+                          prReps: pr.best.reps,
+                          prBadge: true,
+                        });
+                      }}
+                      title="Share PR Card"
+                      style={{
+                        background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)",
+                        borderRadius: 8, padding: "3px 7px", cursor: "pointer",
+                        fontSize: 12, color: "#A78BFA", fontWeight: 700,
+                      }}
+                    >
+                      📤
+                    </button>
+                    <span style={{ fontSize: 14, color: C.sub }}>{isExpanded ? "▲" : "▼"}</span>
                   </div>
                 </button>
 
