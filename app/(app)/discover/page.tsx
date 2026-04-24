@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { getEventCategory } from "@/lib/eventCategories";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -33,14 +35,8 @@ const LOCAL_POSTS = [
     photo: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80" },
 ];
 
-const LOCAL_EVENTS = [
-  { id: 1, name: "Farmers Market", venue: "Downtown Summerlin", day: "SAT", date: "29", emoji: "🛒", category: "Wellness", price: "Free", time: "8AM-1PM" },
-  { id: 2, name: "Degree Wellness Day Pass", venue: "Degree Wellness - Summerlin", day: "FRI", date: "28", emoji: "🧖", category: "Spa", price: "$35", time: "10AM-6PM" },
-  { id: 3, name: "5K Run & Brunch", venue: "The Strip - Wynn Start", day: "SUN", date: "30", emoji: "🏃", category: "Running", price: "$25", time: "7AM-10AM" },
-  { id: 4, name: "Orangetheory Trial Day", venue: "Orangetheory - Summerlin", day: "THU", date: "27", emoji: "🔥", category: "HIIT", price: "Free", time: "6AM-7PM" },
-  { id: 5, name: "Yoga in the Park", venue: "Sunset Park - Las Vegas", day: "SAT", date: "29", emoji: "🧘", category: "Yoga", price: "Free", time: "8AM-9:30AM" },
-  { id: 6, name: "Bodybuilding Expo", venue: "Las Vegas Convention Ctr", day: "SAT", date: "29", emoji: "💪", category: "Expo", price: "$20", time: "9AM-5PM" },
-];
+// LOCAL_EVENTS now comes from the database via the events_with_counts view.
+// Loaded inside the component, filtered by user's city.
 
 const WORLD_POSTS = [
   { id: 1, user: "Chris Bumstead", username: "cbum", avatar: "CB", time: "2h ago",
@@ -105,11 +101,16 @@ interface Post {
 }
 
 interface DbEvent {
-  id: string | number;
-  event_type?: string;
-  location?: string;
-  start_date?: string;
-  event_name?: string;
+  id: string;
+  title: string;
+  category: string;
+  subcategory: string | null;
+  event_date: string;
+  date_tbd: boolean;
+  location_name: string | null;
+  city: string | null;
+  price: string;
+  going_count: number;
 }
 
 interface LocalPost extends Post {
@@ -200,43 +201,56 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
   );
 }
 
-// -- Local Event Card · dark detail style matching worldwide cards -------------
-function EventCard({ event }: { event: typeof LOCAL_EVENTS[0] }) {
-  const [saved, setSaved] = useState(false);
-  const router = useRouter();
+// -- Local Event Card · renders a real event row from public.events_with_counts --
+interface DiscoverEvent {
+  id: string;
+  title: string;
+  category: string;
+  subcategory: string | null;
+  event_date: string;
+  date_tbd: boolean;
+  location_name: string | null;
+  city: string | null;
+  price: string;
+  going_count: number;
+}
+
+function EventCard({ event }: { event: DiscoverEvent }) {
+  const cat = getEventCategory(event.category);
+  const date = new Date(event.event_date);
+  const day = event.date_tbd ? "TBD" : date.toLocaleString("en-US", { weekday: "short" }).toUpperCase();
+  const dateNum = event.date_tbd ? "—" : String(date.getDate());
+  const timeStr = event.date_tbd ? "Date TBD" : date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+
   return (
-    <div
-      onClick={() => router.push(`/events/${event.id}`)}
-      style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"border-color 0.15s" }}
-      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#7C3AED"}
-      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
-    >
-      {/* Date badge */}
-      <div style={{ width:48,height:48,borderRadius:13,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-        <div style={{ fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.85)",textTransform:"uppercase",letterSpacing:0.5 }}>{event.day}</div>
-        <div style={{ fontSize:20,fontWeight:900,color:"#fff",lineHeight:1 }}>{event.date}</div>
-      </div>
-      {/* Info */}
-      <div style={{ flex:1,minWidth:0 }}>
-        <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:3 }}>
-          <span style={{ fontSize:14 }}>{event.emoji}</span>
-          <span style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{event.name}</span>
-        </div>
-        <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>📍 {event.venue}</div>
-        <div style={{ display:"flex",gap:8,alignItems:"center" }}>
-          <span style={{ background:"rgba(124,58,237,0.2)",color:"#4ADE80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{event.category}</span>
-          <span style={{ color:C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
-          <span style={{ color:C.darkSub,fontSize:10 }}>· {event.time}</span>
-        </div>
-      </div>
-      {/* Save button */}
-      <button
-        onClick={e => { e.stopPropagation(); setSaved(s=>!s); }}
-        style={{ background:saved?"rgba(124,58,237,0.2)":"#252A3D",border:`1px solid ${saved?"#7C3AED":C.darkBorder}`,borderRadius:9,padding:"6px 10px",cursor:"pointer",color:saved?"#4ADE80":C.darkSub,fontSize:12,fontWeight:800,flexShrink:0,transition:"all 0.15s" }}
+    <Link href={`/events/${event.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+      <div
+        style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"border-color 0.15s" }}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#7C3AED"}
+        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
       >
-        {saved ? "?" : "+"}
-      </button>
-    </div>
+        {/* Date badge */}
+        <div style={{ width:48,height:48,borderRadius:13,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+          <div style={{ fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.85)",textTransform:"uppercase",letterSpacing:0.5 }}>{day}</div>
+          <div style={{ fontSize:20,fontWeight:900,color:"#fff",lineHeight:1 }}>{dateNum}</div>
+        </div>
+        {/* Info */}
+        <div style={{ flex:1,minWidth:0 }}>
+          <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:3 }}>
+            <span style={{ fontSize:14 }}>{cat.emoji}</span>
+            <span style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{event.title}</span>
+          </div>
+          {event.location_name && (
+            <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>📍 {event.location_name}</div>
+          )}
+          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+            <span style={{ background:"rgba(124,58,237,0.2)",color:"#4ADE80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
+            <span style={{ color:event.price === "Free" ? "#22C55E" : C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
+            <span style={{ color:C.darkSub,fontSize:10 }}>· {timeStr}</span>
+          </div>
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -318,36 +332,10 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: Post[]; onChangeCity: () => void; dbEvents: DbEvent[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
   const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
 
-  // Merge real DB events with mock events · real ones first
-  const allEvents = [
-    ...dbEvents.map((e: any) => {
-      const d = e.event_date ? new Date(e.event_date) : null;
-      return {
-        id: e.id,
-        name: e.name,
-        venue: e.location || (e.groups?.name ? `${e.groups.name}` : 'Online'),
-        day: d ? d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase() : '·',
-        date: d ? String(d.getDate()) : '·',
-        emoji: e.emoji || e.groups?.emoji || '📍',
-        category: e.groups?.category || 'Event',
-        price: e.price || 'Free',
-        time: d ? d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '',
-        isReal: true,
-      };
-    }),
-    ...LOCAL_EVENTS.map(e => ({ ...e, id: String(e.id), isReal: false })),
-  ];
+  // Real events from the database, already filtered by city in the parent
+  const allEvents = dbEvents;
   const eventsToShow = showAllEvents ? allEvents : allEvents.slice(0, 6);
-  const [showHostModal, setShowHostModal] = useState(false);
-  const [hostForm, setHostForm] = useState({ name: '', date: '', time: '', location: '', description: '', price: 'Free', contact: '' });
-  const [hostSubmitted, setHostSubmitted] = useState(false);
-
-  function handleHostSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    // In production this would POST to an API · for now show success
-    setHostSubmitted(true);
-    setTimeout(() => { setShowHostModal(false); setHostSubmitted(false); setHostForm({ name:'', date:'', time:'', location:'', description:'', price:'Free', contact:'' }); }, 2500);
-  }
+  // Host modal removed — "Host an Event" now links to /events/new directly.
 
   return (
     <div className="discover-layout" style={{ display:"flex", gap:48, alignItems:"flex-start", maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px" }}>
@@ -390,73 +378,24 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
           </button>
         )}
 
-        {/* Submit event CTA */}
-        <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #7C3AED`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
-          onClick={() => setShowHostModal(true)}
-          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#1A2A1A"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background=C.darkCard; }}
-        >
-          <div style={{ fontSize:22,marginBottom:5 }}>?</div>
-          <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",marginBottom:3 }}>Host an Event</div>
-          <div style={{ fontSize:11,color:C.darkSub }}>Submit your local fitness event for free</div>
-        </div>
-      </div>
-
-      {/* Host an Event Modal */}
-      {showHostModal && (
-        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={() => setShowHostModal(false)}>
-          <div style={{ background:"#1A1D2E",borderRadius:24,border:"1px solid #2A2D3E",width:"100%",maxWidth:480,padding:28,maxHeight:"90vh",overflowY:"auto" }} onClick={e => e.stopPropagation()}>
-            {hostSubmitted ? (
-              <div style={{ textAlign:"center",padding:"32px 0" }}>
-                <div style={{ fontSize:56,marginBottom:12 }}>🎉</div>
-                <div style={{ fontWeight:900,fontSize:20,color:"#7C3AED",marginBottom:8 }}>Event Submitted!</div>
-                <div style={{ fontSize:14,color:"#8892A4" }}>We'll review and post your event to the local feed.</div>
-              </div>
-            ) : (
-              <>
-                <div style={{ fontWeight:900,fontSize:18,color:"#E2E8F0",marginBottom:20 }}>🎉 Host a Local Event</div>
-                <form onSubmit={handleHostSubmit}>
-                  {[
-                    { label:"Event Name *", key:"name", placeholder:"e.g. Saturday Morning 5K" },
-                    { label:"Location *", key:"location", placeholder:"e.g. Red Rock Canyon, Las Vegas" },
-                    { label:"Price", key:"price", placeholder:"Free" },
-                    { label:"Contact / Sign-up Link", key:"contact", placeholder:"Email or URL" },
-                  ].map(f => (
-                    <div key={f.key} style={{ marginBottom:12 }}>
-                      <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>{f.label}</label>
-                      <input value={(hostForm as any)[f.key]} onChange={e => setHostForm(p => ({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
-                        style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",boxSizing:"border-box" as any }} />
-                    </div>
-                  ))}
-                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12 }}>
-                    <div>
-                      <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>Date *</label>
-                      <input type="date" value={hostForm.date} onChange={e => setHostForm(p=>({...p,date:e.target.value}))} required
-                        style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",boxSizing:"border-box" as any }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>Time</label>
-                      <input type="time" value={hostForm.time} onChange={e => setHostForm(p=>({...p,time:e.target.value}))}
-                        style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",boxSizing:"border-box" as any }} />
-                    </div>
-                  </div>
-                  <div style={{ marginBottom:16 }}>
-                    <label style={{ fontSize:11,color:"#8892A4",fontWeight:700,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8 }}>Description</label>
-                    <textarea value={hostForm.description} onChange={e => setHostForm(p=>({...p,description:e.target.value}))} placeholder="What should attendees expect?" rows={3}
-                      style={{ width:"100%",background:"#252A3D",border:"1px solid #2A2D3E",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#E2E8F0",outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box" as any }} />
-                  </div>
-                  <div style={{ display:"flex",gap:10 }}>
-                    <button type="button" onClick={() => setShowHostModal(false)} style={{ flex:1,padding:"11px",borderRadius:10,border:"1px solid #2A2D3E",background:"transparent",color:"#8892A4",fontWeight:700,cursor:"pointer" }}>Cancel</button>
-                    <button type="submit" disabled={!hostForm.name||!hostForm.location||!hostForm.date} style={{ flex:2,padding:"11px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",opacity:(!hostForm.name||!hostForm.location||!hostForm.date)?0.5:1 }}>
-                      Submit Event 🚀
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
+        {/* Submit event CTA — links to the new dedicated /events/new page.
+            Old inline modal removed in favor of the full create-event flow. */}
+        <Link href="/events/new" style={{ textDecoration: "none", display: "block" }}>
+          <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #7C3AED`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#1A2A1A"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background=C.darkCard; }}
+          >
+            <div style={{ fontSize:22,marginBottom:5 }}>+</div>
+            <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",marginBottom:3 }}>Host an Event</div>
+            <div style={{ fontSize:11,color:C.darkSub }}>Create a local event for free</div>
           </div>
-        </div>
-      )}
+        </Link>
+
+        {/* Browse all events link */}
+        <Link href="/events" style={{ display: "block", textDecoration: "none", textAlign: "center", marginTop: 12, padding: "10px", color: "#A78BFA", fontSize: 12, fontWeight: 700 }}>
+          Browse all events →
+        </Link>
+      </div>
     </div>
   );
 }
@@ -543,20 +482,29 @@ export default function DiscoverPage() {
   const [newCityInput, setNewCityInput] = useState("");
 
   // Real events from DB
-  const [dbEvents, setDbEvents] = useState<any[]>([]);
+  const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
   const [showAllEvents, setShowAllEvents] = useState(false);
 
+  // Re-fetch events whenever the user's city changes so the sidebar stays
+  // in sync with whatever city they've picked above.
   useEffect(() => {
     async function loadEvents() {
-      const { data } = await supabase
-        .from('group_events')
-        .select('*, groups(name, category, emoji)')
+      const now = new Date().toISOString();
+      let query = supabase
+        .from('events_with_counts')
+        .select('id, title, category, subcategory, event_date, date_tbd, location_name, city, price, going_count')
+        .eq('is_public', true)
+        .gte('event_date', now)
         .order('event_date', { ascending: true })
         .limit(50);
-      if (data && data.length > 0) setDbEvents(data);
+      // City match: pull events whose city contains the user's city string.
+      // ilike is case-insensitive substring, so "Las Vegas" matches "Las Vegas, NV"
+      if (userCity) query = query.ilike('city', `%${userCity.split(',')[0].trim()}%`);
+      const { data } = await query;
+      setDbEvents(data || []);
     }
     loadEvents();
-  }, []);
+  }, [userCity]);
 
   useEffect(() => {
     async function loadLocalPosts() {
