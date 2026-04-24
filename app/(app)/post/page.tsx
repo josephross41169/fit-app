@@ -902,21 +902,30 @@ export default function PostPage() {
         if (liftCount >= 1000) await award('lifts-1000');
       }
 
-      // ── Yoga (now a workout category) ─────────────────────────────────
+      // ── Yoga (now a workout category) — full 8-tier ladder ───────────
       if (woCat === 'yoga') {
         const yogaCount = await countLogs({ log_type: 'workout', workout_category: 'yoga' });
-        if (yogaCount >= 1)   await award('first-yoga');
-        if (yogaCount >= 10)  await award('yoga-10');
-        if (yogaCount >= 30)  await award('yoga-lover');
-        if (yogaCount >= 100) await award('yoga-queen');
+        if (yogaCount >= 1)    await award('first-yoga');
+        if (yogaCount >= 5)    await award('yoga-5');
+        if (yogaCount >= 20)   await award('yoga-10');       // reused id, now 20-tier
+        if (yogaCount >= 50)   await award('yoga-50');
+        if (yogaCount >= 100)  await award('yoga-100');
+        if (yogaCount >= 200)  await award('yoga-200');
+        if (yogaCount >= 500)  await award('yoga-500');
+        if (yogaCount >= 1000) await award('yoga-1000');
       }
 
-      // ── Walking (now a workout category) ──────────────────────────────
+      // ── Walking (now a workout category) — full 8-tier ladder ─────────
       if (woCat === 'walking') {
         const walkCount = await countLogs({ log_type: 'workout', workout_category: 'walking' });
-        if (walkCount >= 1)   await award('first-walk');
-        if (walkCount >= 10)  await award('nature-walk');
-        if (walkCount >= 50)  await award('walks-50');
+        if (walkCount >= 1)    await award('first-walk');
+        if (walkCount >= 5)    await award('walks-5');
+        if (walkCount >= 20)   await award('walks-20');
+        if (walkCount >= 50)   await award('walks-50');
+        if (walkCount >= 100)  await award('walks-100');
+        if (walkCount >= 200)  await award('walks-200');
+        if (walkCount >= 500)  await award('walks-500');
+        if (walkCount >= 1000) await award('walks-1000');
       }
     }
 
@@ -933,49 +942,85 @@ export default function PostPage() {
         .ilike('wellness_type', `%${wType}%`);
       const typeCount = wCount || 0;
 
-      // Meditation
+      // Meditation — full 8-tier ladder
       if (wTypeLower.includes('meditat')) {
-        if (typeCount >= 1)   await award('first-meditation');
-        if (typeCount >= 10)  await award('meditation-10');
-        if (typeCount >= 30)  await award('meditation-master');
+        if (typeCount >= 1)    await award('first-meditation');
+        if (typeCount >= 5)    await award('meditation-5');
+        if (typeCount >= 20)   await award('meditation-10');      // reused id, now 20
+        if (typeCount >= 50)   await award('meditation-50');
+        if (typeCount >= 100)  await award('meditation-100');
+        if (typeCount >= 200)  await award('meditation-200');
+        if (typeCount >= 500)  await award('meditation-500');
+        if (typeCount >= 1000) await award('meditation-1000');
       }
-      // Cold Plunge / Ice Bath
+      // Cold Plunge / Ice Bath — full 8-tier ladder
       if (wTypeLower.includes('cold') || wTypeLower.includes('ice') || wTypeLower.includes('plunge')) {
-        if (typeCount >= 1)   await award('first-cold-plunge');
-        if (typeCount >= 5)   await award('ice-bath');
-        if (typeCount >= 20)  await award('cold-plunge-20');
-        if (typeCount >= 50)  await award('ice-warrior');
+        if (typeCount >= 1)    await award('first-cold-plunge');
+        if (typeCount >= 5)    await award('cold-plunge-5');
+        if (typeCount >= 20)   await award('cold-plunge-20');
+        if (typeCount >= 50)   await award('cold-plunge-50');
+        if (typeCount >= 100)  await award('cold-plunge-100');
+        if (typeCount >= 200)  await award('cold-plunge-200');
+        if (typeCount >= 500)  await award('cold-plunge-500');
+        if (typeCount >= 1000) await award('cold-plunge-1000');
       }
-      // Sauna
+      // Sauna — full 8-tier ladder
       if (wTypeLower.includes('sauna')) {
-        if (typeCount >= 1)   await award('first-sauna');
-        if (typeCount >= 10)  await award('sauna');
-        if (typeCount >= 30)  await award('sauna-30');
+        if (typeCount >= 1)    await award('first-sauna');
+        if (typeCount >= 5)    await award('sauna-5');
+        if (typeCount >= 20)   await award('sauna-20');
+        if (typeCount >= 50)   await award('sauna-50');
+        if (typeCount >= 100)  await award('sauna-100');
+        if (typeCount >= 200)  await award('sauna-200');
+        if (typeCount >= 500)  await award('sauna-500');
+        if (typeCount >= 1000) await award('sauna-1000');
       }
-      // Breathwork
+      // Breathwork — full 8-tier ladder
       if (wTypeLower.includes('breath')) {
-        if (typeCount >= 1)   await award('first-breathwork');
-        if (typeCount >= 10)  await award('breathwork');
-        if (typeCount >= 30)  await award('breathwork-30');
+        if (typeCount >= 1)    await award('first-breathwork');
+        if (typeCount >= 5)    await award('breathwork-5');
+        if (typeCount >= 20)   await award('breathwork-20');
+        if (typeCount >= 50)   await award('breathwork-50');
+        if (typeCount >= 100)  await award('breathwork-100');
+        if (typeCount >= 200)  await award('breathwork-200');
+        if (typeCount >= 500)  await award('breathwork-500');
+        if (typeCount >= 1000) await award('breathwork-1000');
       }
-      // Stretching
+      // Stretching — full 8-tier ladder
       if (wTypeLower.includes('stretch')) {
-        if (typeCount >= 1)   await award('first-stretch');
-        if (typeCount >= 20)  await award('stretch-it-out');
+        if (typeCount >= 1)    await award('first-stretch');
+        if (typeCount >= 5)    await award('stretch-5');
+        if (typeCount >= 20)   await award('stretch-20');
+        if (typeCount >= 50)   await award('stretch-50');
+        if (typeCount >= 100)  await award('stretch-100');
+        if (typeCount >= 200)  await award('stretch-200');
+        if (typeCount >= 500)  await award('stretch-500');
+        if (typeCount >= 1000) await award('stretch-1000');
       }
 
-      // Total wellness logs
+      // Total wellness logs — full 8-tier ladder
       const totalWellness = await countLogs({ log_type: 'wellness' });
-      if (totalWellness >= 10) await award('wellness-10');
-      if (totalWellness >= 50) await award('wellness-50');
+      if (totalWellness >= 1)    await award('wellness-1');
+      if (totalWellness >= 5)    await award('wellness-5');
+      if (totalWellness >= 20)   await award('wellness-20');
+      if (totalWellness >= 50)   await award('wellness-50');
+      if (totalWellness >= 100)  await award('wellness-100');
+      if (totalWellness >= 200)  await award('wellness-200');
+      if (totalWellness >= 500)  await award('wellness-500');
+      if (totalWellness >= 1000) await award('wellness-1000');
     }
 
     if (tab === 'nutrition') {
+      // Nutrition logs — full 8-tier ladder (previously 1/7/14/100)
       const totalNutrition = await countLogs({ log_type: 'nutrition' });
-      if (totalNutrition >= 1)   await award('first-nutrition-log');
-      if (totalNutrition >= 7)   await award('nutrition-week');
-      if (totalNutrition >= 14)  await award('nutrition-pro');
-      if (totalNutrition >= 100) await award('nutrition-100');
+      if (totalNutrition >= 1)    await award('first-nutrition-log');
+      if (totalNutrition >= 5)    await award('nutrition-5');
+      if (totalNutrition >= 20)   await award('nutrition-20');
+      if (totalNutrition >= 50)   await award('nutrition-50');
+      if (totalNutrition >= 100)  await award('nutrition-100');
+      if (totalNutrition >= 200)  await award('nutrition-200');
+      if (totalNutrition >= 500)  await award('nutrition-500');
+      if (totalNutrition >= 1000) await award('nutrition-1000');
     }
   }
 
