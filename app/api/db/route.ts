@@ -220,6 +220,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ posts: data || [] });
     }
 
+    // ── MODERATION: Get list of users the current user has blocked ─────────
+    // Returns user profile info for each blocked user so the settings page
+    // can render the list with avatars. Private endpoint — only returns
+    // blocks where the caller is the blocker.
+    if (action === 'get_blocked_users') {
+      if (!userId) return NextResponse.json({ blocked: [] });
+      const { data } = await admin
+        .from('user_blocks')
+        .select('created_at, blocked:users!user_blocks_blocked_id_fkey(id, username, full_name, avatar_url)')
+        .eq('blocker_id', userId)
+        .order('created_at', { ascending: false });
+      return NextResponse.json({ blocked: data || [] });
+    }
+
     return NextResponse.json({ error: 'Unknown GET action' }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -234,6 +248,15 @@ export async function POST(req: NextRequest) {
     if (action === 'create_conversation') {
       const { userId, otherUserId } = payload;
       if (!userId || !otherUserId) return NextResponse.json({ error: 'Missing user IDs' }, { status: 400 });
+
+      // Block check: neither party can start a conversation if a block exists
+      // in either direction. Returns a clean 403 so the UI can show an error.
+      const { data: blockExists } = await admin.from('user_blocks').select('blocker_id')
+        .or(`and(blocker_id.eq.${userId},blocked_id.eq.${otherUserId}),and(blocker_id.eq.${otherUserId},blocked_id.eq.${userId})`)
+        .limit(1);
+      if (blockExists && blockExists.length > 0) {
+        return NextResponse.json({ error: 'Cannot start conversation with this user' }, { status: 403 });
+      }
 
       // Check existing shared conversation
       const { data: myConvs } = await admin
@@ -264,6 +287,22 @@ export async function POST(req: NextRequest) {
     // ── Send message ───────────────────────────────────────────────────────
     if (action === 'send_message') {
       const { conversationId, senderId, content } = payload;
+
+      // Block check: find other participants and verify no block in either
+      // direction. Using the server ensures a malicious client can't bypass
+      // the client-side block filter on the messages page.
+      const { data: otherParts } = await admin
+        .from('conversation_participants').select('user_id').eq('conversation_id', conversationId).neq('user_id', senderId);
+      if (otherParts && otherParts.length > 0) {
+        const otherIds = otherParts.map((p: any) => p.user_id);
+        const { data: blockExists } = await admin.from('user_blocks').select('blocker_id')
+          .or(`and(blocker_id.eq.${senderId},blocked_id.in.(${otherIds.join(',')})),and(blocker_id.in.(${otherIds.join(',')}),blocked_id.eq.${senderId})`)
+          .limit(1);
+        if (blockExists && blockExists.length > 0) {
+          return NextResponse.json({ error: 'Cannot send message' }, { status: 403 });
+        }
+      }
+
       const { data, error } = await admin.from('messages').insert({
         conversation_id: conversationId,
         sender_id: senderId,
@@ -808,6 +847,137 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+    }
+
+    // ── MODERATION: Report content or user ─────────────────────────────────
+    // Creates a row in the reports table. Duplicate reports (same reporter →
+    // same target) are treated as success (idempotent) so clicking report
+    // twice doesn't error. The actual content stays visible until a human
+    // reviews — reports just flag for moderation queue.
+    if (action === 'report_content') {
+      const { reporterId, targetType, targetId, reason, details } = payload;
+      if (!reporterId || !targetType || !targetId || !reason) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+
+      const { error } = await admin.from('reports').upsert({
+        reporter_id: reporterId,
+        target_type: targetType,
+        target_id: targetId,
+        reason,
+        details: details || null,
+      }, { onConflict: 'reporter_id,target_type,target_id' });
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
+    // ── MODERATION: Block a user ─────────────────────────────────────────
+    // Upserts a block row. Idempotent so blocking twice is harmless.
+    // Also auto-unfollows in both directions — blocked users shouldn't
+    // stay in follow relationships since they're effectively invisible.
+    if (action === 'block_user') {
+      const { blockerId, blockedId, reason } = payload;
+      if (!blockerId || !blockedId) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      if (blockerId === blockedId) {
+        return NextResponse.json({ error: 'Cannot block yourself' }, { status: 400 });
+      }
+
+      const { error } = await admin.from('user_blocks').upsert({
+        blocker_id: blockerId,
+        blocked_id: blockedId,
+        reason: reason || null,
+      }, { onConflict: 'blocker_id,blocked_id' });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Unfollow in both directions. Safe to fail — the block is what matters.
+      await admin.from('follows')
+        .delete()
+        .or(`and(follower_id.eq.${blockerId},following_id.eq.${blockedId}),and(follower_id.eq.${blockedId},following_id.eq.${blockerId})`);
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ── MODERATION: Unblock a user ───────────────────────────────────────
+    if (action === 'unblock_user') {
+      const { blockerId, blockedId } = payload;
+      if (!blockerId || !blockedId) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      const { error } = await admin.from('user_blocks')
+        .delete()
+        .eq('blocker_id', blockerId)
+        .eq('blocked_id', blockedId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
+    // ── Delete account (soft delete) ──────────────────────────────────────────
+    // Apple requires in-app account deletion. We anonymize PII but keep the
+    // user row so foreign keys (posts, badges, messages they sent) don't
+    // cascade-delete. After 30 days a scheduled purge can hard-delete if
+    // desired. Username is also added to reserved_usernames so nobody can
+    // re-register the handle and impersonate.
+    //
+    // Important: public.users.id FKs auth.users ON DELETE CASCADE. If we
+    // delete the auth user here, the cascade wipes our just-anonymized row.
+    // Instead we ban the auth user (sets banned_until = far future) which
+    // prevents login while preserving the auth row. The frontend's signOut
+    // clears the session cookie.
+    if (action === 'delete_account') {
+      const { userId, reason } = payload;
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      // 1. Grab the user's current handle so we can reserve it
+      const { data: u, error: uErr } = await admin
+        .from('users')
+        .select('username')
+        .eq('id', userId)
+        .single();
+      if (uErr || !u) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+      // 2. Reserve the username permanently so nobody can impersonate
+      await admin.from('reserved_usernames').upsert({
+        username: u.username,
+        original_user_id: userId,
+        reason: 'account_deleted',
+      }, { onConflict: 'username' });
+
+      // 3. Anonymize PII on the user row. The user stays in the table
+      //    (so FKs hold) but identifying info is wiped. Display name becomes
+      //    "Deleted User" everywhere their posts/comments appear.
+      const anonHandle = `deleted_${userId.slice(0, 8)}`;
+      const { error: updErr } = await admin
+        .from('users')
+        .update({
+          username: anonHandle,
+          full_name: 'Deleted User',
+          bio: null,
+          avatar_url: null,
+          banner_url: null,
+          is_private: true,
+          deleted_at: new Date().toISOString(),
+          deleted_reason: reason || null,
+        })
+        .eq('id', userId);
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+      // 4. Ban the auth user so they can't log back in. We use a ~100-year
+      //    ban duration as a practical "permanent." Supabase exposes this
+      //    via the admin.updateUserById call. If it fails the account is
+      //    still effectively dead (anonymized + client-signed-out) but we
+      //    log the failure for manual cleanup.
+      try {
+        await admin.auth.admin.updateUserById(userId, {
+          ban_duration: '876000h', // 100 years
+        });
+      } catch (authErr: any) {
+        console.error('[delete_account] auth ban failed (non-fatal):', authErr);
+      }
+
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
