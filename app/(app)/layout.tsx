@@ -69,7 +69,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <BottomNav />
       <main
         style={{
-          paddingBottom: 80,
+          // Bottom padding clears the fixed mobile nav (~60px tall) plus
+          // the iPhone home indicator (~34px env(safe-area-inset-bottom))
+          // plus a little breathing room. md:pb-0 zeros this on desktop
+          // where the nav is a left sidebar instead.
+          paddingBottom: "calc(60px + env(safe-area-inset-bottom, 0px) + 20px)",
           // On desktop: offset by sidebar width with smooth transition
           transition: "padding-left 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
