@@ -1016,23 +1016,28 @@ export default function ProfilePage() {
   const [highlightLb,setHighlightLb] = useState<string|null>(null);
   const [editingHighlights,setEditingHighlights] = useState(false);
 
-  // Load persisted highlights — Supabase first, localStorage fallback
+  // Load persisted highlights — Supabase is source of truth.
+  // localStorage is just a fallback for users who haven't saved to DB yet.
   useEffect(() => {
     if (!user) return;
     async function loadHighlights() {
       try {
-        // Try Supabase first (persists across devices)
-        const { data } = await supabase.from('users').select('highlights').eq('id', user!.id).single();
-        if (data?.highlights && Array.isArray(data.highlights) && data.highlights.length > 0) {
+        // Supabase is the source of truth. If the row exists, use whatever
+        // it says — including empty array. Previously this fell through to
+        // localStorage when DB had an empty array, which caused deleted
+        // highlights to come back from stale localStorage cache.
+        const { data, error } = await supabase.from('users').select('highlights').eq('id', user!.id).single();
+        if (!error && data) {
+          const dbHighlights = Array.isArray(data.highlights) ? data.highlights : [];
           // Filter to only valid URLs (not base64 blobs which may be truncated)
-          const validUrls = data.highlights.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
-          if (validUrls.length > 0) {
-            setHighlights(validUrls);
-            return;
-          }
+          const validUrls = dbHighlights.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
+          setHighlights(validUrls);
+          // Sync localStorage to match DB so future loads are consistent
+          try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(validUrls)); } catch {}
+          return;
         }
       } catch {}
-      // Fall back to localStorage
+      // Only reach here if DB query failed entirely — fall back to localStorage
       try {
         const saved = localStorage.getItem(`fit_highlights_${user!.id}`);
         if (saved) {
@@ -1484,30 +1489,39 @@ export default function ProfilePage() {
     const urlToRemove = highlights[idx];
     if (!urlToRemove) return;
 
-    // Update local state immediately
+    // Update local state immediately for responsive UI
     const next = highlights.filter((_,i) => i !== idx);
     setHighlights(next);
     if (next.length === 0) setEditingHighlights(false);
 
     if (!user) return;
 
-    // Update DB array
-    await supabase.from('users').update({ highlights: next } as any).eq('id', user.id).catch(() => {});
+    // Update DB array — explicitly await and log errors. Previously the
+    // .catch(() => {}) swallowed errors silently which caused the deleted
+    // photo to come back on refresh if the save quietly failed.
+    const { error: dbErr } = await supabase
+      .from('users')
+      .update({ highlights: next } as any)
+      .eq('id', user.id);
+    if (dbErr) {
+      console.error("Failed to save highlights deletion:", dbErr);
+      // Roll back local state so the user sees the photo is still there
+      setHighlights(highlights);
+      alert("Couldn't delete that highlight. Try again.");
+      return;
+    }
 
-    // Update localStorage
+    // Update localStorage cache so it matches DB
     try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
 
-    // Permanently delete the file from Supabase storage
-    console.log("Deleting highlight URL:", urlToRemove);
+    // Permanently delete the file from Supabase storage (best-effort —
+    // the row update already removed the URL reference, so even if the
+    // storage cleanup fails the highlight is gone from the user's view).
     try {
       const match = urlToRemove.match(/avatars\/(.+?)(\?|$)/);
-      console.log("Storage path match:", match?.[1]);
       if (match) {
         const path = decodeURIComponent(match[1]);
-        const { data, error } = await supabase.storage.from('avatars').remove([path]);
-        console.log("Storage delete result:", data, error);
-      } else {
-        console.warn("Could not extract storage path from URL:", urlToRemove);
+        await supabase.storage.from('avatars').remove([path]);
       }
     } catch(e) { console.error("Storage delete error:", e); }
   }
