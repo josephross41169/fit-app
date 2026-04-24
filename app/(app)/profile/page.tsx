@@ -1563,11 +1563,12 @@ export default function ProfilePage() {
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
           .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
-          /* Lift avatar so it cleanly overlaps the bottom edge of the banner.
-             184px avatar — half overlaps banner (92px) minus 4px tier border = -88px.
-             Bottom margin pushes the rest of the content down so name/badge/stats
-             don't crash into the avatar's circumference. */
-          .profile-avatar-col { order: 2 !important; margin-top: -88px !important; margin-bottom: 16px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
+          /* On mobile, the avatar sits cleanly BELOW the banner instead of
+             overlapping it. The overlap design only works on wide screens
+             where there's room for the avatar to sit beside content. On
+             phones, the negative margin caused the avatar to crash into the
+             stats / Edit Profile button. Cleaner to just stack vertically. */
+          .profile-avatar-col { order: 2 !important; margin-top: 12px !important; margin-bottom: 8px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
