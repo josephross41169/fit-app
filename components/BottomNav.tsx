@@ -117,6 +117,21 @@ const tabs = [
       </div>
     )
   },
+  // Settings — lives in More menu for account/privacy/legal. Required entry
+  // point for Apple-mandated account deletion (Guideline 5.1.1(v)).
+  {
+    href: "/settings", label: "Settings",
+    icon: (active: boolean) => (
+      <div style={{
+        width: 24, height: 24,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: active ? 18 : 16,
+        filter: active ? "none" : "grayscale(0.4)",
+      }}>
+        ⚙️
+      </div>
+    )
+  },
 ];
 
 // ── Badge component ───────────────────────────────────────────────────────────
