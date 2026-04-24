@@ -13,6 +13,24 @@ interface AuthUser extends User {
     followers_count: number;
     following_count: number;
     posts_count: number;
+    // Account type — personal | business. Critical for many UI branches
+    // (profile layout, bottom nav, onboarding redirect, route guards).
+    account_type?: 'personal' | 'business' | null;
+    // Business-only fields — only populated when account_type = 'business'.
+    // All nullable since new columns didn't exist for older rows.
+    business_name?: string | null;
+    business_type?: string | null;
+    business_website?: string | null;
+    business_address?: string | null;
+    business_phone?: string | null;
+    business_email?: string | null;
+    business_hours?: any;
+    business_description_long?: string | null;
+    business_instagram?: string | null;
+    business_tiktok?: string | null;
+    business_twitter?: string | null;
+    business_youtube?: string | null;
+    verification_status?: string | null;
   }
 }
 
@@ -35,9 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchProfile(authUser: User): Promise<AuthUser> {
     try {
+      // Pull everything the app might need from the users row in one query.
+      // account_type is critical — without it every business/personal branch
+      // in the UI silently falls through to the personal layout.
       const { data } = await supabase
         .from('users')
-        .select('username, full_name, bio, avatar_url, banner_url, followers_count, following_count, posts_count')
+        .select('*')
         .eq('id', authUser.id)
         .single();
       return { ...authUser, profile: data || undefined };
