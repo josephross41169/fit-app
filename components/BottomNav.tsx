@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { isBusinessAccount } from "@/lib/businessTypes";
 
 const PURPLE = "#7C3AED";
 const PURPLE_BG = "rgba(124,58,237,0.15)";
@@ -232,6 +233,22 @@ export default function BottomNav() {
     return false;
   });
 
+  // ── Account-aware tab list ──────────────────────────────────────────────
+  // Business accounts are advertising pages, not athletes. They don't log
+  // workouts, track PRs, use AI plans, or compete in rivals — so those tabs
+  // disappear from their nav. Personal accounts see all tabs.
+  const isBusiness = isBusinessAccount(user?.profile);
+  const businessHiddenHrefs = new Set([
+    "/post",          // activity logger — no workouts for businesses
+    "/stats",         // personal stats
+    "/rivals",        // 1v1 competitions
+    "/workout-plan",  // AI training plan
+    "/prs",           // personal records
+    "/track",         // body weight tracking
+    "/tier-preview",  // athlete tier unlock preview
+  ]);
+  const visibleTabs = isBusiness ? tabs.filter(t => !businessHiddenHrefs.has(t.href)) : tabs;
+
   function toggleSidebar() {
     setCollapsed(c => {
       const next = !c;
@@ -345,7 +362,7 @@ export default function BottomNav() {
               borderRadius:"20px 20px 0 0", padding:"16px 12px 8px",
             }}>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:4 }}>
-                {tabs.slice(5).map((tab) => {
+                {visibleTabs.slice(5).map((tab) => {
                   const active = pathname === tab.href;
                   const badge = getBadge(tab.href);
                   return (
@@ -375,7 +392,7 @@ export default function BottomNav() {
             so the tab row sits above the iPhone home indicator — previously
             used `pb-safe` which was a non-existent Tailwind class. */}
         <div className="flex items-center justify-around px-2 safe-nav">
-          {tabs.slice(0, 5).map((tab) => {
+          {visibleTabs.slice(0, 5).map((tab) => {
             const active = pathname === tab.href;
             const badge = getBadge(tab.href);
             return (
@@ -402,7 +419,7 @@ export default function BottomNav() {
               gap:2,padding:"8px 12px",background:"none",border:"none",cursor:"pointer",
               minWidth:44, position:"relative" }}>
             {/* Badge if any hidden tab has notifications */}
-            {tabs.slice(5).some(t => getBadge(t.href) > 0) && (
+            {visibleTabs.slice(5).some(t => getBadge(t.href) > 0) && (
               <div style={{ position:"absolute",top:6,right:8,width:8,height:8,
                 borderRadius:"50%",background:"#EF4444",border:"2px solid #0D0D0D" }}/>
             )}
@@ -465,7 +482,7 @@ export default function BottomNav() {
         </div>
 
         <div className="flex flex-col gap-1">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <SideNavItemCollapsible key={tab.href} tab={tab} active={pathname === tab.href} badge={getBadge(tab.href)} collapsed={collapsed} />
           ))}
         </div>
