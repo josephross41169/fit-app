@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
 
@@ -215,6 +216,11 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
           </div>
         </div>
         {event.description && <p style={{ fontSize:11, color:darkSub, lineHeight:1.5, marginTop:8, marginBottom:0 }}>{event.description}</p>}
+        {event._isNewEvent && (
+          <Link href={`/events/${event.id}`} onClick={e => e.stopPropagation()} style={{ display:"inline-block", marginTop:8, fontSize:11, color:"#A78BFA", textDecoration:"none", fontWeight:700 }}>
+            View full event page →
+          </Link>
+        )}
       </div>
       {showComments && (
         <div style={{ borderTop:`1px solid ${darkBorder}`, padding:"10px 14px" }}>
@@ -593,7 +599,31 @@ export default function GroupPage() {
       if (data.group) {
         setDbGroup(data.group);
         setDbPosts(data.posts || []);
-        setDbEvents(data.events || []);
+
+        // Old group_events from API + new events from public.events table.
+        // Both are merged so legacy events keep displaying alongside new ones.
+        const legacyEvents = (data.events || []) as any[];
+        const { data: newEvents } = await supabase
+          .from("events_with_counts")
+          .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count")
+          .eq("group_id", data.group.id)
+          .eq("is_public", true)
+          .order("event_date", { ascending: true });
+        // Adapt new-schema rows to the shape the existing EventCard expects
+        const adapted = (newEvents || []).map((e: any) => ({
+          id: e.id,
+          name: e.title,
+          description: e.description,
+          event_date: e.date_tbd ? null : e.event_date,
+          location: e.location_name,
+          price: e.price,
+          emoji: "📅",
+          rsvp_count: e.going_count,
+          image_url: e.image_url,
+          _isNewEvent: true, // flag so card knows to link to /events/[id]
+        }));
+        setDbEvents([...adapted, ...legacyEvents]);
+
         setDbChallenges(data.challenges || []);
         setDbNotes(data.notes || []);
         setDbMembers(data.members || []);
@@ -1392,57 +1422,7 @@ export default function GroupPage() {
         }
       `}</style>
 
-      {/* ── Create Event Modal ── */}
-      {showEventModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setShowEventModal(false)}>
-          <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:460, padding:"24px", maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0", marginBottom:16 }}>🗓️ Create Event</div>
-            <form onSubmit={submitEvent}>
-              {[
-                { label:"Event Name *", key:"name", placeholder:"e.g. Saturday Morning Run" },
-                { label:"Description", key:"description", placeholder:"What to expect..." },
-                { label:"Location", key:"location", placeholder:"Red Rock Canyon / Online" },
-                { label:"Price", key:"price", placeholder:"Free" },
-              ].map(f => (
-                <div key={f.key} style={{ marginBottom:12 }}>
-                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>{f.label}</label>
-                  <input value={(eventForm as any)[f.key]} onChange={e => setEventForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
-                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                </div>
-              ))}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-                <div>
-                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Date</label>
-                  <input type="date" value={eventForm.date} onChange={e => setEventForm(p=>({...p,date:e.target.value}))}
-                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Time</label>
-                  <input type="time" value={eventForm.time} onChange={e => setEventForm(p=>({...p,time:e.target.value}))}
-                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                </div>
-              </div>
-              <div style={{ marginBottom:16 }}>
-                <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Emoji</label>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                  {["📅","🏃","🏋️","🧘","🔥","🏆","🎯","🌅","🤸","💪"].map(em => (
-                    <button key={em} type="button" onClick={() => setEventForm(p=>({...p,emoji:em}))}
-                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${eventForm.emoji===em?"#16A34A":"#2A2D3E"}`, background:eventForm.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
-                      {em}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div style={{ display:"flex", gap:10 }}>
-                <button type="button" onClick={() => setShowEventModal(false)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
-                <button type="submit" disabled={eventSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:eventSubmitting?0.7:1 }}>
-                  {eventSubmitting ? "Creating..." : "Create Event"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Old Create Event modal removed — "+ Event" button now links to /events/new?group_id=X */}
 
       {/* ── Create Group Goal Modal ── */}
       {showGoalModal && (
@@ -2422,7 +2402,7 @@ export default function GroupPage() {
                   <div style={{ fontSize:12, color:C.sub }}>{displayEvents.length} scheduled</div>
                 </div>
                 {group._dbId && (
-                  <button onClick={() => setShowEventModal(true)} style={{ padding:"7px 14px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>+ Event</button>
+                  <Link href={`/events/new?group_id=${group._dbId}`} style={{ padding:"7px 14px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>+ Event</Link>
                 )}
               </div>
               {displayEvents.map((event:any) => (
@@ -3075,7 +3055,7 @@ export default function GroupPage() {
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{displayEvents.length} scheduled</div>
               </div>
               {group._dbId && (
-                <button onClick={() => setShowEventModal(true)} style={{ padding:"5px 12px", borderRadius:8, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>+ Event</button>
+                <Link href={`/events/new?group_id=${group._dbId}`} style={{ padding:"5px 12px", borderRadius:8, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>+ Event</Link>
               )}
             </div>
             {displayEvents.length === 0 && <div style={{ fontSize:12, color:C.darkSub, textAlign:"center", padding:"12px 0" }}>No events yet</div>}
