@@ -1563,12 +1563,11 @@ export default function ProfilePage() {
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
           .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
-          /* On mobile, the avatar sits cleanly BELOW the banner instead of
-             overlapping it. The overlap design only works on wide screens
-             where there's room for the avatar to sit beside content. On
-             phones, the negative margin caused the avatar to crash into the
-             stats / Edit Profile button. Cleaner to just stack vertically. */
-          .profile-avatar-col { order: 2 !important; margin-top: 12px !important; margin-bottom: 8px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
+          /* Lift avatar enough that it cleanly overlaps the bottom edge of the banner.
+             Half of the 160px avatar sits on the banner (80px) minus 4px for the border.
+             Previously tried -56px which left the avatar floating in dead space between
+             the banner bottom and the info card, making it look like a loose purple bar. */
+          .profile-avatar-col { order: 2 !important; margin-top: -80px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
@@ -2409,17 +2408,17 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:184}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:160}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
             >
-              <TierFrame tier={userTier} size={184}>
+              <TierFrame tier={userTier} size={160}>
               {profileImg
-                ? <img src={profileImg} style={{width:184,height:184,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:152,height:152,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                ? <img src={profileImg} style={{width:160,height:160,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                : <div style={{width:128,height:128,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:50,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
@@ -2455,12 +2454,14 @@ export default function ProfilePage() {
               )}
             </div>
             <div style={{textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:6}}>{profile.name}</div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap"}}>
+              <div style={{fontWeight:900,fontSize:17,color:C.text}}>{profile.name}</div>
+              <TierTitle tier={userTier} />
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:4,flexWrap:"wrap"}}>
+                <div style={{fontSize:13,color:C.sub}}>@{profile.username}</div>
                 <TierBadgeChip tier={userTier} />
               </div>
               {profile.city && (
-                <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
+                <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>
               )}
 
               {(user?.profile as any)?.account_type === 'business' && (
