@@ -33,7 +33,7 @@ export default function SignupPage() {
 
   // Business fields
   const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState("Gym");
+  const [businessType, setBusinessType] = useState("gym");
   const [businessWebsite, setBusinessWebsite] = useState("");
 
   async function handleSignup(e: React.FormEvent) {
@@ -217,7 +217,23 @@ export default function SignupPage() {
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Business Type</label>
                 <select style={{ ...inputStyle }} value={businessType} onChange={e => setBusinessType(e.target.value)}>
-                  {["Gym", "Studio", "Brand", "Coach", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
+                  {/* Keep DB values machine-readable (underscore_snake) but label them friendly.
+                      Keeps the business_type column searchable and icon-lookup easy. */}
+                  <option value="gym">🏋️ Gym</option>
+                  <option value="yoga_studio">🧘 Yoga / Pilates Studio</option>
+                  <option value="boxing_gym">🥊 Boxing / MMA Gym</option>
+                  <option value="crossfit_box">🤸 CrossFit Box</option>
+                  <option value="running_club">🏃 Running Club</option>
+                  <option value="swim_club">🏊 Pool / Swim Club</option>
+                  <option value="nutrition_brand">🥗 Nutrition / Meal Prep</option>
+                  <option value="supplement_brand">💊 Supplement Brand</option>
+                  <option value="apparel_brand">🛍️ Apparel Brand</option>
+                  <option value="spa">🧖 Spa / Wellness Center</option>
+                  <option value="recovery_center">💆 Recovery Center</option>
+                  <option value="coach">🧑‍🏫 Coach / Trainer</option>
+                  <option value="dietitian">🍎 Dietitian / Nutritionist</option>
+                  <option value="sports_team">🏆 Sports Team</option>
+                  <option value="other">📍 Other</option>
                 </select>
               </div>
               <div style={{ marginBottom: 16 }}>
