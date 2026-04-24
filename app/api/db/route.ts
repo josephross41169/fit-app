@@ -141,8 +141,12 @@ export async function GET(req: NextRequest) {
 
       let query = admin
         .from('leaderboard_entries')
-        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url), challenge:challenges(id,name,emoji,metric_label)')
+        // Join challenges so we can filter out entries from completed/inactive challenges.
+        // `challenges!inner` enforces that the joined row exists — no orphan entries
+        // (where the challenge was deleted but leaderboard_entries rows lingered).
+        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url), challenge:challenges!inner(id,name,emoji,metric_label,is_active,deadline)')
         .eq('group_id', groupId)
+        .eq('challenge.is_active', true)  // hide entries from ended/deleted challenges
         .order('score', { ascending: false })
         .limit(50);
 
@@ -151,7 +155,15 @@ export async function GET(req: NextRequest) {
       }
 
       const { data } = await query;
-      return NextResponse.json({ leaderboard: data || [] });
+
+      // Second-pass filter: drop anything whose challenge deadline has passed.
+      // The is_active flag above catches explicit deactivation; this catches
+      // time-based expiry where is_active wasn't updated.
+      const nowIso = new Date().toISOString();
+      const filtered = (data || []).filter((entry: any) =>
+        !entry.challenge?.deadline || entry.challenge.deadline > nowIso
+      );
+      return NextResponse.json({ leaderboard: filtered });
     }
 
     // ── Get user's joined groups ───────────────────────────────────────────
