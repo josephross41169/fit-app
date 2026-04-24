@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { isBusinessAccount } from "@/lib/businessTypes";
 
 const C = {
   purple: "#7C3AED",
@@ -155,6 +156,15 @@ function ChipGrid({
 export default function OnboardingPage() {
   const { user } = useAuth();
   const router = useRouter();
+
+  // Business accounts get a completely different onboarding flow — no goals,
+  // no macros, no tier/rivals talk. They go to /onboarding/business instead.
+  useEffect(() => {
+    if (!user) return;
+    if (isBusinessAccount(user.profile)) {
+      router.replace("/onboarding/business");
+    }
+  }, [user, router]);
 
   const [step, setStep] = useState<Step>(1);
   const [saving, setSaving] = useState(false);
