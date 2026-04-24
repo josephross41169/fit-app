@@ -290,12 +290,45 @@ export default function MessagesPage() {
 
     if (!content) return;
 
-    await fetch('/api/db', {
+    // Optimistically add the message to local state immediately so the UI
+    // updates without waiting for the realtime subscription (which may be
+    // disabled on the messages table or have latency on free tier).
+    // The realtime handler dedupes by id so this is safe.
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      conversation_id: activeConvId,
+      sender_id: user.id,
+      content,
+      created_at: new Date().toISOString(),
+    } as Message;
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    const res = await fetch('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'send_message', payload: { conversationId: activeConvId, senderId: user.id, content } }),
     });
-    loadConversations(true); // silent refresh — no spinner flicker
+
+    // Replace the temp message with the real one from the server so future
+    // edits/deletes work correctly. If realtime already fired, the dedup will
+    // catch it.
+    try {
+      const json = await res.json();
+      if (json?.message) {
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== optimisticMsg.id);
+          if (filtered.find(m => m.id === json.message.id)) return filtered;
+          return [...filtered, json.message];
+        });
+      } else {
+        // Fallback: if API didn't return the inserted row, just refetch
+        loadMessages(activeConvId);
+      }
+    } catch {
+      loadMessages(activeConvId);
+    }
+
+    loadConversations(true); // silent refresh of sidebar previews
   };
 
   // ── Handle photo selection ───────────────────────────────────────────────────
