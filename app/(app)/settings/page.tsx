@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { isBusinessAccount } from "@/lib/businessTypes";
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -83,6 +84,23 @@ export default function SettingsPage() {
       <div style={{ fontSize: 14, color: "#9CA3AF", marginBottom: 28 }}>
         Manage your account and privacy
       </div>
+
+      {/* ── SECTION: Business (only shown for business accounts) ─────── */}
+      {/* Dedicated home for business info — the editor page is much larger
+          than would fit inline here, so we link out to it. */}
+      {isBusinessAccount(user.profile) && (
+        <Section title="🏢 Business">
+          <Row>
+            <Link href="/settings/business" style={linkStyle}>
+              Edit business info (hours, address, social links) →
+            </Link>
+          </Row>
+          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 8, paddingLeft: 4 }}>
+            Business accounts are advertising pages — set up your contact info,
+            hours, and social links so customers can find you.
+          </div>
+        </Section>
+      )}
 
       {/* ── SECTION: About ──────────────────────────────────────────── */}
       <Section title="📜 About & Legal">
