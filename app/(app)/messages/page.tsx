@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { loadBlockedUsers } from "@/lib/blocks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,10 +131,20 @@ export default function MessagesPage() {
         body: JSON.stringify({ action: 'get_conversations', payload: { userId: user.id } }),
       });
       const json = await res.json();
+      let next: Conversation[] = json.conversations || [];
+
+      // Filter out conversations with blocked users in either direction.
+      // Apple Guideline 1.2: blocked users must not be able to reach the
+      // blocker. Server-side would also be wise long-term but client filter
+      // is enough for app-store compliance since blocking happens client-side.
+      const blocks = await loadBlockedUsers(user.id);
+      if (blocks.size > 0) {
+        next = next.filter(c => c.otherUser?.id && !blocks.has(c.otherUser.id));
+      }
+
       setConversations(prev => {
         // Avoid unnecessary state updates — only swap if the list actually changed.
         // Prevents flicker when polling returns the same data.
-        const next = json.conversations || [];
         if (prev.length !== next.length) return next;
         const changed = next.some((c: Conversation, i: number) =>
           c.id !== prev[i]?.id ||
