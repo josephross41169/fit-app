@@ -39,6 +39,13 @@ export interface EarnedBadge {
 // Visual style per progression tier. Higher tiers = more dramatic.
 // Updated Oct 2026: expanded from 5 → 8 tiers to support 1/5/20/50/100/200/500/1000
 // progression for the big-grind families (runs, workouts, nutrition, etc.)
+//
+// SHINY UPGRADE: Each tier now uses a metallic 3-stop gradient (dark base →
+// bright mid → dark base) simulating light hitting curved metal. Borders use
+// a complementary bright color. Glow is doubled (close + wide halo) for
+// depth. `shimmer` field controls whether the badge gets an animated
+// highlight sweep — reserved for Platinum and above since too much motion
+// would distract from progress info on common tiers.
 export const TIER_STYLES: Record<BadgeTier, {
   name: string;
   gradient: string;
@@ -46,73 +53,84 @@ export const TIER_STYLES: Record<BadgeTier, {
   glow: string;
   textColor: string;
   accentColor: string;
+  shimmer?: boolean;
 }> = {
   1: {
+    // BRONZE — warm copper with a bright highlight band
     name: "BRONZE",
-    gradient: "linear-gradient(135deg, #3D2A1F, #6B4423)",
-    border: "#B87333",
-    glow: "rgba(184,115,51,0.35)",
-    textColor: "#F5A76B",
-    accentColor: "#B87333",
+    gradient: "linear-gradient(135deg, #4A2E1C 0%, #A66D39 45%, #D4915A 50%, #A66D39 55%, #4A2E1C 100%)",
+    border: "#E5A572",
+    glow: "rgba(229,165,114,0.55)",
+    textColor: "#FFE0C2",
+    accentColor: "#FFC58A",
   },
   2: {
+    // SILVER — cool steel with a white-hot shine streak
     name: "SILVER",
-    gradient: "linear-gradient(135deg, #3A3A42, #5C5C66)",
-    border: "#C0C0C0",
-    glow: "rgba(192,192,192,0.4)",
-    textColor: "#E8E8E8",
-    accentColor: "#C0C0C0",
+    gradient: "linear-gradient(135deg, #2A2D38 0%, #8A9098 45%, #E8ECEF 50%, #8A9098 55%, #2A2D38 100%)",
+    border: "#F0F2F5",
+    glow: "rgba(220,225,230,0.65)",
+    textColor: "#FFFFFF",
+    accentColor: "#E8ECEF",
   },
   3: {
+    // GOLD — rich yellow-orange with a molten highlight
     name: "GOLD",
-    gradient: "linear-gradient(135deg, #3D2D00, #6B5000)",
-    border: "#FFD700",
-    glow: "rgba(255,215,0,0.5)",
-    textColor: "#FFE55C",
-    accentColor: "#FFD700",
+    gradient: "linear-gradient(135deg, #4A3200 0%, #D4A017 40%, #FFEB7A 50%, #D4A017 60%, #4A3200 100%)",
+    border: "#FFE066",
+    glow: "rgba(255,224,102,0.75)",
+    textColor: "#FFF9C4",
+    accentColor: "#FFEB7A",
   },
   4: {
+    // PLATINUM — icy blue-white, mirror-bright
     name: "PLATINUM",
-    gradient: "linear-gradient(135deg, #1A1F3A, #2D3D6B)",
-    border: "#7CC4FF",
-    glow: "rgba(124,196,255,0.55)",
-    textColor: "#A8D9FF",
-    accentColor: "#7CC4FF",
+    gradient: "linear-gradient(135deg, #12194A 0%, #5E8AC9 40%, #C4DFFF 50%, #5E8AC9 60%, #12194A 100%)",
+    border: "#D6ECFF",
+    glow: "rgba(198,227,255,0.85)",
+    textColor: "#F0F8FF",
+    accentColor: "#C4DFFF",
+    shimmer: true,
   },
   5: {
+    // DIAMOND — prismatic purple-pink with animated shine
     name: "DIAMOND",
-    gradient: "linear-gradient(135deg, #1A0F30, #4A2D8A, #1A0F30)",
-    border: "#C084FC",
-    glow: "rgba(192,132,252,0.6)",
-    textColor: "#E9D5FF",
-    accentColor: "#C084FC",
+    gradient: "linear-gradient(135deg, #1A0F30 0%, #7C3AED 35%, #E9D5FF 50%, #C084FC 65%, #1A0F30 100%)",
+    border: "#F3E8FF",
+    glow: "rgba(233,213,255,0.9)",
+    textColor: "#FAF5FF",
+    accentColor: "#E9D5FF",
+    shimmer: true,
   },
   6: {
-    // Emerald — lush green with gold accents, reminds of elite gem
+    // EMERALD — deep jungle green with a jade highlight
     name: "EMERALD",
-    gradient: "linear-gradient(135deg, #022C1B, #0B5C3A, #022C1B)",
-    border: "#34D399",
-    glow: "rgba(52,211,153,0.7)",
-    textColor: "#A7F3D0",
-    accentColor: "#34D399",
+    gradient: "linear-gradient(135deg, #022C1B 0%, #0E9F6E 40%, #6EE7B7 50%, #0E9F6E 60%, #022C1B 100%)",
+    border: "#A7F3D0",
+    glow: "rgba(110,231,183,0.95)",
+    textColor: "#ECFDF5",
+    accentColor: "#6EE7B7",
+    shimmer: true,
   },
   7: {
-    // Onyx — jet black with fire-red/orange edge, intimidating look
+    // ONYX — obsidian black with molten red-orange fire
     name: "ONYX",
-    gradient: "linear-gradient(135deg, #050505, #1A0707, #050505)",
-    border: "#EF4444",
-    glow: "rgba(239,68,68,0.75)",
-    textColor: "#FCA5A5",
-    accentColor: "#F87171",
+    gradient: "linear-gradient(135deg, #0A0A0A 0%, #B91C1C 38%, #FCA5A5 50%, #B91C1C 62%, #0A0A0A 100%)",
+    border: "#FECACA",
+    glow: "rgba(252,165,165,1)",
+    textColor: "#FFF1F1",
+    accentColor: "#FCA5A5",
+    shimmer: true,
   },
   8: {
-    // Obsidian — prismatic max tier, reserved for 1000+ achievements
+    // OBSIDIAN — all-prism, maximum shine, reserved for 1000+ achievements
     name: "OBSIDIAN",
-    gradient: "linear-gradient(135deg, #000, #1F0033, #000, #330033, #000)",
-    border: "#F472B6",
-    glow: "rgba(244,114,182,0.85)",
-    textColor: "#FDF2F8",
-    accentColor: "#F0ABFC",
+    gradient: "linear-gradient(135deg, #000 0%, #8B5CF6 20%, #EC4899 35%, #FDE047 50%, #22D3EE 65%, #8B5CF6 80%, #000 100%)",
+    border: "#FFFFFF",
+    glow: "rgba(255,255,255,1)",
+    textColor: "#FFFFFF",
+    accentColor: "#FDE047",
+    shimmer: true,
   },
 };
 
