@@ -19,6 +19,10 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [city, setCity] = useState("");
+  // Birth date for age gating. Apple + COPPA require a minimum age check
+  // before account creation. We enforce 13+ — users under 13 are rejected
+  // with a clear message.
+  const [birthDate, setBirthDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -37,6 +41,36 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
 
+    // ── Age gate: must be 13+ (COPPA minimum, Apple requires enforcement) ──
+    // Parse the birth date and compute age. Reject if under 13.
+    // The min/max on the <input> help but client enforcement via the form
+    // element alone is bypassable — we also check here as a safety net.
+    if (!birthDate) {
+      setError("Please enter your birth date.");
+      setLoading(false);
+      return;
+    }
+    const birth = new Date(birthDate);
+    if (isNaN(birth.getTime())) {
+      setError("Invalid birth date.");
+      setLoading(false);
+      return;
+    }
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    if (age < 13) {
+      setError("You must be at least 13 years old to sign up.");
+      setLoading(false);
+      return;
+    }
+    if (age > 120) {
+      setError("Please enter a valid birth date.");
+      setLoading(false);
+      return;
+    }
+
     try {
       // Sign up with Supabase auth — profile row created by DB trigger
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -48,6 +82,7 @@ export default function SignupPage() {
             full_name: fullName,
             username: username.toLowerCase(),
             city: city || null,
+            birth_date: birthDate,
             account_type: accountType,
             business_name: businessName || null,
             business_type: businessType || null,
@@ -67,6 +102,7 @@ export default function SignupPage() {
         try {
           await supabase.from('users').update({
             city: city || null,
+            birth_date: birthDate,
             account_type: accountType,
             business_name: businessName || null,
             business_type: businessType || null,
@@ -204,6 +240,29 @@ export default function SignupPage() {
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>City (for local discovery)</label>
             <input style={inputStyle} type="text" placeholder="Las Vegas, NV" value={city} onChange={e => setCity(e.target.value)} />
+          </div>
+
+          {/* Birth date — required for age gating (13+ minimum, COPPA compliance). */}
+          {/* max attr set to "13 years ago today" so the picker itself prevents */}
+          {/* under-13 selections. Server-side and handleSignup re-check as backup. */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Birth date *</label>
+            <input
+              style={inputStyle}
+              type="date"
+              value={birthDate}
+              onChange={e => setBirthDate(e.target.value)}
+              max={(() => {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() - 13);
+                return d.toISOString().split("T")[0];
+              })()}
+              min="1900-01-01"
+              required
+            />
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 6 }}>
+              You must be at least 13 years old to create an account.
+            </div>
           </div>
 
           {error && (
