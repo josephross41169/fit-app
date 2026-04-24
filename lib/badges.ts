@@ -84,20 +84,93 @@ export const BADGES = [
   { id:"step-15k",       emoji:"🦿", label:"Step Master",         desc:"Hit 15,000 steps in a single day",        category:"wellness" },
   { id:"posture",        emoji:"🪑", label:"Posture Pro",         desc:"Completed 20 posture/mobility workouts",  category:"wellness" },
   { id:"nature-walk",    emoji:"🌿", label:"Nature Walker",       desc:"Logged 10 outdoor walks",                 category:"wellness" },
-  { id:"walks-50",       emoji:"🌍", label:"Wanderer",            desc:"Logged 50 walks",                         category:"wellness" },
-  { id:"wellness-10",    emoji:"🌱", label:"Wellness Starter",    desc:"Logged 10 wellness activities",           category:"wellness" },
-  { id:"wellness-50",    emoji:"🌳", label:"Wellness Devotee",    desc:"Logged 50 wellness activities",           category:"wellness" },
+  { id:"wellness-10",    emoji:"🌱", label:"10 Wellness Activities",desc:"Logged 10 wellness activities",         category:"wellness" },
+  // Note: walks-50 and wellness-50 moved into the full-ladder section below
   // First-time wellness (auto-awarded)
+  // Note Oct 2026: expanded to full 8-tier ladder 1/5/20/50/100/200/500/1000.
+  // Old IDs like "sauna" and "sauna-30" remain (below) so users don't lose
+  // badges they already earned, but they're no longer part of the progression
+  // family — the new *-5/*-20/... IDs are canonical for tier display.
+
+  // ── YOGA LADDER ──
   { id:"first-yoga",        emoji:"🧘", label:"First Yoga",       desc:"Logged your first yoga session",          category:"wellness" },
-  { id:"yoga-10",           emoji:"🪷", label:"10 Yoga Sessions", desc:"Logged 10 yoga sessions",                 category:"wellness" },
+  { id:"yoga-5",            emoji:"🧘", label:"Yoga Starter",     desc:"Logged 5 yoga sessions",                  category:"wellness" },
+  { id:"yoga-10",           emoji:"🪷", label:"Yoga Regular",     desc:"Logged 20 yoga sessions",                 category:"wellness" },
+  { id:"yoga-50",           emoji:"🪷", label:"Yoga Dedicated",   desc:"Logged 50 yoga sessions",                 category:"wellness" },
+  { id:"yoga-100",          emoji:"🪷", label:"Yoga Lover",       desc:"Logged 100 yoga sessions",                category:"wellness" },
+  { id:"yoga-200",          emoji:"🧘", label:"Yoga Devotee",     desc:"Logged 200 yoga sessions",                category:"wellness" },
+  { id:"yoga-500",          emoji:"🧘", label:"Yoga Master",      desc:"Logged 500 yoga sessions",                category:"wellness" },
+  { id:"yoga-1000",         emoji:"🧘", label:"Yoga Immortal",    desc:"Logged 1,000 yoga sessions",              category:"wellness" },
+
+  // ── MEDITATION LADDER ──
   { id:"first-meditation",  emoji:"🕊️",label:"First Meditation", desc:"Logged your first meditation",            category:"wellness" },
-  { id:"meditation-10",     emoji:"🧠", label:"10 Meditations",   desc:"Logged 10 meditation sessions",           category:"wellness" },
+  { id:"meditation-5",      emoji:"🕊️",label:"Mindful Starter", desc:"Logged 5 meditations",                    category:"wellness" },
+  { id:"meditation-10",     emoji:"🧠", label:"Mindful Regular",  desc:"Logged 20 meditations",                   category:"wellness" },
+  { id:"meditation-50",     emoji:"🧠", label:"Mindful Practitioner",desc:"Logged 50 meditations",               category:"wellness" },
+  { id:"meditation-100",    emoji:"🕊️",label:"Mindful Devotee",  desc:"Logged 100 meditations",                  category:"wellness" },
+  { id:"meditation-200",    emoji:"🕊️",label:"Mindful Master",   desc:"Logged 200 meditations",                  category:"wellness" },
+  { id:"meditation-500",    emoji:"🧘", label:"Zen Legend",       desc:"Logged 500 meditations",                  category:"wellness" },
+  { id:"meditation-1000",   emoji:"🧘", label:"Enlightened",      desc:"Logged 1,000 meditations",                category:"wellness" },
+
+  // ── COLD PLUNGE LADDER ──
   { id:"first-cold-plunge", emoji:"🧊", label:"First Cold Plunge",desc:"Took your first cold plunge",             category:"wellness" },
+  { id:"cold-plunge-5",     emoji:"🧊", label:"Cold Starter",     desc:"Took 5 cold plunges",                     category:"wellness" },
   { id:"cold-plunge-20",    emoji:"💦", label:"Cold Plunge Addict",desc:"Completed 20 cold plunges",              category:"wellness" },
+  { id:"cold-plunge-50",    emoji:"❄️", label:"Ice Warrior",      desc:"Completed 50 cold plunges",               category:"wellness" },
+  { id:"cold-plunge-100",   emoji:"❄️", label:"Ice Veteran",      desc:"Completed 100 cold plunges",              category:"wellness" },
+  { id:"cold-plunge-200",   emoji:"❄️", label:"Ice Devotee",      desc:"Completed 200 cold plunges",              category:"wellness" },
+  { id:"cold-plunge-500",   emoji:"🥶", label:"Ice Master",       desc:"Completed 500 cold plunges",              category:"wellness" },
+  { id:"cold-plunge-1000",  emoji:"🥶", label:"Ice Immortal",     desc:"Completed 1,000 cold plunges",            category:"wellness" },
+
+  // ── SAUNA LADDER ──
   { id:"first-sauna",       emoji:"🔆", label:"First Sauna",      desc:"Logged your first sauna session",         category:"wellness" },
+  { id:"sauna-5",           emoji:"🔆", label:"Sauna Starter",    desc:"Logged 5 sauna sessions",                 category:"wellness" },
+  { id:"sauna-20",          emoji:"🌡️",label:"Sauna Regular",    desc:"Logged 20 sauna sessions",                category:"wellness" },
+  { id:"sauna-50",          emoji:"🌡️",label:"Sauna Dedicated",  desc:"Logged 50 sauna sessions",                category:"wellness" },
+  { id:"sauna-100",         emoji:"🔥", label:"Sauna Devotee",    desc:"Logged 100 sauna sessions",               category:"wellness" },
+  { id:"sauna-200",         emoji:"🔥", label:"Heat Chamber Vet", desc:"Logged 200 sauna sessions",               category:"wellness" },
+  { id:"sauna-500",         emoji:"🔥", label:"Heat Master",      desc:"Logged 500 sauna sessions",               category:"wellness" },
+  { id:"sauna-1000",        emoji:"🔥", label:"Sauna Immortal",   desc:"Logged 1,000 sauna sessions",             category:"wellness" },
+
+  // ── BREATHWORK LADDER ──
   { id:"first-breathwork",  emoji:"🫁", label:"First Breathwork", desc:"Logged your first breathwork session",    category:"wellness" },
-  { id:"first-walk",        emoji:"🌿", label:"First Walk",       desc:"Logged your first walk",                  category:"wellness" },
+  { id:"breathwork-5",      emoji:"🫁", label:"Breath Starter",   desc:"Completed 5 breathwork sessions",         category:"wellness" },
+  { id:"breathwork-20",     emoji:"🌬️",label:"Breath Regular",   desc:"Completed 20 breathwork sessions",        category:"wellness" },
+  { id:"breathwork-50",     emoji:"🌬️",label:"Breath Dedicated", desc:"Completed 50 breathwork sessions",        category:"wellness" },
+  { id:"breathwork-100",    emoji:"🌪️",label:"Breath Devotee",   desc:"Completed 100 breathwork sessions",       category:"wellness" },
+  { id:"breathwork-200",    emoji:"🌪️",label:"Breath Master",    desc:"Completed 200 breathwork sessions",       category:"wellness" },
+  { id:"breathwork-500",    emoji:"🌪️",label:"Breath Legend",    desc:"Completed 500 breathwork sessions",       category:"wellness" },
+  { id:"breathwork-1000",   emoji:"🌪️",label:"Breath Immortal",  desc:"Completed 1,000 breathwork sessions",     category:"wellness" },
+
+  // ── STRETCHING LADDER ──
   { id:"first-stretch",     emoji:"🤸", label:"First Stretch",    desc:"Logged your first stretching session",    category:"wellness" },
+  { id:"stretch-5",         emoji:"🤸", label:"Stretch Starter",  desc:"Logged 5 stretching sessions",            category:"wellness" },
+  { id:"stretch-20",        emoji:"🤸", label:"Stretch It Out",   desc:"Logged 20 stretching sessions",           category:"wellness" },
+  { id:"stretch-50",        emoji:"🧎", label:"Flexibility Pro",  desc:"Logged 50 stretching sessions",           category:"wellness" },
+  { id:"stretch-100",       emoji:"🧎", label:"Mobility Devotee", desc:"Logged 100 stretching sessions",          category:"wellness" },
+  { id:"stretch-200",       emoji:"🧎", label:"Mobility Master",  desc:"Logged 200 stretching sessions",          category:"wellness" },
+  { id:"stretch-500",       emoji:"🧎", label:"Flex Legend",      desc:"Logged 500 stretching sessions",          category:"wellness" },
+  { id:"stretch-1000",      emoji:"🧎", label:"Flex Immortal",    desc:"Logged 1,000 stretching sessions",        category:"wellness" },
+
+  // ── WALKING LADDER ──
+  { id:"first-walk",        emoji:"🌿", label:"First Walk",       desc:"Logged your first walk",                  category:"wellness" },
+  { id:"walks-5",           emoji:"🌿", label:"Walker Starter",   desc:"Logged 5 walks",                          category:"wellness" },
+  { id:"walks-20",          emoji:"🚶", label:"Walker Regular",   desc:"Logged 20 walks",                         category:"wellness" },
+  { id:"walks-50",          emoji:"🌍", label:"Wanderer",         desc:"Logged 50 walks",                         category:"wellness" },
+  { id:"walks-100",         emoji:"🗺️",label:"Explorer",         desc:"Logged 100 walks",                        category:"wellness" },
+  { id:"walks-200",         emoji:"🗺️",label:"Path Seeker",      desc:"Logged 200 walks",                        category:"wellness" },
+  { id:"walks-500",         emoji:"🧭", label:"Nomad",            desc:"Logged 500 walks",                        category:"wellness" },
+  { id:"walks-1000",        emoji:"🧭", label:"Walking Immortal", desc:"Logged 1,000 walks",                      category:"wellness" },
+
+  // ── WELLNESS OVERALL LADDER ──
+  { id:"wellness-1",        emoji:"🌱", label:"First Wellness",   desc:"Logged your first wellness activity",     category:"wellness" },
+  { id:"wellness-5",        emoji:"🌱", label:"Wellness Starter", desc:"Logged 5 wellness activities",            category:"wellness" },
+  { id:"wellness-20",       emoji:"🌿", label:"Wellness Regular", desc:"Logged 20 wellness activities",           category:"wellness" },
+  { id:"wellness-50",       emoji:"🌳", label:"Wellness Devotee", desc:"Logged 50 wellness activities",           category:"wellness" },
+  { id:"wellness-100",      emoji:"🌳", label:"Wellness Dedicated",desc:"Logged 100 wellness activities",         category:"wellness" },
+  { id:"wellness-200",      emoji:"🌺", label:"Wellness Master",  desc:"Logged 200 wellness activities",          category:"wellness" },
+  { id:"wellness-500",      emoji:"🌸", label:"Wellness Legend",  desc:"Logged 500 wellness activities",          category:"wellness" },
+  { id:"wellness-1000",     emoji:"🌸", label:"Wellness Immortal",desc:"Logged 1,000 wellness activities",        category:"wellness" },
 
   // ── NUTRITION ─────────────────────────────────────────────────────────────
   { id:"calorie-goals",  emoji:"🎯", label:"On Target",           desc:"Hit calorie goal 7 days in a row",        category:"nutrition" },
@@ -110,11 +183,18 @@ export const BADGES = [
   { id:"barcode-100",    emoji:"📊", label:"Data Logger",         desc:"Logged 100 foods via barcode scan",        category:"nutrition" },
   { id:"fasting",        emoji:"⏳", label:"Fasting Pro",         desc:"Completed a 24-hour fast",                category:"nutrition" },
   { id:"clean-30",       emoji:"🥦", label:"Clean 30",            desc:"Ate clean for 30 days straight",          category:"nutrition" },
-  // Nutrition logging milestones (auto-awarded)
-  { id:"first-nutrition-log",emoji:"🥗", label:"First Log",       desc:"Logged your first nutrition entry",       category:"nutrition" },
-  { id:"nutrition-week", emoji:"📅", label:"Nutrition Week",      desc:"Logged nutrition 7 days in a row",        category:"nutrition" },
-  { id:"nutrition-pro",  emoji:"🏅", label:"Nutrition Pro",       desc:"Hit macro goals 14 days in a row",        category:"nutrition" },
-  { id:"nutrition-100",  emoji:"💪", label:"100 Nutrition Logs",  desc:"Logged nutrition 100 times",              category:"nutrition" },
+  // Nutrition logging milestones (auto-awarded) — full 8-tier ladder
+  { id:"first-nutrition-log",emoji:"🥗", label:"First Log",         desc:"Logged your first nutrition entry",       category:"nutrition" },
+  { id:"nutrition-5",    emoji:"🥗", label:"Log Starter",           desc:"Logged 5 nutrition entries",              category:"nutrition" },
+  { id:"nutrition-20",   emoji:"📋", label:"Log Regular",           desc:"Logged 20 nutrition entries",             category:"nutrition" },
+  { id:"nutrition-50",   emoji:"📋", label:"Log Dedicated",         desc:"Logged 50 nutrition entries",             category:"nutrition" },
+  { id:"nutrition-100",  emoji:"💪", label:"100 Nutrition Logs",    desc:"Logged nutrition 100 times",              category:"nutrition" },
+  { id:"nutrition-200",  emoji:"💪", label:"Nutrition Devotee",     desc:"Logged 200 nutrition entries",            category:"nutrition" },
+  { id:"nutrition-500",  emoji:"🏆", label:"Nutrition Legend",      desc:"Logged 500 nutrition entries",            category:"nutrition" },
+  { id:"nutrition-1000", emoji:"🏆", label:"Nutrition Immortal",    desc:"Logged 1,000 nutrition entries",          category:"nutrition" },
+  // Kept for historical earned badges (previously in family, now orphan credentials)
+  { id:"nutrition-week", emoji:"📅", label:"Nutrition Week",        desc:"Logged nutrition 7 days in a row",        category:"nutrition" },
+  { id:"nutrition-pro",  emoji:"🏅", label:"Nutrition Pro",         desc:"Hit macro goals 14 days in a row",        category:"nutrition" },
 
   // ── CHALLENGES ────────────────────────────────────────────────────────────
   { id:"iron-will",      emoji:"🪖", label:"Iron Will",           desc:"Completed a 30-day challenge",            category:"challenges" },
