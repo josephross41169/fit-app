@@ -7,6 +7,8 @@ import ActivityComments from "@/components/ActivityComments";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { computeTier, TIER_COLORS } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
+import { loadBlockedUsers } from "@/lib/blocks";
+import ReportModal, { ReportTarget } from "@/components/ReportModal";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
@@ -618,7 +620,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
 }
 
 // ── Post Card (left column — media + social only) ─────────────────────────────
-function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } } }) {
+function PostCard({ post, onUpdate, onDelete, onReport, currentUser }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } } }) {
   const isOwner = currentUser && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username);
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
@@ -630,7 +632,6 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
   const [commentLoading, setCommentLoading] = useState(false);
   const [brokenImage, setBrokenImage] = useState(false);
   const [replyTo, setReplyTo] = useState<{id:number|string;user:string}|null>(null);
-  const [showShareCard, setShowShareCard] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [m, d] = post.dateShort.split(".").map(Number);
 
@@ -733,16 +734,19 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
             <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
             <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
           </div>
-          {isOwner && onDelete && (
+          {/* ⋯ menu — owners see Delete, non-owners see Report.
+              Report button covers Apple Guideline 1.2 for user-generated content. */}
+          {(isOwner || (currentUser && !isOwner)) && (
             <div style={{ position:"relative" }}>
               <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:C.sub,fontSize:20,lineHeight:1 }}>···</button>
               {showMenu && (
                 <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:"#111118",border:"1.5px solid #2D1F52",borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.4)",minWidth:160,overflow:"hidden" }}>
-                  {!confirmDelete ? (
+                  {isOwner && onDelete && !confirmDelete && (
                     <button onClick={() => setConfirmDelete(true)} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#EF4444",display:"flex",alignItems:"center",gap:8 }}>
                       🗑️ Delete Post
                     </button>
-                  ) : (
+                  )}
+                  {isOwner && onDelete && confirmDelete && (
                     <div style={{ padding:"12px 16px" }}>
                       <div style={{ fontSize:13,fontWeight:700,color:C.text,marginBottom:10 }}>Delete this post?</div>
                       <div style={{ display:"flex",gap:8 }}>
@@ -750,6 +754,11 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
                         <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"1.5px solid #2D1F52",background:"#1A1228",color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
                       </div>
                     </div>
+                  )}
+                  {!isOwner && currentUser && (
+                    <button onClick={() => { setShowMenu(false); onReport?.(); }} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#FCA5A5",display:"flex",alignItems:"center",gap:8 }}>
+                      🚩 Report Post
+                    </button>
                   )}
                 </div>
               )}
@@ -831,38 +840,13 @@ function PostCard({ post, onUpdate, onDelete, currentUser }: { post: Post; onUpd
               </svg>
               <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>{post.comments.length > 0 ? post.comments.length : ""} {post.comments.length === 1 ? "comment" : post.comments.length > 1 ? "comments" : "Comment"}</span>
             </button>
-            <button onClick={() => setShowShareCard(true)} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
+            <button style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
               <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
               </svg>
               <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>Share</span>
             </button>
-            {showShareCard && (() => {
-              const ShareCardDyn = require("@/components/ShareCard").default;
-              const shareType = post.workout ? "workout" : post.nutrition ? "nutrition" : "wellness";
-              return (
-                <ShareCardDyn
-                  data={{
-                    type: shareType,
-                    username: post.username,
-                    displayName: post.user,
-                    tier: post.tier || "default",
-                    workoutType: post.workout?.type,
-                    duration: post.workout?.duration,
-                    calories: post.workout?.calories || post.nutrition?.calories,
-                    exercises: post.workout?.exercises?.map(e => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight })),
-                    totalVolume: post.workout?.exercises?.reduce((acc, e) => acc + (parseFloat(e.weight) || 0) * e.sets * e.reps, 0) || 0,
-                    totalSets: post.workout?.exercises?.reduce((acc, e) => acc + e.sets, 0) || 0,
-                    totalCalories: post.nutrition?.calories,
-                    protein: post.nutrition?.protein,
-                    carbs: post.nutrition?.carbs,
-                    fat: post.nutrition?.fat,
-                  }}
-                  onClose={() => setShowShareCard(false)}
-                />
-              );
-            })()}
           </div>
         </div>
 
@@ -1035,6 +1019,8 @@ export default function FeedPage() {
   const [loadingMoreActivity, setLoadingMoreActivity] = useState(false);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [userBadgeMap, setUserBadgeMap] = useState<Record<string, string[]>>({});
+  // Report state — when non-null, ReportModal is shown for that target.
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
@@ -1063,14 +1049,24 @@ export default function FeedPage() {
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
     if (data) {
+      // Filter out posts from users blocked in either direction — they shouldn't
+      // see each other's content. loadBlockedUsers is cached per session.
+      let filtered = data;
+      if (user) {
+        const blocks = await loadBlockedUsers(user.id);
+        if (blocks.size > 0) {
+          filtered = data.filter((p: any) => !blocks.has(p.user_id));
+        }
+      }
+
       let likedPostIds: Set<string> = new Set();
-      if (user && data.length > 0) {
-        const postIds = data.map((p: any) => p.id);
+      if (user && filtered.length > 0) {
+        const postIds = filtered.map((p: any) => p.id);
         const { data: likeData } = await supabase
           .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
         if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
       }
-      const mapped = data.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+      const mapped = filtered.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
       if (append) setDbPosts(prev => [...prev, ...mapped]);
       else setDbPosts(mapped);
       setDbPostsHasMore(data.length === PAGE_SIZE);
@@ -1127,13 +1123,22 @@ export default function FeedPage() {
     if (filter !== "all") query = query.eq('log_type', filter);
     const { data } = await query;
     if (data) {
-      if (append) setActivityLogs(prev => [...prev, ...data]);
-      else setActivityLogs(data);
+      // Filter out activity from blocked users in either direction
+      let filtered = data;
+      if (user) {
+        const blocks = await loadBlockedUsers(user.id);
+        if (blocks.size > 0) {
+          filtered = data.filter((l: any) => !blocks.has(l.user_id));
+        }
+      }
+
+      if (append) setActivityLogs(prev => [...prev, ...filtered]);
+      else setActivityLogs(filtered);
       setActivityLogsHasMore(data.length === PAGE_SIZE);
       setActivityLogsPage(page);
       // badge loading
-      if (data.length > 0) {
-        const userIds = [...new Set(data.map((l: any) => l.user_id).filter(Boolean))];
+      if (filtered.length > 0) {
+        const userIds = [...new Set(filtered.map((l: any) => l.user_id).filter(Boolean))];
         if (userIds.length > 0) {
           const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
           const { data: badgeData } = await supabase.from('badges').select('user_id, badge_id, created_at')
@@ -1583,7 +1588,7 @@ export default function FeedPage() {
                     </div>
                   )}
                   {displayPosts.map(post => (
-                    <PostCard key={post.id} post={post} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(post.id)} />
+                    <PostCard key={post.id} post={post} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(post.id)} onReport={() => setReportTarget({ type: "post", id: post.id as string })} />
                   ))}
                   {/* Load More posts */}
                   {dbPostsHasMore && dbPosts.length > 0 && (
@@ -1735,7 +1740,7 @@ export default function FeedPage() {
         )}
         {mobileItems.map((item, idx) => {
           if (item.type === "post") {
-            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} />;
+            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} />;
           }
           if (item.type === "activity") {
             return (
@@ -1786,6 +1791,9 @@ export default function FeedPage() {
         </>
         )}
       </div>
+
+      {/* ReportModal — activated when ⋯ → Report is clicked on a post */}
+      <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </div>
   );
 }
