@@ -1,1062 +1,567 @@
 "use client";
+// ── app/(app)/events/[id]/page.tsx ─────────────────────────────────────────
+// Event detail page. Loads from public.events_with_counts view. Lets users:
+//   - RSVP (going / interested / clear)
+//   - Comment (with threaded replies)
+//   - View attendee list
+//   - Open address in Maps
+//
+// Owner sees a "Delete" option. Comments support threaded replies.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
+import { getEventCategory, getEventSubcategory, formatEventCategory } from "@/lib/eventCategories";
 
-const MOCK_EVENTS: Record<string, any> = {
-  "1": {
-    name: "Farmers Market",
-    location: "Downtown Summerlin",
-    emoji: "🌿",
-    category: "Wellness",
-    price: "Free",
-    event_date: null,
-    description:
-      "Weekly farmers market with fresh produce, local vendors, and wellness products. Family friendly!",
-    rsvp_count: 142,
-  },
-  "2": {
-    name: "Degree Wellness Day Pass",
-    location: "Degree Wellness · Summerlin",
-    emoji: "🧖",
-    category: "Spa",
-    price: "$35",
-    event_date: null,
-    description:
-      "Full day access to Degree Wellness facilities. Includes sauna, cold plunge, and relaxation areas.",
-    rsvp_count: 28,
-  },
-  "3": {
-    name: "5K Run & Brunch",
-    location: "The Strip · Wynn Start",
-    emoji: "🏃",
-    category: "Running",
-    price: "$25",
-    event_date: null,
-    description:
-      "Scenic 5K run along the Las Vegas Strip followed by a group brunch. All paces welcome!",
-    rsvp_count: 87,
-  },
-  "4": {
-    name: "Orangetheory Trial Day",
-    location: "Orangetheory · Summerlin",
-    emoji: "🔥",
-    category: "HIIT",
-    price: "Free",
-    event_date: null,
-    description:
-      "Free trial class at Orangetheory Fitness. High-intensity interval training for all fitness levels.",
-    rsvp_count: 34,
-  },
-  "5": {
-    name: "Yoga in the Park",
-    location: "Sunset Park · Las Vegas",
-    emoji: "🧘",
-    category: "Yoga",
-    price: "Free",
-    event_date: null,
-    description:
-      "Community yoga session in the park. Bring your own mat. All levels welcome, mats available for beginners.",
-    rsvp_count: 63,
-  },
-  "6": {
-    name: "Bodybuilding Expo",
-    location: "Las Vegas Convention Ctr",
-    emoji: "🏋️",
-    category: "Expo",
-    price: "$20",
-    event_date: null,
-    description:
-      "Annual bodybuilding and fitness expo. Meet top athletes, discover new supplements, and watch live competitions.",
-    rsvp_count: 412,
-  },
-};
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "Date TBD";
-  const d = new Date(dateStr);
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
-  const dayName = days[d.getDay()];
-  const month = months[d.getMonth()];
-  const day = d.getDate();
-  const hours = d.getHours();
-  const minutes = d.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours % 12 || 12;
-  const displayMinutes = minutes > 0 ? `:${String(minutes).padStart(2, "0")}` : "";
-  return `${dayName}, ${month} ${day} · ${displayHours}${displayMinutes} ${ampm}`;
+interface EventDetail {
+  id: string;
+  creator_id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  subcategory: string | null;
+  event_date: string;
+  end_date: string | null;
+  date_tbd: boolean;
+  location_name: string | null;
+  address: string | null;
+  city: string | null;
+  price: string;
+  image_url: string | null;
+  max_attendees: number | null;
+  going_count: number;
+  interested_count: number;
+  comments_count: number;
+  source: string;
+  external_url: string | null;
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+interface Comment {
+  id: string;
+  user_id: string;
+  parent_id: string | null;
+  content: string;
+  created_at: string;
+  users: { username: string; full_name: string; avatar_url: string | null };
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function Avatar({
-  user,
-  size = 40,
-}: {
-  user: { full_name?: string; username?: string; avatar_url?: string | null };
-  size?: number;
-}) {
-  const name = user?.full_name || user?.username || "U";
-  if (user?.avatar_url) {
-    return (
-      <img
-        src={user.avatar_url}
-        alt={name}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          objectFit: "cover",
-          flexShrink: 0,
-        }}
-      />
-    );
-  }
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: "linear-gradient(135deg, #16A34A, #0D9043)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: size * 0.36,
-        fontWeight: 700,
-        color: "#fff",
-        flexShrink: 0,
-      }}
-    >
-      {getInitials(name)}
-    </div>
-  );
-}
+type RsvpStatus = "going" | "interested" | null;
 
 export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const id = params?.id as string;
+  const { user } = useAuth();
+  const eventId = params?.id as string;
 
-  const [event, setEvent] = useState<any>(null);
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [creatorProfile, setCreatorProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [rsvped, setRsvped] = useState(false);
-  const [rsvpCount, setRsvpCount] = useState(0);
-  const [attendees, setAttendees] = useState<any[]>([]);
-  const [comments, setComments] = useState<any[]>([]);
-  const [commentText, setCommentText] = useState("");
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [notFound, setNotFound] = useState(false);
+
+  const [myRsvp, setMyRsvp] = useState<RsvpStatus>(null);
+  const [updating, setUpdating] = useState(false);
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
   const [posting, setPosting] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setCurrentUser(user);
+  const [attendeesOpen, setAttendeesOpen] = useState(false);
+  const [attendees, setAttendees] = useState<any[]>([]);
 
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-      if (uuidRegex.test(id)) {
-        const { data: ev } = await supabase
-          .from("group_events")
-          .select(
-            "*, groups(id, name, category, emoji, banner_url, slug, created_by, creator_id)"
-          )
-          .eq("id", id)
-          .single();
-
-        if (ev) {
-          setEvent(ev);
-          setRsvpCount(ev.rsvp_count || 0);
-
-          const { data: rsvps } = await supabase
-            .from("group_event_rsvps")
-            .select("*, users(id, full_name, username, avatar_url)")
-            .eq("event_id", id)
-            .limit(20);
-          setAttendees(rsvps || []);
-
-          if (user) {
-            const already = (rsvps || []).find(
-              (r: any) => r.user_id === user.id
-            );
-            setRsvped(!!already);
-          }
-
-          const { data: coms } = await supabase
-            .from("group_event_comments")
-            .select("*, users(id, full_name, username, avatar_url)")
-            .eq("event_id", id)
-            .order("created_at", { ascending: true });
-          setComments(coms || []);
-
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Fallback: mock data
-      if (MOCK_EVENTS[id]) {
-        setEvent(MOCK_EVENTS[id]);
-        setRsvpCount(MOCK_EVENTS[id].rsvp_count || 0);
-      }
-
+  const loadEvent = useCallback(async () => {
+    if (!eventId) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("events_with_counts")
+      .select("*")
+      .eq("id", eventId)
+      .single();
+    if (error || !data) {
+      setNotFound(true);
       setLoading(false);
+      return;
     }
-    load();
-  }, [id]);
+    setEvent(data);
 
-  async function handleRSVP() {
-    if (rsvped || !currentUser) return;
-    setRsvped(true);
-    setRsvpCount((c) => c + 1);
-    await supabase
-      .from("group_event_rsvps")
-      .insert({ event_id: id, user_id: currentUser.id })
-      .catch(() => {});
-    await supabase
-      .from("group_events")
-      .update({ rsvp_count: rsvpCount + 1 })
-      .eq("id", id)
-      .catch(() => {});
+    // Load creator profile
+    const { data: cp } = await supabase
+      .from("users")
+      .select("username, full_name, avatar_url, account_type")
+      .eq("id", data.creator_id)
+      .single();
+    setCreatorProfile(cp);
+
+    setLoading(false);
+  }, [eventId]);
+
+  const loadRsvp = useCallback(async () => {
+    if (!user || !eventId) return;
+    const { data } = await supabase
+      .from("event_rsvps")
+      .select("status")
+      .eq("event_id", eventId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setMyRsvp((data?.status as RsvpStatus) || null);
+  }, [user, eventId]);
+
+  const loadComments = useCallback(async () => {
+    if (!eventId) return;
+    const { data } = await supabase
+      .from("event_comments")
+      .select("*, users:user_id(username, full_name, avatar_url)")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: true });
+    setComments(data || []);
+  }, [eventId]);
+
+  useEffect(() => { loadEvent(); }, [loadEvent]);
+  useEffect(() => { loadRsvp(); }, [loadRsvp]);
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  // ── RSVP toggle ────────────────────────────────────────────────────────
+  async function setRsvp(status: RsvpStatus) {
+    if (!user || updating) return;
+    setUpdating(true);
+    try {
+      if (status === null) {
+        // Clear RSVP
+        await supabase.from("event_rsvps").delete().eq("event_id", eventId).eq("user_id", user.id);
+      } else if (myRsvp === null) {
+        // New RSVP
+        await supabase.from("event_rsvps").insert({ event_id: eventId, user_id: user.id, status });
+      } else {
+        // Update existing
+        await supabase.from("event_rsvps").update({ status }).eq("event_id", eventId).eq("user_id", user.id);
+      }
+      setMyRsvp(status);
+      // Reload counts
+      loadEvent();
+    } finally {
+      setUpdating(false);
+    }
   }
 
-  async function postComment() {
-    if (!commentText.trim() || !currentUser || posting) return;
+  // ── Comment posting ────────────────────────────────────────────────────
+  async function postComment(parentId: string | null, content: string) {
+    if (!user || posting || !content.trim()) return;
     setPosting(true);
-    const text = commentText.trim();
-    setCommentText("");
-    setComments((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        content: text,
-        created_at: new Date().toISOString(),
-        users: {
-          full_name:
-            currentUser.user_metadata?.full_name || "You",
-          username: currentUser.email,
-          avatar_url: null,
-        },
-      },
-    ]);
-    await supabase
-      .from("group_event_comments")
-      .insert({ event_id: id, user_id: currentUser.id, content: text })
-      .catch(() => {});
-    setPosting(false);
+    try {
+      await supabase.from("event_comments").insert({
+        event_id: eventId,
+        user_id: user.id,
+        parent_id: parentId,
+        content: content.trim(),
+      });
+      if (parentId) {
+        setReplyText("");
+        setReplyTo(null);
+      } else {
+        setNewComment("");
+      }
+      await loadComments();
+    } finally {
+      setPosting(false);
+    }
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0D0D0D",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              border: "3px solid #2A2A2A",
-              borderTopColor: "#16A34A",
-              borderRadius: "50%",
-              animation: "spin 0.8s linear infinite",
-              margin: "0 auto 16px",
-            }}
-          />
-          <p style={{ color: "#555", fontSize: 14 }}>Loading event…</p>
-        </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+  async function deleteComment(commentId: string) {
+    if (!user) return;
+    const ok = window.confirm("Delete this comment?");
+    if (!ok) return;
+    await supabase.from("event_comments").delete().eq("id", commentId).eq("user_id", user.id);
+    await loadComments();
   }
 
-  // ── Not Found ────────────────────────────────────────────────────────────
-  if (!event) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0D0D0D",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 16,
-        }}
-      >
-        <div style={{ fontSize: 64 }}>🔍</div>
-        <h2 style={{ color: "#fff", fontWeight: 700, fontSize: 22, margin: 0 }}>
-          Event not found
-        </h2>
-        <p style={{ color: "#666", margin: 0 }}>
-          This event may have been removed or doesn&apos;t exist.
-        </p>
-        <button
-          onClick={() => router.back()}
-          style={{
-            marginTop: 8,
-            padding: "10px 24px",
-            background: "#16A34A",
-            color: "#fff",
-            border: "none",
-            borderRadius: 10,
-            fontSize: 15,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          ← Go Back
-        </button>
-      </div>
-    );
+  // ── Delete event (creator only) ────────────────────────────────────────
+  async function deleteEvent() {
+    if (!user || !event || event.creator_id !== user.id) return;
+    const ok = window.confirm(`Delete "${event.title}"? This cannot be undone.`);
+    if (!ok) return;
+    await supabase.from("events").delete().eq("id", event.id);
+    router.push("/events");
   }
 
-  // ── Derived data ─────────────────────────────────────────────────────────
-  const group = event.groups || null;
-  const bannerUrl = group?.banner_url || null;
-  const emoji = event.emoji || group?.emoji || "🎯";
-  const category = event.category || group?.category || "";
-  const price = event.price || "Free";
-  const isFree = price === "Free" || price === "free" || price === "$0";
-  const displayedAttendees = attendees.slice(0, 8);
-  const extraAttendees = attendees.length > 8 ? attendees.length - 8 : 0;
+  // ── Attendees modal ────────────────────────────────────────────────────
+  async function openAttendees() {
+    setAttendeesOpen(true);
+    if (attendees.length > 0) return;
+    const { data } = await supabase
+      .from("event_rsvps")
+      .select("status, users:user_id(id, username, full_name, avatar_url)")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: true });
+    setAttendees(data || []);
+  }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  if (loading) return <FullPageMessage>Loading event...</FullPageMessage>;
+  if (notFound || !event) return <FullPageMessage>Event not found.</FullPageMessage>;
+
+  const cat = getEventCategory(event.category);
+  const sub = getEventSubcategory(event.category, event.subcategory);
+  const date = new Date(event.event_date);
+  const endDate = event.end_date ? new Date(event.end_date) : null;
+  const isOwner = user?.id === event.creator_id;
+  const dateLabel = event.date_tbd
+    ? "Date TBD"
+    : date.toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const timeLabel = event.date_tbd
+    ? ""
+    : date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" }) +
+      (endDate ? ` – ${endDate.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}` : "");
+
+  // Build comment tree (top-level + replies)
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replyMap: Record<string, Comment[]> = {};
+  comments.filter(c => c.parent_id).forEach(c => {
+    if (!replyMap[c.parent_id!]) replyMap[c.parent_id!] = [];
+    replyMap[c.parent_id!].push(c);
+  });
+
   return (
-    <div style={{ minHeight: "100vh", background: "#0D0D0D", color: "#fff" }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        * { box-sizing: border-box; }
-        textarea:focus, input:focus { outline: none; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #0D0D0D; }
-        ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
-        .rsvp-btn:hover:not(:disabled) { background: #15803D !important; transform: translateY(-1px); }
-        .rsvp-btn:disabled { opacity: 0.7; cursor: default; }
-        .back-btn:hover { background: rgba(255,255,255,0.2) !important; }
-        .comment-post-btn:hover:not(:disabled) { background: #15803D !important; }
-        .comment-post-btn:disabled { opacity: 0.5; cursor: default; }
-        .view-group-btn:hover { background: #1A1A1A !important; }
-        @media (max-width: 768px) {
-          .layout-cols { flex-direction: column !important; }
-          .right-col { width: 100% !important; }
-        }
-      `}</style>
-
-      {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          position: "relative",
-          height: 280,
-          overflow: "hidden",
-          background: bannerUrl
-            ? undefined
-            : "linear-gradient(135deg, #0D1F0D, #1A3A1A)",
-        }}
-      >
-        {bannerUrl && (
-          <>
-            <img
-              src={bannerUrl}
-              alt=""
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "rgba(0,0,0,0.65)",
-              }}
-            />
-          </>
-        )}
-
-        {/* Back button */}
-        <button
-          className="back-btn"
-          onClick={() => router.back()}
-          style={{
-            position: "absolute",
-            top: 16,
-            left: 16,
-            zIndex: 10,
-            background: "rgba(0,0,0,0.45)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 10,
-            color: "#fff",
-            padding: "8px 16px",
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: "pointer",
-            backdropFilter: "blur(8px)",
-            transition: "background 0.2s",
-          }}
-        >
+    <div style={{ background: C.bg, minHeight: "100vh", color: C.text, paddingBottom: 80 }}>
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "20px 16px" }}>
+        <Link href="/events" style={{ color: "#A78BFA", textDecoration: "none", fontSize: 13, fontWeight: 600, display: "inline-block", marginBottom: 14 }}>
           ← Back
-        </button>
+        </Link>
 
-        {/* Category badge */}
-        {category && (
-          <div
-            style={{
-              position: "absolute",
-              top: 16,
-              right: 16,
-              zIndex: 10,
-              background: "rgba(22,163,74,0.25)",
-              border: "1px solid rgba(22,163,74,0.5)",
-              borderRadius: 20,
-              color: "#4ADE80",
-              padding: "6px 14px",
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: "0.05em",
-              backdropFilter: "blur(8px)",
-            }}
-          >
-            {category}
+        {/* Hero */}
+        <div style={{
+          width: "100%", aspectRatio: "16/9",
+          background: event.image_url
+            ? `url(${event.image_url}) center/cover`
+            : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+          borderRadius: 18, marginBottom: 20, position: "relative", overflow: "hidden",
+        }}>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.7) 100%)" }} />
+          <div style={{ position: "absolute", top: 14, left: 14, display: "flex", gap: 8 }}>
+            <span style={{ background: "rgba(0,0,0,0.7)", padding: "5px 12px", borderRadius: 99, fontSize: 12, fontWeight: 700, color: "#fff" }}>
+              {cat.emoji} {cat.label}{sub && ` · ${sub.label}`}
+            </span>
+            <span style={{ background: event.price === "Free" ? "#16A34A" : "rgba(0,0,0,0.7)", padding: "5px 12px", borderRadius: 99, fontSize: 12, fontWeight: 800, color: "#fff" }}>
+              {event.price}
+            </span>
+          </div>
+          {isOwner && (
+            <button onClick={deleteEvent} style={{ position: "absolute", top: 14, right: 14, background: "rgba(0,0,0,0.75)", color: "#FCA5A5", border: "none", padding: "6px 12px", borderRadius: 99, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              🗑 Delete
+            </button>
+          )}
+        </div>
+
+        {/* Title block */}
+        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, marginBottom: 10 }}>{event.title}</h1>
+
+        {/* Meta strip */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20, fontSize: 14, color: "#CBD5E1" }}>
+          <div>📅 <strong>{dateLabel}</strong>{timeLabel && ` · ${timeLabel}`}</div>
+          {event.location_name && <div>📍 {event.location_name}</div>}
+          {event.address && (
+            <div>
+              <a href={`https://maps.google.com/?q=${encodeURIComponent(event.address)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#A78BFA", textDecoration: "none", fontSize: 13 }}>
+                🗺 {event.address}
+              </a>
+            </div>
+          )}
+          {event.city && <div style={{ color: C.sub, fontSize: 13 }}>{event.city}</div>}
+        </div>
+
+        {/* RSVP buttons */}
+        {user && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+            <button
+              disabled={updating}
+              onClick={() => setRsvp(myRsvp === "going" ? null : "going")}
+              style={{
+                ...rsvpBtn,
+                background: myRsvp === "going" ? "linear-gradient(135deg, #16A34A, #22C55E)" : C.card,
+                color: myRsvp === "going" ? "#fff" : C.text,
+                border: myRsvp === "going" ? "none" : `1.5px solid ${C.border}`,
+              }}
+            >
+              ✓ Going {myRsvp === "going" && "·"} {event.going_count}
+            </button>
+            <button
+              disabled={updating}
+              onClick={() => setRsvp(myRsvp === "interested" ? null : "interested")}
+              style={{
+                ...rsvpBtn,
+                background: myRsvp === "interested" ? "linear-gradient(135deg, #7C3AED, #A78BFA)" : C.card,
+                color: myRsvp === "interested" ? "#fff" : C.text,
+                border: myRsvp === "interested" ? "none" : `1.5px solid ${C.border}`,
+              }}
+            >
+              ⭐ Interested · {event.interested_count}
+            </button>
+            <button onClick={openAttendees} style={{ ...rsvpBtn, background: C.card, color: C.sub, border: `1.5px solid ${C.border}` }}>
+              👥 View attendees
+            </button>
           </div>
         )}
 
-        {/* Emoji centered */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 80,
-            filter: "drop-shadow(0 4px 24px rgba(0,0,0,0.5))",
-          }}
-        >
-          {emoji}
-        </div>
+        {/* Capacity warning */}
+        {event.max_attendees && event.going_count >= event.max_attendees && (
+          <div style={{ background: "#3A2210", border: "1px solid #F59E0B", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#FCD34D", marginBottom: 16 }}>
+            ⚠️ This event is at capacity ({event.max_attendees} attendees).
+          </div>
+        )}
+
+        {/* Description */}
+        {event.description && (
+          <Card title="About this event">
+            <p style={{ fontSize: 14, lineHeight: 1.65, color: "#E2E8F0", whiteSpace: "pre-wrap", margin: 0 }}>
+              {event.description}
+            </p>
+          </Card>
+        )}
+
+        {/* Hosted by */}
+        {creatorProfile && (
+          <Card title="Hosted by">
+            <Link href={`/profile/${creatorProfile.username}`} style={{ display: "flex", gap: 12, alignItems: "center", textDecoration: "none", color: "inherit" }}>
+              <div style={{ width: 44, height: 44, borderRadius: 22, background: C.input, overflow: "hidden", flexShrink: 0 }}>
+                {creatorProfile.avatar_url
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  ? <img src={creatorProfile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: C.sub, fontSize: 18 }}>👤</div>
+                }
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+                  {creatorProfile.full_name}
+                  {creatorProfile.account_type === "business" && <span style={{ marginLeft: 6, fontSize: 11, padding: "2px 8px", background: "#2A1F4A", color: "#E9D5FF", borderRadius: 99 }}>🏢 Business</span>}
+                </div>
+                <div style={{ fontSize: 12, color: C.sub }}>@{creatorProfile.username}</div>
+              </div>
+            </Link>
+          </Card>
+        )}
+
+        {/* Source attribution for imported events */}
+        {event.source !== "user" && event.external_url && (
+          <Card title="Source">
+            <a href={event.external_url} target="_blank" rel="noopener noreferrer" style={{ color: "#A78BFA", fontSize: 13 }}>
+              View original on {event.source} →
+            </a>
+          </Card>
+        )}
+
+        {/* Comments */}
+        <Card title={`💬 Comments & Questions (${event.comments_count})`}>
+          {/* New comment box */}
+          {user && (
+            <div style={{ marginBottom: 16 }}>
+              <textarea
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                placeholder="Ask a question or add a comment..."
+                rows={2}
+                style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button
+                  onClick={() => postComment(null, newComment)}
+                  disabled={posting || !newComment.trim()}
+                  style={{
+                    padding: "8px 16px", borderRadius: 10, border: "none",
+                    background: newComment.trim() ? "linear-gradient(135deg, #7C3AED, #A78BFA)" : C.input,
+                    color: newComment.trim() ? "#fff" : C.muted,
+                    fontWeight: 700, fontSize: 13, cursor: newComment.trim() ? "pointer" : "not-allowed",
+                  }}
+                >Post</button>
+              </div>
+            </div>
+          )}
+
+          {topLevel.length === 0 ? (
+            <Empty>No comments yet. Be the first.</Empty>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {topLevel.map(c => (
+                <CommentBlock
+                  key={c.id}
+                  comment={c}
+                  replies={replyMap[c.id] || []}
+                  currentUserId={user?.id}
+                  onDelete={deleteComment}
+                  replyTo={replyTo}
+                  setReplyTo={setReplyTo}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onPostReply={postComment}
+                  posting={posting}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
-      {/* ── EVENT HEADER CARD ─────────────────────────────────────────────── */}
-      <div
-        style={{
-          margin: "0 auto",
-          maxWidth: 960,
-          padding: "0 16px",
-        }}
-      >
-        <div
-          style={{
-            background: "#1A1A1A",
-            border: "1px solid #2A2A2A",
-            borderRadius: 16,
-            padding: "24px",
-            marginTop: -24,
-            position: "relative",
-            zIndex: 5,
-          }}
-        >
-          {/* Title row */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 14,
-              marginBottom: 16,
-            }}
-          >
-            <span style={{ fontSize: 36, lineHeight: 1, flexShrink: 0 }}>{emoji}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 26,
-                  fontWeight: 900,
-                  color: "#fff",
-                  lineHeight: 1.2,
-                  wordBreak: "break-word",
-                }}
-              >
-                {event.name}
-              </h1>
-              {/* Date */}
-              <p style={{ margin: "6px 0 0", color: "#A3A3A3", fontSize: 14 }}>
-                📅 {formatDate(event.event_date || event.starts_at || null)}
-              </p>
-              {/* Location */}
-              {event.location && (
-                <p style={{ margin: "4px 0 0", color: "#A3A3A3", fontSize: 14 }}>
-                  📍 {event.location}
-                </p>
-              )}
+      {/* Attendees modal */}
+      {attendeesOpen && (
+        <div onClick={() => setAttendeesOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: 22, maxWidth: 480, width: "100%", maxHeight: "70vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Attendees</h3>
+              <button onClick={() => setAttendeesOpen(false)} style={{ background: "none", border: "none", color: C.sub, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
             </div>
-            {/* Price badge */}
-            <div
-              style={{
-                padding: "6px 14px",
-                borderRadius: 20,
-                background: isFree
-                  ? "rgba(22,163,74,0.2)"
-                  : "rgba(245,166,35,0.15)",
-                border: `1px solid ${isFree ? "rgba(22,163,74,0.5)" : "rgba(245,166,35,0.4)"}`,
-                color: isFree ? "#4ADE80" : "#F5A623",
-                fontSize: 13,
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              {price}
-            </div>
-          </div>
-
-          {/* Stat pills */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <div
-              style={{
-                padding: "6px 14px",
-                background: "#242424",
-                border: "1px solid #2A2A2A",
-                borderRadius: 20,
-                fontSize: 13,
-                color: "#ccc",
-              }}
-            >
-              👥 {rsvpCount} going
-            </div>
-            {(event.duration_minutes || event.duration) && (
-              <div
-                style={{
-                  padding: "6px 14px",
-                  background: "#242424",
-                  border: "1px solid #2A2A2A",
-                  borderRadius: 20,
-                  fontSize: 13,
-                  color: "#ccc",
-                }}
-              >
-                ⏰{" "}
-                {event.duration_minutes
-                  ? `${event.duration_minutes} min`
-                  : event.duration}
-              </div>
-            )}
-            <div
-              style={{
-                padding: "6px 14px",
-                background: "#242424",
-                border: "1px solid #2A2A2A",
-                borderRadius: 20,
-                fontSize: 13,
-                color: "#ccc",
-              }}
-            >
-              💰 {price}
-            </div>
-          </div>
-        </div>
-
-        {/* ── TWO-COLUMN LAYOUT ────────────────────────────────────────────── */}
-        <div
-          className="layout-cols"
-          style={{
-            display: "flex",
-            gap: 20,
-            marginTop: 20,
-            paddingBottom: 40,
-            alignItems: "flex-start",
-          }}
-        >
-          {/* ── LEFT COLUMN ─────────────────────────────────────────────── */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* About card */}
-            <div
-              style={{
-                background: "#1A1A1A",
-                border: "1px solid #2A2A2A",
-                borderRadius: 16,
-                padding: 24,
-              }}
-            >
-              <h2
-                style={{
-                  margin: "0 0 16px",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "#fff",
-                }}
-              >
-                📖 About
-              </h2>
-              {event.description ? (
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#C4C4C4",
-                    fontSize: 15,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {event.description}
-                </p>
-              ) : (
-                <p style={{ margin: 0, color: "#555", fontSize: 14, fontStyle: "italic" }}>
-                  No description provided.
-                </p>
-              )}
-
-              {/* Group info */}
-              {group && (
-                <div
-                  style={{
-                    marginTop: 20,
-                    paddingTop: 20,
-                    borderTop: "1px solid #2A2A2A",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 8px",
-                      fontSize: 12,
-                      color: "#666",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Hosted by
-                  </p>
-                  <Link
-                    href={`/groups/${group.slug || group.id}`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 10,
-                      textDecoration: "none",
-                      padding: "10px 16px",
-                      background: "#222",
-                      border: "1px solid #2A2A2A",
-                      borderRadius: 12,
-                      transition: "border-color 0.2s",
-                    }}
-                  >
-                    <span style={{ fontSize: 22 }}>{group.emoji || "🏋️"}</span>
-                    <div>
-                      <p
-                        style={{
-                          margin: 0,
-                          color: "#fff",
-                          fontWeight: 700,
-                          fontSize: 15,
-                        }}
-                      >
-                        {group.name}
-                      </p>
-                      {group.category && (
-                        <p style={{ margin: 0, color: "#16A34A", fontSize: 12 }}>
-                          {group.category}
-                        </p>
-                      )}
+            {attendees.length === 0 ? (
+              <Empty>No one has RSVP'd yet.</Empty>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {attendees.map((a, i) => (
+                  <Link key={i} href={`/profile/${a.users.username}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, textDecoration: "none", color: "inherit" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 18, background: C.input, overflow: "hidden", flexShrink: 0 }}>
+                      {a.users.avatar_url
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        ? <img src={a.users.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.sub }}>👤</div>
+                      }
                     </div>
-                    <span style={{ color: "#555", marginLeft: "auto", fontSize: 16 }}>→</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{a.users.full_name}</div>
+                      <div style={{ fontSize: 12, color: C.sub }}>@{a.users.username}</div>
+                    </div>
+                    <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: a.status === "going" ? "#16A34A" : "#7C3AED", color: "#fff", fontWeight: 700 }}>
+                      {a.status === "going" ? "Going" : "Interested"}
+                    </span>
                   </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Comments section */}
-            <div
-              style={{
-                background: "#1A1A1A",
-                border: "1px solid #2A2A2A",
-                borderRadius: 16,
-                padding: 24,
-              }}
-            >
-              <h2
-                style={{
-                  margin: "0 0 20px",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "#fff",
-                }}
-              >
-                💬 Comments{" "}
-                <span style={{ color: "#555", fontWeight: 400, fontSize: 15 }}>
-                  ({comments.length})
-                </span>
-              </h2>
-
-              {comments.length === 0 && (
-                <p
-                  style={{
-                    color: "#555",
-                    fontSize: 14,
-                    fontStyle: "italic",
-                    margin: "0 0 20px",
-                  }}
-                >
-                  No comments yet. Be the first to say something!
-                </p>
-              )}
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
-                {comments.map((c: any) => (
-                  <div
-                    key={c.id}
-                    style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
-                  >
-                    <Avatar user={c.users || {}} size={36} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          marginBottom: 4,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 700,
-                            color: "#e0e0e0",
-                          }}
-                        >
-                          {c.users?.full_name || c.users?.username || "User"}
-                        </span>
-                        <span style={{ fontSize: 11, color: "#555" }}>
-                          {timeAgo(c.created_at)}
-                        </span>
-                      </div>
-                      <p
-                        style={{
-                          margin: 0,
-                          color: "#C0C0C0",
-                          fontSize: 14,
-                          lineHeight: 1.6,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {c.content}
-                      </p>
-                    </div>
-                  </div>
                 ))}
               </div>
-
-              {/* Comment input */}
-              {currentUser ? (
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-                  <Avatar
-                    user={{
-                      full_name: currentUser.user_metadata?.full_name,
-                      username: currentUser.email,
-                      avatar_url: currentUser.user_metadata?.avatar_url,
-                    }}
-                    size={36}
-                  />
-                  <div style={{ flex: 1, position: "relative" }}>
-                    <textarea
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          postComment();
-                        }
-                      }}
-                      placeholder="Write a comment…"
-                      rows={2}
-                      style={{
-                        width: "100%",
-                        background: "#222",
-                        border: "1px solid #333",
-                        borderRadius: 12,
-                        color: "#fff",
-                        fontSize: 14,
-                        padding: "10px 80px 10px 14px",
-                        resize: "none",
-                        fontFamily: "inherit",
-                        lineHeight: 1.5,
-                      }}
-                    />
-                    <button
-                      className="comment-post-btn"
-                      onClick={postComment}
-                      disabled={posting || !commentText.trim()}
-                      style={{
-                        position: "absolute",
-                        right: 8,
-                        bottom: 8,
-                        padding: "6px 14px",
-                        background: "#16A34A",
-                        border: "none",
-                        borderRadius: 8,
-                        color: "#fff",
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        transition: "background 0.2s",
-                      }}
-                    >
-                      {posting ? "…" : "Post"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ color: "#555", fontSize: 13, margin: 0 }}>
-                  <Link href="/auth/login" style={{ color: "#16A34A" }}>
-                    Log in
-                  </Link>{" "}
-                  to leave a comment.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* ── RIGHT COLUMN ─────────────────────────────────────────────── */}
-          <div
-            className="right-col"
-            style={{
-              width: 300,
-              flexShrink: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
-            {/* RSVP card */}
-            <div
-              style={{
-                background: "#1A1A1A",
-                border: "1px solid #2A2A2A",
-                borderRadius: 16,
-                padding: 20,
-              }}
-            >
-              <button
-                className="rsvp-btn"
-                onClick={handleRSVP}
-                disabled={rsvped || !currentUser}
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  background: rsvped ? "#14532D" : "#16A34A",
-                  border: rsvped ? "2px solid #16A34A" : "2px solid #16A34A",
-                  borderRadius: 12,
-                  color: "#fff",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  cursor: rsvped ? "default" : "pointer",
-                  transition: "all 0.2s",
-                  letterSpacing: "0.01em",
-                }}
-              >
-                {rsvped ? "✓ RSVP'd" : `RSVP — ${price}`}
-              </button>
-
-              <p
-                style={{
-                  margin: "12px 0 0",
-                  textAlign: "center",
-                  color: "#888",
-                  fontSize: 13,
-                }}
-              >
-                {rsvpCount} {rsvpCount === 1 ? "person" : "people"} going
-              </p>
-
-              {!currentUser && (
-                <p
-                  style={{
-                    margin: "8px 0 0",
-                    textAlign: "center",
-                    color: "#555",
-                    fontSize: 12,
-                  }}
-                >
-                  <Link href="/auth/login" style={{ color: "#16A34A" }}>
-                    Sign in
-                  </Link>{" "}
-                  to RSVP
-                </p>
-              )}
-            </div>
-
-            {/* Attendees card */}
-            {attendees.length > 0 && (
-              <div
-                style={{
-                  background: "#1A1A1A",
-                  border: "1px solid #2A2A2A",
-                  borderRadius: 16,
-                  padding: 20,
-                }}
-              >
-                <h3
-                  style={{
-                    margin: "0 0 14px",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "#fff",
-                  }}
-                >
-                  👥 Going ({attendees.length})
-                </h3>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 8,
-                  }}
-                >
-                  {displayedAttendees.map((r: any, i: number) => (
-                    <div
-                      key={r.id || i}
-                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
-                      title={r.users?.full_name || r.users?.username || "User"}
-                    >
-                      <Avatar user={r.users || {}} size={48} />
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "#777",
-                          textAlign: "center",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          width: "100%",
-                        }}
-                      >
-                        {(r.users?.full_name || r.users?.username || "").split(" ")[0]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {extraAttendees > 0 && (
-                  <p
-                    style={{
-                      margin: "12px 0 0",
-                      color: "#16A34A",
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                  >
-                    + {extraAttendees} more
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Organizer card */}
-            {group && (
-              <div
-                style={{
-                  background: "#1A1A1A",
-                  border: "1px solid #2A2A2A",
-                  borderRadius: 16,
-                  padding: 20,
-                }}
-              >
-                <h3
-                  style={{
-                    margin: "0 0 14px",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "#fff",
-                  }}
-                >
-                  🎯 Organizer
-                </h3>
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}
-                >
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, #16A34A, #0D9043)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 22,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {group.emoji || "🏋️"}
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: "#fff", fontWeight: 700, fontSize: 15 }}>
-                      {group.name}
-                    </p>
-                    <p style={{ margin: 0, color: "#16A34A", fontSize: 12 }}>
-                      Event Organizer
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href={`/groups/${group.slug || group.id}`}
-                  className="view-group-btn"
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "10px",
-                    background: "#222",
-                    border: "1px solid #333",
-                    borderRadius: 10,
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    textAlign: "center",
-                    textDecoration: "none",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  View Group →
-                </Link>
-              </div>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommentBlock({
+  comment, replies, currentUserId, onDelete, replyTo, setReplyTo, replyText, setReplyText, onPostReply, posting,
+}: {
+  comment: Comment;
+  replies: Comment[];
+  currentUserId: string | undefined;
+  onDelete: (id: string) => void;
+  replyTo: string | null;
+  setReplyTo: (id: string | null) => void;
+  replyText: string;
+  setReplyText: (v: string) => void;
+  onPostReply: (parentId: string, content: string) => void;
+  posting: boolean;
+}) {
+  const isOwn = currentUserId === comment.user_id;
+  return (
+    <div>
+      <CommentRow comment={comment} isOwn={isOwn} onDelete={onDelete} onReply={() => setReplyTo(replyTo === comment.id ? null : comment.id)} />
+      {/* Replies */}
+      {replies.length > 0 && (
+        <div style={{ marginLeft: 36, marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {replies.map(r => (
+            <CommentRow key={r.id} comment={r} isOwn={currentUserId === r.user_id} onDelete={onDelete} compact />
+          ))}
+        </div>
+      )}
+      {/* Reply input */}
+      {replyTo === comment.id && (
+        <div style={{ marginLeft: 36, marginTop: 10 }}>
+          <textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder={`Reply to @${comment.users.username}...`} rows={2}
+            style={{ ...inputStyle, resize: "vertical", minHeight: 50, fontSize: 13 }} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+            <button onClick={() => setReplyTo(null)} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+            <button onClick={() => onPostReply(comment.id, replyText)} disabled={posting || !replyText.trim()}
+              style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: replyText.trim() ? "#7C3AED" : C.input, color: replyText.trim() ? "#fff" : C.muted, fontSize: 12, fontWeight: 700, cursor: replyText.trim() ? "pointer" : "not-allowed" }}>
+              Reply
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommentRow({ comment, isOwn, onDelete, onReply, compact }: { comment: Comment; isOwn: boolean; onDelete: (id: string) => void; onReply?: () => void; compact?: boolean }) {
+  const ago = timeAgo(comment.created_at);
+  return (
+    <div style={{ display: "flex", gap: 10 }}>
+      <Link href={`/profile/${comment.users.username}`} style={{ flexShrink: 0 }}>
+        <div style={{ width: compact ? 28 : 34, height: compact ? 28 : 34, borderRadius: 99, background: C.input, overflow: "hidden" }}>
+          {comment.users.avatar_url
+            /* eslint-disable-next-line @next/next/no-img-element */
+            ? <img src={comment.users.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: C.sub }}>👤</div>
+          }
+        </div>
+      </Link>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12 }}>
+          <Link href={`/profile/${comment.users.username}`} style={{ color: C.text, fontWeight: 700, textDecoration: "none" }}>{comment.users.full_name}</Link>
+          <span style={{ color: C.muted, marginLeft: 6 }}>@{comment.users.username} · {ago}</span>
+        </div>
+        <div style={{ fontSize: compact ? 13 : 14, color: "#E2E8F0", marginTop: 3, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{comment.content}</div>
+        <div style={{ display: "flex", gap: 14, marginTop: 6 }}>
+          {onReply && <button onClick={onReply} style={miniLink}>Reply</button>}
+          {isOwn && <button onClick={() => onDelete(comment.id)} style={{ ...miniLink, color: "#FCA5A5" }}>Delete</button>}
         </div>
       </div>
     </div>
   );
 }
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 12 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <div style={{ color: C.muted, fontSize: 13, padding: "8px 0" }}>{children}</div>;
+}
+
+function FullPageMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.sub, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+      {children}
+    </div>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+const C = {
+  bg: "#0D0D0D", card: "#161A26", input: "#1F2333", border: "#2A2F42",
+  text: "#F0F0F0", sub: "#9CA3AF", muted: "#6B7280",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%", padding: "10px 13px", background: C.input,
+  border: `1px solid ${C.border}`, borderRadius: 10, color: C.text,
+  fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+};
+
+const rsvpBtn: React.CSSProperties = {
+  padding: "11px 20px", borderRadius: 12, fontWeight: 800, fontSize: 14,
+  cursor: "pointer", flex: "1 1 auto", minWidth: 130,
+};
+
+const miniLink: React.CSSProperties = {
+  background: "none", border: "none", color: C.sub, fontSize: 12,
+  fontWeight: 600, cursor: "pointer", padding: 0,
+};
