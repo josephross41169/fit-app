@@ -1565,9 +1565,9 @@ export default function ProfilePage() {
           .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
           /* Lift avatar enough that it cleanly overlaps the bottom edge of the banner.
              Half of the 160px avatar sits on the banner (80px) minus 4px for the border.
-             Previously tried -56px which left the avatar floating in dead space between
-             the banner bottom and the info card, making it look like a loose purple bar. */
-          .profile-avatar-col { order: 2 !important; margin-top: -80px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
+             margin-bottom: 24px adds breathing room so anything that renders below
+             the avatar (Edit Profile button on mobile) doesn't crash into the avatar circle. */
+          .profile-avatar-col { order: 2 !important; margin-top: -80px !important; margin-bottom: 24px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
