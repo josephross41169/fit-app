@@ -12,6 +12,8 @@ import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { computeTier, getTierInfo } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
+import { isBusinessAccount } from "@/lib/businessTypes";
+import BusinessProfileView from "@/components/BusinessProfileView";
 
 const C = {
   purple:"#7C3AED", purpleLight:"#2D1F52", purpleMid:"#3D2A6E",
@@ -1529,6 +1531,23 @@ export default function ProfilePage() {
 
   const manualBadges = BADGES.filter(b => b.manual);
   const HIGHLIGHT_SLOTS = 9;
+
+  // ── BRANCH: business accounts render a completely different layout ──
+  // The entire athlete profile (followers/following, badges, activity log,
+  // level progress, rivals, etc.) is inappropriate for a business. Instead
+  // we render the dedicated BusinessProfileView with hero + tabs + contact
+  // info. This branch applies to the LOGGED-IN user viewing their own
+  // profile at /profile — the public profile at /profile/[username] already
+  // has its own branch.
+  if (user?.profile && isBusinessAccount(user.profile)) {
+    return (
+      <BusinessProfileView
+        profile={user.profile}
+        currentUser={{ id: user.id }}
+        // No message/block on own profile — they're the owner
+      />
+    );
+  }
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
