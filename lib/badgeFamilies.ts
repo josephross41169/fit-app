@@ -202,18 +202,22 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "comeback-streak",     name: "Comeback",         category: "consistency", members: ["comeback"] },
 
   // ── WELLNESS ────────────────────────────────────────────
-  { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-10", "yoga-lover", "yoga-queen"], thresholds: [1, 10, 30, 100], counterSource: "yogaSessions" },
-  { key: "meditation",          name: "Meditation",       category: "wellness",  members: ["first-meditation", "meditation-10", "meditation-master"], thresholds: [1, 10, 30], counterSource: "meditationSessions" },
-  { key: "cold-plunge",         name: "Cold Plunge",      category: "wellness",  members: ["first-cold-plunge", "ice-bath", "cold-plunge-20"], thresholds: [1, 5, 20], counterSource: "coldPlunges" },
-  { key: "sauna",               name: "Sauna",            category: "wellness",  members: ["first-sauna"], thresholds: [1], counterSource: "saunaSessions" },
-  { key: "breathwork",          name: "Breathwork",       category: "wellness",  members: ["first-breathwork"], thresholds: [1], counterSource: "breathworkSessions" },
-  { key: "walking",             name: "Walking",          category: "wellness",  members: ["first-walk"], thresholds: [1], counterSource: "walks" },
-  { key: "stretching",          name: "Stretching",       category: "wellness",  members: ["first-stretch", "stretch-it-out"], thresholds: [1, 20], counterSource: "stretchingSessions" },
-  { key: "wellness-general",    name: "Wellness",         category: "wellness",  members: ["wellness-50"], thresholds: [50], counterSource: "totalWellness" },
+  // All wellness families now use the canonical 1/5/20/50/100/200/500/1000 ladder
+  // so every activity can progress all the way to OBSIDIAN tier. Old standalone
+  // IDs like `sauna` (at 10) and `yoga-lover` (at 30) remain in the BADGES
+  // catalog for historical earn records but are no longer part of progression.
+  { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-5", "yoga-10", "yoga-50", "yoga-100", "yoga-200", "yoga-500", "yoga-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "yogaSessions" },
+  { key: "meditation",          name: "Meditation",       category: "wellness",  members: ["first-meditation", "meditation-5", "meditation-10", "meditation-50", "meditation-100", "meditation-200", "meditation-500", "meditation-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "meditationSessions" },
+  { key: "cold-plunge",         name: "Cold Plunge",      category: "wellness",  members: ["first-cold-plunge", "cold-plunge-5", "cold-plunge-20", "cold-plunge-50", "cold-plunge-100", "cold-plunge-200", "cold-plunge-500", "cold-plunge-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "coldPlunges" },
+  { key: "sauna",               name: "Sauna",            category: "wellness",  members: ["first-sauna", "sauna-5", "sauna-20", "sauna-50", "sauna-100", "sauna-200", "sauna-500", "sauna-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "saunaSessions" },
+  { key: "breathwork",          name: "Breathwork",       category: "wellness",  members: ["first-breathwork", "breathwork-5", "breathwork-20", "breathwork-50", "breathwork-100", "breathwork-200", "breathwork-500", "breathwork-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "breathworkSessions" },
+  { key: "walking",             name: "Walking",          category: "wellness",  members: ["first-walk", "walks-5", "walks-20", "walks-50", "walks-100", "walks-200", "walks-500", "walks-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "walks" },
+  { key: "stretching",          name: "Stretching",       category: "wellness",  members: ["first-stretch", "stretch-5", "stretch-20", "stretch-50", "stretch-100", "stretch-200", "stretch-500", "stretch-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "stretchingSessions" },
+  { key: "wellness-general",    name: "Wellness",         category: "wellness",  members: ["wellness-1", "wellness-5", "wellness-20", "wellness-50", "wellness-100", "wellness-200", "wellness-500", "wellness-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "totalWellness" },
   { key: "recovery",            name: "Recovery",         category: "wellness",  members: ["sleep-champ", "hydration-hero"] },
 
   // ── NUTRITION ───────────────────────────────────────────
-  { key: "nutrition-logging",   name: "Nutrition Logs",   category: "nutrition", members: ["first-nutrition-log", "nutrition-week", "nutrition-pro", "nutrition-100"], thresholds: [1, 7, 14, 100], counterSource: "nutritionLogs" },
+  { key: "nutrition-logging",   name: "Nutrition Logs",   category: "nutrition", members: ["first-nutrition-log", "nutrition-5", "nutrition-20", "nutrition-50", "nutrition-100", "nutrition-200", "nutrition-500", "nutrition-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "nutritionLogs" },
   { key: "nutrition-goals",     name: "Nutrition Goals",  category: "nutrition", members: ["calorie-goals", "protein-streak", "macro-master"] },
   { key: "meal-prep",           name: "Meal Prep",        category: "nutrition", members: ["meal-prep"] },
   { key: "plant-based",         name: "Plant-Based",      category: "nutrition", members: ["plant-week"] },
