@@ -175,90 +175,98 @@ export interface BadgeFamily {
 }
 
 export const BADGE_FAMILIES: BadgeFamily[] = [
-  // ── STRENGTH ────────────────────────────────────────────
-  { key: "lifting-progression", name: "Lifter",           category: "strength",  members: ["first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100", "lifts-200", "lifts-500", "lifts-1000"], thresholds: [1, 10, 25, 50, 100, 200, 500, 1000], counterSource: "liftSessions" },
-  { key: "bench-progression",   name: "Bench Press",      category: "strength",  members: ["bench-200", "heavy-lifter"] },
-  { key: "squat-progression",   name: "Squat",            category: "strength",  members: ["squat-300"] },
-  { key: "deadlift-progression",name: "Deadlift",         category: "strength",  members: ["deadlift-400", "iron-maiden"] },
-  { key: "one-rep-max",         name: "One Rep Max",      category: "strength",  members: ["1rm-pr", "pb-crusher"] },
-  { key: "overhead-pull",       name: "Overhead & Pull",  category: "strength",  members: ["overhead-bw", "weighted-pullup"] },
-  { key: "kettlebell",          name: "Kettlebell",       category: "strength",  members: ["kettlebell-king"] },
-  { key: "powerlifting",        name: "1,000 lb Club",    category: "strength",  members: ["1k-club"] },
-  { key: "powerlifter-meets",   name: "Powerlifting Meets", category: "strength", members: ["powerlifter-1", "powerlifter-3", "powerlifter-5", "powerlifter-10", "powerlifter-20"], thresholds: [1, 3, 5, 10, 20] },
+  // ── EASY COUNTER LADDERS (8 tiers @ 1/5/20/50/100/200/500/1000) ───────
+  // All auto-awarded based on counterSource. Tier 1 IS the first earn —
+  // no separate "first-X" badges. Old IDs renamed: first-run → runs-1, etc.
 
-  // ── CARDIO / RUNNING ─────────────────────────────────────
-  { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100", "runs-200", "runs-500", "runs-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "runs" },
-  // Hard-event ladders (1/3/5/10/20) — manual claim only, leveled up by reporting more
-  { key: "marathon",       name: "Marathons",       category: "cardio",  members: ["marathon-1", "marathon-3", "marathon-5", "marathon-10", "marathon-20"],                       thresholds: [1, 3, 5, 10, 20] },
-  { key: "ultra",          name: "Ultras",          category: "cardio",  members: ["ultra-1", "ultra-3", "ultra-5", "ultra-10", "ultra-20"],                                      thresholds: [1, 3, 5, 10, 20] },
-  { key: "half-marathon",  name: "Half Marathons",  category: "cardio",  members: ["half-marathon-1", "half-marathon-3", "half-marathon-5", "half-marathon-10", "half-marathon-20"], thresholds: [1, 3, 5, 10, 20] },
-  { key: "5k-events",      name: "5K Races",        category: "cardio",  members: ["5k-1", "5k-3", "5k-5", "5k-10", "5k-20"],                                                     thresholds: [1, 3, 5, 10, 20] },
-  { key: "10k-events",     name: "10K Races",       category: "cardio",  members: ["10k-1", "10k-3", "10k-5", "10k-10", "10k-20"],                                                thresholds: [1, 3, 5, 10, 20] },
-  { key: "ironman",        name: "Ironman",         category: "cardio",  members: ["ironman-1", "ironman-3", "ironman-5", "ironman-10", "ironman-20"],                            thresholds: [1, 3, 5, 10, 20] },
-  { key: "triathlon",      name: "Triathlon",       category: "cardio",  members: ["triathlon-1", "triathlon-3", "triathlon-5", "triathlon-10", "triathlon-20"],                  thresholds: [1, 3, 5, 10, 20] },
-  { key: "century-ride",   name: "Century Rides",   category: "cardio",  members: ["century-ride-1", "century-ride-3", "century-ride-5", "century-ride-10", "century-ride-20"],   thresholds: [1, 3, 5, 10, 20] },
-  { key: "swim-mile",      name: "Open Water",      category: "cardio",  members: ["swim-mile-1", "swim-mile-3", "swim-mile-5", "swim-mile-10", "swim-mile-20"],                  thresholds: [1, 3, 5, 10, 20] },
-  { key: "speed",               name: "Speed",            category: "cardio",    members: ["6min-mile"] },
-  { key: "rowing",              name: "Rower",            category: "cardio",    members: ["rowing-10k"] },
+  // STRENGTH
+  { key: "lifts",        name: "Lifting",          category: "strength",    members: ["lifts-1","lifts-5","lifts-20","lifts-50","lifts-100","lifts-200","lifts-500","lifts-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "liftSessions" },
 
-  // ── CONSISTENCY ─────────────────────────────────────────
-  { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "centurion-2x", "500-workouts", "1000-workouts"], thresholds: [1, 10, 25, 50, 100, 200, 500, 1000], counterSource: "totalWorkouts" },
-  { key: "streaks",             name: "Streak",           category: "consistency", members: ["7day-streak", "30day-streak", "90day-streak", "365day"], thresholds: [7, 30, 90, 365], counterSource: "currentStreak" },
-  { key: "no-days-off",         name: "No Days Off",      category: "consistency", members: ["no-days-off", "weekend-warrior"] },
-  { key: "early-bird-general",  name: "Early Bird",       category: "consistency", members: ["early-bird"] },
-  { key: "comeback-streak",     name: "Comeback",         category: "consistency", members: ["comeback"] },
+  // CARDIO
+  { key: "runs",         name: "Runs",             category: "cardio",      members: ["runs-1","runs-5","runs-20","runs-50","runs-100","runs-200","runs-500","runs-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "runs" },
+  { key: "walks",        name: "Walking",          category: "cardio",      members: ["walks-1","walks-5","walks-20","walks-50","walks-100","walks-200","walks-500","walks-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "walks" },
+  { key: "biking",       name: "Biking",           category: "cardio",      members: ["biking-1","biking-5","biking-20","biking-50","biking-100","biking-200","biking-500","biking-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "bikingSessions" },
+  { key: "swimming",     name: "Swimming",         category: "cardio",      members: ["swimming-1","swimming-5","swimming-20","swimming-50","swimming-100","swimming-200","swimming-500","swimming-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "swimmingSessions" },
+  { key: "rowing",       name: "Rowing",           category: "cardio",      members: ["rowing-1","rowing-5","rowing-20","rowing-50","rowing-100","rowing-200","rowing-500","rowing-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "rowingSessions" },
+  { key: "hiit",         name: "HIIT",             category: "cardio",      members: ["hiit-1","hiit-5","hiit-20","hiit-50","hiit-100","hiit-200","hiit-500","hiit-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "hiitSessions" },
+  { key: "boxing",       name: "Boxing",           category: "cardio",      members: ["boxing-1","boxing-5","boxing-20","boxing-50","boxing-100","boxing-200","boxing-500","boxing-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "boxingSessions" },
+  { key: "sports",       name: "Sports",           category: "cardio",      members: ["sports-1","sports-5","sports-20","sports-50","sports-100","sports-200","sports-500","sports-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "sportsSessions" },
 
-  // ── WELLNESS ────────────────────────────────────────────
-  // All wellness families now use the canonical 1/5/20/50/100/200/500/1000 ladder
-  // so every activity can progress all the way to OBSIDIAN tier. Old standalone
-  // IDs like `sauna` (at 10) and `yoga-lover` (at 30) remain in the BADGES
-  // catalog for historical earn records but are no longer part of progression.
-  { key: "yoga",                name: "Yoga",             category: "wellness",  members: ["first-yoga", "yoga-5", "yoga-10", "yoga-50", "yoga-100", "yoga-200", "yoga-500", "yoga-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "yogaSessions" },
-  { key: "meditation",          name: "Meditation",       category: "wellness",  members: ["first-meditation", "meditation-5", "meditation-10", "meditation-50", "meditation-100", "meditation-200", "meditation-500", "meditation-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "meditationSessions" },
-  { key: "cold-plunge",         name: "Cold Plunge",      category: "wellness",  members: ["first-cold-plunge", "cold-plunge-5", "cold-plunge-20", "cold-plunge-50", "cold-plunge-100", "cold-plunge-200", "cold-plunge-500", "cold-plunge-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "coldPlunges" },
-  { key: "sauna",               name: "Sauna",            category: "wellness",  members: ["first-sauna", "sauna-5", "sauna-20", "sauna-50", "sauna-100", "sauna-200", "sauna-500", "sauna-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "saunaSessions" },
-  { key: "breathwork",          name: "Breathwork",       category: "wellness",  members: ["first-breathwork", "breathwork-5", "breathwork-20", "breathwork-50", "breathwork-100", "breathwork-200", "breathwork-500", "breathwork-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "breathworkSessions" },
-  { key: "walking",             name: "Walking",          category: "wellness",  members: ["first-walk", "walks-5", "walks-20", "walks-50", "walks-100", "walks-200", "walks-500", "walks-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "walks" },
-  { key: "stretching",          name: "Stretching",       category: "wellness",  members: ["first-stretch", "stretch-5", "stretch-20", "stretch-50", "stretch-100", "stretch-200", "stretch-500", "stretch-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "stretchingSessions" },
-  { key: "wellness-general",    name: "Wellness",         category: "wellness",  members: ["wellness-1", "wellness-5", "wellness-20", "wellness-50", "wellness-100", "wellness-200", "wellness-500", "wellness-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "totalWellness" },
-  { key: "recovery",            name: "Recovery",         category: "wellness",  members: ["sleep-champ", "hydration-hero"] },
+  // WELLNESS
+  { key: "yoga",         name: "Yoga",             category: "wellness",    members: ["yoga-1","yoga-5","yoga-20","yoga-50","yoga-100","yoga-200","yoga-500","yoga-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "yogaSessions" },
+  { key: "meditation",   name: "Meditation",       category: "wellness",    members: ["meditation-1","meditation-5","meditation-20","meditation-50","meditation-100","meditation-200","meditation-500","meditation-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "meditationSessions" },
+  { key: "cold-plunge",  name: "Cold Plunge",      category: "wellness",    members: ["cold-plunge-1","cold-plunge-5","cold-plunge-20","cold-plunge-50","cold-plunge-100","cold-plunge-200","cold-plunge-500","cold-plunge-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "coldPlunges" },
+  { key: "sauna",        name: "Sauna",            category: "wellness",    members: ["sauna-1","sauna-5","sauna-20","sauna-50","sauna-100","sauna-200","sauna-500","sauna-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "saunaSessions" },
+  { key: "breathwork",   name: "Breathwork",       category: "wellness",    members: ["breathwork-1","breathwork-5","breathwork-20","breathwork-50","breathwork-100","breathwork-200","breathwork-500","breathwork-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "breathworkSessions" },
+  { key: "stretching",   name: "Stretching",       category: "wellness",    members: ["stretching-1","stretching-5","stretching-20","stretching-50","stretching-100","stretching-200","stretching-500","stretching-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "stretchingSessions" },
+  { key: "pilates",      name: "Pilates",          category: "wellness",    members: ["pilates-1","pilates-5","pilates-20","pilates-50","pilates-100","pilates-200","pilates-500","pilates-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "pilatesSessions" },
+  { key: "wellness",     name: "Total Wellness",   category: "wellness",    members: ["wellness-1","wellness-5","wellness-20","wellness-50","wellness-100","wellness-200","wellness-500","wellness-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "totalWellness" },
 
-  // ── NUTRITION ───────────────────────────────────────────
-  { key: "nutrition-logging",   name: "Nutrition Logs",   category: "nutrition", members: ["first-nutrition-log", "nutrition-5", "nutrition-20", "nutrition-50", "nutrition-100", "nutrition-200", "nutrition-500", "nutrition-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "nutritionLogs" },
-  { key: "nutrition-goals",     name: "Nutrition Goals",  category: "nutrition", members: ["calorie-goals", "protein-streak", "macro-master"] },
-  { key: "meal-prep",           name: "Meal Prep",        category: "nutrition", members: ["meal-prep"] },
-  { key: "plant-based",         name: "Plant-Based",      category: "nutrition", members: ["plant-week"] },
-  { key: "clean-eating",        name: "Clean Eating",     category: "nutrition", members: ["sugar-free", "clean-30"] },
-  { key: "barcode-scanner",     name: "Scanner",          category: "nutrition", members: ["barcode-10", "barcode-100"] },
-  { key: "fasting",             name: "Fasting",          category: "nutrition", members: ["fasting"] },
+  // NUTRITION
+  { key: "nutrition",    name: "Nutrition Logs",   category: "nutrition",   members: ["nutrition-1","nutrition-5","nutrition-20","nutrition-50","nutrition-100","nutrition-200","nutrition-500","nutrition-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "nutritionLogs" },
 
-  // ── CHALLENGES & EVENTS ─────────────────────────────────
-  { key: "iron-will",          name: "Iron Will",       category: "challenges", members: ["iron-will"] },
-  // Hard-event ladders (1/3/5/10/20) — leveled up by reporting more
-  { key: "75-hard-events",     name: "75 Hard",         category: "challenges", members: ["75-hard-1", "75-hard-3", "75-hard-5", "75-hard-10", "75-hard-20"],            thresholds: [1, 3, 5, 10, 20] },
-  { key: "murph-events",       name: "Murph",           category: "challenges", members: ["murph-1", "murph-3", "murph-5", "murph-10", "murph-20"],                       thresholds: [1, 3, 5, 10, 20] },
-  { key: "spartan-events",     name: "Spartan Race",    category: "challenges", members: ["spartan-1", "spartan-3", "spartan-5", "spartan-10", "spartan-20"],             thresholds: [1, 3, 5, 10, 20] },
-  { key: "tough-mudder-events",name: "Tough Mudder",    category: "challenges", members: ["tough-mudder-1", "tough-mudder-3", "tough-mudder-5", "tough-mudder-10", "tough-mudder-20"], thresholds: [1, 3, 5, 10, 20] },
-  { key: "crossfit-open-events",name:"CrossFit Open",   category: "challenges", members: ["crossfit-open-1", "crossfit-open-3", "crossfit-open-5", "crossfit-open-10", "crossfit-open-20"], thresholds: [1, 3, 5, 10, 20] },
-  { key: "pushup",              name: "Push-Ups",         category: "challenges", members: ["pushup-100"] },
-  { key: "plank",               name: "Plank",            category: "challenges", members: ["plank-5min"] },
-  { key: "burpee",              name: "Burpees",          category: "challenges", members: ["burpee-100"] },
-  { key: "pullup",              name: "Pull-Ups",         category: "challenges", members: ["pullup-20"] },
+  // CONSISTENCY
+  { key: "workouts",     name: "Total Workouts",   category: "consistency", members: ["workouts-1","workouts-5","workouts-20","workouts-50","workouts-100","workouts-200","workouts-500","workouts-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "totalWorkouts" },
+  { key: "streak",       name: "Streak",           category: "consistency", members: ["streak-3","streak-7","streak-14","streak-30","streak-60","streak-90","streak-180","streak-365"], thresholds: [3,7,14,30,60,90,180,365], counterSource: "currentStreak" },
+  { key: "early-bird",   name: "Early Bird",       category: "consistency", members: ["early-bird-1","early-bird-5","early-bird-20","early-bird-50","early-bird-100","early-bird-200","early-bird-500","early-bird-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "earlyBirdCount" },
 
-  // ── SOCIAL ──────────────────────────────────────────────
-  { key: "posts",               name: "Posts",            category: "social",    members: ["first-post", "10-posts"], thresholds: [1, 10], counterSource: "postCount" },
-  { key: "followers",           name: "Followers",        category: "social",    members: ["first-follower", "100-followers"], thresholds: [1, 100], counterSource: "followerCount" },
-  { key: "groups",              name: "Groups",           category: "social",    members: ["group-member", "group-leader"] },
-  { key: "likes",               name: "Likes",            category: "social",    members: ["first-like", "motivator"] },
+  // SOCIAL
+  { key: "posts",        name: "Posts",            category: "social",      members: ["posts-1","posts-5","posts-20","posts-50","posts-100","posts-200","posts-500","posts-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "postCount" },
+  { key: "followers",    name: "Followers",        category: "social",      members: ["followers-1","followers-5","followers-20","followers-50","followers-100","followers-200","followers-500","followers-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "followerCount" },
+  { key: "likes",        name: "Likes",            category: "social",      members: ["likes-1","likes-5","likes-20","likes-50","likes-100","likes-200","likes-500","likes-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "likesReceived" },
+  { key: "comments",     name: "Comments",         category: "social",      members: ["comments-1","comments-5","comments-20","comments-50","comments-100","comments-200","comments-500","comments-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "commentsMade" },
 
-  // ── SPECIAL (progression) ───────────────────────────────
-  // Credentials are handled separately below, not here.
-  { key: "gym-rat",             name: "Gym Rat",          category: "special",   members: ["first-gym"] },
-  { key: "new-year",            name: "New Year",         category: "special",   members: ["new-years"] },
-  { key: "holiday",             name: "Holiday",          category: "special",   members: ["holiday-hustle"] },
-  { key: "workout-partner",     name: "Workout Partner",  category: "special",   members: ["collab"] },
-  { key: "outdoor",             name: "Outdoor",          category: "special",   members: ["outdoor-adventurer"] },
-  { key: "competitor",          name: "Competitor",       category: "special",   members: ["sport-competitor"] },
+  // ── STRENGTH WEIGHT LADDERS (4 tiers @ weight thresholds) ──────────────
+  // Auto-detected from logged exercises with weight recorded.
+  { key: "bench",        name: "Bench Press",      category: "strength",    members: ["bench-200","bench-300","bench-400","bench-500"], thresholds: [200,300,400,500], counterSource: "benchMax" },
+  { key: "squat",        name: "Squat",            category: "strength",    members: ["squat-200","squat-300","squat-400","squat-500"], thresholds: [200,300,400,500], counterSource: "squatMax" },
+  { key: "deadlift",     name: "Deadlift",         category: "strength",    members: ["deadlift-200","deadlift-300","deadlift-400","deadlift-500"], thresholds: [200,300,400,500], counterSource: "deadliftMax" },
+  { key: "total",        name: "Total Lift Club",  category: "strength",    members: ["total-800","total-1000","total-1300","total-1500"], thresholds: [800,1000,1300,1500], counterSource: "totalLiftMax" },
+
+  // ── HARD EVENT LADDERS (5 tiers @ 1/3/5/10/20) — manual claim ─────────
+  { key: "marathon",       name: "Marathons",       category: "cardio",      members: ["marathon-1","marathon-3","marathon-5","marathon-10","marathon-20"],                                       thresholds: [1,3,5,10,20] },
+  { key: "ultra",          name: "Ultras",          category: "cardio",      members: ["ultra-1","ultra-3","ultra-5","ultra-10","ultra-20"],                                                      thresholds: [1,3,5,10,20] },
+  { key: "half-marathon",  name: "Half Marathons",  category: "cardio",      members: ["half-marathon-1","half-marathon-3","half-marathon-5","half-marathon-10","half-marathon-20"],              thresholds: [1,3,5,10,20] },
+  { key: "5k-events",      name: "5K Races",        category: "cardio",      members: ["5k-1","5k-3","5k-5","5k-10","5k-20"],                                                                     thresholds: [1,3,5,10,20] },
+  { key: "10k-events",     name: "10K Races",       category: "cardio",      members: ["10k-1","10k-3","10k-5","10k-10","10k-20"],                                                                thresholds: [1,3,5,10,20] },
+  { key: "ironman",        name: "Ironman",         category: "cardio",      members: ["ironman-1","ironman-3","ironman-5","ironman-10","ironman-20"],                                            thresholds: [1,3,5,10,20] },
+  { key: "triathlon",      name: "Triathlon",       category: "cardio",      members: ["triathlon-1","triathlon-3","triathlon-5","triathlon-10","triathlon-20"],                                  thresholds: [1,3,5,10,20] },
+  { key: "century-ride",   name: "Century Rides",   category: "cardio",      members: ["century-ride-1","century-ride-3","century-ride-5","century-ride-10","century-ride-20"],                   thresholds: [1,3,5,10,20] },
+  { key: "swim-mile",      name: "Open Water",      category: "cardio",      members: ["swim-mile-1","swim-mile-3","swim-mile-5","swim-mile-10","swim-mile-20"],                                  thresholds: [1,3,5,10,20] },
+  { key: "75-hard",        name: "75 Hard",         category: "challenges",  members: ["75-hard-1","75-hard-3","75-hard-5","75-hard-10","75-hard-20"],                                            thresholds: [1,3,5,10,20] },
+  { key: "murph",          name: "Murph",           category: "challenges",  members: ["murph-1","murph-3","murph-5","murph-10","murph-20"],                                                      thresholds: [1,3,5,10,20] },
+  { key: "spartan",        name: "Spartan Race",    category: "challenges",  members: ["spartan-1","spartan-3","spartan-5","spartan-10","spartan-20"],                                            thresholds: [1,3,5,10,20] },
+  { key: "tough-mudder",   name: "Tough Mudder",    category: "challenges",  members: ["tough-mudder-1","tough-mudder-3","tough-mudder-5","tough-mudder-10","tough-mudder-20"],                   thresholds: [1,3,5,10,20] },
+  { key: "crossfit-open",  name: "CrossFit Open",   category: "challenges",  members: ["crossfit-open-1","crossfit-open-3","crossfit-open-5","crossfit-open-10","crossfit-open-20"],              thresholds: [1,3,5,10,20] },
+  { key: "powerlifter",    name: "Powerlifting Meet", category: "strength",  members: ["powerlifter-1","powerlifter-3","powerlifter-5","powerlifter-10","powerlifter-20"],                        thresholds: [1,3,5,10,20] },
+
+  // ── SINGLE-SHOT CREDENTIALS ────────────────────────────────────────────
+  // 1-member families render as `credential` style (holographic, no tier pill).
+  { key: "iron-maiden",     name: "Iron Maiden",        category: "strength",    members: ["iron-maiden"] },
+  { key: "overhead-bw",     name: "Overhead Master",    category: "strength",    members: ["overhead-bw"] },
+  { key: "weighted-pullup", name: "Weighted Pull-Up",   category: "strength",    members: ["weighted-pullup"] },
+  { key: "kettlebell-king", name: "Kettlebell King",    category: "strength",    members: ["kettlebell-king"] },
+  { key: "6min-mile",       name: "6 Minute Mile",      category: "cardio",      members: ["6min-mile"] },
+  { key: "plank-5min",      name: "Plank Legend",       category: "challenges",  members: ["plank-5min"] },
+  { key: "burpee-100",      name: "Burpee Beast",       category: "challenges",  members: ["burpee-100"] },
+  { key: "pullup-20",       name: "Pull-Up Pro",        category: "challenges",  members: ["pullup-20"] },
+  { key: "pushup-100",      name: "100 Push-Ups",       category: "challenges",  members: ["pushup-100"] },
+  { key: "iron-will",       name: "Iron Will",          category: "challenges",  members: ["iron-will"] },
+  { key: "calorie-goals",   name: "On Target",          category: "nutrition",   members: ["calorie-goals"] },
+  { key: "protein-streak",  name: "Protein Streak",     category: "nutrition",   members: ["protein-streak"] },
+  { key: "meal-prep",       name: "Meal Prepper",       category: "nutrition",   members: ["meal-prep"] },
+  { key: "plant-week",      name: "Plant Week",         category: "nutrition",   members: ["plant-week"] },
+  { key: "sugar-free",      name: "Sugar Free",         category: "nutrition",   members: ["sugar-free"] },
+  { key: "macro-master",    name: "Macro Master",       category: "nutrition",   members: ["macro-master"] },
+  { key: "fasting",         name: "Fasting Pro",        category: "nutrition",   members: ["fasting"] },
+  { key: "clean-30",        name: "Clean 30",           category: "nutrition",   members: ["clean-30"] },
+  { key: "group-member",    name: "Group Member",       category: "social",      members: ["group-member"] },
+  { key: "group-leader",    name: "Group Leader",       category: "social",      members: ["group-leader"] },
+  { key: "new-years",       name: "New Year",           category: "special",     members: ["new-years"] },
+  { key: "holiday-hustle",  name: "Holiday Hustle",     category: "special",     members: ["holiday-hustle"] },
+  { key: "collab",          name: "Workout Partner",    category: "special",     members: ["collab"] },
+  { key: "outdoor",         name: "Outdoor Adventurer", category: "special",     members: ["outdoor-adventurer"] },
+  { key: "competitor",      name: "Competitor",         category: "special",     members: ["sport-competitor"] },
 ];
 
 // Reverse lookup for quick membership checks
@@ -316,6 +324,22 @@ const PROGRESS_LABEL_BY_COUNTER: Record<string, string> = {
   nutritionLogs: "logs",
   postCount: "posts",
   followerCount: "followers",
+  // New ladders added in Apr 2026 rewrite
+  bikingSessions: "rides",
+  swimmingSessions: "swims",
+  rowingSessions: "sessions",
+  hiitSessions: "sessions",
+  pilatesSessions: "sessions",
+  boxingSessions: "rounds",
+  sportsSessions: "games",
+  likesReceived: "likes",
+  commentsMade: "comments",
+  earlyBirdCount: "pre-7am",
+  // Strength weight-based (uses different units)
+  benchMax: "lbs",
+  squatMax: "lbs",
+  deadliftMax: "lbs",
+  totalLiftMax: "lbs total",
 };
 
 // ── GROUPING LOGIC ──────────────────────────────────────────────────────────
@@ -378,6 +402,25 @@ export function groupBadgesIntoFamilies(
   for (const family of BADGE_FAMILIES) {
     const earnedMembers = family.members.filter((id) => earnedIds.has(id));
     if (earnedMembers.length === 0) continue;
+
+    // Single-member family → render as credential (no "1/1" tier pill).
+    // Skip if it's already a CREDENTIAL_BADGE_IDS entry — already handled above.
+    if (family.members.length === 1) {
+      const onlyId = family.members[0];
+      if (CREDENTIAL_BADGE_IDS.has(onlyId) || consumedIds.has(onlyId)) continue;
+      const badge = BADGES.find((b) => b.id === onlyId);
+      if (!badge) continue;
+      result.push({
+        key: family.key,
+        renderType: "credential",
+        emoji: badge.emoji,
+        label: badge.label,
+        desc: badge.desc,
+        category: family.category,
+      });
+      consumedIds.add(onlyId);
+      continue;
+    }
 
     // Peak = furthest-along member in family order
     const maxDefinedIndex = earnedMembers.reduce((max, id) => {
