@@ -313,7 +313,7 @@ export default function PostPage() {
   const submittingRef = useRef(false); // hard lock · prevents double-submit even with rapid clicks
 
   // Workout state
-  const [woCategory, setWoCategory] = useState("lifting"); // standardized category; drives form fields
+  const [woCategory, setWoCategory] = useState("lifting"); // primary category; drives stats/badges/rivalries
   const [woType, setWoType] = useState("");                 // user-facing workout NAME ("Push Day A")
   const [woDuration, setWoDuration] = useState("");
   const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
@@ -324,6 +324,17 @@ export default function PostPage() {
   const [cardioDistance, setCardioDistance] = useState("");
   const [woNotes, setWoNotes] = useState("");
   const [woPhoto, setWoPhoto] = useState<string | null>(null);
+
+  // Combined-workout toggles — when on, the form shows BOTH a cardio block
+  // and an exercises block in the same workout entry. Lets users log
+  // "ran 2 miles AND did chest day" as one log instead of two.
+  // Cardio block uses cardioSubcategory + cardioBlockDuration + cardioBlockDistance
+  // (decoupled from woCategory/woDuration/woDistance which now serve "single mode")
+  const [includeCardio, setIncludeCardio] = useState(false);
+  const [includeLifting, setIncludeLifting] = useState(true);
+  const [cardioSubcategory, setCardioSubcategory] = useState<string>("running");
+  const [cardioBlockDuration, setCardioBlockDuration] = useState("");
+  const [cardioBlockDistance, setCardioBlockDistance] = useState("");
 
   // PR + Template state
   const [newPRs, setNewPRs] = useState<PRResult[]>([]);
@@ -514,6 +525,29 @@ export default function PostPage() {
         setCardioDuration(data.cardio[0].duration || '');
         setCardioDistance(data.cardio[0].distance || '');
       }
+      // Restore toggle state for combined workouts. The block fields take
+      // precedence over the legacy single-category state for the new UI.
+      const hasCardio = !!(data.cardio && data.cardio.length > 0 && (data.cardio[0].duration || data.cardio[0].distance || data.cardio[0].miles));
+      const hasExercises = exs.length > 0;
+      const cardioCats = ["running","walking","biking","swimming","rowing"];
+      // If saved as a cardio category in single-mode, toggle includeCardio on and copy fields into block state
+      if (cardioCats.includes(data.workout_category) && !hasExercises) {
+        setIncludeCardio(true);
+        setIncludeLifting(false);
+        setCardioSubcategory(data.workout_category);
+        setCardioBlockDuration(data.workout_duration_min ? String(data.workout_duration_min) : '');
+        setCardioBlockDistance(firstCardio ? String(firstCardio.miles ?? firstCardio.distance ?? '') : '');
+      } else if (hasCardio && hasExercises) {
+        // Combined workout — both blocks active
+        setIncludeCardio(true);
+        setIncludeLifting(true);
+        setCardioSubcategory(data.cardio[0].type || 'running');
+        setCardioBlockDuration(data.cardio[0].duration ? String(data.cardio[0].duration) : '');
+        setCardioBlockDistance(data.cardio[0].distance ? String(data.cardio[0].distance) : (data.cardio[0].miles ? String(data.cardio[0].miles) : ''));
+      } else if (hasExercises) {
+        setIncludeCardio(false);
+        setIncludeLifting(true);
+      }
       setLogTab('workout');
     } catch {}
   }
@@ -685,44 +719,73 @@ export default function PostPage() {
           notes: ex.notes || undefined,
         }));
 
-        // Build the cardio array based on the selected category's fields.
-        // For distance-based categories (running/walking/biking/swimming/rowing),
-        // save {miles, duration, pace} — matching what the rivalry scoring
-        // function and legacy code already expect (cardio.miles, cardio.pace_min_per_mile).
-        const selectedCat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
+        // ── Build the cardio + exercises payload ─────────────────────────
+        // The form has two modes:
+        //   A) "Combined" mode: includeCardio + includeLifting toggles. User
+        //      can have one or both blocks filled in. woCategory is set to
+        //      the cardio subcategory if cardio is on AND lifting is off,
+        //      "lifting" if lifting is on, otherwise the user's pick.
+        //   B) "Single" mode: woCategory is one of hiit/yoga/pilates/etc.,
+        //      no toggles, just duration + notes.
+        //
+        // The DB columns (workout_category, exercises, cardio) work for both —
+        // the only thing that changes is which fields get populated.
         let cardioPayload: any = null;
-        if (selectedCat?.distance && (woDistance || woDuration)) {
-          const distNum = parseFloat(woDistance) || 0;
-          const durNum  = parseFloat(woDuration)  || 0;
-          const cardioEntry: any = {
-            type: woCategory,
-            distance: woDistance || null,
-            duration: woDuration || null,
-          };
-          if (distNum > 0) cardioEntry.miles = distNum;
-          if (distNum > 0 && durNum > 0) {
-            // Auto-compute pace when both fields are present
-            if (woCategory === "running") {
-              cardioEntry.pace_min_per_mile = durNum / distNum;
-            } else if (woCategory === "biking") {
-              cardioEntry.mph = (distNum / durNum) * 60;
-            } else if (woCategory === "swimming") {
-              // min per 100 yards
-              cardioEntry.pace_min_per_100 = (durNum / distNum) * 100;
+        let effectiveWoCategory = woCategory;
+        let effectiveDuration: number | null = null;
+
+        // Detect single-mode (non-cardio, non-lifting category)
+        const isSingleMode = !["running","walking","biking","swimming","rowing","lifting"].includes(woCategory);
+
+        if (isSingleMode) {
+          // Single mode — hiit/yoga/pilates/boxing/sports/other
+          // Only duration matters; no cardio block, no exercises
+          effectiveDuration = woDuration ? parseInt(woDuration) : null;
+        } else {
+          // Combined mode — process toggles
+          if (includeCardio) {
+            const distNum = parseFloat(cardioBlockDistance) || 0;
+            const durNum  = parseFloat(cardioBlockDuration)  || 0;
+            const cardioEntry: any = {
+              type: cardioSubcategory,
+              distance: cardioBlockDistance || null,
+              duration: cardioBlockDuration || null,
+            };
+            if (distNum > 0) cardioEntry.miles = distNum;
+            if (distNum > 0 && durNum > 0) {
+              if (cardioSubcategory === "running") cardioEntry.pace_min_per_mile = durNum / distNum;
+              else if (cardioSubcategory === "biking") cardioEntry.mph = (distNum / durNum) * 60;
+              else if (cardioSubcategory === "swimming") cardioEntry.pace_min_per_100 = (durNum / distNum) * 100;
             }
+            cardioPayload = [cardioEntry];
+            effectiveDuration = (effectiveDuration || 0) + (durNum > 0 ? Math.round(durNum) : 0);
           }
-          cardioPayload = [cardioEntry];
+
+          // Set workout_category — primary classifier for badges/stats/rivalries.
+          // If both blocks active, lifting wins as the primary (most weight bearing).
+          // If only cardio, use the cardio subcategory.
+          if (includeLifting) {
+            effectiveWoCategory = "lifting";
+          } else if (includeCardio) {
+            effectiveWoCategory = cardioSubcategory;
+          } else {
+            // Neither block on — fall back to current woCategory
+            effectiveWoCategory = woCategory;
+          }
+          // Lifting workouts may also have a duration (user can enter it manually)
+          if (woDuration) {
+            const wd = parseInt(woDuration);
+            if (!isNaN(wd)) effectiveDuration = (effectiveDuration || 0) + wd;
+          }
         }
-        // Preserve legacy standalone cardio fields if user filled them (backwards compat)
-        else if (cardioType || cardioDuration || cardioDistance) {
-          cardioPayload = [{ type: cardioType, duration: cardioDuration, distance: cardioDistance }];
-        }
+        // Normalize exercises (already done above as normalizedExercises)
+        const useExercises = (isSingleMode ? false : includeLifting) && normalizedExercises.length > 0;
 
         const workoutPayload = {
-          workout_category: woCategory,                 // standardized — drives stats/badges/rivalries
+          workout_category: effectiveWoCategory,         // standardized — drives stats/badges/rivalries
           workout_type: woType || null,                  // user's name for this workout ("Push Day A")
-          workout_duration_min: woDuration ? parseInt(woDuration) : null,
-          exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
+          workout_duration_min: effectiveDuration,
+          exercises: useExercises ? normalizedExercises : null,
           cardio: cardioPayload,
           notes: woNotes || null,
           photo_url: woPhotoUrl,
@@ -822,19 +885,27 @@ export default function PostPage() {
       } catch {}
       // -- Award XP for level system ----------------------------------------
       // Fires once per (user, category) per UTC day — server enforces the cap.
-      // Workout sub-types get split between "workout" (lifting/bodyweight/hiit)
-      // and "cardio" (running/walking/biking/swimming/rowing) per spec.
+      // Workouts can award MULTIPLE XP categories — if user logged a combined
+      // cardio + lifting session, they get BOTH cardio XP AND workout XP that day.
       try {
         const cardioCategories = new Set(["running", "walking", "biking", "swimming", "rowing"]);
-        let xpCategory: "workout" | "cardio" | "nutrition" | "wellness" | null = null;
+        const xpCategoriesToAward: Array<"workout" | "cardio" | "nutrition" | "wellness"> = [];
+
         if (logTab === "workout") {
-          xpCategory = cardioCategories.has(woCategory) ? "cardio" : "workout";
+          // Combined-mode: cardio toggle + lifting toggle each award their category
+          if (includeCardio || includeLifting) {
+            if (includeCardio) xpCategoriesToAward.push("cardio");
+            if (includeLifting) xpCategoriesToAward.push("workout");
+          } else {
+            // Single-mode (hiit/yoga/etc.) — fall back to woCategory
+            xpCategoriesToAward.push(cardioCategories.has(woCategory) ? "cardio" : "workout");
+          }
         } else if (logTab === "nutrition") {
-          xpCategory = "nutrition";
+          xpCategoriesToAward.push("nutrition");
         } else if (logTab === "wellness") {
-          xpCategory = "wellness";
+          xpCategoriesToAward.push("wellness");
         }
-        if (xpCategory) await awardXp(user.id, xpCategory);
+        for (const cat of xpCategoriesToAward) await awardXp(user.id, cat);
       } catch (e) {
         console.warn("[post] awardXp failed:", e);
       }
@@ -1409,83 +1480,162 @@ export default function PostPage() {
               {todayLogId && (
                 <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>✏️ Editing today's {todayLog?.type || 'workout'} · save will update it</div>
-                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoCategory('lifting'); setWoDuration(''); setWoDistance(''); setWoNotes(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
+                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoCategory('lifting'); setWoDuration(''); setWoDistance(''); setWoNotes(''); setIncludeCardio(false); setIncludeLifting(true); setCardioSubcategory('running'); setCardioBlockDuration(''); setCardioBlockDistance(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
                 </div>
               )}
 
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💪 Workout Details</div>
 
-                {/* Category — drives which fields appear below */}
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Category</label>
-                  <select style={iStyle} value={woCategory} onChange={e => setWoCategory(e.target.value)}>
-                    {WORKOUT_CATEGORIES.map(c => (
+                {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                  </label>
+                  <input style={iStyle} placeholder={`e.g. ${includeLifting ? 'Push Day A' : includeCardio ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
+                </div>
+
+                {/* What did you do? — toggle Cardio + Lifting independently
+                    or fall back to "Other type" for hiit/yoga/pilates/etc. */}
+                <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                  What did you do?
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                  <button
+                    onClick={() => {
+                      setIncludeCardio(c => !c);
+                      // If turning ON cardio while in single-mode (hiit/yoga), reset to combined-mode
+                      if (!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory)) {
+                        setWoCategory("lifting");
+                      }
+                    }}
+                    style={{
+                      flex: "1 1 130px", padding: "11px 14px", borderRadius: 12,
+                      background: includeCardio ? "rgba(124,58,237,0.18)" : C.white,
+                      border: `2px solid ${includeCardio ? C.blue : C.greenMid}`,
+                      color: includeCardio ? "#A78BFA" : C.sub,
+                      fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left",
+                    }}>
+                    {includeCardio ? "✓" : "+"} 🏃 Cardio
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIncludeLifting(l => !l);
+                      if (!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory)) {
+                        setWoCategory("lifting");
+                      }
+                    }}
+                    style={{
+                      flex: "1 1 130px", padding: "11px 14px", borderRadius: 12,
+                      background: includeLifting ? "rgba(124,58,237,0.18)" : C.white,
+                      border: `2px solid ${includeLifting ? C.blue : C.greenMid}`,
+                      color: includeLifting ? "#A78BFA" : C.sub,
+                      fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left",
+                    }}>
+                    {includeLifting ? "✓" : "+"} 🏋️ Lifting
+                  </button>
+                </div>
+
+                {/* "Or pick a different workout type" — for hiit/yoga/pilates/boxing/sports/other.
+                    Selecting one of these auto-disables both toggles (single-mode). */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Or a different type
+                  </label>
+                  <select style={iStyle}
+                    value={["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) ? "" : woCategory}
+                    onChange={e => {
+                      if (!e.target.value) return;
+                      setWoCategory(e.target.value);
+                      setIncludeCardio(false);
+                      setIncludeLifting(false);
+                    }}>
+                    <option value="">— Pick one (HIIT, Yoga, etc.) —</option>
+                    {WORKOUT_CATEGORIES.filter(c => !["running","walking","biking","swimming","rowing","lifting"].includes(c.id)).map(c => (
                       <option key={c.id} value={c.id}>{c.emoji}  {c.label}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
-                  </label>
-                  <input style={iStyle} placeholder={`e.g. ${woCategory === 'lifting' ? 'Push Day A' : woCategory === 'running' ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
-                </div>
-
-                {(() => {
-                  const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
-                  if (!cat) return null;
-                  // Pace auto-calculated from distance + duration
-                  const distNum = parseFloat(woDistance) || 0;
-                  const durNum  = parseFloat(woDuration)  || 0;
+                {/* ── CARDIO BLOCK — only when toggle on ─────────────────── */}
+                {includeCardio && (() => {
+                  const distNum = parseFloat(cardioBlockDistance) || 0;
+                  const durNum  = parseFloat(cardioBlockDuration)  || 0;
                   let paceText = "";
-                  if (cat.pace && distNum > 0 && durNum > 0) {
-                    if (cat.id === "running") {
+                  if (distNum > 0 && durNum > 0) {
+                    if (cardioSubcategory === "running") {
                       const p = durNum / distNum;
                       const m = Math.floor(p);
                       const s = Math.round((p - m) * 60);
                       paceText = `${m}:${s.toString().padStart(2, "0")} min/mi`;
-                    } else if (cat.id === "biking") {
+                    } else if (cardioSubcategory === "biking") {
                       paceText = `${((distNum / durNum) * 60).toFixed(1)} mph`;
-                    } else if (cat.id === "swimming") {
+                    } else if (cardioSubcategory === "swimming") {
                       const p = (durNum / distNum) * 100;
                       const m = Math.floor(p);
                       const s = Math.round((p - m) * 60);
                       paceText = `${m}:${s.toString().padStart(2, "0")} min/100yd`;
                     }
                   }
+                  const showPace = ["running","biking","swimming"].includes(cardioSubcategory);
+                  const distUnit = cardioSubcategory === "swimming" ? "yards" : cardioSubcategory === "rowing" ? "meters" : "miles";
                   return (
-                    <>
-                      {/* Duration — every category uses this */}
-                      <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
-                        <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
+                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>🏃 Cardio</div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
+                        <select style={iStyle} value={cardioSubcategory} onChange={e => setCardioSubcategory(e.target.value)}>
+                          <option value="running">🏃 Running</option>
+                          <option value="walking">🚶 Walking</option>
+                          <option value="biking">🚴 Biking</option>
+                          <option value="swimming">🏊 Swimming</option>
+                          <option value="rowing">🚣 Rowing</option>
+                        </select>
                       </div>
-
-                      {/* Distance — only for categories that support it */}
-                      {cat.distance && (
-                        <div style={{ marginBottom: 12 }}>
-                          <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                            Distance ({cat.distanceUnit})
-                          </label>
-                          <input style={iStyle} type="text" inputMode="decimal" placeholder={cat.id === "swimming" ? "e.g. 1000" : cat.id === "rowing" ? "e.g. 2000" : "e.g. 3.2"} value={woDistance} onChange={e => setWoDistance(e.target.value)} />
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
+                          <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 30" value={cardioBlockDuration} onChange={e => setCardioBlockDuration(e.target.value)} />
                         </div>
-                      )}
-
-                      {/* Auto-computed pace — read-only display */}
-                      {cat.pace && (
-                        <div style={{ marginBottom: 12, background: "#0D0D0D", borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.greenMid}` }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance ({distUnit})</label>
+                          <input style={iStyle} type="text" inputMode="decimal" placeholder={cardioSubcategory === "swimming" ? "1000" : cardioSubcategory === "rowing" ? "2000" : "3.2"} value={cardioBlockDistance} onChange={e => setCardioBlockDistance(e.target.value)} />
+                        </div>
+                      </div>
+                      {showPace && (
+                        <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.greenMid}` }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>
                             Pace · auto-calculated
                           </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: paceText ? C.gold : C.sub }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: paceText ? C.gold : C.sub }}>
                             {paceText || "Enter distance + duration"}
                           </div>
                         </div>
                       )}
-                    </>
+                    </div>
+                  );
+                })()}
+
+                {/* ── LIFTING DURATION (only when lifting toggled on) ── */}
+                {includeLifting && (
+                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>🏋️ Lifting</div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min) <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                    <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
+                    <div style={{ fontSize: 11, color: C.sub, marginTop: 8 }}>Add your exercises in the section below ↓</div>
+                  </div>
+                )}
+
+                {/* ── SINGLE-MODE FALLBACK (HIIT / Yoga / etc.) ── */}
+                {!includeCardio && !includeLifting && (() => {
+                  const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
+                  if (!cat) return null;
+                  return (
+                    <div style={{ padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
+                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
+                    </div>
                   );
                 })()}
               </div>
@@ -1553,6 +1703,8 @@ export default function PostPage() {
               </div>
 
               {/* Exercises table · with search autocomplete, increment buttons, prev session */}
+              {/* Only shown when lifting is toggled on (combined-mode workouts) */}
+              {includeLifting && (
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
@@ -1669,6 +1821,7 @@ export default function PostPage() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* Notes & Photo */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
