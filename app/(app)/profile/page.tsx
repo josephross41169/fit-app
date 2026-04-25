@@ -12,7 +12,9 @@ import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { computeTier, getTierInfo } from "@/lib/tiers";
-import type { Tier } from "@/lib/tiers";
+import type { Tier, Level, CounterData, LevelProgressInfo } from "@/lib/tiers";
+import { getLevelProgress, LEVEL_CHALLENGES, XP_FOR_NEXT, LEVEL_COLORS, XP_CATEGORIES } from "@/lib/tiers";
+import { tryLevelUp } from "@/lib/xp";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import BusinessProfileView from "@/components/BusinessProfileView";
 
@@ -1369,6 +1371,86 @@ export default function ProfilePage() {
   const [userTier, setUserTier] = useState<Tier>("default");
   const [tierInfo, setTierInfo] = useState(getTierInfo(0, 0));
 
+  // ── NEW Level System v2 ────────────────────────────────────────────────────
+  // Source of truth: users.current_level + users.xp_in_level + counter columns
+  // populated by the level-system-v2 migration. Loads in one query.
+  const [counterData, setCounterData] = useState<CounterData | null>(null);
+  const [progressInfo, setProgressInfo] = useState<LevelProgressInfo | null>(null);
+  // Modal-local state — which level is currently expanded in the breakdown
+  const [modalSelectedLevel, setModalSelectedLevel] = useState<Level | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadCounters() {
+      // Pull all the counter columns + xp/level + following count
+      const { data: u } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user!.id)
+        .single();
+
+      // Compute streaks client-side from realDays — DB doesn't track these
+      // (Date-gap math; longest consecutive day workout / nutrition logs)
+      const computeStreak = (filterFn: (d: any) => boolean): number => {
+        const dates = [...new Set(
+          realDays.filter(filterFn).map((d: any) => {
+            const dt = new Date(d._date || 0);
+            return `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+          })
+        )].sort();
+        if (dates.length === 0) return 0;
+        // longest run of consecutive days
+        let longest = 1, current = 1;
+        for (let i = 1; i < dates.length; i++) {
+          const [y1, m1, d1] = dates[i - 1].split('-').map(Number);
+          const [y2, m2, d2] = dates[i].split('-').map(Number);
+          const a = new Date(y1, m1, d1).getTime();
+          const b = new Date(y2, m2, d2).getTime();
+          if ((b - a) === 86400000) { current++; longest = Math.max(longest, current); }
+          else current = 1;
+        }
+        return longest;
+      };
+
+      const workoutStreak = computeStreak((d: any) => !!d.workout);
+      const nutritionStreak = computeStreak((d: any) => !!d.nutrition);
+
+      const cd: CounterData = {
+        xpInLevel:        (u as any)?.xp_in_level ?? 0,
+        currentLevel:     ((u as any)?.current_level ?? 1) as Level,
+        workoutsCount:    (u as any)?.workouts_count ?? 0,
+        wellnessCount:    (u as any)?.wellness_count ?? 0,
+        nutritionCount:   (u as any)?.nutrition_count ?? 0,
+        yogaCount:        (u as any)?.yoga_count ?? 0,
+        swimCount:        (u as any)?.swim_count ?? 0,
+        sportsCount:      (u as any)?.sports_count ?? 0,
+        feedPostsCount:   (u as any)?.feed_posts_count ?? 0,
+        rivalWinsCount:   (u as any)?.rival_wins_count ?? 0,
+        groupsJoinedCount:(u as any)?.groups_joined_count ?? 0,
+        eventsRsvpCount:  (u as any)?.events_rsvp_count ?? 0,
+        badgesEarnedCount:(u as any)?.badges_earned_count ?? 0,
+        groupWarsParticipated:        (u as any)?.group_wars_participated ?? 0,
+        groupChallengesParticipated:  (u as any)?.group_challenges_participated ?? 0,
+        followingCount:   (u as any)?.following_count ?? 0,
+        workoutStreak, nutritionStreak,
+      };
+      setCounterData(cd);
+      const info = getLevelProgress(cd);
+      setProgressInfo(info);
+      setModalSelectedLevel(((cd.currentLevel + 1) <= 6 ? cd.currentLevel + 1 : 6) as Level);
+
+      // If user is ready to level up (XP + challenges all met), trigger server-side level_up
+      if (info.readyToLevelUp) {
+        const result = await tryLevelUp(user!.id);
+        if (result && result.level !== cd.currentLevel) {
+          // Reload counters with new level
+          setTimeout(() => loadCounters(), 200);
+        }
+      }
+    }
+    loadCounters();
+  }, [user?.id, realDays.length]);
+
   useEffect(() => {
     if (!user) return;
     async function loadTier() {
@@ -2192,265 +2274,205 @@ export default function ProfilePage() {
         );
       })()}
 
-      {/* Level Progress Modal */}
-      {showLevelModal && (
+      {/* Level Progress Modal — v2 (6-level XP + challenges system) */}
+      {showLevelModal && progressInfo && counterData && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
           display:"flex",alignItems:"flex-end",justifyContent:"center"}}
           onClick={e=>{if(e.target===e.currentTarget)setShowLevelModal(false);}}>
           <div style={{background:"#111118",borderRadius:"24px 24px 0 0",width:"100%",
             maxWidth:560,maxHeight:"85vh",overflowY:"auto",padding:"24px 20px 48px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontWeight:900,fontSize:22,color:"#F0F0F0"}}>⚡ Your Level</div>
               <button onClick={()=>setShowLevelModal(false)} style={{background:"none",border:"none",
                 color:"#6B7280",fontSize:26,cursor:"pointer",lineHeight:1}}>×</button>
             </div>
 
-            {/* Current level display */}
-            <div style={{background:"linear-gradient(135deg,#2D1F52,#1A0F30)",borderRadius:16,
-              padding:"20px",border:"1px solid #3D2A6E",marginBottom:20,textAlign:"center" as const}}>
-              <div style={{fontSize:48,fontWeight:900,color:"#7C3AED",lineHeight:1}}>
-                {tierInfo.tier === "default" ? 1 : tierInfo.tier === "active" ? 2 :
-                 tierInfo.tier === "grinder" ? 3 : tierInfo.tier === "elite" ? 4 : 5}
-              </div>
-              <div style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Current Level</div>
-              {tierInfo.progress < 100 && tierInfo.nextTier && (
-                <>
-                  <div style={{margin:"14px 0 6px",height:8,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
-                    <div style={{height:"100%",borderRadius:99,background:"#7C3AED",
-                      width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
-                  </div>
-                  <div style={{fontSize:11,color:"#6B7280"}}>{tierInfo.progress}% toward Level {
-                    tierInfo.tier === "default" ? 2 : tierInfo.tier === "active" ? 3 :
-                    tierInfo.tier === "grinder" ? 4 : 5
-                  }</div>
-                </>
-              )}
-            </div>
-
-            {/* XP explanation for levels 1-2 */}
-            {(tierInfo.tier === "default" || tierInfo.tier === "active") && (
-              <div style={{marginBottom:20}}>
-                <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12}}>
-                  🎯 How to earn XP
-                </div>
-                <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
-                  {[
-                    {icon:"💪",label:"Log a Workout",xp:"+3 XP"},
-                    {icon:"🏃",label:"Log a Run / Cardio",xp:"+3 XP"},
-                    {icon:"🥗",label:"Log Nutrition",xp:"+3 XP"},
-                    {icon:"🌿",label:"Log Wellness",xp:"+3 XP"},
-                    {icon:"📸",label:"Post to Feed",xp:"+3 XP"},
-                  ].map(({icon,label,xp})=>(
-                    <div key={label} style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"center",padding:"10px 14px",background:"#1A1228",
-                      borderRadius:10,border:"1px solid #2D1F52"}}>
-                      <span style={{fontSize:13,color:"#F0F0F0"}}>{icon} {label}</span>
-                      <span style={{fontSize:12,fontWeight:800,color:"#7C3AED"}}>{xp} / day</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{fontSize:11,color:"#6B7280",marginTop:8,textAlign:"center" as const}}>
-                  Max 15 XP per day · One award per category per day
-                </div>
-              </div>
-            )}
-
-            {/* Task gates for levels 3-4 — with live progress */}
-            {(tierInfo.tier === "active" || tierInfo.tier === "grinder") && (()=>{
-              // ── Compute live task progress from realDays ──────────────────
-              const now = new Date();
-
-              // Nutrition streak — consecutive days with nutrition logged (no reset on 15th+ day)
-              const nutDates = [...new Set(
-                realDays.filter((d:any)=>d.nutrition).map((d:any)=>{
-                  const dt = new Date(d._date||0);
-                  return `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
-                })
-              )].sort();
-              let nutStreak = 0;
-              if (nutDates.length > 0) {
-                // Count consecutive days backward from most recent
-                let checkDate = new Date(realDays.filter((d:any)=>d.nutrition)
-                  .reduce((latest:any, d:any) => (d._date||0) > (latest._date||0) ? d : latest, realDays[0])?._date||0);
-                for (let i = 0; i < 60; i++) {
-                  const key = `${checkDate.getFullYear()}-${checkDate.getMonth()}-${checkDate.getDate()}`;
-                  if (nutDates.includes(key)) { nutStreak++; checkDate.setDate(checkDate.getDate()-1); }
-                  else break;
-                }
-              }
-
-              // Workouts in last 7 days
-              const weekAgo = new Date(now); weekAgo.setDate(now.getDate()-7);
-              const workoutsThisWeek = realDays.filter((d:any)=>d.workout && new Date(d._date||0)>=weekAgo).length;
-
-              // Workouts in last 14 days
-              const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate()-14);
-              const workoutsLast14 = realDays.filter((d:any)=>d.workout && new Date(d._date||0)>=twoWeeksAgo).length;
-
-              // Wellness by type
-              const allWellness = realDays.flatMap((d:any)=>d.wellness?.entries||[]);
-              const yogaSessions = allWellness.filter((e:any)=>e.type?.toLowerCase().includes('yoga')).length;
-              const meditationSessions = allWellness.filter((e:any)=>
-                e.type?.toLowerCase().includes('meditat')||e.type?.toLowerCase().includes('mindful')).length;
-
-              // Following count
-              const followingCount = user?.profile?.following_count ?? 0;
-
-              // Feed posts with photos
-              const photoPosts = realDays.filter((d:any)=>d.photo_url).length;
-
-              // Group membership (we know if they're a member from groups joined)
-              const inGroup = (user?.profile as any)?.group_count > 0;
-
-              // Rival wins (from profile if tracked)
-              const rivalWins = (user?.profile as any)?.rival_wins || 0;
-
-              const isLvl2 = tierInfo.tier === "active";
-
-              const tasks = isLvl2 ? [
-                {
-                  icon:"🥊", label:"Win 2 Rivalries",
-                  current: rivalWins, goal: 2,
-                  done: rivalWins >= 2,
-                  detail: rivalWins >= 2 ? "Complete!" : `${rivalWins}/2 wins`,
-                },
-                {
-                  icon:"👥", label:"Join a Group",
-                  current: inGroup ? 1 : 0, goal: 1,
-                  done: inGroup,
-                  detail: inGroup ? "Complete!" : "Not yet joined",
-                },
-                {
-                  icon:"➕", label:"Follow 5 People",
-                  current: Math.min(followingCount, 5), goal: 5,
-                  done: followingCount >= 5,
-                  detail: followingCount >= 5 ? "Complete!" : `${followingCount}/5 following`,
-                },
-                {
-                  icon:"🥗", label:"Log Nutrition 7 Days in a Row",
-                  current: Math.min(nutStreak, 7), goal: 7,
-                  done: nutStreak >= 7,
-                  detail: nutStreak >= 7 ? "Complete! ✓ Locked in" : nutStreak === 0 ? "Start today!" : `${nutStreak}/7 days — ${7-nutStreak} more to go`,
-                  streak: true,
-                },
-                {
-                  icon:"💪", label:"Log 4 Workouts This Week",
-                  current: Math.min(workoutsThisWeek, 4), goal: 4,
-                  done: workoutsThisWeek >= 4,
-                  detail: workoutsThisWeek >= 4 ? "Complete!" : `${workoutsThisWeek}/4 this week — ${4-workoutsThisWeek} more needed`,
-                },
-              ] : [
-                {
-                  icon:"🥊", label:"Win 5 Rivalries",
-                  current: rivalWins, goal: 5,
-                  done: rivalWins >= 5,
-                  detail: rivalWins >= 5 ? "Complete!" : `${rivalWins}/5 wins`,
-                },
-                {
-                  icon:"🧘", label:"Log a Yoga Session",
-                  current: Math.min(yogaSessions, 1), goal: 1,
-                  done: yogaSessions >= 1,
-                  detail: yogaSessions >= 1 ? "Complete!" : "Log a yoga session in Wellness",
-                },
-                {
-                  icon:"📸", label:"Post 3 Photos to Feed",
-                  current: Math.min(photoPosts, 3), goal: 3,
-                  done: photoPosts >= 3,
-                  detail: photoPosts >= 3 ? "Complete!" : `${photoPosts}/3 photos posted`,
-                },
-                {
-                  icon:"🧠", label:"Log 3 Meditation Sessions",
-                  current: Math.min(meditationSessions, 3), goal: 3,
-                  done: meditationSessions >= 3,
-                  detail: meditationSessions >= 3 ? "Complete!" : `${meditationSessions}/3 — ${3-meditationSessions} more to go`,
-                },
-                {
-                  icon:"🥗", label:"Log Nutrition 14 Days in a Row",
-                  current: Math.min(nutStreak, 14), goal: 14,
-                  done: nutStreak >= 14,
-                  detail: nutStreak >= 14 ? "Complete! ✓ Locked in" : nutStreak === 0 ? "Start today!" : `${nutStreak}/14 days — ${14-nutStreak} more to go`,
-                  streak: true,
-                },
-                {
-                  icon:"💪", label:"Log 8 Workouts in 14 Days",
-                  current: Math.min(workoutsLast14, 8), goal: 8,
-                  done: workoutsLast14 >= 8,
-                  detail: workoutsLast14 >= 8 ? "Complete!" : `${workoutsLast14}/8 workouts in last 14 days`,
-                },
-              ];
-
-              const completedCount = tasks.filter(t=>t.done).length;
-
+            {/* ── Current level + XP bar ─────────────────────────────────── */}
+            {(() => {
+              const lvlColors = LEVEL_COLORS[progressInfo.level];
+              const xpNeeded = progressInfo.xpNeeded;
               return (
-                <div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                    <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0"}}>
-                      ✅ Tasks to reach Level {isLvl2 ? 3 : 4}
-                    </div>
-                    <span style={{fontSize:12,fontWeight:700,
-                      color:completedCount===tasks.length?"#4ADE80":"#6B7280"}}>
-                      {completedCount}/{tasks.length} done
-                    </span>
+                <div style={{
+                  background: `linear-gradient(135deg, ${lvlColors.badge}, #0E0820)`,
+                  borderRadius: 16, padding: "20px",
+                  border: `1px solid ${lvlColors.border}`,
+                  marginBottom: 18, textAlign: "center" as const,
+                  boxShadow: `0 0 32px ${lvlColors.glow}`,
+                }}>
+                  <div style={{fontSize:13,color:"#9CA3AF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase" as const}}>Current Level</div>
+                  <div style={{fontSize:54,fontWeight:900,color:lvlColors.accent,lineHeight:1,marginTop:4}}>
+                    {progressInfo.level}
                   </div>
-                  <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
-                    {tasks.map((t)=>(
-                      <div key={t.label} style={{
-                        padding:"12px 14px",background:t.done?"rgba(74,222,128,0.08)":"#1A1228",
-                        borderRadius:12,border:`1px solid ${t.done?"#4ADE80":"#2D1F52"}`,
-                      }}>
-                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:t.done?0:6}}>
-                          <span style={{fontSize:18,flexShrink:0}}>{t.done?"✅":t.icon}</span>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:700,
-                              color:t.done?"#4ADE80":"#F0F0F0",
-                              textDecoration:t.done?"line-through":"none",
-                              opacity:t.done?0.8:1}}>
-                              {t.label}
-                            </div>
-                            <div style={{fontSize:11,color:t.done?"#4ADE80":"#9CA3AF",marginTop:2}}>
-                              {t.detail}
-                            </div>
-                          </div>
-                          {!t.done && (
-                            <span style={{fontSize:11,fontWeight:800,color:"#7C3AED",
-                              flexShrink:0,whiteSpace:"nowrap" as const}}>
-                              {t.current}/{t.goal}
-                            </span>
-                          )}
+                  {progressInfo.isMaxLevel ? (
+                    <div style={{marginTop:12,fontSize:14,fontWeight:800,color:lvlColors.badgeText}}>
+                      💀 MAX LEVEL — Legendary Status
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{margin:"14px 0 6px",height:10,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:99,background:lvlColors.accent,
+                          width:`${progressInfo.xpPercent}%`,transition:"width 0.5s ease"}}/>
+                      </div>
+                      <div style={{fontSize:13,color:"#F0F0F0",fontWeight:700}}>
+                        {progressInfo.xpInLevel} <span style={{color:"#9CA3AF",fontWeight:600}}>/ {xpNeeded} XP</span>
+                      </div>
+                      <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>toward Level {progressInfo.level + 1}</div>
+                      {progressInfo.readyToLevelUp && (
+                        <div style={{marginTop:10,padding:"8px 12px",background:"rgba(16,185,129,0.15)",
+                          border:"1px solid #10B981",borderRadius:10,fontSize:12,color:"#10B981",fontWeight:800}}>
+                          ✨ Ready to level up!
                         </div>
-                        {/* Progress bar for incomplete tasks */}
-                        {!t.done && t.goal > 1 && (
-                          <div style={{height:4,borderRadius:99,background:"rgba(255,255,255,0.06)",
-                            overflow:"hidden",marginLeft:28}}>
-                            <div style={{height:"100%",borderRadius:99,
-                              background: (t as any).streak ? "#F5A623" : "#7C3AED",
-                              width:`${Math.round((t.current/t.goal)*100)}%`,
-                              transition:"width 0.5s"}}/>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {completedCount === tasks.length && (
-                    <div style={{marginTop:14,padding:"12px",background:"rgba(74,222,128,0.1)",
-                      border:"1px solid #4ADE80",borderRadius:12,textAlign:"center" as const}}>
-                      <div style={{fontWeight:800,color:"#4ADE80",fontSize:14}}>🎉 All tasks complete!</div>
-                      <div style={{fontSize:12,color:"#6B7280",marginTop:4}}>
-                        Your level will update automatically.
-                      </div>
-                    </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
             })()}
 
-            {tierInfo.tier === "untouchable" && (
-              <div style={{textAlign:"center" as const,padding:"20px 0"}}>
-                <div style={{fontSize:48,marginBottom:12}}>💀</div>
-                <div style={{fontWeight:900,fontSize:18,color:"#E879F9"}}>MAX LEVEL</div>
-                <div style={{fontSize:13,color:"#6B7280",marginTop:8}}>You've reached the top. Legendary status.</div>
+            {/* ── How to earn XP ─────────────────────────────────────────── */}
+            <div style={{background:"#1A1228",borderRadius:14,padding:"14px 16px",
+              border:"1px solid #2D1F52",marginBottom:18}}>
+              <div style={{fontWeight:800,fontSize:13,color:"#F0F0F0",marginBottom:10}}>
+                🎯 How to earn XP
               </div>
-            )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {XP_CATEGORIES.map(cat => (
+                  <div key={cat.key} style={{display:"flex",justifyContent:"space-between",
+                    alignItems:"center",padding:"7px 10px",background:"#0E0820",
+                    borderRadius:8,border:"1px solid #2D1F52"}}>
+                    <span style={{fontSize:12,color:"#F0F0F0"}}>{cat.icon} {cat.label}</span>
+                    <span style={{fontSize:11,fontWeight:800,color:"#A78BFA"}}>+{cat.xp}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:10,color:"#6B7280",marginTop:8,textAlign:"center" as const}}>
+                Max 3 XP per category per day · 15 XP/day max · XP resets on level up
+              </div>
+            </div>
+
+            {/* ── Level navigator (1-6) ──────────────────────────────────── */}
+            <div style={{fontWeight:800,fontSize:13,color:"#9CA3AF",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase" as const}}>
+              Level Breakdown
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" as const}}>
+              {([1,2,3,4,5,6] as Level[]).map(lvl => {
+                const isCurrent = lvl === progressInfo.level;
+                const isComplete = lvl < progressInfo.level;
+                const isSelected = lvl === modalSelectedLevel;
+                const lvlColors = LEVEL_COLORS[lvl];
+                return (
+                  <button key={lvl} onClick={()=>setModalSelectedLevel(lvl)} style={{
+                    flex:"1 0 auto",minWidth:50,padding:"10px 4px",borderRadius:10,cursor:"pointer",
+                    background: isSelected ? lvlColors.badge : "#0E0820",
+                    border: `2px solid ${isSelected ? lvlColors.accent : isCurrent ? lvlColors.accent : "#2D1F52"}`,
+                    color: isSelected ? lvlColors.accent : isCurrent ? lvlColors.accent : "#9CA3AF",
+                    fontSize:14, fontWeight:900, position:"relative" as const,
+                    transition: "all 0.15s",
+                  }}>
+                    {lvl}
+                    {isComplete && (
+                      <div style={{position:"absolute" as const,top:2,right:4,fontSize:9,color:"#10B981"}}>✓</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Selected level details ─────────────────────────────────── */}
+            {modalSelectedLevel && (() => {
+              const sel = modalSelectedLevel;
+              const isPureXp = sel <= 2;
+              const xpForReachingThis = sel === 1 ? 0 : (XP_FOR_NEXT[(sel - 1) as Level] ?? 0);
+              const challenges = sel >= 3 && sel <= 6 ? LEVEL_CHALLENGES[sel as 3|4|5|6] : [];
+              const showLiveProgress = sel === progressInfo.level + 1; // only "next level" gets live data
+              const lvlColors = LEVEL_COLORS[sel];
+              const reached = sel <= progressInfo.level;
+              return (
+                <div style={{background:"#0E0820",borderRadius:14,padding:"16px",
+                  border:`1.5px solid ${lvlColors.border}`,marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <div style={{fontWeight:900,fontSize:16,color:lvlColors.accent}}>
+                      Level {sel} {sel === 6 && "— MAX"}
+                    </div>
+                    {reached ? (
+                      <div style={{padding:"3px 10px",borderRadius:99,background:"rgba(16,185,129,0.15)",
+                        color:"#10B981",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>REACHED</div>
+                    ) : showLiveProgress ? (
+                      <div style={{padding:"3px 10px",borderRadius:99,background:lvlColors.badge,
+                        color:lvlColors.accent,fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>NEXT UP</div>
+                    ) : (
+                      <div style={{padding:"3px 10px",borderRadius:99,background:"#1A1228",
+                        color:"#6B7280",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>LOCKED</div>
+                    )}
+                  </div>
+
+                  {sel === 1 && (
+                    <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>
+                      Starting level. Earn 36 XP to reach Level 2.
+                    </div>
+                  )}
+                  {sel === 2 && (
+                    <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>
+                      Need <strong style={{color:"#F0F0F0"}}>60 XP</strong> from Level 2 to advance to Level 3.
+                      No challenges yet — pure XP.
+                    </div>
+                  )}
+                  {sel >= 3 && (
+                    <>
+                      <div style={{fontSize:12,color:"#9CA3AF",marginBottom:12,lineHeight:1.5}}>
+                        Need <strong style={{color:"#F0F0F0"}}>{xpForReachingThis} XP</strong> from Level {sel - 1}{" "}
+                        AND complete all challenges below:
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column" as const,gap:6}}>
+                        {challenges.map(ch => {
+                          // Show live progress only for the level user is currently working toward
+                          const live = showLiveProgress && counterData ? ch.progress(counterData) : null;
+                          const have = live?.have ?? 0;
+                          const need = live?.need ?? 1;
+                          const complete = live ? have >= need : false;
+                          return (
+                            <div key={ch.key} style={{
+                              display:"flex",alignItems:"center",gap:10,
+                              padding:"9px 12px",
+                              background: complete ? "rgba(16,185,129,0.1)" : "#1A1228",
+                              border: `1px solid ${complete ? "#10B981" : "#2D1F52"}`,
+                              borderRadius:10,
+                            }}>
+                              <div style={{
+                                width:22,height:22,borderRadius:"50%",flexShrink:0,
+                                display:"flex",alignItems:"center",justifyContent:"center",
+                                background: complete ? "#10B981" : "#2D1F52",
+                                color: complete ? "#0E0820" : "#9CA3AF",
+                                fontSize:11, fontWeight:900,
+                              }}>{complete ? "✓" : ch.icon}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0"}}>{ch.label}</div>
+                                {live && (
+                                  <div style={{marginTop:3,height:4,borderRadius:99,background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
+                                    <div style={{
+                                      height:"100%",borderRadius:99,
+                                      background: complete ? "#10B981" : lvlColors.accent,
+                                      width: `${Math.min(100, Math.round((have/need)*100))}%`,
+                                      transition:"width 0.5s ease",
+                                    }}/>
+                                  </div>
+                                )}
+                              </div>
+                              {live && (
+                                <div style={{flexShrink:0,fontSize:11,fontWeight:800,
+                                  color: complete ? "#10B981" : "#A78BFA",fontVariantNumeric:"tabular-nums" as any}}>
+                                  {have}/{need}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -2668,29 +2690,45 @@ export default function ProfilePage() {
 
           {/* LEFT — Highlights + Level Progress */}
           <div style={{paddingTop:44}}>
-            {/* Level progress card */}
+            {/* Level progress card — v2 (6-level system) */}
             <button onClick={()=>setShowLevelModal(true)} style={{
-              width:"100%",marginBottom:12,background:"rgba(124,58,237,0.10)",
-              border:"1.5px solid rgba(124,58,237,0.35)",borderRadius:16,
-              padding:"14px 16px",cursor:"pointer",textAlign:"left" as const,
+              width:"100%",marginBottom:12,
+              background: progressInfo
+                ? `linear-gradient(135deg, ${LEVEL_COLORS[progressInfo.level].badge}, rgba(14,8,32,0.8))`
+                : "rgba(124,58,237,0.10)",
+              border: progressInfo
+                ? `1.5px solid ${LEVEL_COLORS[progressInfo.level].border}`
+                : "1.5px solid rgba(124,58,237,0.35)",
+              borderRadius:16,padding:"14px 16px",cursor:"pointer",textAlign:"left" as const,
+              boxShadow: progressInfo ? `0 0 16px ${LEVEL_COLORS[progressInfo.level].glow}` : "none",
             }}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontWeight:800,fontSize:13,color:C.text}}>
-                  ⚡ Level {userTier==="default"?1:userTier==="active"?2:userTier==="grinder"?3:userTier==="elite"?4:5} Progress
+                  ⚡ Level {progressInfo?.level ?? 1} Progress
                 </div>
-                <span style={{fontSize:11,fontWeight:700,color:"#7C3AED"}}>{tierInfo.progress}%</span>
+                <span style={{fontSize:11,fontWeight:700,
+                  color: progressInfo ? LEVEL_COLORS[progressInfo.level].accent : "#7C3AED"}}>
+                  {progressInfo?.isMaxLevel ? "MAX" : `${progressInfo?.xpInLevel ?? 0}/${progressInfo?.xpNeeded ?? 36} XP`}
+                </span>
               </div>
               <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden",marginBottom:6}}>
-                <div style={{height:"100%",borderRadius:99,background:"linear-gradient(90deg,#7C3AED,#A78BFA)",
-                  width:`${tierInfo.progress}%`,transition:"width 0.5s ease"}}/>
+                <div style={{height:"100%",borderRadius:99,
+                  background: progressInfo
+                    ? `linear-gradient(90deg, ${LEVEL_COLORS[progressInfo.level].accent}, #A78BFA)`
+                    : "linear-gradient(90deg,#7C3AED,#A78BFA)",
+                  width:`${progressInfo?.xpPercent ?? 0}%`,transition:"width 0.5s ease"}}/>
               </div>
-              {userTier !== "untouchable" && tierInfo.nextTier ? (
-                <div style={{fontSize:10,color:C.sub,textAlign:"center" as const}}>
-                  Tap to see what's needed for next level →
+              {progressInfo?.readyToLevelUp ? (
+                <div style={{fontSize:10,color:"#10B981",fontWeight:800,textAlign:"center" as const}}>
+                  ✨ Ready to level up — tap to confirm
+                </div>
+              ) : progressInfo?.isMaxLevel ? (
+                <div style={{fontSize:10,color:LEVEL_COLORS[6].accent,fontWeight:700,textAlign:"center" as const}}>
+                  MAX LEVEL ✦ Tap for details
                 </div>
               ) : (
-                <div style={{fontSize:10,color:"#E879F9",fontWeight:700,textAlign:"center" as const}}>
-                  MAX LEVEL ✦ Tap for details
+                <div style={{fontSize:10,color:C.sub,textAlign:"center" as const}}>
+                  Tap to see what's needed for next level →
                 </div>
               )}
             </button>
