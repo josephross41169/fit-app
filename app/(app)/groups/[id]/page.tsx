@@ -1358,33 +1358,71 @@ export default function GroupPage() {
     }
   }
 
+  // Resize an image File to a canvas at the given dimensions, return a new Blob.
+  // Uses object-fit: cover behavior — fills the box, crops overflow, no distortion.
+  async function resizeImageFile(file: File, targetW: number, targetH: number): Promise<Blob | null> {
+    return new Promise(resolve => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { URL.revokeObjectURL(objectUrl); resolve(null); return; }
+
+          // Fill the target box, cropping to maintain aspect ratio (object-fit: cover)
+          const srcRatio = img.naturalWidth / img.naturalHeight;
+          const dstRatio = targetW / targetH;
+          let sx = 0, sy = 0, sW = img.naturalWidth, sH = img.naturalHeight;
+          if (srcRatio > dstRatio) {
+            // source is wider than dest — crop sides
+            sW = img.naturalHeight * dstRatio;
+            sx = (img.naturalWidth - sW) / 2;
+          } else {
+            // source is taller than dest — crop top/bottom
+            sH = img.naturalWidth / dstRatio;
+            sy = (img.naturalHeight - sH) / 2;
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, sx, sy, sW, sH, 0, 0, targetW, targetH);
+
+          canvas.toBlob(blob => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(blob);
+          }, "image/jpeg", 0.9);
+        } catch {
+          URL.revokeObjectURL(objectUrl);
+          resolve(null);
+        }
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); };
+      img.src = objectUrl;
+    });
+  }
+
   async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !group._dbId) return;
-
-    // Reject images that are too small to look good as a banner.
-    // The banner displays at up to 1200×340 on desktop; we want at least
-    // 1200px wide so it doesn't get upscaled.
-    const dimensions = await new Promise<{ w: number; h: number } | null>(resolve => {
-      const url = URL.createObjectURL(file);
-      const img = new window.Image();
-      img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-      img.src = url;
-    });
-    if (dimensions && dimensions.w < 1200) {
-      alert(`That image is only ${dimensions.w}px wide — banners need to be at least 1200px wide so they don't look blurry. Try a higher-resolution photo.`);
-      e.target.value = ""; // reset so they can try again
-      return;
-    }
-
     setBannerUploading(true);
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `groups/${group._dbId}/banner.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('activity').upload(path, file, { upsert: true });
+      // Auto-resize to a standard banner size (1600×600).
+      // This way every banner has consistent dimensions regardless of source image.
+      const resizedBlob = await resizeImageFile(file, 1600, 600);
+      const uploadBody: Blob = resizedBlob ?? file; // fall back to raw file if canvas fails
+
+      // Always save as .jpg since we're outputting JPEG from the canvas
+      const path = `groups/${group._dbId}/banner.jpg`;
+      const { error: uploadError } = await supabase.storage.from('activity').upload(path, uploadBody, {
+        upsert: true,
+        contentType: "image/jpeg",
+      });
       if (uploadError) {
         console.error('Banner upload error:', uploadError);
+        alert("Couldn't upload that image. Try a different one.");
         setBannerUploading(false);
         return;
       }
@@ -1399,8 +1437,10 @@ export default function GroupPage() {
       await loadGroupData();
     } catch (err) {
       console.error('Banner upload failed:', err);
+      alert("Something went wrong uploading the banner. Try again.");
     } finally {
       setBannerUploading(false);
+      e.target.value = ""; // allow re-selecting the same file
     }
   }
 
