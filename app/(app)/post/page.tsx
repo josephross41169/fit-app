@@ -292,7 +292,26 @@ const WORKOUT_CATEGORIES: WorkoutCategory[] = [
 // Wellness kept for recovery / mindfulness / passive activities. Yoga and
 // Walking moved to workout categories since they burn calories and improve
 // fitness. Sleep stays here — it's tracking, not exercise.
-const WELLNESS_TYPES = ["Sleep", "Meditation", "Stretching", "Cold Plunge", "Sauna", "Breathwork", "Steam Room", "Foam Rolling", "Other"];
+// ── Wellness types grouped into categories ─────────────────────────────────
+// Grouped for the <optgroup> display in the wellness picker. Order within each
+// group reflects rough popularity. The flat WELLNESS_TYPES list (kept for
+// backwards compat with anywhere else that imports it) is the union of all groups.
+const WELLNESS_GROUPS: { label: string; types: string[] }[] = [
+  { label: "🌬️ Recovery & Therapy", types: [
+    "Cold Plunge", "Sauna", "Infrared Sauna", "Steam Room", "Red Light Therapy",
+    "Hyperbaric Oxygen", "Cryotherapy", "Compression Therapy", "Massage",
+    "Chiropractic", "Float Tank", "Acupuncture", "Cupping",
+  ]},
+  { label: "🧘 Mind & Stress", types: [
+    "Meditation", "Breathwork", "Yoga Nidra", "Journaling", "Therapy", "Sound Bath",
+  ]},
+  { label: "🛌 Sleep & Rest", types: ["Sleep", "Nap"] },
+  { label: "🤸 Mobility & Bodywork", types: ["Stretching", "Foam Rolling", "Mobility Work"] },
+  { label: "🍽️ Diet & Body", types: ["Fasting", "Hydration Goal"] },
+  { label: "☀️ Outdoor & Light", types: ["Sunlight Exposure", "Grounding", "Nature Walk"] },
+  { label: "Other", types: ["Other"] },
+];
+const WELLNESS_TYPES = WELLNESS_GROUPS.flatMap(g => g.types);
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
 
@@ -380,6 +399,8 @@ export default function PostPage() {
   const [steps, setSteps] = useState("");
   const [hrv, setHrv] = useState("");
   const [restingHR, setRestingHR] = useState("");
+  // Fasting state — only used when wellnessType === 'Fasting'
+  const [fastingHours, setFastingHours] = useState("");
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
@@ -838,6 +859,22 @@ export default function PostPage() {
         });
         error = res.error;
       } else if (logTab === 'wellness') {
+        // Fasting validation — minimum 12 hours, anything less rejected
+        if (wellnessType === 'Fasting') {
+          const hours = parseFloat(fastingHours);
+          if (!fastingHours.trim() || isNaN(hours)) {
+            setSaveError("Enter how many hours you fasted (minimum 12).");
+            setLoading(false);
+            submittingRef.current = false;
+            return;
+          }
+          if (hours < 12) {
+            setSaveError("Fasts under 12 hours don't count — that's just sleeping and breakfast 😅. Try logging another wellness activity instead.");
+            setLoading(false);
+            submittingRef.current = false;
+            return;
+          }
+        }
         // Upload wellness photo if present
         let wellnessUploadedUrl: string | null = null;
         if (wellnessPhotoUrl) {
@@ -854,11 +891,17 @@ export default function PostPage() {
         if (steps) wellnessData.steps = parseInt(steps);
         if (hrv) wellnessData.hrv = parseInt(hrv);
         if (restingHR) wellnessData.resting_hr = parseInt(restingHR);
+        // For fasting, store hours converted to minutes in wellness_duration_min
+        // (since hours don't matter for badges, this is just for personal tracking)
+        const durationToStore =
+          wellnessType === 'Fasting' && fastingHours
+            ? Math.round(parseFloat(fastingHours) * 60)
+            : (wellnessDuration ? parseInt(wellnessDuration) : null);
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'wellness',
           wellness_type: wellnessType,
-          wellness_duration_min: wellnessDuration ? parseInt(wellnessDuration) : null,
+          wellness_duration_min: durationToStore,
           mood: mood || null,
           notes: wellnessNotes || null,
           photo_url: wellnessUploadedUrl || null,
@@ -974,6 +1017,8 @@ export default function PostPage() {
       for (const [key, val] of Object.entries(filters)) {
         if (typeof val === 'string' && val.startsWith('ilike:')) {
           q = (q as any).ilike(key, val.replace('ilike:', ''));
+        } else if (typeof val === 'string' && val.startsWith('gte:')) {
+          q = (q as any).gte(key, val.replace('gte:', ''));
         } else {
           q = (q as any).eq(key, val);
         }
@@ -1040,9 +1085,18 @@ export default function PostPage() {
       const wellnessLadders: { types: string[]; prefix: string }[] = [
         { types: ['meditation'],                prefix: 'meditation' },
         { types: ['cold plunge', 'ice bath'],   prefix: 'cold-plunge' },
+        // Plain "sauna" matches both Sauna and Infrared Sauna logs since infrared
+        // is a sauna variant. The infrared-only ladder below is additional, not exclusive.
         { types: ['sauna'],                     prefix: 'sauna' },
+        { types: ['infrared sauna'],            prefix: 'infrared-sauna' },
         { types: ['breathwork'],                prefix: 'breathwork' },
         { types: ['stretching'],                prefix: 'stretching' },
+        { types: ['red light'],                 prefix: 'red-light' },
+        { types: ['massage'],                   prefix: 'massage' },
+        { types: ['float tank'],                prefix: 'float-tank' },
+        { types: ['mobility'],                  prefix: 'mobility' },
+        { types: ['journaling'],                prefix: 'journaling' },
+        { types: ['sunlight', 'grounding'],     prefix: 'sunlight' },
       ];
       for (const wl of wellnessLadders) {
         if (!wl.types.some(t => wType?.toLowerCase().includes(t))) continue;
@@ -1052,6 +1106,27 @@ export default function PostPage() {
           count += await countLogs({ log_type: 'wellness', wellness_type: `ilike:%${t}%` });
         }
         await awardLadder(wl.prefix, count);
+      }
+
+      // Fasting ladder — counts only fasts where wellness_duration_min >= 720
+      // (12 hours × 60). Anything shorter is rejected at save time so this is a
+      // safety check only. The hours don't affect badge progress beyond crossing
+      // the 12h threshold — every qualifying fast counts as one toward the ladder.
+      if (wType?.toLowerCase().includes('fasting')) {
+        const fastingCount = await countLogs({
+          log_type: 'wellness',
+          wellness_type: 'ilike:%fasting%',
+          wellness_duration_min: 'gte:720',
+        });
+        await awardLadder('fasting-12h', fastingCount);
+
+        // Also award the existing 24h "Fasting Pro" credential on any 24h+ fast
+        const has24h = await countLogs({
+          log_type: 'wellness',
+          wellness_type: 'ilike:%fasting%',
+          wellness_duration_min: 'gte:1440',
+        });
+        if (has24h > 0) await award('fasting');
       }
     }
 
@@ -2183,13 +2258,39 @@ export default function PostPage() {
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity Type</label>
                   <select style={iStyle} value={wellnessType} onChange={e => setWellnessType(e.target.value)}>
-                    {WELLNESS_TYPES.map(t => <option key={t}>{t}</option>)}
+                    {WELLNESS_GROUPS.map(group => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.types.map(t => <option key={t} value={t}>{t}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
-                  <input style={iStyle} placeholder="e.g. 20 min" value={wellnessDuration} onChange={e => setWellnessDuration(e.target.value)} />
-                </div>
+                {/* Fasting uses its own hours input instead of generic duration */}
+                {wellnessType !== 'Fasting' && (
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
+                    <input style={iStyle} placeholder="e.g. 20 min" value={wellnessDuration} onChange={e => setWellnessDuration(e.target.value)} />
+                  </div>
+                )}
+
+                {/* Fasting-specific block — minimum 12 hours enforced on save */}
+                {wellnessType === 'Fasting' && (
+                  <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>⏳ Fasting</div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Hours fasted</label>
+                    <input
+                      style={iStyle}
+                      type="text" inputMode="numeric"
+                      placeholder="e.g. 16"
+                      value={fastingHours}
+                      onChange={e => setFastingHours(e.target.value)}
+                    />
+                    <div style={{ fontSize: 11, color: C.sub, marginTop: 8, lineHeight: 1.4 }}>
+                      Minimum <strong style={{ color: C.text }}>12 hours</strong> to count as a fast — anything shorter is just regular eating habits.
+                      Beyond that, hours don't change badge progress — every 12+ hour fast counts as one toward the ladder.
+                    </div>
+                  </div>
+                )}
 
                 {/* Sleep-specific fields */}
                 {wellnessType === 'Sleep' && (
