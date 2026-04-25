@@ -7,6 +7,7 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 import { EXERCISES } from "@/lib/exercises";
 import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 import { BADGES } from "@/lib/badges";
+import { awardXp } from "@/lib/xp";
 
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
@@ -819,6 +820,24 @@ export default function PostPage() {
         const awarded = await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, woCategory, exercises);
         if (awarded && awarded.length > 0) setNewBadges(awarded);
       } catch {}
+      // -- Award XP for level system ----------------------------------------
+      // Fires once per (user, category) per UTC day — server enforces the cap.
+      // Workout sub-types get split between "workout" (lifting/bodyweight/hiit)
+      // and "cardio" (running/walking/biking/swimming/rowing) per spec.
+      try {
+        const cardioCategories = new Set(["running", "walking", "biking", "swimming", "rowing"]);
+        let xpCategory: "workout" | "cardio" | "nutrition" | "wellness" | null = null;
+        if (logTab === "workout") {
+          xpCategory = cardioCategories.has(woCategory) ? "cardio" : "workout";
+        } else if (logTab === "nutrition") {
+          xpCategory = "nutrition";
+        } else if (logTab === "wellness") {
+          xpCategory = "wellness";
+        }
+        if (xpCategory) await awardXp(user.id, xpCategory);
+      } catch (e) {
+        console.warn("[post] awardXp failed:", e);
+      }
       // -- Sync group-challenge progress from activity_logs ------------------
       // Scans the user's active group goals and updates their contribution
       // based on what's actually in activity_logs right now. Best-effort.
@@ -1090,6 +1109,9 @@ export default function PostPage() {
             await supabase.from('badges').insert({ user_id: user.id, badge_id: '10-posts' }).match({ user_id: user.id, badge_id: '10-posts' });
           }
         } catch {}
+        // -- Award XP for feed post ----------------------------------------
+        // 3 XP per day max for posting to feed (server enforces cap)
+        try { await awardXp(user.id, "feed_post"); } catch (e) { console.warn("[post] feed_post XP failed:", e); }
         setPosted(true);
         // ref stays true · post is done, we never want another submit
       }
