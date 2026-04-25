@@ -234,3 +234,36 @@ export const BADGES = [
 ];
 
 export type Badge = typeof BADGES[0];
+
+// IDs the badge engine awards automatically based on counters (lift sessions,
+// runs, sauna count, etc.). These should NOT show in the "Report an
+// Achievement" modal — users earn them by logging activities, not by claiming.
+// Keep in sync with lib/badgeFamilies.ts entries that have counterSource.
+export const AUTO_AWARDED_BADGE_IDS = new Set<string>([
+  // Lifting progression
+  "first-lift", "lifts-10", "lifts-25", "lifts-50", "lifts-100", "lifts-200", "lifts-500", "lifts-1000",
+  // Running progression
+  "first-run", "runs-5", "runs-20", "runs-50", "runs-100", "runs-200", "runs-500", "runs-1000",
+  // Total workouts
+  "first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "centurion-2x", "500-workouts", "1000-workouts",
+  // Streaks
+  "7day-streak", "30day-streak", "90day-streak", "365day",
+  // Wellness ladders (yoga, meditation, cold plunge, sauna, breathwork, walks, stretching, total wellness)
+  "first-yoga", "yoga-5", "yoga-10", "yoga-50", "yoga-100", "yoga-200", "yoga-500", "yoga-1000",
+  "first-meditation", "meditation-5", "meditation-10", "meditation-50", "meditation-100", "meditation-200", "meditation-500", "meditation-1000",
+  "first-cold-plunge", "cold-plunge-5", "cold-plunge-20", "cold-plunge-50", "cold-plunge-100", "cold-plunge-200", "cold-plunge-500", "cold-plunge-1000",
+  "first-sauna", "sauna-5", "sauna-20", "sauna-50", "sauna-100", "sauna-200", "sauna-500", "sauna-1000",
+  "first-breathwork", "breathwork-5", "breathwork-20", "breathwork-50", "breathwork-100", "breathwork-200", "breathwork-500", "breathwork-1000",
+  "first-walk", "walks-5", "walks-20", "walks-50", "walks-100", "walks-200", "walks-500", "walks-1000",
+  "first-stretch", "stretch-5", "stretch-20", "stretch-50", "stretch-100", "stretch-200", "stretch-500", "stretch-1000",
+  "wellness-1", "wellness-5", "wellness-20", "wellness-50", "wellness-100", "wellness-200", "wellness-500", "wellness-1000",
+  // Nutrition logging
+  "first-nutrition-log", "nutrition-5", "nutrition-20", "nutrition-50", "nutrition-100", "nutrition-200", "nutrition-500", "nutrition-1000",
+  // Social (auto-tracked from posts/follows)
+  "first-post", "10-posts", "first-follower", "100-followers", "first-like", "motivator",
+]);
+
+/** True if a badge is honor-system / manually claimed by the user. */
+export function isManualBadge(badgeId: string): boolean {
+  return !AUTO_AWARDED_BADGE_IDS.has(badgeId);
+}
