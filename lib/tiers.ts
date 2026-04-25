@@ -1,21 +1,28 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// TIER / LEVEL SYSTEM
-// Levels 1-2: XP based (3 XP per category per day, max ~15/day)
-// Level 3+:   Task gates (specific challenges must be completed)
+// LEVEL SYSTEM v2 — 6 levels
+// Levels 1-2: pure XP (no challenges)
+// Levels 3-6: XP threshold + ALL challenges complete
+// XP RESETS to 0 on level up — does not carry over
+//
+// XP earned per category per day, capped at 3 XP per category, max 5
+// categories = 15 XP/day. Categories: workout, cardio, nutrition, wellness,
+// feed_post.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type Tier = "1" | "2" | "3" | "4" | "5";
+export type Level = 1 | 2 | 3 | 4 | 5 | 6;
 
-// ── XP thresholds (cumulative) ────────────────────────────────────────────────
-export const XP_THRESHOLDS: Record<Tier, number> = {
-  "1": 0,
-  "2": 30,
-  "3": 90,   // XP gate cleared — but also needs task gate below
-  "4": 90,   // same XP floor, task gate is the real bar
-  "5": 90,
+// XP needed to advance FROM this level to the next.
+// L6 is the cap — no L7 yet.
+export const XP_FOR_NEXT: Record<Level, number | null> = {
+  1: 36,
+  2: 60,
+  3: 90,
+  4: 120,
+  5: 150,
+  6: null, // max
 };
 
-// ── XP categories (one award per category per day) ───────────────────────────
+// XP categories (one award per category per day)
 export const XP_CATEGORIES = [
   { key: "workout",   label: "Workout",        xp: 3, icon: "💪" },
   { key: "cardio",    label: "Run / Cardio",   xp: 3, icon: "🏃" },
@@ -25,273 +32,232 @@ export const XP_CATEGORIES = [
 ] as const;
 export type XpCategory = typeof XP_CATEGORIES[number]["key"];
 
-// ── Task gates ────────────────────────────────────────────────────────────────
-export interface TierTask {
+// ── Counter data the app reads from users table ──────────────────────────────
+export interface CounterData {
+  xpInLevel:           number;
+  currentLevel:        Level;
+  workoutsCount:       number;
+  wellnessCount:       number;
+  nutritionCount:      number;
+  yogaCount:           number;
+  swimCount:           number;
+  sportsCount:         number;
+  feedPostsCount:      number;
+  rivalWinsCount:      number;
+  groupsJoinedCount:   number;
+  eventsRsvpCount:     number;
+  badgesEarnedCount:   number;
+  groupWarsParticipated:       number;
+  groupChallengesParticipated: number;
+  followingCount:      number;
+  // Dynamic / computed (still passed in — usually computed on profile load)
+  workoutStreak:       number; // longest consecutive day workout streak
+  nutritionStreak:     number; // longest consecutive day nutrition streak
+}
+
+// ── Challenge definition ─────────────────────────────────────────────────────
+export interface Challenge {
   key: string;
   label: string;
   icon: string;
   description: string;
-  // How to check completion — evaluated client-side from user data
-  check: (data: TierCheckData) => boolean;
+  // current / required count for live progress (used to render "3 / 5")
+  progress: (d: CounterData) => { have: number; need: number };
 }
 
-export interface TierCheckData {
-  xp: number;
-  rivalWins: number;
-  followingCount: number;
-  inGroup: boolean;
-  nutritionStreak: number;        // consecutive days logged
-  workoutsThisWeek: number;
-  yogaSessions: number;
-  meditationSessions: number;
-  photosPosted: number;
-  challengeTop3: number;          // times finished top 3 in a group challenge
-  workoutsLast14Days: number;
-  nutritionStreak14: number;
-}
+const c = (
+  key: string, icon: string, label: string, description: string,
+  progress: Challenge["progress"],
+): Challenge => ({ key, icon, label, description, progress });
 
-export const TIER_TASKS: Record<"3" | "4", TierTask[]> = {
-  "3": [
-    {
-      key: "rival_wins_2",
-      label: "Win 2 Rivalries",
-      icon: "🥊",
-      description: "Win 2 head-to-head rivalries",
-      check: (d) => d.rivalWins >= 2,
-    },
-    {
-      key: "join_group",
-      label: "Join a Group",
-      icon: "👥",
-      description: "Become a member of any group",
-      check: (d) => d.inGroup,
-    },
-    {
-      key: "follow_5",
-      label: "Follow 5 People",
-      icon: "➕",
-      description: "Follow at least 5 people on the app",
-      check: (d) => d.followingCount >= 5,
-    },
-    {
-      key: "nutrition_7",
-      label: "Log Nutrition 7 Days in a Row",
-      icon: "🥗",
-      description: "Log a meal every day for 7 consecutive days",
-      check: (d) => d.nutritionStreak >= 7,
-    },
-    {
-      key: "workouts_week_4",
-      label: "4 Workouts in One Week",
-      icon: "💪",
-      description: "Log 4 workouts or runs in a single week",
-      check: (d) => d.workoutsThisWeek >= 4,
-    },
+// Helpers for cleaner table below
+const at = (have: number, need: number) => ({ have: Math.min(have, need), need });
+
+export const LEVEL_CHALLENGES: Record<3 | 4 | 5 | 6, Challenge[]> = {
+  3: [
+    c("follow_5",     "➕", "Follow 5 People",            "Follow 5 other users on the app",
+      d => at(d.followingCount, 5)),
+    c("rsvp_event_1", "🎟️", "RSVP for 1 Event",           "RSVP to any community event",
+      d => at(d.eventsRsvpCount, 1)),
+    c("photos_5",     "📸", "Post 5 Photos to Feed",     "Share 5 photos on your activity feed",
+      d => at(d.feedPostsCount, 5)),
+    c("workout_4day_streak", "💪", "Log a Workout 4 Days in a Row", "Workout 4 consecutive days",
+      d => at(d.workoutStreak, 4)),
+    c("nutrition_7",  "🥗", "Log Nutrition 7 Days in a Row", "7-day nutrition streak",
+      d => at(d.nutritionStreak, 7)),
+    c("wellness_4_in_7", "🌿", "Log 4 Wellness Activities in 7 Days", "Cumulative — 4 wellness logs in any 7-day window",
+      d => at(d.wellnessCount, 4)),
+    c("rival_win_1",  "🥊", "Win 1 Rivalry",              "Win a head-to-head rivalry",
+      d => at(d.rivalWinsCount, 1)),
+    c("join_group_1", "👥", "Join a Group",               "Become a member of any group",
+      d => at(d.groupsJoinedCount, 1)),
   ],
-  "4": [
-    {
-      key: "rival_wins_5",
-      label: "Win 5 Rivalries",
-      icon: "🥊",
-      description: "Win 5 head-to-head rivalries total",
-      check: (d) => d.rivalWins >= 5,
-    },
-    {
-      key: "yoga_session",
-      label: "Log a Yoga Session",
-      icon: "🧘",
-      description: "Log at least one yoga wellness session",
-      check: (d) => d.yogaSessions >= 1,
-    },
-    {
-      key: "photos_3",
-      label: "Post 3 Photos to Feed",
-      icon: "📸",
-      description: "Share 3 photos on your activity feed",
-      check: (d) => d.photosPosted >= 3,
-    },
-    {
-      key: "challenge_top3",
-      label: "Top 3 in a Group Challenge × 3",
-      icon: "🏆",
-      description: "Finish in the top 3 contributors in a group challenge 3 times",
-      check: (d) => d.challengeTop3 >= 3,
-    },
-    {
-      key: "meditation_3",
-      label: "Log 3 Meditation Sessions",
-      icon: "🧠",
-      description: "Log 3 meditation wellness sessions",
-      check: (d) => d.meditationSessions >= 3,
-    },
-    {
-      key: "nutrition_14",
-      label: "Log Nutrition 14 Days in a Row",
-      icon: "🥗",
-      description: "Log a meal every day for 14 consecutive days",
-      check: (d) => d.nutritionStreak14 >= 14,
-    },
-    {
-      key: "workouts_14days_8",
-      label: "8 Workouts in 14 Days",
-      icon: "💪",
-      description: "Log 8 workouts or runs within any 14-day window",
-      check: (d) => d.workoutsLast14Days >= 8,
-    },
+  4: [
+    c("follow_30",        "➕", "Follow 30 People",       "Follow 30 users",
+      d => at(d.followingCount, 30)),
+    c("nutrition_14",     "🥗", "Log Nutrition 14 Days in a Row", "14-day nutrition streak",
+      d => at(d.nutritionStreak, 14)),
+    c("rival_wins_3",     "🥊", "Win 3 Rivalries",        "Win 3 rivalries total",
+      d => at(d.rivalWinsCount, 3)),
+    c("wellness_25",      "🌿", "Log 25 Wellness Activities", "25 wellness logs total",
+      d => at(d.wellnessCount, 25)),
+    c("workouts_25",      "💪", "Log 25 Workouts",        "25 workouts total",
+      d => at(d.workoutsCount, 25)),
+    c("group_challenges_3", "🏆", "Participate in 3 Group Challenges", "Participate in 3 group challenges",
+      d => at(d.groupChallengesParticipated, 3)),
+  ],
+  5: [
+    c("follow_50",   "➕", "Follow 50 People",            "Follow 50 users",
+      d => at(d.followingCount, 50)),
+    c("rival_wins_7", "🥊", "Win 7 Rivalries",            "Win 7 rivalries total",
+      d => at(d.rivalWinsCount, 7)),
+    c("badges_20",   "🏅", "Earn 20 Badges",              "Collect 20 badges across all categories",
+      d => at(d.badgesEarnedCount, 20)),
+    c("rsvp_8",      "🎟️", "RSVP for 8 Events",           "RSVP to 8 events",
+      d => at(d.eventsRsvpCount, 8)),
+    c("group_wars_5", "⚔️", "Participate in 5 Group Wars", "Take part in 5 group wars",
+      d => at(d.groupWarsParticipated, 5)),
+    c("swim_5",      "🏊", "Log 5 Swims",                 "5 swim sessions",
+      d => at(d.swimCount, 5)),
+    c("yoga_1",      "🧘", "Log 1 Yoga Session",          "Any yoga session",
+      d => at(d.yogaCount, 1)),
+    c("sports_1",    "⚽", "Log 1 Sports Session",        "Any sports session",
+      d => at(d.sportsCount, 1)),
+  ],
+  6: [
+    c("rival_wins_10",     "🥊", "Win 10 Rivalries",          "Win 10 rivalries total",
+      d => at(d.rivalWinsCount, 10)),
+    c("groups_3",          "👥", "Join 3 Groups",              "Be a member of 3 groups",
+      d => at(d.groupsJoinedCount, 3)),
+    c("rsvp_20",           "🎟️", "RSVP for 20 Events",         "RSVP to 20 events",
+      d => at(d.eventsRsvpCount, 20)),
+    c("workout_5day_streak","💪", "Log Workouts 5 Days in a Row","5 consecutive workout days",
+      d => at(d.workoutStreak, 5)),
+    c("nutrition_30",      "🥗", "Log Nutrition 30 Days in a Row","30-day nutrition streak",
+      d => at(d.nutritionStreak, 30)),
+    c("sports_3",          "⚽", "Log 3 Sports Sessions",      "3 sports sessions",
+      d => at(d.sportsCount, 3)),
+    c("yoga_3",            "🧘", "Log 3 Yoga Sessions",        "3 yoga sessions",
+      d => at(d.yogaCount, 3)),
+    c("group_wars_10",     "⚔️", "Participate in 10 Group Wars","10 group wars",
+      d => at(d.groupWarsParticipated, 10)),
+    c("group_challenges_20","🏆", "Participate in 20 Group Challenges","20 group challenges",
+      d => at(d.groupChallengesParticipated, 20)),
+    c("photos_10",         "📸", "Post 10 Photos to Feed",     "10 main feed photos",
+      d => at(d.feedPostsCount, 10)),
   ],
 };
 
-// ── Level info ────────────────────────────────────────────────────────────────
-export interface LevelInfo {
-  level: number;
-  xpRequired: number;       // total XP to reach this level
-  xpForNext: number | null; // XP needed to reach next (null = task gated)
-  gateType: "xp" | "tasks" | "max";
-  tasksRequired: TierTask[] | null;
-}
-
-export const LEVEL_INFO: Record<number, LevelInfo> = {
-  1: { level: 1, xpRequired: 0,  xpForNext: 30,  gateType: "xp",   tasksRequired: null },
-  2: { level: 2, xpRequired: 30, xpForNext: 60,  gateType: "xp",   tasksRequired: null },
-  3: { level: 3, xpRequired: 90, xpForNext: null, gateType: "tasks", tasksRequired: TIER_TASKS["3"] },
-  4: { level: 4, xpRequired: 90, xpForNext: null, gateType: "tasks", tasksRequired: TIER_TASKS["4"] },
-  5: { level: 5, xpRequired: 90, xpForNext: null, gateType: "max",   tasksRequired: null },
-};
-
-// ── Compute level from XP + task completion ───────────────────────────────────
-export function computeLevel(data: TierCheckData): number {
-  const { xp } = data;
-
-  // XP gates for levels 1 → 2 → 3 threshold
-  if (xp < 30) return 1;
-  if (xp < 90) return 2;
-
-  // Level 3 requires XP ≥ 90 + all Tier 3 tasks
-  const tier3Done = TIER_TASKS["3"].every(t => t.check(data));
-  if (!tier3Done) return 2; // XP hit but tasks not done — stuck at 2, working toward 3
-
-  // Level 4 requires all Tier 4 tasks
-  const tier4Done = TIER_TASKS["4"].every(t => t.check(data));
-  if (!tier4Done) return 3;
-
-  return 4; // Level 5 TBD
-}
-
-// ── Progress toward next level ────────────────────────────────────────────────
-export interface ProgressInfo {
-  level: number;
-  xp: number;
-  gateType: "xp" | "tasks" | "max";
-  // XP progress
-  xpTowardNext: number;
-  xpNeededForNext: number | null;
-  xpPercent: number;
-  // Task progress (for levels 3+)
-  tasks: Array<TierTask & { completed: boolean }> | null;
-  tasksCompleted: number;
-  tasksTotal: number;
-}
-
-export function getProgressInfo(data: TierCheckData): ProgressInfo {
-  const level = computeLevel(data);
-  const { xp } = data;
-
-  if (level === 1) {
-    return {
-      level, xp, gateType: "xp",
-      xpTowardNext: xp,
-      xpNeededForNext: 30,
-      xpPercent: Math.min(100, Math.round((xp / 30) * 100)),
-      tasks: null, tasksCompleted: 0, tasksTotal: 0,
-    };
-  }
-
-  if (level === 2) {
-    // Could be: XP < 90 (still grinding XP) or XP ≥ 90 but tasks not done
-    if (xp < 90) {
-      const toward = xp - 30;
-      return {
-        level, xp, gateType: "xp",
-        xpTowardNext: toward,
-        xpNeededForNext: 60,
-        xpPercent: Math.min(100, Math.round((toward / 60) * 100)),
-        tasks: null, tasksCompleted: 0, tasksTotal: 0,
-      };
+// ── Compute the actual current level from counter data ───────────────────────
+// In v2, current_level lives in the database (users.current_level).
+// This function computes "what level SHOULD this user be at" from counters,
+// for use in syncing / level-up logic. Normally the DB value is the source.
+export function computeLevelFromCounters(d: CounterData): Level {
+  // Walk up from db's current_level. If they meet next-level requirements, advance.
+  let lvl: Level = d.currentLevel;
+  while (lvl < 6) {
+    const xpNeeded = XP_FOR_NEXT[lvl];
+    if (xpNeeded === null) break;
+    const xpReady = d.xpInLevel >= xpNeeded;
+    const challengesDone = lvl < 3
+      ? true // L1→2 and L2→3 are pure XP
+      : LEVEL_CHALLENGES[(lvl) as 3 | 4 | 5].every(ch => {
+          const p = ch.progress(d);
+          return p.have >= p.need;
+        });
+    if (xpReady && challengesDone) {
+      lvl = (lvl + 1) as Level;
+      // Note: this client-side function does not reset xpInLevel; the server's
+      // level_up RPC handles that. This is just a "ready to advance?" check.
+      break;
+    } else {
+      break;
     }
-    // XP done, now need tasks
-    const tasks = TIER_TASKS["3"].map(t => ({ ...t, completed: t.check(data) }));
-    const done = tasks.filter(t => t.completed).length;
-    return {
-      level, xp, gateType: "tasks",
-      xpTowardNext: xp, xpNeededForNext: null, xpPercent: 100,
-      tasks, tasksCompleted: done, tasksTotal: tasks.length,
-    };
   }
+  return lvl;
+}
 
-  if (level === 3) {
-    const tasks = TIER_TASKS["4"].map(t => ({ ...t, completed: t.check(data) }));
-    const done = tasks.filter(t => t.completed).length;
-    return {
-      level, xp, gateType: "tasks",
-      xpTowardNext: xp, xpNeededForNext: null, xpPercent: 100,
-      tasks, tasksCompleted: done, tasksTotal: tasks.length,
-    };
-  }
+// ── Progress info for UI ─────────────────────────────────────────────────────
+export interface LevelProgressInfo {
+  level: Level;
+  xpInLevel: number;
+  xpNeeded: number | null;          // null = max level
+  xpPercent: number;                // 0–100
+  isMaxLevel: boolean;
+  // Challenges only present for levels 3+
+  challenges: Array<Challenge & { have: number; need: number; complete: boolean }>;
+  challengesComplete: number;
+  challengesTotal: number;
+  // True if user has met BOTH XP and challenges and is ready to level up
+  readyToLevelUp: boolean;
+}
+
+export function getLevelProgress(d: CounterData): LevelProgressInfo {
+  const level = d.currentLevel;
+  const xpNeeded = XP_FOR_NEXT[level];
+  const isMax = xpNeeded === null;
+  const xpPercent = xpNeeded ? Math.min(100, Math.round((d.xpInLevel / xpNeeded) * 100)) : 100;
+
+  // Challenges live on the level you're working TOWARD if it's 3+.
+  // Working toward L3 from L2? You see L3's challenges.
+  // Working toward L7 doesn't exist (capped at 6).
+  const nextLevel = level + 1;
+  const showChallenges = nextLevel >= 3 && nextLevel <= 6;
+  const rawChallenges = showChallenges
+    ? LEVEL_CHALLENGES[(nextLevel) as 3 | 4 | 5 | 6]
+    : [];
+  const challenges = rawChallenges.map(ch => {
+    const { have, need } = ch.progress(d);
+    return { ...ch, have, need, complete: have >= need };
+  });
+  const challengesComplete = challenges.filter(ch => ch.complete).length;
+  const challengesTotal = challenges.length;
+
+  const xpReady = isMax ? false : d.xpInLevel >= (xpNeeded as number);
+  const challengesReady = showChallenges ? challengesComplete === challengesTotal : true;
+  const readyToLevelUp = !isMax && xpReady && challengesReady;
 
   return {
-    level, xp, gateType: "max",
-    xpTowardNext: xp, xpNeededForNext: null, xpPercent: 100,
-    tasks: null, tasksCompleted: 0, tasksTotal: 0,
+    level, xpInLevel: d.xpInLevel, xpNeeded,
+    xpPercent, isMaxLevel: isMax,
+    challenges, challengesComplete, challengesTotal,
+    readyToLevelUp,
   };
 }
 
-// ── Visual config per level ───────────────────────────────────────────────────
-export const LEVEL_COLORS: Record<number, {
+// ── Visuals ──────────────────────────────────────────────────────────────────
+export const LEVEL_COLORS: Record<Level, {
   border: string; glow: string; badge: string; badgeText: string; accent: string; label: string;
 }> = {
-  1: { border: "#2D2D2D", glow: "transparent",          badge: "#1A1A1A", badgeText: "#6B7280", accent: "#6B7280",  label: "Level 1" },
-  2: { border: "#7C3AED", glow: "rgba(124,58,237,0.3)", badge: "#2D1B69", badgeText: "#A78BFA", accent: "#7C3AED",  label: "Level 2" },
-  3: { border: "#F59E0B", glow: "rgba(245,158,11,0.35)",badge: "#3D2200", badgeText: "#FCD34D", accent: "#F59E0B",  label: "Level 3" },
-  4: { border: "#38BDF8", glow: "rgba(56,189,248,0.4)", badge: "#0A1628", badgeText: "#7DD3FC", accent: "#38BDF8",  label: "Level 4" },
-  5: { border: "#E879F9", glow: "rgba(232,121,249,0.5)",badge: "#1A0035", badgeText: "#F0ABFC", accent: "#E879F9",  label: "Level 5" },
+  1: { border: "#2D2D2D", glow: "transparent",          badge: "#1A1A1A", badgeText: "#6B7280", accent: "#6B7280", label: "Level 1" },
+  2: { border: "#7C3AED", glow: "rgba(124,58,237,0.3)", badge: "#2D1B69", badgeText: "#A78BFA", accent: "#7C3AED", label: "Level 2" },
+  3: { border: "#F59E0B", glow: "rgba(245,158,11,0.35)",badge: "#3D2200", badgeText: "#FCD34D", accent: "#F59E0B", label: "Level 3" },
+  4: { border: "#38BDF8", glow: "rgba(56,189,248,0.4)", badge: "#0A1628", badgeText: "#7DD3FC", accent: "#38BDF8", label: "Level 4" },
+  5: { border: "#E879F9", glow: "rgba(232,121,249,0.5)",badge: "#1A0035", badgeText: "#F0ABFC", accent: "#E879F9", label: "Level 5" },
+  6: { border: "#FF4444", glow: "rgba(255,68,68,0.55)", badge: "#3A0000", badgeText: "#FFB4B4", accent: "#FF4444", label: "Level 6 — MAX" },
 };
 
-// Keep Tier type alias for backwards compat with any old imports
-export type { Tier as TierLegacy };
-export const TIER_COLORS = LEVEL_COLORS; // alias
-
-// ── Backwards compatibility shims ─────────────────────────────────────────────
-// feed/page.tsx and profile/page.tsx still call these — keep them working
-
+// ── Backwards compatibility shims ────────────────────────────────────────────
+// Old code may still import these. Map old names to new system so nothing breaks
+// at compile time. These are NO LONGER USED for level computation.
+export type Tier = "1" | "2" | "3" | "4" | "5" | "6";
 export type OldTier = "default" | "active" | "grinder" | "elite" | "untouchable";
 
-/** @deprecated Use computeLevel() instead */
-export function computeTier(logsLast28Days: number, _longestStreak: number): OldTier {
-  if (logsLast28Days >= 80) return "untouchable";
-  if (logsLast28Days >= 50) return "elite";
-  if (logsLast28Days >= 30) return "grinder";
-  if (logsLast28Days >= 12) return "active";
-  return "default";
-}
+/** @deprecated kept for old imports; returns Level 1 always */
+export function computeTier(_a: number, _b: number): OldTier { return "default"; }
 
-/** @deprecated Use getProgressInfo() instead */
-export function getTierInfo(logsLast28Days: number, longestStreak: number) {
-  const tier = computeTier(logsLast28Days, longestStreak);
-  const ORDER: OldTier[] = ["default","active","grinder","elite","untouchable"];
-  const THRESHOLDS: Record<OldTier,number> = { default:0, active:12, grinder:30, elite:50, untouchable:80 };
-  const idx = ORDER.indexOf(tier);
-  const nextTier = idx < ORDER.length - 1 ? ORDER[idx + 1] : null;
-  const cur = THRESHOLDS[tier];
-  const nxt = nextTier ? THRESHOLDS[nextTier] : 80;
-  const progress = nextTier ? Math.min(100, Math.round(((logsLast28Days - cur) / (nxt - cur)) * 100)) : 100;
+/** @deprecated kept for old imports — returns minimal shape */
+export function getTierInfo(_a: number, _b: number) {
   return {
-    tier,
-    label: tier.charAt(0).toUpperCase() + tier.slice(1),
-    icon: tier === "untouchable" ? "💀" : tier === "elite" ? "⚡" : tier === "grinder" ? "🔥" : tier === "active" ? "🟣" : "🩶",
-    title: tier === "grinder" ? "The Grinder" : tier === "untouchable" ? "Untouchable" : tier.charAt(0).toUpperCase() + tier.slice(1),
+    tier: "default" as OldTier,
+    label: "Level 1",
+    icon: "🩶",
+    title: "Level 1",
     description: "",
-    nextTier,
-    nextDescription: nextTier ? `${nxt - logsLast28Days} more logs needed in 28 days to reach ${nextTier}` : null,
-    progress,
+    nextTier: "active" as OldTier | null,
+    nextDescription: null,
+    progress: 0,
   };
 }
+
+export const TIER_COLORS = LEVEL_COLORS;
