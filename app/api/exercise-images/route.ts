@@ -1,18 +1,25 @@
 // app/api/exercise-images/route.ts
-// Server-side proxy to wger.de — fetches the exercise catalog and returns
-// a flat { normalized_name: image_url } map. Cached for 7 days at the edge
-// so we hit wger at most once per week per Vercel region.
+// Server-side proxy that builds a merged exercise-name -> image-url map
+// from TWO public sources:
+//   1. yuhonas/free-exercise-db on GitHub (real-photo JPGs, ~800 exercises) — PRIMARY
+//   2. wger.de  (illustrated SVGs, ~400 exercises) — FALLBACK
+// Free-exercise-db has the bigger catalog so we use it first, and wger fills
+// in anything the primary source doesn't cover.
 //
-// Hitting this route directly in the browser is also the easiest way to debug:
+// Cached for 7 days at the edge (Vercel) so we hit the upstream sources
+// at most once per week per region. Hitting this URL directly in the browser
+// is the easiest way to debug:
 //   https://fit-app-ecru.vercel.app/api/exercise-images
-// It should return a JSON object with hundreds of keys.
 
 import { NextResponse } from "next/server";
 
 const WGER_BASE = "https://wger.de";
+const FREE_DB_URL =
+  "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
+const FREE_DB_IMG_PREFIX =
+  "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/";
 const REVALIDATE_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
-// Tell Next.js to cache this route's response for a week
 export const revalidate = REVALIDATE_SECONDS;
 export const dynamic = "force-static";
 
@@ -24,47 +31,90 @@ function normalize(name: string): string {
     .trim();
 }
 
-export async function GET() {
+// ── Source 1: free-exercise-db (PRIMARY — bigger catalog) ─────────────────────
+interface FreeDbExercise {
+  name?: string;
+  images?: string[]; // e.g. ["Air_Bike/0.jpg", "Air_Bike/1.jpg"]
+}
+
+async function fetchFreeDbMap(): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  const res = await fetch(FREE_DB_URL, {
+    next: { revalidate: REVALIDATE_SECONDS },
+  });
+  if (!res.ok) return map;
+  const exercises: FreeDbExercise[] = await res.json();
+
+  for (const ex of exercises) {
+    if (!ex.name || !ex.images?.length) continue;
+    const imgPath = ex.images[0]; // first image is usually the start position
+    const fullUrl = FREE_DB_IMG_PREFIX + imgPath;
+    const key = normalize(ex.name);
+    if (key && !map[key]) map[key] = fullUrl;
+  }
+  return map;
+}
+
+// ── Source 2: wger (FALLBACK) ─────────────────────────────────────────────────
+async function fetchWgerMap(): Promise<Record<string, string>> {
   const map: Record<string, string> = {};
   let next: string | null = `${WGER_BASE}/api/v2/exerciseinfo/?language=2&limit=100`;
-  let safety = 20; // hard cap of 20 pages = 2000 exercises
-  let pagesFetched = 0;
+  let safety = 20;
 
-  try {
-    while (next && safety-- > 0) {
-      // Use Next.js fetch caching at this level too
-      const res: Response = await fetch(next, {
-        next: { revalidate: REVALIDATE_SECONDS },
-        headers: { "Accept": "application/json" },
-      });
-      if (!res.ok) break;
-      const data = await res.json();
-      pagesFetched++;
+  while (next && safety-- > 0) {
+    const res: Response = await fetch(next, {
+      next: { revalidate: REVALIDATE_SECONDS },
+      headers: { "Accept": "application/json" },
+    });
+    if (!res.ok) break;
+    const data = await res.json();
 
-      for (const ex of data.results ?? []) {
-        const imgs = ex.images ?? [];
-        if (!imgs.length) continue;
-        const main = imgs.find((i: { is_main?: boolean }) => i.is_main) ?? imgs[0];
-        const url: string | undefined = main?.image;
-        if (!url) continue;
+    for (const ex of data.results ?? []) {
+      const imgs = ex.images ?? [];
+      if (!imgs.length) continue;
+      const main = imgs.find((i: { is_main?: boolean }) => i.is_main) ?? imgs[0];
+      const url: string | undefined = main?.image;
+      if (!url) continue;
 
-        const translations: { language: number; name: string }[] = ex.translations ?? [];
-        for (const t of translations) {
-          if (t.language !== 2 || !t.name) continue;
-          const key = normalize(t.name);
-          if (key && !map[key]) map[key] = url;
-        }
+      const translations: { language: number; name: string }[] = ex.translations ?? [];
+      for (const t of translations) {
+        if (t.language !== 2 || !t.name) continue;
+        const key = normalize(t.name);
+        if (key && !map[key]) map[key] = url;
       }
-      next = data.next ?? null;
     }
+    next = data.next ?? null;
+  }
+  return map;
+}
+
+// ── Merge: free-db wins ties; wger fills gaps ─────────────────────────────────
+export async function GET() {
+  try {
+    // Fetch both sources in parallel — if one fails, we still get the other
+    const [freeDbResult, wgerResult] = await Promise.allSettled([
+      fetchFreeDbMap(),
+      fetchWgerMap(),
+    ]);
+
+    const freeDbMap = freeDbResult.status === "fulfilled" ? freeDbResult.value : {};
+    const wgerMap = wgerResult.status === "fulfilled" ? wgerResult.value : {};
+
+    // Start with wger, then overlay free-db so free-db wins on collisions
+    const map: Record<string, string> = { ...wgerMap, ...freeDbMap };
 
     return NextResponse.json(
-      { map, count: Object.keys(map).length, pagesFetched },
+      {
+        map,
+        count: Object.keys(map).length,
+        freeDbCount: Object.keys(freeDbMap).length,
+        wgerCount: Object.keys(wgerMap).length,
+      },
       { headers: { "Cache-Control": "public, s-maxage=604800, stale-while-revalidate=86400" } },
     );
   } catch (err) {
     return NextResponse.json(
-      { map: {}, error: String(err), pagesFetched },
+      { map: {}, error: String(err) },
       { status: 500 },
     );
   }
