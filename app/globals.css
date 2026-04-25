@@ -104,3 +104,9 @@ input[type="number"] {
 .reaction-pop {
   animation: reactionPop 0.25s ease;
 }
+
+/* Loading shimmer for lazy-loaded images (used in workout plan exercise rows) */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
