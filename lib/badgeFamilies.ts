@@ -183,16 +183,23 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "one-rep-max",         name: "One Rep Max",      category: "strength",  members: ["1rm-pr", "pb-crusher"] },
   { key: "overhead-pull",       name: "Overhead & Pull",  category: "strength",  members: ["overhead-bw", "weighted-pullup"] },
   { key: "kettlebell",          name: "Kettlebell",       category: "strength",  members: ["kettlebell-king"] },
-  { key: "powerlifting",        name: "Powerlifter",      category: "strength",  members: ["powerlifter", "1k-club"] },
+  { key: "powerlifting",        name: "1,000 lb Club",    category: "strength",  members: ["1k-club"] },
+  { key: "powerlifter-meets",   name: "Powerlifting Meets", category: "strength", members: ["powerlifter-1", "powerlifter-3", "powerlifter-5", "powerlifter-10", "powerlifter-20"], thresholds: [1, 3, 5, 10, 20] },
 
   // ── CARDIO / RUNNING ─────────────────────────────────────
   { key: "runs",                name: "Runs",             category: "cardio",    members: ["first-run", "runs-5", "runs-20", "runs-50", "runs-100", "runs-200", "runs-500", "runs-1000"], thresholds: [1, 5, 20, 50, 100, 200, 500, 1000], counterSource: "runs" },
-  { key: "run-distance",        name: "Distance Runner",  category: "cardio",    members: ["5k", "10k", "half-marathon", "marathon", "ultra"] },
+  // Hard-event ladders (1/3/5/10/20) — manual claim only, leveled up by reporting more
+  { key: "marathon",       name: "Marathons",       category: "cardio",  members: ["marathon-1", "marathon-3", "marathon-5", "marathon-10", "marathon-20"],                       thresholds: [1, 3, 5, 10, 20] },
+  { key: "ultra",          name: "Ultras",          category: "cardio",  members: ["ultra-1", "ultra-3", "ultra-5", "ultra-10", "ultra-20"],                                      thresholds: [1, 3, 5, 10, 20] },
+  { key: "half-marathon",  name: "Half Marathons",  category: "cardio",  members: ["half-marathon-1", "half-marathon-3", "half-marathon-5", "half-marathon-10", "half-marathon-20"], thresholds: [1, 3, 5, 10, 20] },
+  { key: "5k-events",      name: "5K Races",        category: "cardio",  members: ["5k-1", "5k-3", "5k-5", "5k-10", "5k-20"],                                                     thresholds: [1, 3, 5, 10, 20] },
+  { key: "10k-events",     name: "10K Races",       category: "cardio",  members: ["10k-1", "10k-3", "10k-5", "10k-10", "10k-20"],                                                thresholds: [1, 3, 5, 10, 20] },
+  { key: "ironman",        name: "Ironman",         category: "cardio",  members: ["ironman-1", "ironman-3", "ironman-5", "ironman-10", "ironman-20"],                            thresholds: [1, 3, 5, 10, 20] },
+  { key: "triathlon",      name: "Triathlon",       category: "cardio",  members: ["triathlon-1", "triathlon-3", "triathlon-5", "triathlon-10", "triathlon-20"],                  thresholds: [1, 3, 5, 10, 20] },
+  { key: "century-ride",   name: "Century Rides",   category: "cardio",  members: ["century-ride-1", "century-ride-3", "century-ride-5", "century-ride-10", "century-ride-20"],   thresholds: [1, 3, 5, 10, 20] },
+  { key: "swim-mile",      name: "Open Water",      category: "cardio",  members: ["swim-mile-1", "swim-mile-3", "swim-mile-5", "swim-mile-10", "swim-mile-20"],                  thresholds: [1, 3, 5, 10, 20] },
   { key: "speed",               name: "Speed",            category: "cardio",    members: ["6min-mile"] },
-  { key: "biking",              name: "Cyclist",          category: "cardio",    members: ["century-ride"] },
-  { key: "swimming",            name: "Swimmer",          category: "cardio",    members: ["swim-mile"] },
   { key: "rowing",              name: "Rower",            category: "cardio",    members: ["rowing-10k"] },
-  { key: "multi-sport",         name: "Multi-Sport",      category: "cardio",    members: ["triathlon", "ironman"] },
 
   // ── CONSISTENCY ─────────────────────────────────────────
   { key: "total-workouts",      name: "Total Workouts",   category: "consistency", members: ["first-workout", "workouts-10", "workouts-25", "centurion-half", "centurion", "centurion-2x", "500-workouts", "1000-workouts"], thresholds: [1, 10, 25, 50, 100, 200, 500, 1000], counterSource: "totalWorkouts" },
@@ -226,8 +233,13 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "fasting",             name: "Fasting",          category: "nutrition", members: ["fasting"] },
 
   // ── CHALLENGES & EVENTS ─────────────────────────────────
-  { key: "challenges-programs", name: "Programs",         category: "challenges", members: ["iron-will", "75-hard"] },
-  { key: "challenges-events",   name: "Events",           category: "challenges", members: ["murph", "spartan", "tough-mudder", "crossfit-open"] },
+  { key: "iron-will",          name: "Iron Will",       category: "challenges", members: ["iron-will"] },
+  // Hard-event ladders (1/3/5/10/20) — leveled up by reporting more
+  { key: "75-hard-events",     name: "75 Hard",         category: "challenges", members: ["75-hard-1", "75-hard-3", "75-hard-5", "75-hard-10", "75-hard-20"],            thresholds: [1, 3, 5, 10, 20] },
+  { key: "murph-events",       name: "Murph",           category: "challenges", members: ["murph-1", "murph-3", "murph-5", "murph-10", "murph-20"],                       thresholds: [1, 3, 5, 10, 20] },
+  { key: "spartan-events",     name: "Spartan Race",    category: "challenges", members: ["spartan-1", "spartan-3", "spartan-5", "spartan-10", "spartan-20"],             thresholds: [1, 3, 5, 10, 20] },
+  { key: "tough-mudder-events",name: "Tough Mudder",    category: "challenges", members: ["tough-mudder-1", "tough-mudder-3", "tough-mudder-5", "tough-mudder-10", "tough-mudder-20"], thresholds: [1, 3, 5, 10, 20] },
+  { key: "crossfit-open-events",name:"CrossFit Open",   category: "challenges", members: ["crossfit-open-1", "crossfit-open-3", "crossfit-open-5", "crossfit-open-10", "crossfit-open-20"], thresholds: [1, 3, 5, 10, 20] },
   { key: "pushup",              name: "Push-Ups",         category: "challenges", members: ["pushup-100"] },
   { key: "plank",               name: "Plank",            category: "challenges", members: ["plank-5min"] },
   { key: "burpee",              name: "Burpees",          category: "challenges", members: ["burpee-100"] },
