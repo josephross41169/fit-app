@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
-import { BADGES } from "@/lib/badges";
+import { BADGES, isManualBadge } from "@/lib/badges";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
@@ -1290,6 +1290,10 @@ export default function ProfilePage() {
   const [selectedBadge,setSelectedBadge] = useState<string>("");
   const [badgeNote,setBadgeNote] = useState("");
   const [badgeToast,setBadgeToast] = useState<string|null>(null);
+  // Filter the long manual badge list — without these the modal renders ~150
+  // badges in one scroll and users can't find what they want.
+  const [badgeCategoryFilter,setBadgeCategoryFilter] = useState<string>("all");
+  const [badgeSearch,setBadgeSearch] = useState("");
   const [showAllBadgesModal,setShowAllBadgesModal] = useState(false);
   const [badgesTab,setBadgesTab] = useState<"fitness"|"rivals">("fitness");
   const [rivalryBadges,setRivalryBadges] = useState<RivalryBadgeWithContext[]>([]);
@@ -1543,12 +1547,28 @@ export default function ProfilePage() {
 
   async function claimBadge() {
     if (!user || !selectedBadge) return;
-    await supabase.from('badges').insert({
-      user_id: user.id,
-      badge_id: selectedBadge,
-      note: badgeNote || null,
-    });
-    setEarnedBadges(prev => [...prev, selectedBadge]);
+
+    // Insert into DB and select the row back so we have the real ID + timestamp
+    const { data, error } = await supabase
+      .from('badges')
+      .insert({
+        user_id: user.id,
+        badge_id: selectedBadge,
+        note: badgeNote || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("claimBadge failed:", error);
+      alert("Couldn't claim that badge. Try again.");
+      return;
+    }
+
+    // earnedBadges expects objects with shape { badge_id, ... } — pushing
+    // just the string broke the .some(eb => eb.badge_id === b.id) check
+    // and made claimed badges look unclaimed.
+    setEarnedBadges(prev => [...prev, data]);
     setShowBadgeModal(false);
     setSelectedBadge("");
     setBadgeNote("");
@@ -1558,7 +1578,7 @@ export default function ProfilePage() {
 
   const inputStyle = {width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box" as const,marginBottom:10};
 
-  const manualBadges = BADGES.filter(b => b.manual);
+  const manualBadges = BADGES.filter(b => isManualBadge(b.id));
   const HIGHLIGHT_SLOTS = 9;
 
   // ── BRANCH: business accounts render a completely different layout ──
@@ -1752,44 +1772,92 @@ export default function ProfilePage() {
       )}
 
       {/* ── Badge Modal ── */}
-      {showBadgeModal && (
+      {showBadgeModal && (() => {
+        // Filter manual badges by category + search query so the user can find
+        // theirs in the long list. Search matches label or description.
+        const cats = Array.from(new Set(manualBadges.map(b => b.category)));
+        const q = badgeSearch.trim().toLowerCase();
+        const filtered = manualBadges.filter(b => {
+          if (badgeCategoryFilter !== "all" && b.category !== badgeCategoryFilter) return false;
+          if (q && !(b.label.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q))) return false;
+          return true;
+        });
+
+        // Visual style per category — gives each badge group a distinct color
+        // so the modal doesn't look like 150 identical purple cards.
+        const catStyle: Record<string, { bg: string; border: string; chip: string }> = {
+          strength:    { bg: "linear-gradient(135deg,#7C2D12,#9A3412)", border: "#EA580C", chip: "#FED7AA" },
+          cardio:      { bg: "linear-gradient(135deg,#831843,#9F1239)", border: "#E11D48", chip: "#FECACA" },
+          consistency: { bg: "linear-gradient(135deg,#713F12,#854D0E)", border: "#CA8A04", chip: "#FDE68A" },
+          wellness:    { bg: "linear-gradient(135deg,#14532D,#166534)", border: "#16A34A", chip: "#BBF7D0" },
+          nutrition:   { bg: "linear-gradient(135deg,#365314,#3F6212)", border: "#65A30D", chip: "#D9F99D" },
+          challenges:  { bg: "linear-gradient(135deg,#1E3A8A,#1D4ED8)", border: "#3B82F6", chip: "#BFDBFE" },
+          social:      { bg: "linear-gradient(135deg,#581C87,#6B21A8)", border: "#A855F7", chip: "#E9D5FF" },
+          special:     { bg: "linear-gradient(135deg,#831843,#86198F)", border: "#D946EF", chip: "#F5D0FE" },
+        };
+        const fallbackStyle = { bg: "#1A1A1A", border: C.purpleMid, chip: C.purple };
+
+        return (
         <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div style={{background:C.white,borderRadius:28,padding:32,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.18)",maxHeight:"90vh",overflowY:"auto"}}>
-            <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:6}}>Report an Achievement</div>
-            <div style={{fontSize:13,color:C.sub,marginBottom:20}}>Honor system — we trust you. Earn it for real 💪</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-              {manualBadges.map(b => {
+          <div style={{background:C.white,borderRadius:28,padding:0,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.18)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"28px 28px 16px"}}>
+              <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:6}}>Report an Achievement</div>
+              <div style={{fontSize:13,color:C.sub,marginBottom:16}}>Honor system — we trust you. Earn it for real 💪</div>
+
+              {/* Search */}
+              <input value={badgeSearch} onChange={e=>setBadgeSearch(e.target.value)} placeholder="Search achievements..." style={{width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
+
+              {/* Category chips */}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <button onClick={()=>setBadgeCategoryFilter("all")} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter==="all"?C.purple:C.purpleMid}`,background:badgeCategoryFilter==="all"?"#2D1F52":"transparent",color:badgeCategoryFilter==="all"?"#E9D5FF":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>All</button>
+                {cats.map(cat => (
+                  <button key={cat} onClick={()=>setBadgeCategoryFilter(cat)} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter===cat?C.purple:C.purpleMid}`,background:badgeCategoryFilter===cat?"#2D1F52":"transparent",color:badgeCategoryFilter===cat?"#E9D5FF":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>{cat}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Scrollable badge list — separate scroll so cancel/claim stay visible */}
+            <div style={{flex:1,overflowY:"auto",padding:"0 28px",display:"flex",flexDirection:"column",gap:10}}>
+              {filtered.length === 0 ? (
+                <div style={{padding:"32px 0",textAlign:"center",color:C.sub,fontSize:14}}>No badges match.</div>
+              ) : filtered.map(b => {
                 const earned = earnedBadges.some(eb => eb.badge_id === b.id);
                 const sel = selectedBadge === b.id;
+                const cs = catStyle[b.category] || fallbackStyle;
                 return (
-                  <button key={b.id} onClick={()=>setSelectedBadge(b.id)}
-                    style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,border:`2px solid ${sel?C.purple:C.purpleMid}`,background:sel?"#2D1F52":"#1A1A1A",cursor:"pointer",textAlign:"left",opacity:earned?0.55:1}}>
-                    <span style={{fontSize:28,flexShrink:0}}>{b.emoji}</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:800,fontSize:14,color:C.text,display:"flex",alignItems:"center",gap:8}}>
+                  <button key={b.id} onClick={()=>setSelectedBadge(b.id)} disabled={earned}
+                    style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,border:`2px solid ${sel?C.purple:cs.border}`,background:sel?cs.bg:`${cs.bg}99`,cursor:earned?"not-allowed":"pointer",textAlign:"left",opacity:earned?0.45:1,boxShadow:sel?`0 0 0 3px ${C.purple}33`:"none",transition:"all 0.12s"}}>
+                    <span style={{fontSize:30,flexShrink:0}}>{b.emoji}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:14,color:"#fff",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                         {b.label}
-                        {earned && <span style={{fontSize:11,fontWeight:700,background:"#D1FAE5",color:"#065F46",borderRadius:8,padding:"2px 8px"}}>✓ Earned</span>}
+                        {earned && <span style={{fontSize:10,fontWeight:700,background:"#D1FAE5",color:"#065F46",borderRadius:8,padding:"2px 8px"}}>✓ Earned</span>}
                       </div>
-                      <div style={{fontSize:12,color:C.sub,marginTop:2}}>{b.desc}</div>
+                      <div style={{fontSize:11,color:cs.chip,marginTop:2,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{b.category}</div>
+                      <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:3}}>{b.desc}</div>
                     </div>
-                    <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.purple:C.purpleMid}`,background:sel?C.purple:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.purple:"rgba(255,255,255,0.5)"}`,background:sel?C.purple:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                       {sel && <div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,fontWeight:700,color:C.sub,display:"block",marginBottom:6}}>Tell us about it (optional)</label>
-              <textarea value={badgeNote} onChange={e=>setBadgeNote(e.target.value)} rows={3} placeholder="Share your story..." style={{width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",resize:"none",boxSizing:"border-box"}}/>
-            </div>
-            <div style={{display:"flex",gap:12}}>
-              <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-              <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#A78BFA)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+
+            <div style={{padding:"16px 28px 28px",borderTop:`1px solid ${C.purpleMid}`}}>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,fontWeight:700,color:C.sub,display:"block",marginBottom:6}}>Tell us about it (optional)</label>
+                <textarea value={badgeNote} onChange={e=>setBadgeNote(e.target.value)} rows={2} placeholder="Share your story..." style={{width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",resize:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div style={{display:"flex",gap:12}}>
+                <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");setBadgeSearch("");setBadgeCategoryFilter("all");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#A78BFA)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+              </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── All Badges Modal ── */}
       {showAllBadgesModal && (() => {
