@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { BADGES, isManualBadge } from "@/lib/badges";
+import { BadgeTile } from "@/components/BadgeTile";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
@@ -1882,10 +1883,24 @@ export default function ProfilePage() {
               }
               /* badgeShimmer — moves a diagonal white band across the tile. Paired
                  with backgroundSize:"200% 100%" the band slides from left to right
-                 and loops. Only applied to Platinum+ tiers via the style.shimmer flag. */
+                 and loops. Speed varies per tier in BadgeTile component. */
               @keyframes badgeShimmer {
                 0%   { background-position: 200% 0; }
                 100% { background-position: -200% 0; }
+              }
+              /* Spin animations for tier ornament bursts (Diamond+) */
+              @keyframes badgeBurstSpin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+              }
+              @keyframes badgeBurstSpinReverse {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(-360deg); }
+              }
+              /* Sparkle dot orbit for tier 5+ — circles the badge */
+              @keyframes badgeSparkleOrbit {
+                0%   { transform: rotate(0deg) translateX(38px) rotate(0deg); }
+                100% { transform: rotate(360deg) translateX(38px) rotate(-360deg); }
               }
             `}</style>
 
@@ -2014,107 +2029,31 @@ export default function ProfilePage() {
                         );
                       }
 
-                      // ── PROGRESSION: tiered bronze/silver/gold/platinum/diamond ──
-                      // Each tier renders with a metallic 3-stop gradient + double glow
-                      // (close halo + wide soft light) to simulate shine. Top tiers
-                      // (platinum+) get an animated shimmer sweep on top of the gradient.
-                      const style = TIER_STYLES[g.tier ?? 1];
-                      const hasProgress = g.currentValue !== undefined && g.currentThreshold !== undefined;
-                      const progressToNext = hasProgress && g.nextThreshold !== undefined
-                        ? Math.min(100, Math.max(0, ((g.currentValue! - g.currentThreshold!) / (g.nextThreshold - g.currentThreshold!)) * 100))
-                        : 100; // maxed
+                      // ── PROGRESSION: tiered bronze/silver/gold/platinum/etc ──
+                      // Rendered via the BadgeTile component (see components/BadgeTile.tsx)
+                      // which adds per-category sigil patterns, tier ornamentation rings,
+                      // continuous shimmer, and orbiting sparkles on high tiers.
                       return (
-                        <div key={g.key} style={{
-                          borderRadius:16,
-                          padding:"16px 10px",
-                          textAlign:"center",
-                          border:`2px solid ${style.border}`,
-                          background: style.gradient,
-                          // Double box-shadow: tight halo + wide glow. Creates depth.
-                          boxShadow:`0 0 12px ${style.glow}, 0 0 32px ${style.glow}, inset 0 1px 0 rgba(255,255,255,0.25)`,
-                          position:"relative",
-                          transition:"all 0.2s",
-                          overflow:"hidden",
-                        }}>
-                          {/* Top highlight strip — simulates light hitting the top edge
-                              of a curved metal surface. Gradient fades L→R so it looks
-                              like a specular highlight, not a solid bar. */}
-                          <div style={{
-                            position:"absolute", top:0, left:0, right:0, height:"35%",
-                            background:"linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)",
-                            pointerEvents:"none",
-                            borderRadius:"14px 14px 0 0",
-                          }}/>
-
-                          {/* Animated shimmer sweep — only for Platinum+ to avoid
-                              visual noise on common badges. The diagonal band moves
-                              across the badge every 3s giving a living-metal feel. */}
-                          {style.shimmer && (
-                            <div style={{
-                              position:"absolute", inset:0,
-                              background:"linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)",
-                              backgroundSize:"200% 100%",
-                              animation:"badgeShimmer 3s ease-in-out infinite",
-                              pointerEvents:"none",
-                              mixBlendMode:"overlay",
-                            }}/>
-                          )}
-
-                          {/* Tier count pill (how many tiers cleared) */}
-                          {(g.maxTier ?? 1) > 1 && (
-                            <div style={{position:"absolute",top:8,right:8,
-                              background:"rgba(0,0,0,0.55)",
-                              backdropFilter:"blur(4px)",
-                              borderRadius:99,padding:"2px 6px",
-                              fontSize:9,fontWeight:800,color:style.accentColor,
-                              zIndex:2,
-                              border:`1px solid ${style.border}`,
-                            }}>
-                              {g.earnedCount}/{g.maxTier}
-                            </div>
-                          )}
-                          <div style={{fontSize:32,marginBottom:6,position:"relative",zIndex:1,
-                            filter:`drop-shadow(0 2px 4px rgba(0,0,0,0.6))`}}>{g.emoji}</div>
-                          <div style={{fontWeight:800,fontSize:12,color:style.textColor,lineHeight:1.3,marginBottom:4,position:"relative",zIndex:1,
-                            textShadow:"0 1px 3px rgba(0,0,0,0.8)"}}>{g.label}</div>
-                          <div style={{fontSize:10,color:style.accentColor,lineHeight:1.3,marginBottom:8,position:"relative",zIndex:1,
-                            textShadow:"0 1px 2px rgba(0,0,0,0.7)"}}>{g.desc}</div>
-
-                          {/* Progress display — current count + bar to next tier */}
-                          {hasProgress && (
-                            <div style={{marginBottom:8,position:"relative",zIndex:1}}>
-                              <div style={{fontSize:10,fontWeight:800,color:style.textColor,marginBottom:4,
-                                textShadow:"0 1px 2px rgba(0,0,0,0.8)"}}>
-                                {g.isMaxed
-                                  ? `${g.currentValue} ${g.progressLabel} · MAXED`
-                                  : `${g.currentValue} / ${g.nextThreshold} ${g.progressLabel}`
+                        <BadgeTile
+                          key={g.key}
+                          tier={g.tier ?? 1}
+                          emoji={g.emoji}
+                          label={g.label}
+                          desc={g.desc}
+                          category={g.category}
+                          earnedCount={g.earnedCount}
+                          maxTier={g.maxTier}
+                          progress={
+                            g.currentValue !== undefined && g.progressLabel
+                              ? {
+                                  current: g.currentValue,
+                                  next: g.nextThreshold ?? null,
+                                  label: g.progressLabel,
+                                  isMaxed: g.isMaxed ?? false,
                                 }
-                              </div>
-                              <div style={{height:5,borderRadius:99,background:"rgba(0,0,0,0.55)",overflow:"hidden",
-                                border:`1px solid rgba(0,0,0,0.3)`}}>
-                                <div style={{
-                                  height:"100%",
-                                  width:`${progressToNext}%`,
-                                  background: g.isMaxed
-                                    ? `linear-gradient(90deg, ${style.accentColor}, #fff, ${style.accentColor})`
-                                    : `linear-gradient(90deg, ${style.accentColor}, ${style.border})`,
-                                  boxShadow:`0 0 6px ${style.glow}`,
-                                  transition:"width 0.5s ease",
-                                }} />
-                              </div>
-                            </div>
-                          )}
-
-                          <div style={{display:"inline-block",background:"rgba(0,0,0,0.55)",
-                            backdropFilter:"blur(4px)",
-                            borderRadius:99,padding:"3px 10px",
-                            fontSize:9,fontWeight:900,color:style.accentColor,letterSpacing:0.8,
-                            border:`1px solid ${style.border}`,
-                            position:"relative",zIndex:1,
-                            textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>
-                            {g.isMaxed ? `${style.name} · MAXED` : style.name}
-                          </div>
-                        </div>
+                              : undefined
+                          }
+                        />
                       );
                     })}
                     {/* Challenge completion badges still get their own gold tiles */}
