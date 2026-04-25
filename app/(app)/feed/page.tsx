@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { uploadPhoto } from "@/lib/uploadPhoto";
 import FollowButton from "@/components/FollowButton";
 import ActivityComments from "@/components/ActivityComments";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
@@ -346,25 +347,144 @@ const INITIAL_POSTS: Post[] = [
 ];
 
 // ── Story Viewer ──────────────────────────────────────────────────────────────
-function StoryViewer({ story, onClose }: { story: typeof INITIAL_STORIES[0] & { photo: string | null }; onClose: () => void }) {
+// ── Story types ─────────────────────────────────────────────────────────────
+interface Story {
+  id: string;
+  user_id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  media_url: string;
+  media_type: 'image' | 'video';
+  caption: string | null;
+  created_at: string;
+  is_you: boolean;
+}
+
+// Format "2h ago" / "5m ago" for stories
+function timeAgoShort(iso: string): string {
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  return `${hr}h ago`;
+}
+
+function StoryViewer({
+  story, onClose, onDelete, onReply,
+}: {
+  story: Story;
+  onClose: () => void;
+  onDelete?: (id: string) => void;
+  onReply?: (story: Story, text: string) => Promise<void>;
+}) {
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Auto-advance progress bar — closes after 8 seconds (Instagram standard)
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const startedAt = Date.now();
+    const DURATION_MS = 8000;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const pct = Math.min(100, (elapsed / DURATION_MS) * 100);
+      setProgress(pct);
+      if (pct >= 100) { clearInterval(interval); onClose(); }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [story.id, onClose]);
+
+  async function handleReplySend() {
+    if (!replyText.trim() || sending || !onReply) return;
+    setSending(true);
+    try {
+      await onReply(story, replyText.trim());
+      setReplyText("");
+      onClose();
+    } finally { setSending(false); }
+  }
+
   return (
-    <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center" }}>
-      <button onClick={onClose} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer" }}>×</button>
+    <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center" }}
+         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <button onClick={onClose} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer",zIndex:2 }}>×</button>
+
       <div style={{ width:"100%",maxWidth:400,aspectRatio:"9/16",borderRadius:20,overflow:"hidden",position:"relative",background:"#1A1A2E" }}>
-        {story.photo
-          ? <img src={story.photo} style={{ width:"100%",height:"100%",objectFit:"cover" }} alt="" />
-          : <div style={{ width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,${C.blue},#4ADE80)` }}>
-              <div style={{ fontSize:80,fontWeight:900,color:"#fff" }}>{story.username[0].toUpperCase()}</div>
-            </div>}
-        <div style={{ position:"absolute",bottom:0,left:0,right:0,padding:"24px 20px 32px",background:"linear-gradient(transparent,rgba(0,0,0,0.7))" }}>
-          <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-            <div style={{ width:36,height:36,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>{story.username[0].toUpperCase()}</div>
-            <div>
-              <div style={{ color:"#fff",fontWeight:700,fontSize:14 }}>{story.username}</div>
-              <div style={{ color:"rgba(255,255,255,0.7)",fontSize:12 }}>Just now</div>
-            </div>
-          </div>
+        {/* Progress bar at top */}
+        <div style={{ position:"absolute",top:8,left:8,right:8,height:3,borderRadius:99,background:"rgba(255,255,255,0.25)",overflow:"hidden",zIndex:2 }}>
+          <div style={{ height:"100%",width:`${progress}%`,background:"#fff",transition:"width 50ms linear" }} />
         </div>
+
+        {story.media_type === 'video' ? (
+          <video src={story.media_url} autoPlay muted playsInline
+            style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+        ) : (
+          <img src={story.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+        )}
+
+        {/* Header */}
+        <div style={{ position:"absolute",top:18,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:2 }}>
+          <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
+            {story.avatar_url
+              ? <img src={story.avatar_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+              : (story.username[0] || "?").toUpperCase()}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:14,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{story.username}</div>
+            <div style={{ color:"rgba(255,255,255,0.85)",fontSize:11,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{timeAgoShort(story.created_at)}</div>
+          </div>
+          {/* Delete button — only for your own story */}
+          {story.is_you && onDelete && !confirmDelete && (
+            <button onClick={() => setConfirmDelete(true)} style={{ background:"rgba(0,0,0,0.4)",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }}>
+              🗑️ Delete
+            </button>
+          )}
+          {confirmDelete && (
+            <button onClick={() => onDelete!(story.id)} style={{ background:"#EF4444",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }}>
+              Confirm?
+            </button>
+          )}
+        </div>
+
+        {/* Caption — bottom center */}
+        {story.caption && (
+          <div style={{ position:"absolute",bottom:90,left:16,right:16,padding:"10px 14px",background:"rgba(0,0,0,0.5)",borderRadius:12,zIndex:2 }}>
+            <div style={{ color:"#fff",fontSize:13,fontWeight:600,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{story.caption}</div>
+          </div>
+        )}
+
+        {/* Reply input — only for OTHER people's stories */}
+        {!story.is_you && onReply && (
+          <div style={{ position:"absolute",bottom:16,left:16,right:16,zIndex:2,display:"flex",gap:8 }}
+               onClick={e => e.stopPropagation()}>
+            <input
+              value={replyText}
+              onChange={e => setReplyText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleReplySend(); }}
+              placeholder={`Reply to ${story.username}...`}
+              style={{
+                flex:1, padding:"12px 16px", borderRadius:99,
+                background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.3)",
+                color:"#fff", fontSize:13, outline:"none",
+              }}
+            />
+            <button
+              onClick={handleReplySend}
+              disabled={!replyText.trim() || sending}
+              style={{
+                padding:"10px 16px", borderRadius:99,
+                background: replyText.trim() ? C.blue : "rgba(255,255,255,0.15)",
+                border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer",
+                opacity: sending ? 0.6 : 1,
+              }}
+            >
+              {sending ? "..." : "Send"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1025,7 +1145,11 @@ export default function FeedPage() {
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
-  const [viewingStory, setViewingStory] = useState<typeof INITIAL_STORIES[0] | null>(null);
+  // Stories — real data from /api/db
+  const [stories, setStories] = useState<Story[]>([]);
+  const [viewingStory, setViewingStory] = useState<Story | null>(null);
+  const [postingStory, setPostingStory] = useState(false);
+  const storyFileInputRef = useRef<HTMLInputElement>(null);
   // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -1077,6 +1201,114 @@ export default function FeedPage() {
   }
 
   useEffect(() => { fetchPosts(0); }, []);
+
+  // ── Stories: load active stories (last 24h) ────────────────────────────
+  async function loadStories() {
+    if (!user) return;
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_active_stories', payload: { viewerId: user.id } }),
+      });
+      const data = await res.json();
+      if (data.stories) setStories(data.stories as Story[]);
+    } catch (err) {
+      console.warn('[stories] load failed:', err);
+    }
+  }
+  useEffect(() => { loadStories(); }, [user?.id]);
+
+  // ── Stories: post a new story (called when user picks a photo) ─────────
+  async function handlePostStory(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setPostingStory(true);
+    try {
+      // Upload the photo to the activity bucket via existing helper.
+      // Path is namespaced under stories/ so we can find them later if needed.
+      const url = await uploadPhoto(file, 'activity', `stories/${user.id}/${Date.now()}.jpg`);
+      if (!url) {
+        alert("Couldn't upload that photo. Try another one.");
+        return;
+      }
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'post_story',
+          payload: { userId: user.id, mediaUrl: url, mediaType: 'image', caption: null },
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(`Failed to post story: ${data.error}`);
+        return;
+      }
+      await loadStories();
+    } catch (err: any) {
+      console.warn('[stories] post failed:', err);
+      alert(`Story upload error: ${err?.message || String(err)}`);
+    } finally {
+      setPostingStory(false);
+      if (storyFileInputRef.current) storyFileInputRef.current.value = "";
+    }
+  }
+
+  // ── Stories: delete one of your own ────────────────────────────────────
+  async function handleDeleteStory(storyId: string) {
+    if (!user) return;
+    try {
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_my_story', payload: { userId: user.id, storyId } }),
+      });
+      setViewingStory(null);
+      await loadStories();
+    } catch (err) {
+      console.warn('[stories] delete failed:', err);
+    }
+  }
+
+  // ── Stories: reply via DM ──────────────────────────────────────────────
+  // Encodes the story media URL in the message content using a [story_reply]
+  // marker that the messages page knows how to render.
+  async function handleStoryReply(story: Story, text: string) {
+    if (!user) return;
+    try {
+      // Find or create a conversation between user and story author
+      const convRes = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_conversation',
+          payload: { userId: user.id, otherUserId: story.user_id },
+        }),
+      });
+      const convData = await convRes.json();
+      const conversationId = convData?.conversationId || convData?.conversation?.id;
+      if (!conversationId) {
+        alert("Couldn't open DM with that user.");
+        return;
+      }
+
+      // Send the message with the story-reply marker. The messages page
+      // parses [story_reply]: URL out and renders it as a small preview tile.
+      const content = `[story_reply]: ${story.media_url}\n${text}`;
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send_message',
+          payload: { conversationId, senderId: user.id, content },
+        }),
+      });
+    } catch (err: any) {
+      console.warn('[stories] reply failed:', err);
+      alert(`Reply failed: ${err?.message || String(err)}`);
+    }
+  }
 
   async function loadMorePosts() {
     if (loadingMorePosts || !dbPostsHasMore) return;
@@ -1477,30 +1709,86 @@ export default function FeedPage() {
       </div>
 
       {/* ── Story Viewer overlay ── */}
-      {viewingStory && <StoryViewer story={viewingStory} onClose={() => setViewingStory(null)} />}
+      {viewingStory && (
+        <StoryViewer
+          story={viewingStory}
+          onClose={() => setViewingStory(null)}
+          onDelete={handleDeleteStory}
+          onReply={handleStoryReply}
+        />
+      )}
+
+      {/* Hidden file input — clicked programmatically when "+" is tapped */}
+      <input
+        ref={storyFileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handlePostStory}
+      />
 
       {/* ── Stories Row (visible on all views) ── */}
       <div style={{ padding:"12px 0 0", borderBottom:"1px solid #2D1F52", overflowX:"auto" }}>
         <div style={{ display:"flex", gap:16, padding:"4px 24px 14px", minWidth:"max-content" }}>
-          {INITIAL_STORIES.map(story => {
-            const tier: Tier = "default"; // stories use default tier frame (users could earn tiers shown here in future)
+          {/* "Your story" tile — always first. Tap to upload (or view if posted). */}
+          {(() => {
+            const myStory = stories.find(s => s.is_you);
+            const tier: Tier = "default";
+            return (
+              <button
+                key="my-story"
+                onClick={() => {
+                  if (myStory) setViewingStory(myStory);
+                  else storyFileInputRef.current?.click();
+                }}
+                disabled={postingStory}
+                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0, opacity: postingStory ? 0.5 : 1 }}
+              >
+                <TierFrame tier={tier} size={60}>
+                  {myStory ? (
+                    <div style={{ width:"100%",height:"100%",position:"relative" }}>
+                      <img src={myStory.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                    </div>
+                  ) : (
+                    <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff" }}>
+                      {postingStory ? "…" : "＋"}
+                    </div>
+                  )}
+                </TierFrame>
+                <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {myStory ? "Your story" : "Add story"}
+                </span>
+              </button>
+            );
+          })()}
+
+          {/* Other users' stories */}
+          {stories.filter(s => !s.is_you).map(story => {
+            const tier: Tier = "default";
             return (
               <button
                 key={story.id}
-                onClick={() => !story.isYou && setViewingStory(story)}
+                onClick={() => setViewingStory(story)}
                 style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0 }}
               >
                 <TierFrame tier={tier} size={60}>
-                  <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${story.hasNew ? C.blue : "#2D2D2D"}, ${story.hasNew ? "#4ADE80" : "#1A1A1A"})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:900, color:"#fff" }}>
-                    {story.isYou ? "＋" : story.username[0].toUpperCase()}
+                  <div style={{ width:"100%",height:"100%",position:"relative",overflow:"hidden" }}>
+                    <img src={story.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
                   </div>
                 </TierFrame>
-                <span style={{ fontSize:11, fontWeight:600, color: story.hasNew ? C.text : C.sub, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {story.isYou ? "You" : story.username}
+                <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {story.username}
                 </span>
               </button>
             );
           })}
+
+          {/* Empty state — only show if NO stories AND user hasn't posted */}
+          {stories.length === 0 && (
+            <span style={{ alignSelf:"center", fontSize:12, color:C.sub, padding:"0 12px" }}>
+              No stories yet · be the first to post one
+            </span>
+          )}
         </div>
       </div>
 
