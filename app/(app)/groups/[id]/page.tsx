@@ -1422,22 +1422,28 @@ export default function GroupPage() {
       });
       if (uploadError) {
         console.error('Banner upload error:', uploadError);
-        alert("Couldn't upload that image. Try a different one.");
+        // Surface the actual error so we can debug — RLS policy, size limit, etc.
+        alert(`Upload failed: ${uploadError.message || JSON.stringify(uploadError)}`);
         setBannerUploading(false);
         return;
       }
       const { data: { publicUrl } } = supabase.storage.from('activity').getPublicUrl(path);
       // Append a timestamp to bust the browser cache when a new banner replaces an old one
       const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
-      await fetch('/api/db', {
+      const dbRes = await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'update_group_banner', payload: { groupId: group._dbId, bannerUrl: cacheBustedUrl, userId: currentUser?.id || null } }),
       });
+      const dbData = await dbRes.json().catch(() => ({}));
+      if (dbData?.error) {
+        console.error('DB update error:', dbData.error);
+        alert(`Saved image but couldn't update group: ${dbData.error}`);
+      }
       await loadGroupData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Banner upload failed:', err);
-      alert("Something went wrong uploading the banner. Try again.");
+      alert(`Banner upload error: ${err?.message || String(err)}`);
     } finally {
       setBannerUploading(false);
       e.target.value = ""; // allow re-selecting the same file
