@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
-import { BADGES, isManualBadge } from "@/lib/badges";
+import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
@@ -1549,12 +1549,44 @@ export default function ProfilePage() {
   async function claimBadge() {
     if (!user || !selectedBadge) return;
 
+    // ── Ladder progression check ────────────────────────────────────────
+    // If the selected badge is the entry of a manual ladder (marathon-1,
+    // spartan-1, etc.), figure out which tier to actually award based on
+    // how many badges in this family the user has already claimed.
+    //
+    // First time → award tier 1 (marathon-1)
+    // 3rd time   → award tier 2 (marathon-3)
+    // 5th time   → award tier 3 (marathon-5)
+    // ...etc, capping at tier 5 (marathon-20) for 20+ claims.
+    let badgeIdToAward = selectedBadge;
+    let actualCount = 1;
+    const family = findManualBadgeFamily(selectedBadge);
+    if (family) {
+      // Count how many badges in this family the user already has
+      const existingInFamily = earnedBadges.filter(eb => family.tiers.includes(eb.badge_id)).length;
+      actualCount = existingInFamily + 1; // +1 for the one we're about to claim
+      badgeIdToAward = getTierForCount(family, actualCount);
+
+      // If they're already at the highest tier (marathon-20), don't insert
+      // anything — just show them they're maxed.
+      if (actualCount > 20) {
+        setBadgeToast("You're already at the highest tier for this badge! 👑");
+        setTimeout(() => setBadgeToast(null), 3000);
+        setShowBadgeModal(false);
+        setSelectedBadge("");
+        setBadgeNote("");
+        setBadgeSearch("");
+        setBadgeCategoryFilter("all");
+        return;
+      }
+    }
+
     // Insert into DB and select the row back so we have the real ID + timestamp
     const { data, error } = await supabase
       .from('badges')
       .insert({
         user_id: user.id,
-        badge_id: selectedBadge,
+        badge_id: badgeIdToAward,
         note: badgeNote || null,
       })
       .select()
@@ -1573,8 +1605,17 @@ export default function ProfilePage() {
     setShowBadgeModal(false);
     setSelectedBadge("");
     setBadgeNote("");
-    setBadgeToast("Badge unlocked! 🎉");
-    setTimeout(() => setBadgeToast(null), 3000);
+    setBadgeSearch("");
+    setBadgeCategoryFilter("all");
+
+    // Toast — for ladder badges, name the actual tier they hit
+    if (family) {
+      const awarded = BADGES.find(b => b.id === badgeIdToAward);
+      setBadgeToast(`${awarded?.emoji ?? "🏆"} ${awarded?.label ?? "Badge"} unlocked! (${actualCount} total)`);
+    } else {
+      setBadgeToast("Badge unlocked! 🎉");
+    }
+    setTimeout(() => setBadgeToast(null), 3500);
   }
 
   const inputStyle = {width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box" as const,marginBottom:10};
@@ -1822,7 +1863,17 @@ export default function ProfilePage() {
               {filtered.length === 0 ? (
                 <div style={{padding:"32px 0",textAlign:"center",color:C.sub,fontSize:14}}>No badges match.</div>
               ) : filtered.map(b => {
-                const earned = earnedBadges.some(eb => eb.badge_id === b.id);
+                // For ladder entry badges, count how many in the family the user has —
+                // shows progress in the modal so they know what tier they're at.
+                const ladderFamily = findManualBadgeFamily(b.id);
+                const ladderCount = ladderFamily
+                  ? earnedBadges.filter(eb => ladderFamily.tiers.includes(eb.badge_id)).length
+                  : 0;
+                const ladderMaxed = ladderFamily && ladderCount >= 20;
+                // Standalone badges: earned = locked. Ladder badges: never lock unless maxed.
+                const earned = ladderFamily
+                  ? ladderMaxed
+                  : earnedBadges.some(eb => eb.badge_id === b.id);
                 const sel = selectedBadge === b.id;
                 const cs = catStyle[b.category] || fallbackStyle;
                 return (
@@ -1832,10 +1883,17 @@ export default function ProfilePage() {
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:800,fontSize:14,color:"#fff",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                         {b.label}
-                        {earned && <span style={{fontSize:10,fontWeight:700,background:"#D1FAE5",color:"#065F46",borderRadius:8,padding:"2px 8px"}}>✓ Earned</span>}
+                        {ladderFamily && ladderCount > 0 && (
+                          <span style={{fontSize:10,fontWeight:800,background:cs.chip,color:"#000",borderRadius:8,padding:"2px 8px"}}>
+                            {ladderMaxed ? "👑 MAXED" : `${ladderCount} done`}
+                          </span>
+                        )}
+                        {!ladderFamily && earned && <span style={{fontSize:10,fontWeight:700,background:"#D1FAE5",color:"#065F46",borderRadius:8,padding:"2px 8px"}}>✓ Earned</span>}
                       </div>
                       <div style={{fontSize:11,color:cs.chip,marginTop:2,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{b.category}</div>
-                      <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:3}}>{b.desc}</div>
+                      <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:3}}>
+                        {ladderFamily ? `Tap to report another · earns ${ladderFamily.tiers.length} tiers (1/3/5/10/20)` : b.desc}
+                      </div>
                     </div>
                     <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.purple:"rgba(255,255,255,0.5)"}`,background:sel?C.purple:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                       {sel && <div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
