@@ -980,6 +980,94 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // ── Stories ────────────────────────────────────────────────────────────
+    // Get all active stories (last 24h) — returns 1 row per user with their
+    // most recent story. The feed rail shows one ring per user; tap to see
+    // their newest story.
+    if (action === 'get_active_stories') {
+      const { viewerId } = payload || {};
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: rows, error } = await admin
+        .from('stories')
+        .select('id, user_id, media_url, media_type, caption, created_at')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Dedupe to most recent per user
+      const seen = new Set<string>();
+      const latestPerUser: any[] = [];
+      for (const r of rows || []) {
+        if (seen.has(r.user_id)) continue;
+        seen.add(r.user_id);
+        latestPerUser.push(r);
+      }
+
+      // Hydrate with user info (username, avatar, full_name)
+      const userIds = latestPerUser.map(s => s.user_id);
+      const { data: users } = userIds.length
+        ? await admin.from('users').select('id, username, full_name, avatar_url').in('id', userIds)
+        : { data: [] };
+      const userMap = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
+
+      // Move the viewer's own story to the front so it shows up first in the rail
+      const enriched = latestPerUser.map(s => ({
+        ...s,
+        username: userMap[s.user_id]?.username ?? 'unknown',
+        full_name: userMap[s.user_id]?.full_name ?? null,
+        avatar_url: userMap[s.user_id]?.avatar_url ?? null,
+        is_you: s.user_id === viewerId,
+      }));
+      enriched.sort((a, b) => {
+        if (a.is_you && !b.is_you) return -1;
+        if (!a.is_you && b.is_you) return 1;
+        return 0;
+      });
+
+      return NextResponse.json({ stories: enriched });
+    }
+
+    // Get all stories from a single user (last 24h) — used for the viewer
+    // when a user has multiple stories queued up.
+    if (action === 'get_user_stories') {
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await admin
+        .from('stories')
+        .select('id, user_id, media_url, media_type, caption, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', since)
+        .order('created_at', { ascending: true });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ stories: data || [] });
+    }
+
+    // Post a new story. The client uploads the photo first via uploadPhoto
+    // helper and passes the public URL in here.
+    if (action === 'post_story') {
+      const { userId, mediaUrl, mediaType, caption } = payload || {};
+      if (!userId || !mediaUrl) return NextResponse.json({ error: 'Missing userId or mediaUrl' }, { status: 400 });
+      const { data, error } = await admin.from('stories').insert({
+        user_id: userId,
+        media_url: mediaUrl,
+        media_type: mediaType || 'image',
+        caption: caption || null,
+      }).select().single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ story: data });
+    }
+
+    // Delete one of your own stories
+    if (action === 'delete_my_story') {
+      const { userId, storyId } = payload || {};
+      if (!userId || !storyId) return NextResponse.json({ error: 'Missing userId or storyId' }, { status: 400 });
+      const { error } = await admin.from('stories').delete()
+        .eq('id', storyId).eq('user_id', userId); // user_id check enforces ownership
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
