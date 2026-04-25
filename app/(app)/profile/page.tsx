@@ -1458,65 +1458,80 @@ export default function ProfilePage() {
     setAvatarRepositionMode(false);
   }
 
+  // Centralized helper: persist a new highlights array to DB + localStorage.
+  // Returns true on success, false on failure. ALL highlight mutations should
+  // go through this — previously each callsite did its own save (or didn't),
+  // which is why some highlights weren't persisting and refreshes lost them.
+  async function persistHighlights(next: string[]): Promise<boolean> {
+    if (!user) return false;
+    // Strip any non-http URLs (base64 data: URLs aren't real persisted images)
+    const httpOnly = next.filter(u => typeof u === 'string' && u.startsWith('http'));
+    const { error } = await supabase
+      .from('users')
+      .update({ highlights: httpOnly } as any)
+      .eq('id', user.id);
+    if (error) {
+      console.error("Failed to persist highlights:", error);
+      return false;
+    }
+    try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(httpOnly)); } catch {}
+    return true;
+  }
+
   function addHighlight(e:React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if(!f) return;
     const r = new FileReader();
     r.onload = async ev => {
       const dataUrl = ev.target!.result as string;
-      // Show base64 preview immediately
+      // Show base64 preview immediately so user sees the photo land in the slot
       setHighlights(h => [...h, dataUrl]);
-      if (user) {
-        const publicUrl = await uploadPhoto(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
-        if (publicUrl && publicUrl.startsWith('http')) {
-          setHighlights(h => {
-            const next = h.map(u => u === dataUrl ? publicUrl : u).filter(u => u.startsWith('http') || u.startsWith('data:'));
-            const httpOnly = next.filter(u => u.startsWith('http'));
-            // persist outside render cycle
-            setTimeout(() => {
-              supabase.from('users').update({ highlights: httpOnly } as any).eq('id', user!.id).catch(() => {});
-              try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(httpOnly)); } catch {}
-            }, 0);
-            return next;
-          });
-        }
+      if (!user) return;
+      // Upload to storage to get a real URL
+      const publicUrl = await uploadPhoto(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
+      if (!publicUrl || !publicUrl.startsWith('http')) {
+        // Upload failed — remove the preview so user knows something went wrong
+        setHighlights(h => h.filter(u => u !== dataUrl));
+        alert("Couldn't upload that image. Try again.");
+        return;
       }
+      // Swap base64 preview for the real URL and save to DB
+      setHighlights(h => {
+        const next = h.map(u => u === dataUrl ? publicUrl : u);
+        // Persist outside render cycle so we don't block paint
+        persistHighlights(next);
+        return next;
+      });
     };
     r.readAsDataURL(f);
     e.target.value = "";
   }
 
   async function removeHighlight(idx:number) {
+    // Capture URL up-front and key off URL (not index) so a re-render between
+    // click and execution can't make us delete the wrong photo or all photos.
     const urlToRemove = highlights[idx];
-    if (!urlToRemove) return;
+    if (!urlToRemove || !user) return;
 
-    // Update local state immediately for responsive UI
-    const next = highlights.filter((_,i) => i !== idx);
+    const next = highlights.filter(u => u !== urlToRemove);
+
+    // Optimistic UI
     setHighlights(next);
     if (next.length === 0) setEditingHighlights(false);
 
-    if (!user) return;
-
-    // Update DB array — explicitly await and log errors. Previously the
-    // .catch(() => {}) swallowed errors silently which caused the deleted
-    // photo to come back on refresh if the save quietly failed.
-    const { error: dbErr } = await supabase
-      .from('users')
-      .update({ highlights: next } as any)
-      .eq('id', user.id);
-    if (dbErr) {
-      console.error("Failed to save highlights deletion:", dbErr);
-      // Roll back local state so the user sees the photo is still there
-      setHighlights(highlights);
+    // Persist to DB. If save fails, roll back to BEFORE state.
+    const ok = await persistHighlights(next);
+    if (!ok) {
+      setHighlights(prev => {
+        // Only roll back if our delete is still the latest change
+        if (!prev.includes(urlToRemove)) return [...prev, urlToRemove];
+        return prev;
+      });
       alert("Couldn't delete that highlight. Try again.");
       return;
     }
 
-    // Update localStorage cache so it matches DB
-    try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(next)); } catch {}
-
-    // Permanently delete the file from Supabase storage (best-effort —
-    // the row update already removed the URL reference, so even if the
-    // storage cleanup fails the highlight is gone from the user's view).
+    // Best-effort: remove the file from storage. If this fails the highlight
+    // is already gone from the user's view (DB updated), so it's fine.
     try {
       const match = urlToRemove.match(/avatars\/(.+?)(\?|$)/);
       if (match) {
@@ -1628,13 +1643,19 @@ export default function ProfilePage() {
                   return (
                     <button key={idx} onClick={async ()=>{
                       if(alreadyAdded) return;
-                      // Add directly from feed URL — no re-upload needed
-                      setHighlights(h=>{
-                        const next=[...h,src];
-                        if(user){ try{ localStorage.setItem(`fit_highlights_${user.id}`,JSON.stringify(next)); }catch{} }
-                        return next;
-                      });
+                      // Add directly from feed URL — no re-upload needed.
+                      // CRITICAL: we have to save to DB here. Previously this
+                      // only updated local state + localStorage, so on refresh
+                      // the highlight disappeared.
+                      const next = [...highlights, src];
+                      setHighlights(next);
                       setShowHighlightPicker(false);
+                      const ok = await persistHighlights(next);
+                      if (!ok) {
+                        // Roll back if save failed
+                        setHighlights(prev => prev.filter(u => u !== src));
+                        alert("Couldn't add that highlight. Try again.");
+                      }
                     }} style={{padding:0,border:`3px solid ${alreadyAdded?C.purple:C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"none",aspectRatio:"1",position:"relative"}}>
                       <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
                       {alreadyAdded && (
@@ -1657,13 +1678,22 @@ export default function ProfilePage() {
                 r.onload=async ev=>{
                   const dataUrl=ev.target!.result as string;
                   setShowHighlightPicker(false);
-                  let url=dataUrl;
-                  if(user){
-                    const {uploadPhoto:up}=await import('@/lib/uploadPhoto');
-                    const publicUrl=await up(dataUrl,'avatars',`${user.id}/highlights/${Date.now()}.jpg`);
-                    if(publicUrl) url=publicUrl;
+                  if(!user) return;
+                  // Show base64 preview while upload happens
+                  setHighlights(h => [...h, dataUrl]);
+                  const {uploadPhoto:up}=await import('@/lib/uploadPhoto');
+                  const publicUrl=await up(dataUrl,'avatars',`${user.id}/highlights/${Date.now()}.jpg`);
+                  if(!publicUrl || !publicUrl.startsWith('http')){
+                    setHighlights(h => h.filter(u => u !== dataUrl));
+                    alert("Couldn't upload that image. Try again.");
+                    return;
                   }
-                  setHighlights(h=>{ const next=[...h,url]; if(user){ try{ localStorage.setItem(`fit_highlights_${user.id}`,JSON.stringify(next)); }catch{} } return next; });
+                  // Swap base64 preview for real URL and save to DB
+                  setHighlights(h => {
+                    const next = h.map(u => u === dataUrl ? publicUrl : u);
+                    persistHighlights(next);
+                    return next;
+                  });
                 };
                 r.readAsDataURL(f); e.target.value="";
               }}/>
