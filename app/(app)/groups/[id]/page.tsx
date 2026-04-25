@@ -1361,6 +1361,23 @@ export default function GroupPage() {
   async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !group._dbId) return;
+
+    // Reject images that are too small to look good as a banner.
+    // The banner displays at up to 1200×340 on desktop; we want at least
+    // 1200px wide so it doesn't get upscaled.
+    const dimensions = await new Promise<{ w: number; h: number } | null>(resolve => {
+      const url = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+    if (dimensions && dimensions.w < 1200) {
+      alert(`That image is only ${dimensions.w}px wide — banners need to be at least 1200px wide so they don't look blurry. Try a higher-resolution photo.`);
+      e.target.value = ""; // reset so they can try again
+      return;
+    }
+
     setBannerUploading(true);
     try {
       const ext = file.name.split('.').pop() || 'jpg';
@@ -1372,10 +1389,12 @@ export default function GroupPage() {
         return;
       }
       const { data: { publicUrl } } = supabase.storage.from('activity').getPublicUrl(path);
+      // Append a timestamp to bust the browser cache when a new banner replaces an old one
+      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_group_banner', payload: { groupId: group._dbId, bannerUrl: publicUrl, userId: currentUser?.id || null } }),
+        body: JSON.stringify({ action: 'update_group_banner', payload: { groupId: group._dbId, bannerUrl: cacheBustedUrl, userId: currentUser?.id || null } }),
       });
       await loadGroupData();
     } catch (err) {
@@ -1416,6 +1435,7 @@ export default function GroupPage() {
           .groups-action-bar { flex-wrap: wrap !important; gap: 8px !important; }
           .groups-action-bar button { font-size: 13px !important; padding: 10px 14px !important; }
           .groups-tabs button { font-size: 10px !important; padding: 7px 1px !important; }
+          .group-hero-banner { height: 220px !important; }
         }
         @media (min-width: 768px) {
           .groups-mobile-tabs-extra { display: none !important; }
@@ -1655,8 +1675,11 @@ export default function GroupPage() {
       )}
 
       {/* ── Hero Banner ── */}
-      <div style={{ width:"100%", height:260, position:"relative", overflow:"hidden" }}>
-        <img src={group.recentPhoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+      {/* Constrained to maxWidth 1200 to match the rest of the page layout —
+          this prevents the banner image from being upscaled past its native
+          resolution on desktop (which was making it look pixelated). */}
+      <div className="group-hero-banner" style={{ width:"100%", maxWidth:1200, margin:"0 auto", height:340, position:"relative", overflow:"hidden" }}>
+        <img src={group.recentPhoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.78) 100%)" }} />
         {bannerUploading && (
           <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:10 }}>
