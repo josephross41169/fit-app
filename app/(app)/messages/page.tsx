@@ -545,15 +545,40 @@ export default function MessagesPage() {
                 // Parse photo from content
                 const photoMatch = msg.content.match(/^\[photo\]: (https?:\/\/\S+)(\n|$)/);
                 const photoUrl = photoMatch ? photoMatch[1] : null;
-                const textContent = photoUrl
-                  ? msg.content.replace(/^\[photo\]: https?:\/\/\S+\n?/, '').trim()
-                  : msg.content;
+                // Parse story_reply from content — these get a special header
+                // ("Replied to your story") and the story image as a small preview tile
+                // above the actual reply text. Format: [story_reply]: URL\ntext
+                const storyMatch = msg.content.match(/^\[story_reply\]: (https?:\/\/\S+)(\n|$)/);
+                const storyReplyUrl = storyMatch ? storyMatch[1] : null;
+
+                let textContent: string;
+                if (storyReplyUrl) {
+                  textContent = msg.content.replace(/^\[story_reply\]: https?:\/\/\S+\n?/, '').trim();
+                } else if (photoUrl) {
+                  textContent = msg.content.replace(/^\[photo\]: https?:\/\/\S+\n?/, '').trim();
+                } else {
+                  textContent = msg.content;
+                }
 
                 return (
                   <div
                     key={msg.id}
                     className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
                   >
+                    {/* Story-reply header tag — only on incoming messages so the
+                        recipient knows this DM is in response to their story */}
+                    {storyReplyUrl && !isMine && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
+                        <span>↩️</span>
+                        <span>Replied to your story</span>
+                      </div>
+                    )}
+                    {storyReplyUrl && isMine && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
+                        <span>↩️</span>
+                        <span>You replied to their story</span>
+                      </div>
+                    )}
                     <div
                       className="max-w-xs lg:max-w-md rounded-2xl text-sm overflow-hidden"
                       style={{
@@ -563,6 +588,28 @@ export default function MessagesPage() {
                         borderBottomLeftRadius: !isMine ? 4 : undefined,
                       }}
                     >
+                      {storyReplyUrl && (
+                        // Small preview tile of the story being replied to.
+                        // Click opens the image full-size in a new tab.
+                        <a
+                          href={storyReplyUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ display:"block", padding:"6px 6px 0", textDecoration:"none" }}
+                        >
+                          <div style={{
+                            display:"flex", alignItems:"center", gap:8,
+                            padding:"6px 8px",
+                            background: isMine ? "rgba(0,0,0,0.2)" : "rgba(124,58,237,0.15)",
+                            border: `1px solid ${isMine ? "rgba(255,255,255,0.2)" : "rgba(124,58,237,0.4)"}`,
+                            borderRadius: 10,
+                          }}>
+                            <img src={storyReplyUrl} alt=""
+                              style={{ width:36, height:48, borderRadius:6, objectFit:"cover", flexShrink:0 }}/>
+                            <div style={{ fontSize:11, fontWeight:600, opacity:0.85, lineHeight:1.3 }}>
+                              {isMine ? "Your reply to" : "Their reply to"}<br/>this story
+                            </div>
+                          </div>
+                        </a>
+                      )}
                       {photoUrl && (
                         <img
                           src={photoUrl}
@@ -573,7 +620,7 @@ export default function MessagesPage() {
                       {textContent && (
                         <div className="px-4 py-2.5">{textContent}</div>
                       )}
-                      {!textContent && !photoUrl && (
+                      {!textContent && !photoUrl && !storyReplyUrl && (
                         <div className="px-4 py-2.5">{msg.content}</div>
                       )}
                     </div>
