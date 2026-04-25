@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { EXERCISES } from "@/lib/exercises";
 import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
+import { BADGES } from "@/lib/badges";
 
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
@@ -301,6 +302,10 @@ export default function PostPage() {
   const [logTab, setLogTab] = useState<LogTab>("workout");
   const [saved, setSaved] = useState(false);
   const [posted, setPosted] = useState(false);
+  // Newly-awarded badge IDs from the auto-award engine. Set after a successful
+  // activity log; the saved-confirmation screen reads this to render a toast
+  // celebrating new tier unlocks.
+  const [newBadges, setNewBadges] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -810,7 +815,10 @@ export default function PostPage() {
       // NOTE: now passes woCategory (standardized) so badge-award can reliably
       // detect category (running/lifting/etc.) instead of keyword-matching
       // the free-text workout name.
-      try { await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, woCategory, exercises); } catch {}
+      try {
+        const awarded = await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, woCategory, exercises);
+        if (awarded && awarded.length > 0) setNewBadges(awarded);
+      } catch {}
       // -- Sync group-challenge progress from activity_logs ------------------
       // Scans the user's active group goals and updates their contribution
       // based on what's actually in activity_logs right now. Best-effort.
@@ -842,12 +850,32 @@ export default function PostPage() {
     woCat: string,
     exs: any[]
   ) {
-    // Upsert helper — a no-op if the badge row already exists
+    // Pre-fetch existing badge IDs once instead of upserting blindly. The old
+    // version did 30+ upserts per save (one per threshold check) and let the
+    // DB silently ignore duplicates. This way we know exactly what's NEW so
+    // we can toast the user about it after the save completes.
+    const { data: existingRows } = await supabase
+      .from('badges')
+      .select('badge_id')
+      .eq('user_id', userId);
+    const existing = new Set((existingRows || []).map((r: any) => r.badge_id));
+
+    // Newly-awarded badges (in this save). Collected and returned to caller
+    // so the saved-confirmation screen can render a toast.
+    const newlyAwarded: string[] = [];
+
+    // Insert helper — only fires DB call when badge is genuinely new.
     async function award(badgeId: string) {
-      await supabase.from('badges').upsert(
-        { user_id: userId, badge_id: badgeId },
-        { onConflict: 'user_id,badge_id', ignoreDuplicates: true }
-      );
+      if (existing.has(badgeId)) return;
+      const { error } = await supabase.from('badges').insert({
+        user_id: userId,
+        badge_id: badgeId,
+        note: 'auto',
+      });
+      if (!error) {
+        existing.add(badgeId);
+        newlyAwarded.push(badgeId);
+      }
     }
 
     // Count logs matching a filter. Supports eq and ilike via 'ilike:' prefix.
@@ -1022,6 +1050,8 @@ export default function PostPage() {
       if (totalNutrition >= 500)  await award('nutrition-500');
       if (totalNutrition >= 1000) await award('nutrition-1000');
     }
+
+    return newlyAwarded;
   }
 
   // uploadPhoto imported from @/lib/uploadPhoto · uses server-side API to bypass storage RLS
@@ -1142,8 +1172,16 @@ export default function PostPage() {
 
   if (saved) {
     const hasPRs = newPRs.length > 0;
-    if (!hasPRs) setTimeout(() => router.push("/profile"), 1500);
+    const hasNewBadges = newBadges.length > 0;
+    // Give user time to see badge unlocks before auto-redirect. PR screen
+    // already requires manual dismiss, but badge-only unlocks need extra time.
+    const redirectDelay = hasNewBadges ? 4500 : 1500;
+    if (!hasPRs) setTimeout(() => router.push("/profile"), redirectDelay);
     const firstPR = newPRs[0];
+    // Look up badge metadata for the awarded IDs (emoji + label)
+    const awardedBadgeMeta = newBadges
+      .map(id => BADGES.find(b => b.id === id))
+      .filter(Boolean) as typeof BADGES;
     return (
       <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 24px" }}>
         {/* ShareCard modal (lazy import avoids SSR issues) */}
@@ -1163,6 +1201,24 @@ export default function PostPage() {
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#F5A623" }}>{pr.exercise}</div>
                   <div style={{ fontSize: 12, color: "#A78BFA" }}>{pr.weight}lbs · {pr.reps} reps{pr.isNew ? " · First PR!" : " · New Best!"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Badge unlocks — shown when the auto-award engine returned new
+            badges. Card is purple-bordered so it's distinct from PR cards. */}
+        {hasNewBadges && awardedBadgeMeta.length > 0 && (
+          <div style={{ background: "linear-gradient(135deg,#1A0F30,#2D1B69)", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #A78BFA", boxShadow: "0 0 24px rgba(167,139,250,0.4)" }}>
+            <div style={{ fontWeight: 900, fontSize: 14, color: "#E9D5FF", marginBottom: 10, letterSpacing: 0.5 }}>
+              ✨ {awardedBadgeMeta.length} NEW BADGE{awardedBadgeMeta.length > 1 ? "S" : ""} UNLOCKED!
+            </div>
+            {awardedBadgeMeta.map((b, i) => (
+              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < awardedBadgeMeta.length - 1 ? "1px solid #3D2A6E" : "none" }}>
+                <span style={{ fontSize: 26 }}>{b.emoji}</span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#fff" }}>{b.label}</div>
+                  <div style={{ fontSize: 12, color: "#A78BFA" }}>{b.desc}</div>
                 </div>
               </div>
             ))}
