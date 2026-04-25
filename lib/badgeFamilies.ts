@@ -200,10 +200,19 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "breathwork",   name: "Breathwork",       category: "wellness",    members: ["breathwork-1","breathwork-5","breathwork-20","breathwork-50","breathwork-100","breathwork-200","breathwork-500","breathwork-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "breathworkSessions" },
   { key: "stretching",   name: "Stretching",       category: "wellness",    members: ["stretching-1","stretching-5","stretching-20","stretching-50","stretching-100","stretching-200","stretching-500","stretching-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "stretchingSessions" },
   { key: "pilates",      name: "Pilates",          category: "wellness",    members: ["pilates-1","pilates-5","pilates-20","pilates-50","pilates-100","pilates-200","pilates-500","pilates-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "pilatesSessions" },
+  // New wellness modalities (Apr 2026)
+  { key: "infrared-sauna", name: "Infrared Sauna", category: "wellness",    members: ["infrared-sauna-1","infrared-sauna-5","infrared-sauna-20","infrared-sauna-50","infrared-sauna-100","infrared-sauna-200","infrared-sauna-500","infrared-sauna-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "infraredSaunaSessions" },
+  { key: "red-light",    name: "Red Light Therapy", category: "wellness",   members: ["red-light-1","red-light-5","red-light-20","red-light-50","red-light-100","red-light-200","red-light-500","red-light-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "redLightSessions" },
+  { key: "massage",      name: "Massage",          category: "wellness",    members: ["massage-1","massage-5","massage-20","massage-50","massage-100","massage-200","massage-500","massage-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "massageSessions" },
+  { key: "float-tank",   name: "Float Tank",       category: "wellness",    members: ["float-tank-1","float-tank-5","float-tank-20","float-tank-50","float-tank-100","float-tank-200","float-tank-500","float-tank-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "floatTankSessions" },
+  { key: "mobility",     name: "Mobility Work",    category: "wellness",    members: ["mobility-1","mobility-5","mobility-20","mobility-50","mobility-100","mobility-200","mobility-500","mobility-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "mobilitySessions" },
+  { key: "journaling",   name: "Journaling",       category: "wellness",    members: ["journaling-1","journaling-5","journaling-20","journaling-50","journaling-100","journaling-200","journaling-500","journaling-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "journalingSessions" },
+  { key: "sunlight",     name: "Sunlight & Grounding", category: "wellness", members: ["sunlight-1","sunlight-5","sunlight-20","sunlight-50","sunlight-100","sunlight-200","sunlight-500","sunlight-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "sunlightSessions" },
   { key: "wellness",     name: "Total Wellness",   category: "wellness",    members: ["wellness-1","wellness-5","wellness-20","wellness-50","wellness-100","wellness-200","wellness-500","wellness-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "totalWellness" },
 
   // NUTRITION
   { key: "nutrition",    name: "Nutrition Logs",   category: "nutrition",   members: ["nutrition-1","nutrition-5","nutrition-20","nutrition-50","nutrition-100","nutrition-200","nutrition-500","nutrition-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "nutritionLogs" },
+  { key: "fasting-12h",  name: "Fasting Discipline", category: "nutrition", members: ["fasting-12h-1","fasting-12h-5","fasting-12h-20","fasting-12h-50","fasting-12h-100","fasting-12h-200","fasting-12h-500","fasting-12h-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "fastingCount" },
 
   // CONSISTENCY
   { key: "workouts",     name: "Total Workouts",   category: "consistency", members: ["workouts-1","workouts-5","workouts-20","workouts-50","workouts-100","workouts-200","workouts-500","workouts-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "totalWorkouts" },
@@ -317,11 +326,19 @@ const PROGRESS_LABEL_BY_COUNTER: Record<string, string> = {
   meditationSessions: "sessions",
   coldPlunges: "plunges",
   saunaSessions: "sessions",
+  infraredSaunaSessions: "sessions",
+  redLightSessions: "sessions",
+  massageSessions: "massages",
+  floatTankSessions: "sessions",
+  mobilitySessions: "sessions",
+  journalingSessions: "entries",
+  sunlightSessions: "sessions",
   breathworkSessions: "sessions",
   walks: "walks",
   stretchingSessions: "sessions",
   totalWellness: "activities",
   nutritionLogs: "logs",
+  fastingCount: "fasts",
   postCount: "posts",
   followerCount: "followers",
   // New ladders added in Apr 2026 rewrite
