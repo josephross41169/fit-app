@@ -135,11 +135,40 @@ export const BADGES: Badge[] = [
   ...easyLadder({ prefix: "stretching", emoji: "🤸", noun: "stretch session", nounPlural: "stretch sessions", category: "wellness",
     tierNames: ["First Stretch", "Stretch Starter", "Stretch Regular", "Flexibility Pro", "Stretch Devotee", "Mobility Master", "Stretch Legend", "Stretch Immortal"] }),
 
+  // ── Recovery & therapy modalities ────────────────────────────────────────
+  ...easyLadder({ prefix: "infrared-sauna", emoji: "♨️", noun: "infrared sauna session", nounPlural: "infrared sauna sessions", category: "wellness",
+    tierNames: ["First Infrared", "Infrared Starter", "Infrared Regular", "Deep Heat Pro", "Infrared Devotee", "Infrared Master", "Infrared Legend", "Infrared Immortal"] }),
+
+  ...easyLadder({ prefix: "red-light", emoji: "🔴", noun: "red light therapy session", nounPlural: "red light therapy sessions", category: "wellness",
+    tierNames: ["First Red Light", "Photon Starter", "Photon Regular", "Photon Devotee", "Light Bather", "Photon Master", "Red Light Legend", "Red Light Immortal"] }),
+
+  ...easyLadder({ prefix: "massage", emoji: "💆", noun: "massage", nounPlural: "massages", category: "wellness",
+    tierNames: ["First Massage", "Massage Starter", "Massage Regular", "Knot Slayer", "Massage Devotee", "Bodywork Master", "Massage Legend", "Massage Immortal"] }),
+
+  ...easyLadder({ prefix: "float-tank", emoji: "🌊", noun: "float tank session", nounPlural: "float tank sessions", category: "wellness",
+    tierNames: ["First Float", "Float Starter", "Float Regular", "Sensory Adept", "Float Devotee", "Float Master", "Float Legend", "Float Immortal"] }),
+
+  ...easyLadder({ prefix: "mobility", emoji: "🦵", noun: "mobility session", nounPlural: "mobility sessions", category: "wellness",
+    tierNames: ["First Mobility", "Mobility Starter", "Mobility Regular", "Joint Wizard", "Mobility Devotee", "Mobility Master", "Mobility Legend", "Mobility Immortal"] }),
+
+  ...easyLadder({ prefix: "journaling", emoji: "📓", noun: "journal entry", nounPlural: "journal entries", category: "wellness",
+    tierNames: ["First Entry", "Journal Starter", "Journal Regular", "Reflection Pro", "Journal Devotee", "Journal Master", "Journal Legend", "Journal Immortal"] }),
+
+  ...easyLadder({ prefix: "sunlight", emoji: "☀️", noun: "sunlight session", nounPlural: "sunlight sessions", category: "wellness",
+    tierNames: ["First Sun", "Sun Starter", "Sun Regular", "Vitamin D Pro", "Sun Devotee", "Sun Master", "Sun Legend", "Sun Immortal"] }),
+  // ─────────────────────────────────────────────────────────────────────────
+
   ...easyLadder({ prefix: "wellness", emoji: "🌱", noun: "wellness activity", nounPlural: "wellness activities", category: "wellness",
     tierNames: ["First Wellness", "Wellness Starter", "Wellness Regular", "Wellness Devotee", "Wellness Dedicated", "Wellness Master", "Wellness Legend", "Wellness Immortal"] }),
 
   ...easyLadder({ prefix: "nutrition", emoji: "🥗", noun: "nutrition log", nounPlural: "nutrition logs", category: "nutrition",
     tierNames: ["First Log", "Log Starter", "Log Regular", "Log Dedicated", "100 Logs", "Nutrition Devotee", "Nutrition Legend", "Nutrition Immortal"] }),
+
+  // Fasting ladder — counts fasts ≥ 12 hours. Hours don't matter beyond
+  // the 12h threshold; every qualifying fast = +1 toward the ladder.
+  // The existing "fasting" credential (24h fast) stays separate.
+  ...easyLadder({ prefix: "fasting-12h", emoji: "⏳", noun: "12+ hour fast", nounPlural: "12+ hour fasts", category: "nutrition",
+    tierNames: ["Fasted Faithful", "Hunger Tamed", "Disciplined Soul", "Hollow Warrior", "Empty Vessel", "Monk Mode", "Ascetic", "Eternal Fasted"] }),
 
   ...easyLadder({ prefix: "posts", emoji: "📸", noun: "post", nounPlural: "posts", category: "social",
     tierNames: ["First Post", "Content Starter", "Content Creator", "Content Hunter", "Content Devotee", "Feed Master", "Content Legend", "Content Immortal"] }),
@@ -367,8 +396,12 @@ export const BADGES: Badge[] = [
 export const EASY_LADDER_PREFIXES = [
   "workouts", "runs", "lifts", "yoga", "walks", "biking", "swimming", "rowing",
   "hiit", "pilates", "boxing", "sports", "sauna", "cold-plunge", "meditation",
-  "breathwork", "stretching", "wellness", "nutrition", "posts", "followers",
-  "likes", "comments", "early-bird",
+  "breathwork", "stretching",
+  // New wellness modalities (Apr 2026 expansion)
+  "infrared-sauna", "red-light", "massage", "float-tank", "mobility",
+  "journaling", "sunlight",
+  "wellness", "nutrition", "fasting-12h", "posts",
+  "followers", "likes", "comments", "early-bird",
 ];
 
 export const EASY_LADDER_THRESHOLDS = [1, 5, 20, 50, 100, 200, 500, 1000];
