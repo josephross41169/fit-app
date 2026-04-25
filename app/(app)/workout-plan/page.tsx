@@ -1,7 +1,8 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { generatePlan, Goal, Level, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
 import { Equipment, EQUIPMENT_TYPES } from "@/lib/exercises";
+import { getExerciseImage } from "@/lib/exerciseImages";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C = {
@@ -71,6 +72,30 @@ function CategoryBadge({ cat }: { cat: string }) {
 
 function ExerciseRow({ ex, idx }: { ex: PlannedExercise; idx: number }) {
   const [open, setOpen] = useState(false);
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [imgState, setImgState] = useState<"idle" | "loading" | "loaded" | "missing">("idle");
+
+  // Lazy-fetch the image only the first time the row is opened
+  useEffect(() => {
+    if (!open || imgState !== "idle") return;
+    let cancelled = false;
+    setImgState("loading");
+    getExerciseImage(ex.name)
+      .then(url => {
+        if (cancelled) return;
+        if (url) {
+          setImgUrl(url);
+          setImgState("loaded");
+        } else {
+          setImgState("missing");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setImgState("missing");
+      });
+    return () => { cancelled = true; };
+  }, [open, imgState, ex.name]);
+
   return (
     <div style={{ borderRadius: 10, background: "#161616", marginBottom: 6, overflow: "hidden" }}>
       <button
@@ -94,6 +119,33 @@ function ExerciseRow({ ex, idx }: { ex: PlannedExercise; idx: number }) {
       </button>
       {open && (
         <div style={{ padding: "0 12px 12px", borderTop: `1px solid ${C.border}` }}>
+          {/* Exercise image — only renders if wger had a match for this exercise */}
+          {imgState === "loading" && (
+            <div style={{
+              marginTop: 10, height: 140, borderRadius: 8,
+              background: "linear-gradient(90deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%)",
+              backgroundSize: "200% 100%",
+              animation: "shimmer 1.4s ease-in-out infinite",
+            }} />
+          )}
+          {imgState === "loaded" && imgUrl && (
+            <div style={{
+              marginTop: 10, borderRadius: 8, overflow: "hidden",
+              background: "#fff", border: `1px solid ${C.border}`,
+              display: "flex", justifyContent: "center", alignItems: "center",
+              maxHeight: 200,
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imgUrl}
+                alt={ex.name}
+                loading="lazy"
+                style={{ maxWidth: "100%", maxHeight: 200, objectFit: "contain", display: "block" }}
+              />
+            </div>
+          )}
+          {/* If image is missing we show nothing — keeps the UI clean */}
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
             {ex.muscles.map(m => (
               <span key={m} style={{ fontSize: 10, color: C.sub, background: "#222", borderRadius: 4, padding: "2px 6px" }}>{m}</span>
