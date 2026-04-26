@@ -805,6 +805,14 @@ export async function POST(req: NextRequest) {
       const { userId, groupId, name, description, event_date, location, price, emoji } = payload;
       if (!userId || !groupId || !name) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
+      // Only the group owner can create events. Defense in depth — the UI
+      // hides this button for non-owners but a curious user could POST directly.
+      const { data: groupRow } = await admin.from('groups').select('created_by').eq('id', groupId).single();
+      if (!groupRow) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+      if (groupRow.created_by !== userId) {
+        return NextResponse.json({ error: 'Only the group owner can create events' }, { status: 403 });
+      }
+
       const { data, error } = await admin.from('group_events').insert({
         group_id: groupId,
         creator_id: userId,
