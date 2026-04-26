@@ -981,9 +981,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Stories ────────────────────────────────────────────────────────────
-    // Get all active stories (last 24h) — returns 1 row per user with their
-    // most recent story. The feed rail shows one ring per user; tap to see
-    // their newest story.
+    // Get all active stories (last 24h) grouped by user. Each user is one
+    // entry in the rail with their full list of stories sorted oldest→newest.
+    // The `has_unseen` flag tells the rail whether to show a "new" dot.
     if (action === 'get_active_stories') {
       const { viewerId } = payload || {};
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -991,44 +991,60 @@ export async function POST(req: NextRequest) {
         .from('stories')
         .select('id, user_id, media_url, media_type, caption, created_at')
         .gte('created_at', since)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-      // Dedupe to most recent per user
-      const seen = new Set<string>();
-      const latestPerUser: any[] = [];
-      for (const r of rows || []) {
-        if (seen.has(r.user_id)) continue;
-        seen.add(r.user_id);
-        latestPerUser.push(r);
-      }
-
-      // Hydrate with user info (username, avatar, full_name)
-      const userIds = latestPerUser.map(s => s.user_id);
+      // Hydrate user info
+      const userIds = [...new Set((rows || []).map((r: any) => r.user_id))];
       const { data: users } = userIds.length
         ? await admin.from('users').select('id, username, full_name, avatar_url').in('id', userIds)
         : { data: [] };
       const userMap = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
 
-      // Move the viewer's own story to the front so it shows up first in the rail
-      const enriched = latestPerUser.map(s => ({
-        ...s,
-        username: userMap[s.user_id]?.username ?? 'unknown',
-        full_name: userMap[s.user_id]?.full_name ?? null,
-        avatar_url: userMap[s.user_id]?.avatar_url ?? null,
-        is_you: s.user_id === viewerId,
-      }));
-      enriched.sort((a, b) => {
+      // Look up which stories the viewer has seen
+      const storyIds = (rows || []).map((r: any) => r.id);
+      const { data: views } = (viewerId && storyIds.length)
+        ? await admin.from('story_views').select('story_id')
+            .eq('viewer_id', viewerId).in('story_id', storyIds)
+        : { data: [] };
+      const seenSet = new Set((views || []).map((v: any) => v.story_id));
+
+      // Group by user, build rail entries
+      const groupsByUser: Record<string, any> = {};
+      for (const r of rows || []) {
+        if (!groupsByUser[r.user_id]) {
+          groupsByUser[r.user_id] = {
+            user_id: r.user_id,
+            username: userMap[r.user_id]?.username ?? 'unknown',
+            full_name: userMap[r.user_id]?.full_name ?? null,
+            avatar_url: userMap[r.user_id]?.avatar_url ?? null,
+            is_you: r.user_id === viewerId,
+            stories: [],
+            has_unseen: false,
+            preview_url: null as string | null,
+          };
+        }
+        groupsByUser[r.user_id].stories.push(r);
+        groupsByUser[r.user_id].preview_url = r.media_url; // last (newest) wins
+        if (!seenSet.has(r.id) && r.user_id !== viewerId) {
+          groupsByUser[r.user_id].has_unseen = true;
+        }
+      }
+
+      // Sort: you first, then unseen, then alphabetical
+      const arr = Object.values(groupsByUser);
+      arr.sort((a: any, b: any) => {
         if (a.is_you && !b.is_you) return -1;
         if (!a.is_you && b.is_you) return 1;
-        return 0;
+        if (a.has_unseen && !b.has_unseen) return -1;
+        if (!a.has_unseen && b.has_unseen) return 1;
+        return (a.username || '').localeCompare(b.username || '');
       });
 
-      return NextResponse.json({ stories: enriched });
+      return NextResponse.json({ groups: arr });
     }
 
-    // Get all stories from a single user (last 24h) — used for the viewer
-    // when a user has multiple stories queued up.
+    // (legacy) Get all stories from a single user
     if (action === 'get_user_stories') {
       const { userId } = payload || {};
       if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
@@ -1043,8 +1059,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ stories: data || [] });
     }
 
-    // Post a new story. The client uploads the photo first via uploadPhoto
-    // helper and passes the public URL in here.
+    // Post a new story.
     if (action === 'post_story') {
       const { userId, mediaUrl, mediaType, caption } = payload || {};
       if (!userId || !mediaUrl) return NextResponse.json({ error: 'Missing userId or mediaUrl' }, { status: 400 });
@@ -1058,14 +1073,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ story: data });
     }
 
-    // Delete one of your own stories
+    // Delete one of your own stories.
     if (action === 'delete_my_story') {
       const { userId, storyId } = payload || {};
       if (!userId || !storyId) return NextResponse.json({ error: 'Missing userId or storyId' }, { status: 400 });
       const { error } = await admin.from('stories').delete()
-        .eq('id', storyId).eq('user_id', userId); // user_id check enforces ownership
+        .eq('id', storyId).eq('user_id', userId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true });
+    }
+
+    // Record that the viewer saw this story. Idempotent.
+    if (action === 'record_story_view') {
+      const { storyId, viewerId } = payload || {};
+      if (!storyId || !viewerId) return NextResponse.json({ error: 'Missing storyId or viewerId' }, { status: 400 });
+      // Don't record self-views
+      const { data: storyRow } = await admin.from('stories').select('user_id').eq('id', storyId).single();
+      if (storyRow && storyRow.user_id === viewerId) return NextResponse.json({ success: true, skipped: true });
+      const { error } = await admin.from('story_views').upsert(
+        { story_id: storyId, viewer_id: viewerId },
+        { onConflict: 'story_id,viewer_id', ignoreDuplicates: true },
+      );
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
+    // Get "seen by" list for one of YOUR stories.
+    if (action === 'get_story_views') {
+      const { storyId, ownerId } = payload || {};
+      if (!storyId || !ownerId) return NextResponse.json({ error: 'Missing storyId or ownerId' }, { status: 400 });
+      const { data: storyRow } = await admin.from('stories').select('user_id').eq('id', storyId).single();
+      if (!storyRow || storyRow.user_id !== ownerId) {
+        return NextResponse.json({ error: 'Not your story' }, { status: 403 });
+      }
+      const { data: views } = await admin.from('story_views')
+        .select('viewer_id, viewed_at')
+        .eq('story_id', storyId)
+        .order('viewed_at', { ascending: false });
+      const viewerIds = (views || []).map((v: any) => v.viewer_id);
+      const { data: users } = viewerIds.length
+        ? await admin.from('users').select('id, username, full_name, avatar_url').in('id', viewerIds)
+        : { data: [] };
+      const userMap = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
+      const enriched = (views || []).map((v: any) => ({
+        viewer_id: v.viewer_id,
+        viewed_at: v.viewed_at,
+        username: userMap[v.viewer_id]?.username ?? 'unknown',
+        full_name: userMap[v.viewer_id]?.full_name ?? null,
+        avatar_url: userMap[v.viewer_id]?.avatar_url ?? null,
+      }));
+      return NextResponse.json({ views: enriched, count: enriched.length });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
