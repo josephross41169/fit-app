@@ -741,13 +741,13 @@ export default function PostPage() {
         }));
 
         // ── Build the cardio + exercises payload ─────────────────────────
-        // The form has two modes:
-        //   A) "Combined" mode: includeCardio + includeLifting toggles. User
-        //      can have one or both blocks filled in. woCategory is set to
-        //      the cardio subcategory if cardio is on AND lifting is off,
-        //      "lifting" if lifting is on, otherwise the user's pick.
-        //   B) "Single" mode: woCategory is one of hiit/yoga/pilates/etc.,
-        //      no toggles, just duration + notes.
+        // The form has two primary-activity modes:
+        //   A) Cardio mode (woCategory ∈ running/walking/biking/swimming/rowing/lifting):
+        //      uses the includeCardio + includeLifting toggles. User can fill
+        //      one or both blocks.
+        //   B) "Other type" mode (woCategory ∈ hiit/yoga/pilates/boxing/sports/other):
+        //      duration + notes drive the primary log; the user can ALSO
+        //      toggle Lifting on to attach exercises in the same entry.
         //
         // The DB columns (workout_category, exercises, cardio) work for both —
         // the only thing that changes is which fields get populated.
@@ -755,15 +755,18 @@ export default function PostPage() {
         let effectiveWoCategory = woCategory;
         let effectiveDuration: number | null = null;
 
-        // Detect single-mode (non-cardio, non-lifting category)
-        const isSingleMode = !["running","walking","biking","swimming","rowing","lifting"].includes(woCategory);
+        // Detect "other type" mode (non-cardio, non-lifting primary category)
+        const isOtherTypeMode = !["running","walking","biking","swimming","rowing","lifting"].includes(woCategory);
 
-        if (isSingleMode) {
-          // Single mode — hiit/yoga/pilates/boxing/sports/other
-          // Only duration matters; no cardio block, no exercises
+        if (isOtherTypeMode) {
+          // Primary activity = sports/HIIT/yoga/etc. The duration field at
+          // top of that block becomes the primary duration.
           effectiveDuration = woDuration ? parseInt(woDuration) : null;
+          // woCategory stays as-is (sports/hiit/yoga/etc) — that's the
+          // primary classifier. We still allow lifting exercises to
+          // be attached via includeLifting (handled below in useExercises).
         } else {
-          // Combined mode — process toggles
+          // Cardio-mode — process toggles
           if (includeCardio) {
             const distNum = parseFloat(cardioBlockDistance) || 0;
             const durNum  = parseFloat(cardioBlockDuration)  || 0;
@@ -790,7 +793,6 @@ export default function PostPage() {
           } else if (includeCardio) {
             effectiveWoCategory = cardioSubcategory;
           } else {
-            // Neither block on — fall back to current woCategory
             effectiveWoCategory = woCategory;
           }
           // Lifting workouts may also have a duration (user can enter it manually)
@@ -799,8 +801,9 @@ export default function PostPage() {
             if (!isNaN(wd)) effectiveDuration = (effectiveDuration || 0) + wd;
           }
         }
-        // Normalize exercises (already done above as normalizedExercises)
-        const useExercises = (isSingleMode ? false : includeLifting) && normalizedExercises.length > 0;
+        // Allow exercises to attach in BOTH cardio-mode (when includeLifting on)
+        // and other-type mode (when includeLifting on alongside e.g. sports).
+        const useExercises = includeLifting && normalizedExercises.length > 0;
 
         const workoutPayload = {
           workout_category: effectiveWoCategory,         // standardized — drives stats/badges/rivalries
@@ -1612,7 +1615,11 @@ export default function PostPage() {
                 </div>
 
                 {/* "Or pick a different workout type" — for hiit/yoga/pilates/boxing/sports/other.
-                    Selecting one of these auto-disables both toggles (single-mode). */}
+                    Picking one of these turns OFF the cardio toggle (because cardio's
+                    cardio-specific dropdown is for running/walking/biking/swimming/rowing).
+                    Lifting stays on its own track — you CAN do "sports + lifting" or
+                    "HIIT + lifting" in one log. The cardio toggle only conflicts with
+                    these because both occupy the "primary cardio activity" slot. */}
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
                     Or a different type
@@ -1622,8 +1629,11 @@ export default function PostPage() {
                     onChange={e => {
                       if (!e.target.value) return;
                       setWoCategory(e.target.value);
+                      // Turn off cardio block since this is a different
+                      // (non-running/walking/etc.) primary activity.
+                      // KEEP lifting toggle as-is so users can combine
+                      // e.g. "Sports + Lifting" or "HIIT + Lifting".
                       setIncludeCardio(false);
-                      setIncludeLifting(false);
                     }}>
                     <option value="">— Pick one (HIIT, Yoga, etc.) —</option>
                     {WORKOUT_CATEGORIES.filter(c => !["running","walking","biking","swimming","rowing","lifting"].includes(c.id)).map(c => (
@@ -1701,12 +1711,15 @@ export default function PostPage() {
                   </div>
                 )}
 
-                {/* ── SINGLE-MODE FALLBACK (HIIT / Yoga / etc.) ── */}
-                {!includeCardio && !includeLifting && (() => {
+                {/* ── "OTHER TYPE" DURATION BLOCK ──
+                    Shown whenever the user picked HIIT/yoga/pilates/boxing/sports/other
+                    from the dropdown above. Renders alongside the lifting block
+                    when both are wanted (e.g. "Sports + Lifting" combo log). */}
+                {!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) && (() => {
                   const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
                   if (!cat) return null;
                   return (
-                    <div style={{ padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
                       <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
                       <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
