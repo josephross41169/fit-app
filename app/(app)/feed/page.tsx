@@ -787,17 +787,38 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser }: { post: P
     setReplyTo(null);
     const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: fullText, time: "Just now" };
     if (isDbPost && currentUser) {
-      const { data } = await supabase.from('comments').insert({
-        user_id: currentUser.id,
-        post_id: post.id,
-        content: fullText,
-      }).select('id').single();
-      if (data) nc.id = data.id;
-      // Notify post owner
-      const postOwnerId = (post as any)._ownerId;
-      if (postOwnerId && postOwnerId !== currentUser.id) {
-        fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ action:'create_notification', payload:{ userId: postOwnerId, fromUserId: currentUser.id, type:'comment', referenceId: post.id, body:`${displayName} commented: "${commentText.trim().slice(0,50)}"` }}) });
+      // Route through /api/db so the admin client bypasses RLS — direct
+      // supabase.from('comments').insert() was failing silently because the
+      // RLS policy on the comments table doesn't grant authenticated users
+      // INSERT permission. The API also handles the notification side-effect
+      // server-side so we don't need a separate fetch here.
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'post_feed_comment',
+            payload: {
+              postId: post.id,
+              commenterId: currentUser.id,
+              content: fullText,
+              postOwnerId: (post as any)._ownerId || null,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          console.error('[comment] post failed:', data?.error || res.statusText);
+          alert(`Couldn't post your comment: ${data?.error || 'Server error'}`);
+          setCommentLoading(false);
+          return;
+        }
+        if (data.comment?.id) nc.id = data.comment.id;
+      } catch (err: any) {
+        console.error('[comment] network error:', err);
+        alert(`Couldn't post your comment: ${err?.message || 'Network error'}`);
+        setCommentLoading(false);
+        return;
       }
     }
     onUpdate({ ...post, comments: [...post.comments, nc] });
