@@ -10,28 +10,42 @@ const PURPLE = "#7C3AED";
 const PURPLE_BG = "rgba(124,58,237,0.15)";
 
 // ── Nav tab definitions ───────────────────────────────────────────────────────
-const tabs = [
+// Each tab has a `slot` declaring where it appears on mobile:
+//   "primary" → bottom-nav row (rendered alongside the More button = 5 visible)
+//   "more"    → inside the More sheet
+//   "hidden"  → nowhere on mobile (still available on desktop sidebar)
+// Desktop sidebar shows every tab regardless of slot.
+type Slot = "primary" | "more" | "hidden";
+interface Tab {
+  href: string;
+  label: string;
+  slot: Slot;
+  icon: (active: boolean) => React.ReactNode;
+}
+
+const tabs: Tab[] = [
+  // ── Mobile primary nav (4 tabs + More button) ────────────────────────────
   {
-    href: "/feed", label: "Feed",
-    icon: (active: boolean) => (
+    href: "/feed", label: "Feed", slot: "primary",
+    icon: (active) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         <polyline points="9,22 9,12 15,12 15,22" />
       </svg>
-    )
+    ),
   },
   {
-    href: "/discover", label: "Discover",
-    icon: (active: boolean) => (
+    href: "/discover", label: "Discover", slot: "primary",
+    icon: (active) => (
       <svg viewBox="0 0 24 24" fill="none" stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <circle cx="11" cy="11" r="8" />
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
-    )
+    ),
   },
   {
-    href: "/post", label: "Post",
-    icon: (_active: boolean) => (
+    href: "/post", label: "Post", slot: "primary",
+    icon: (_active) => (
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg -mt-3"
         style={{ background: `linear-gradient(135deg, ${PURPLE}, #A78BFA)` }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-6 h-6">
@@ -39,99 +53,94 @@ const tabs = [
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </div>
-    )
+    ),
   },
   {
-    href: "/stats", label: "Stats",
-    icon: (active: boolean) => (
-      <div style={{
-        width: 24, height: 24,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: active ? 18 : 16,
-        filter: active ? "none" : "grayscale(0.4)",
-      }}>
-        📊
-      </div>
-    )
-  },
-  {
-    href: "/profile", label: "Profile",
-    icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    )
-  },
-  {
-    href: "/notifications", label: "Alerts",
-    icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-      </svg>
-    )
-  },
-  {
-    href: "/messages", label: "Messages",
-    icon: (active: boolean) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
-    )
-  },
-  {
-    href: "/connect", label: "Connect",
-    icon: (active: boolean) => (
+    href: "/connect", label: "Connect", slot: "primary",
+    icon: (active) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
         <circle cx="9" cy="7" r="4"/>
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
         <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
-    )
-  },
-  {
-    href: "/rivals", label: "Rivals",
-    icon: (active: boolean) => (
-      <div style={{
-        width: 24, height: 24,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: active ? 18 : 16,
-        filter: active ? "none" : "grayscale(0.4)",
-      }}>
-        ⚔️
-      </div>
-    )
+    ),
   },
 
+  // ── More sheet (mobile) ──────────────────────────────────────────────────
+  // "My Groups" deep-links to the connect page. There's no /groups index
+  // page right now — connect doubles as the groups browser.
   {
-    href: "/workout-plan", label: "AI Plan",
-    icon: (active: boolean) => (
-      <div style={{
-        width: 24, height: 24,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: active ? 18 : 16,
-        filter: active ? "none" : "grayscale(0.4)",
-      }}>
+    href: "/connect?tab=mygroups", label: "My Groups", slot: "more",
+    icon: (active) => (
+      <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: active ? 18 : 16, filter: active ? "none" : "grayscale(0.4)" }}>
+        👥
+      </div>
+    ),
+  },
+  {
+    href: "/stats", label: "Stats", slot: "more",
+    icon: (active) => (
+      <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: active ? 18 : 16, filter: active ? "none" : "grayscale(0.4)" }}>
+        📊
+      </div>
+    ),
+  },
+  {
+    href: "/rivals", label: "Rivals", slot: "more",
+    icon: (active) => (
+      <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: active ? 18 : 16, filter: active ? "none" : "grayscale(0.4)" }}>
+        ⚔️
+      </div>
+    ),
+  },
+  {
+    href: "/workout-plan", label: "AI Plan", slot: "more",
+    icon: (active) => (
+      <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: active ? 18 : 16, filter: active ? "none" : "grayscale(0.4)" }}>
         🤖
       </div>
-    )
+    ),
   },
-  // Settings — lives in More menu for account/privacy/legal. Required entry
-  // point for Apple-mandated account deletion (Guideline 5.1.1(v)).
   {
-    href: "/settings", label: "Settings",
-    icon: (active: boolean) => (
-      <div style={{
-        width: 24, height: 24,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: active ? 18 : 16,
-        filter: active ? "none" : "grayscale(0.4)",
-      }}>
+    href: "/settings", label: "Settings", slot: "more",
+    icon: (active) => (
+      <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: active ? 18 : 16, filter: active ? "none" : "grayscale(0.4)" }}>
         ⚙️
       </div>
-    )
+    ),
+  },
+
+  // ── Desktop-only / hidden on mobile ──────────────────────────────────────
+  // Profile is reached on mobile by tapping the avatar in the top header.
+  // Desktop sidebar still shows it.
+  {
+    href: "/profile", label: "Profile", slot: "hidden",
+    icon: (active) => (
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+  },
+  // Notifications: bell on the feed header replaces this on mobile.
+  {
+    href: "/notifications", label: "Alerts", slot: "hidden",
+    icon: (active) => (
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    ),
+  },
+  // Messages: floating right-edge handle replaces this tab on mobile.
+  {
+    href: "/messages", label: "Messages", slot: "hidden",
+    icon: (active) => (
+      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    ),
   },
 ];
 
@@ -162,7 +171,7 @@ function Badge({ count }: { count: number }) {
 }
 
 // ── Desktop sidebar nav item (collapsible) ───────────────────────────────────
-function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: typeof tabs[0]; active: boolean; badge?: number; collapsed: boolean }) {
+function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: Tab; active: boolean; badge?: number; collapsed: boolean }) {
   return (
     <Link href={tab.href}
       title={collapsed ? tab.label : undefined}
@@ -195,30 +204,6 @@ function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: typeof
   );
 }
 
-// ── Desktop sidebar nav item (original — kept for reference) ──────────────────
-function SideNavItem({ tab, active, badge }: { tab: typeof tabs[0]; active: boolean; badge?: number }) {
-  return (
-    <Link href={tab.href}
-      className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-150 group"
-      style={{ background: active ? PURPLE_BG : "transparent", position: "relative" }}>
-      <div style={{ position: "relative", flexShrink: 0 }}>
-        {tab.icon(active)}
-        {badge ? <Badge count={badge} /> : null}
-      </div>
-      <span className="text-sm font-semibold hidden lg:block"
-        style={{ color: active ? PURPLE : "#9CA3AF" }}>
-        {tab.label}
-      </span>
-      {badge ? (
-        <span className="hidden lg:flex ml-auto text-xs font-bold px-2 py-0.5 rounded-full"
-          style={{ background: "#EF4444", color: "#fff", fontSize: 10 }}>
-          {badge > 99 ? "99+" : badge}
-        </span>
-      ) : null}
-    </Link>
-  );
-}
-
 // ── Main BottomNav ────────────────────────────────────────────────────────────
 export default function BottomNav() {
   const pathname = usePathname();
@@ -234,20 +219,21 @@ export default function BottomNav() {
   });
 
   // ── Account-aware tab list ──────────────────────────────────────────────
-  // Business accounts are advertising pages, not athletes. They don't log
-  // workouts, track PRs, use AI plans, or compete in rivals — so those tabs
-  // disappear from their nav. Personal accounts see all tabs.
   const isBusiness = isBusinessAccount(user?.profile);
   const businessHiddenHrefs = new Set([
-    "/post",          // activity logger — no workouts for businesses
-    "/stats",         // personal stats
-    "/rivals",        // 1v1 competitions
-    "/workout-plan",  // AI training plan
-    "/prs",           // personal records
-    "/track",         // body weight tracking
-    "/tier-preview",  // athlete tier unlock preview
+    "/post",
+    "/stats",
+    "/rivals",
+    "/workout-plan",
+    "/prs",
+    "/track",
+    "/tier-preview",
   ]);
   const visibleTabs = isBusiness ? tabs.filter(t => !businessHiddenHrefs.has(t.href)) : tabs;
+
+  // Split by slot for mobile rendering
+  const primaryTabs = visibleTabs.filter(t => t.slot === "primary");
+  const moreTabs = visibleTabs.filter(t => t.slot === "more");
 
   function toggleSidebar() {
     setCollapsed(c => {
@@ -343,39 +329,48 @@ export default function BottomNav() {
     return 0;
   };
 
+  // True if any tab in the More sheet has unread items — drives the red dot
+  // on the More button so the user knows to look in there.
+  const moreHasBadge = moreTabs.some(t => getBadge(t.href) > 0);
+
   return (
     <>
-      {/* Mobile bottom nav */}
+      {/* ── Mobile bottom nav ─────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t"
         style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
 
         {/* More drawer — slides up when open */}
         {moreOpen && (
           <>
-            {/* Backdrop */}
             <div onClick={() => setMoreOpen(false)}
               style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:40 }}/>
-            {/* Drawer */}
             <div style={{
               position:"fixed", bottom:60, left:0, right:0, zIndex:41,
               background:"#111118", borderTop:"1px solid #2D1F52",
-              borderRadius:"20px 20px 0 0", padding:"16px 12px 8px",
+              borderRadius:"20px 20px 0 0", padding:"16px 12px 12px",
+              maxHeight: "70vh", overflowY: "auto",
             }}>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:4 }}>
-                {visibleTabs.slice(5).map((tab) => {
-                  const active = pathname === tab.href;
+              <div style={{ fontSize:11, fontWeight:700, color:"#6B7280", textTransform:"uppercase",
+                letterSpacing:"0.08em", padding:"0 8px 10px" }}>
+                More
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
+                {moreTabs.map((tab) => {
+                  const active = pathname === tab.href.split('?')[0];
                   const badge = getBadge(tab.href);
                   return (
                     <Link key={tab.href} href={tab.href}
                       onClick={() => setMoreOpen(false)}
                       style={{ display:"flex",flexDirection:"column",alignItems:"center",
-                        gap:3,padding:"10px 4px",borderRadius:12,textDecoration:"none",
-                        background: active ? "rgba(124,58,237,0.15)" : "transparent" }}>
-                      <div style={{ position:"relative" }}>
+                        gap:6, padding:"14px 8px", borderRadius:14, textDecoration:"none",
+                        background: active ? "rgba(124,58,237,0.15)" : "rgba(255,255,255,0.02)",
+                        border: active ? "1px solid rgba(124,58,237,0.4)" : "1px solid transparent",
+                      }}>
+                      <div style={{ position:"relative", transform:"scale(1.2)" }}>
                         {tab.icon(active)}
                         {badge > 0 && <Badge count={badge} />}
                       </div>
-                      <span style={{ fontSize:10, fontWeight:600,
+                      <span style={{ fontSize:11, fontWeight:700,
                         color: active ? PURPLE : "#9CA3AF" }}>
                         {tab.label}
                       </span>
@@ -387,12 +382,9 @@ export default function BottomNav() {
           </>
         )}
 
-        {/* 5 primary tabs + More button.
-            safe-nav adds bottom padding equal to env(safe-area-inset-bottom)
-            so the tab row sits above the iPhone home indicator — previously
-            used `pb-safe` which was a non-existent Tailwind class. */}
+        {/* 4 primary tabs + More button */}
         <div className="flex items-center justify-around px-2 safe-nav">
-          {visibleTabs.slice(0, 5).map((tab) => {
+          {primaryTabs.map((tab) => {
             const active = pathname === tab.href;
             const badge = getBadge(tab.href);
             return (
@@ -418,8 +410,7 @@ export default function BottomNav() {
             style={{ display:"flex",flexDirection:"column",alignItems:"center",
               gap:2,padding:"8px 12px",background:"none",border:"none",cursor:"pointer",
               minWidth:44, position:"relative" }}>
-            {/* Badge if any hidden tab has notifications */}
-            {visibleTabs.slice(5).some(t => getBadge(t.href) > 0) && (
+            {moreHasBadge && (
               <div style={{ position:"absolute",top:6,right:8,width:8,height:8,
                 borderRadius:"50%",background:"#EF4444",border:"2px solid #0D0D0D" }}/>
             )}
@@ -434,7 +425,7 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      {/* Desktop sidebar */}
+      {/* ── Desktop sidebar — shows everything regardless of mobile slot ── */}
       <nav
         className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r py-6 px-3"
         style={{
@@ -444,7 +435,6 @@ export default function BottomNav() {
           overflow: "hidden",
         }}
       >
-        {/* Logo + collapse toggle */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", marginBottom: 32, padding: "0 4px" }}>
           {!collapsed && (
             <span className="text-2xl font-black" style={{ color: PURPLE, whiteSpace: "nowrap" }}>FIT ⚡</span>
@@ -462,7 +452,6 @@ export default function BottomNav() {
               transition: "background 0.15s",
             }}
           >
-            {/* Hamburger / close icon */}
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               {collapsed ? (
                 <>
@@ -483,11 +472,10 @@ export default function BottomNav() {
 
         <div className="flex flex-col gap-1">
           {visibleTabs.map((tab) => (
-            <SideNavItemCollapsible key={tab.href} tab={tab} active={pathname === tab.href} badge={getBadge(tab.href)} collapsed={collapsed} />
+            <SideNavItemCollapsible key={tab.href} tab={tab} active={pathname === tab.href.split('?')[0]} badge={getBadge(tab.href)} collapsed={collapsed} />
           ))}
         </div>
       </nav>
     </>
   );
 }
-
