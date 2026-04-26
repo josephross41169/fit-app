@@ -2781,9 +2781,9 @@ export default function ProfilePage() {
       <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
 
         {/* Profile header */}
-        <div className="profile-header-wrap" style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
+        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:48,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28,paddingLeft:isMobile?0:60}}>
           {/* Avatar */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,transform:isMobile?"none":"translateX(60px)"}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
