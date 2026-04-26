@@ -425,10 +425,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div className="diamond-shimmer-card" style={{background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}}>
+    <div className="diamond-shimmer-card" style={{background:"linear-gradient(135deg, #1E2547 0%, #2A3A6B 25%, #3D5A8C 50%, #2A3A6B 75%, #1E2547 100%)",borderRadius:22,border:"2px solid #93C5FD",boxShadow:"0 4px 24px rgba(147,197,253,0.25), inset 0 1px 0 rgba(255,255,255,0.15)",marginBottom:16,overflow:"hidden"}}>
 
       {/* HEADER */}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?"#2D1F52":C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?"rgba(45,31,82,0.85)":"transparent",border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,#4ADE80,#22C55E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(74,222,128,0.3)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
@@ -1815,7 +1815,7 @@ export default function ProfilePage() {
           left: 0;
           right: 0;
           bottom: 0;
-          background: linear-gradient(115deg, transparent 35%, rgba(167,139,250,0.25) 47%, rgba(255,255,255,0.55) 50%, rgba(167,139,250,0.25) 53%, transparent 65%);
+          background: linear-gradient(115deg, transparent 35%, rgba(186,230,253,0.30) 47%, rgba(255,255,255,0.70) 50%, rgba(186,230,253,0.30) 53%, transparent 65%);
           transform: translateX(-120%);
           animation: diamondShimmerSweep 3.5s ease-in-out infinite;
           pointer-events: none;
