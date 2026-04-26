@@ -115,7 +115,7 @@ const tabs: Tab[] = [
   // Profile is reached on mobile by tapping the avatar in the top header.
   // Desktop sidebar still shows it.
   {
-    href: "/profile", label: "Profile", slot: "hidden",
+    href: "/profile", label: "Profile", slot: "primary",
     icon: (active) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
