@@ -351,17 +351,35 @@ const INITIAL_POSTS: Post[] = [
 interface Story {
   id: string;
   user_id: string;
-  username: string;
-  full_name: string | null;
-  avatar_url: string | null;
   media_url: string;
   media_type: 'image' | 'video';
   caption: string | null;
   created_at: string;
-  is_you: boolean;
 }
 
-// Format "2h ago" / "5m ago" for stories
+// One per user shown in the rail. Contains all the user's active stories.
+interface StoryGroup {
+  user_id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  is_you: boolean;
+  has_unseen: boolean;
+  preview_url: string | null;
+  stories: Story[];
+}
+
+interface StoryViewerData {
+  viewer_id: string;
+  viewed_at: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
+// Quick-tap reactions sent as DMs
+const STORY_REACTIONS = ["❤️", "🔥", "💪", "😂", "👏", "😮"] as const;
+
 function timeAgoShort(iso: string): string {
   const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (sec < 60) return "just now";
@@ -372,51 +390,123 @@ function timeAgoShort(iso: string): string {
 }
 
 function StoryViewer({
-  story, onClose, onDelete, onReply,
+  group, onClose, onDelete, onReply, onReact, onAdvanceGroup, onRewindGroup, onView,
+  currentUserId,
 }: {
-  story: Story;
+  group: StoryGroup;
   onClose: () => void;
   onDelete?: (id: string) => void;
-  onReply?: (story: Story, text: string) => Promise<void>;
+  onReply?: (story: Story, ownerUsername: string, text: string) => Promise<void>;
+  onReact?: (story: Story, ownerUsername: string, emoji: string) => Promise<void>;
+  onAdvanceGroup?: () => void;
+  onRewindGroup?: () => void;
+  onView: (storyId: string) => void;
+  currentUserId: string;
 }) {
+  const [idx, setIdx] = useState(0);
+  const story = group.stories[idx];
+  const total = group.stories.length;
+
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [showSeenBy, setShowSeenBy] = useState(false);
+  const [seenByList, setSeenByList] = useState<StoryViewerData[]>([]);
+  const [seenByLoading, setSeenByLoading] = useState(false);
 
-  // Auto-advance progress bar — closes after 8 seconds (Instagram standard)
   const [progress, setProgress] = useState(0);
   useEffect(() => {
-    const startedAt = Date.now();
+    if (!story) return;
+    if (paused || showSeenBy) return;
     const DURATION_MS = 8000;
+    const startedAt = Date.now() - (progress / 100) * DURATION_MS;
     const interval = setInterval(() => {
       const elapsed = Date.now() - startedAt;
       const pct = Math.min(100, (elapsed / DURATION_MS) * 100);
       setProgress(pct);
-      if (pct >= 100) { clearInterval(interval); onClose(); }
+      if (pct >= 100) {
+        clearInterval(interval);
+        if (idx < total - 1) {
+          setIdx(idx + 1);
+          setProgress(0);
+        } else if (onAdvanceGroup) {
+          onAdvanceGroup();
+        } else {
+          onClose();
+        }
+      }
     }, 50);
     return () => clearInterval(interval);
-  }, [story.id, onClose]);
+  }, [story?.id, paused, showSeenBy, idx, total]);
+
+  // Record the view as soon as the story renders. Skipped for own stories.
+  useEffect(() => {
+    if (!story) return;
+    if (story.user_id !== currentUserId) onView(story.id);
+    setProgress(0);
+    setReplyText("");
+    setConfirmDelete(false);
+  }, [story?.id]);
+
+  function handleZoneTap(zone: "prev" | "next" | "center") {
+    if (zone === "center") { setPaused(p => !p); return; }
+    if (zone === "next") {
+      if (idx < total - 1) setIdx(idx + 1);
+      else if (onAdvanceGroup) onAdvanceGroup();
+      else onClose();
+    } else {
+      if (idx > 0) setIdx(idx - 1);
+      else if (onRewindGroup) onRewindGroup();
+    }
+  }
 
   async function handleReplySend() {
     if (!replyText.trim() || sending || !onReply) return;
     setSending(true);
     try {
-      await onReply(story, replyText.trim());
+      await onReply(story, group.username, replyText.trim());
       setReplyText("");
       onClose();
     } finally { setSending(false); }
   }
 
+  async function handleReactionTap(emoji: string) {
+    if (!onReact || sending) return;
+    setSending(true);
+    try {
+      await onReact(story, group.username, emoji);
+    } finally { setSending(false); }
+  }
+
+  async function loadSeenBy() {
+    if (!story || !group.is_you) return;
+    setSeenByLoading(true);
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'get_story_views',
+          payload: { storyId: story.id, ownerId: currentUserId },
+        }),
+      });
+      const data = await res.json();
+      setSeenByList((data.views || []) as StoryViewerData[]);
+    } catch {
+      setSeenByList([]);
+    } finally { setSeenByLoading(false); }
+  }
+
+  if (!story) return null;
+
   return (
     <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center" }}
          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <button onClick={onClose} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer",zIndex:2 }}>×</button>
+      <button onClick={onClose} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer",zIndex:5 }}>×</button>
 
-      <div style={{ width:"100%",maxWidth:400,aspectRatio:"9/16",borderRadius:20,overflow:"hidden",position:"relative",background:"#1A1A2E" }}>
-        {/* Progress bar at top */}
-        <div style={{ position:"absolute",top:8,left:8,right:8,height:3,borderRadius:99,background:"rgba(255,255,255,0.25)",overflow:"hidden",zIndex:2 }}>
-          <div style={{ height:"100%",width:`${progress}%`,background:"#fff",transition:"width 50ms linear" }} />
-        </div>
+      <div style={{ width:"100%",maxWidth:400,aspectRatio:"9/16",borderRadius:20,overflow:"hidden",position:"relative",background:"#1A1A2E" }}
+           onClick={e => e.stopPropagation()}>
 
         {story.media_type === 'video' ? (
           <video src={story.media_url} autoPlay muted playsInline
@@ -425,21 +515,48 @@ function StoryViewer({
           <img src={story.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
         )}
 
+        {/* Tap zones — left/center/right */}
+        <div style={{ position:"absolute",inset:0,display:"flex",zIndex:1 }}>
+          <div style={{ flex:1,cursor:"pointer" }} onClick={() => handleZoneTap("prev")} />
+          <div style={{ flex:1,cursor:"pointer" }} onClick={() => handleZoneTap("center")} />
+          <div style={{ flex:1,cursor:"pointer" }} onClick={() => handleZoneTap("next")} />
+        </div>
+
+        {/* Counter dots (top center) — distinct from segmented bars */}
+        {total > 1 && (
+          <div style={{ position:"absolute",top:14,left:0,right:0,display:"flex",justifyContent:"center",gap:5,zIndex:3,pointerEvents:"none" }}>
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} style={{
+                width: i === idx ? 14 : 6, height: 6, borderRadius: 99,
+                background: i <= idx ? "#fff" : "rgba(255,255,255,0.4)",
+                transition: "all 0.25s",
+              }}/>
+            ))}
+          </div>
+        )}
+
+        {/* Bottom progress line */}
+        <div style={{ position:"absolute",bottom: !group.is_you && onReply ? 78 : 14, left:14, right:14, height:2, borderRadius:99, background:"rgba(255,255,255,0.25)",overflow:"hidden",zIndex:3,pointerEvents:"none" }}>
+          <div style={{ height:"100%",width:`${progress}%`,background:"#fff",transition:"width 50ms linear" }} />
+        </div>
+
         {/* Header */}
-        <div style={{ position:"absolute",top:18,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:2 }}>
-          <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-            {story.avatar_url
-              ? <img src={story.avatar_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-              : (story.username[0] || "?").toUpperCase()}
+        <div style={{ position:"absolute",top:30,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:4 }}>
+          <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+            {group.avatar_url
+              ? <img src={group.avatar_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+              : (group.username[0] || "?").toUpperCase()}
           </div>
-          <div style={{ flex:1 }}>
-            <div style={{ color:"#fff",fontWeight:700,fontSize:14,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{story.username}</div>
-            <div style={{ color:"rgba(255,255,255,0.85)",fontSize:11,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{timeAgoShort(story.created_at)}</div>
+          <div style={{ flex:1,minWidth:0 }}>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:14,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{group.username}</div>
+            <div style={{ color:"rgba(255,255,255,0.85)",fontSize:11,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>
+              {timeAgoShort(story.created_at)}
+              {paused && <span style={{ marginLeft:6,fontWeight:700 }}>· paused</span>}
+            </div>
           </div>
-          {/* Delete button — only for your own story */}
-          {story.is_you && onDelete && !confirmDelete && (
+          {group.is_you && onDelete && !confirmDelete && (
             <button onClick={() => setConfirmDelete(true)} style={{ background:"rgba(0,0,0,0.4)",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }}>
-              🗑️ Delete
+              🗑️
             </button>
           )}
           {confirmDelete && (
@@ -449,40 +566,115 @@ function StoryViewer({
           )}
         </div>
 
-        {/* Caption — bottom center */}
+        {/* Caption */}
         {story.caption && (
-          <div style={{ position:"absolute",bottom:90,left:16,right:16,padding:"10px 14px",background:"rgba(0,0,0,0.5)",borderRadius:12,zIndex:2 }}>
+          <div style={{ position:"absolute",bottom: !group.is_you && onReply ? 100 : 36, left:16, right:16, padding:"10px 14px", background:"rgba(0,0,0,0.5)", borderRadius:12, zIndex:3,pointerEvents:"none" }}>
             <div style={{ color:"#fff",fontSize:13,fontWeight:600,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{story.caption}</div>
           </div>
         )}
 
-        {/* Reply input — only for OTHER people's stories */}
-        {!story.is_you && onReply && (
-          <div style={{ position:"absolute",bottom:16,left:16,right:16,zIndex:2,display:"flex",gap:8 }}
+        {/* Reaction column (right side) — others' stories only */}
+        {!group.is_you && onReact && (
+          <div style={{
+            position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+            display:"flex",flexDirection:"column",gap:6,zIndex:4,
+          }} onClick={e => e.stopPropagation()}>
+            {STORY_REACTIONS.map(emoji => (
+              <button key={emoji} onClick={() => handleReactionTap(emoji)}
+                disabled={sending}
+                style={{
+                  width:38,height:38,borderRadius:"50%",
+                  background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(255,255,255,0.25)",
+                  fontSize:18,cursor:"pointer",
+                  transition:"transform 0.1s",
+                }}
+                onMouseDown={e => { e.currentTarget.style.transform = "scale(0.85)"; }}
+                onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+              >{emoji}</button>
+            ))}
+          </div>
+        )}
+
+        {/* "Seen by N" — own stories */}
+        {group.is_you && (
+          <button onClick={() => { setShowSeenBy(true); loadSeenBy(); }}
+            style={{
+              position:"absolute",bottom:14,left:16,zIndex:4,
+              background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(255,255,255,0.25)",
+              borderRadius:99,padding:"7px 14px",color:"#fff",fontSize:12,fontWeight:700,
+              display:"flex",alignItems:"center",gap:6,cursor:"pointer",
+            }}>
+            👁️ Seen by
+          </button>
+        )}
+
+        {/* Reply input */}
+        {!group.is_you && onReply && (
+          <div style={{ position:"absolute",bottom:16,left:16,right:60,zIndex:4,display:"flex",gap:8 }}
                onClick={e => e.stopPropagation()}>
             <input
               value={replyText}
               onChange={e => setReplyText(e.target.value)}
+              onFocus={() => setPaused(true)}
+              onBlur={() => setPaused(false)}
               onKeyDown={e => { if (e.key === 'Enter') handleReplySend(); }}
-              placeholder={`Reply to ${story.username}...`}
+              placeholder={`Reply to ${group.username}...`}
               style={{
                 flex:1, padding:"12px 16px", borderRadius:99,
                 background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.3)",
                 color:"#fff", fontSize:13, outline:"none",
               }}
             />
-            <button
-              onClick={handleReplySend}
-              disabled={!replyText.trim() || sending}
+            <button onClick={handleReplySend} disabled={!replyText.trim() || sending}
               style={{
                 padding:"10px 16px", borderRadius:99,
                 background: replyText.trim() ? C.blue : "rgba(255,255,255,0.15)",
                 border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer",
                 opacity: sending ? 0.6 : 1,
-              }}
-            >
-              {sending ? "..." : "Send"}
-            </button>
+              }}>{sending ? "..." : "Send"}</button>
+          </div>
+        )}
+
+        {/* Seen-by sheet */}
+        {showSeenBy && (
+          <div style={{
+            position:"absolute",inset:0,zIndex:6,background:"rgba(0,0,0,0.7)",
+            display:"flex",alignItems:"flex-end",
+          }} onClick={() => setShowSeenBy(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              width:"100%",maxHeight:"60%",overflowY:"auto",
+              background:"#111118",borderTopLeftRadius:20,borderTopRightRadius:20,
+              padding:"16px 20px 24px",
+            }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+                <div style={{ fontSize:15,fontWeight:800,color:"#F0F0F0" }}>
+                  👁️ Seen by {seenByList.length}
+                </div>
+                <button onClick={() => setShowSeenBy(false)} style={{ background:"none",border:"none",color:"#9CA3AF",fontSize:22,cursor:"pointer",lineHeight:1 }}>×</button>
+              </div>
+              {seenByLoading ? (
+                <div style={{ padding:"20px",textAlign:"center" as const,color:"#6B7280",fontSize:13 }}>Loading...</div>
+              ) : seenByList.length === 0 ? (
+                <div style={{ padding:"20px",textAlign:"center" as const,color:"#6B7280",fontSize:13 }}>No one has viewed this story yet.</div>
+              ) : (
+                <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                  {seenByList.map(v => (
+                    <div key={v.viewer_id} style={{ display:"flex",alignItems:"center",gap:10,padding:"6px 4px" }}>
+                      <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
+                        {v.avatar_url
+                          ? <img src={v.avatar_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+                          : (v.username[0] || "?").toUpperCase()}
+                      </div>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:13,fontWeight:700,color:"#F0F0F0" }}>{v.full_name || v.username}</div>
+                        <div style={{ fontSize:11,color:"#9CA3AF" }}>@{v.username} · {timeAgoShort(v.viewed_at)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1145,9 +1337,9 @@ export default function FeedPage() {
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
-  // Stories — real data from /api/db
-  const [stories, setStories] = useState<Story[]>([]);
-  const [viewingStory, setViewingStory] = useState<Story | null>(null);
+  // Stories — groups (one per user), viewer index points into the array
+  const [storyGroups, setStoryGroups] = useState<StoryGroup[]>([]);
+  const [viewingGroupIdx, setViewingGroupIdx] = useState<number | null>(null);
   const [postingStory, setPostingStory] = useState(false);
   const storyFileInputRef = useRef<HTMLInputElement>(null);
   // Search
@@ -1202,7 +1394,7 @@ export default function FeedPage() {
 
   useEffect(() => { fetchPosts(0); }, []);
 
-  // ── Stories: load active stories (last 24h) ────────────────────────────
+  // ── Stories: load active stories grouped by user ──────────────────────
   async function loadStories() {
     if (!user) return;
     try {
@@ -1212,21 +1404,19 @@ export default function FeedPage() {
         body: JSON.stringify({ action: 'get_active_stories', payload: { viewerId: user.id } }),
       });
       const data = await res.json();
-      if (data.stories) setStories(data.stories as Story[]);
+      if (data.groups) setStoryGroups(data.groups as StoryGroup[]);
     } catch (err) {
       console.warn('[stories] load failed:', err);
     }
   }
   useEffect(() => { loadStories(); }, [user?.id]);
 
-  // ── Stories: post a new story (called when user picks a photo) ─────────
+  // ── Stories: post a new one ────────────────────────────────────────────
   async function handlePostStory(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     setPostingStory(true);
     try {
-      // Upload the photo to the activity bucket via existing helper.
-      // Path is namespaced under stories/ so we can find them later if needed.
       const url = await uploadPhoto(file, 'activity', `stories/${user.id}/${Date.now()}.jpg`);
       if (!url) {
         alert("Couldn't upload that photo. Try another one.");
@@ -1264,20 +1454,49 @@ export default function FeedPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_my_story', payload: { userId: user.id, storyId } }),
       });
-      setViewingStory(null);
+      setViewingGroupIdx(null);
       await loadStories();
     } catch (err) {
       console.warn('[stories] delete failed:', err);
     }
   }
 
+  // ── Stories: record a view ─────────────────────────────────────────────
+  const viewedStoriesRef = useRef<Set<string>>(new Set());
+  async function handleStoryView(storyId: string) {
+    if (!user) return;
+    if (viewedStoriesRef.current.has(storyId)) return;
+    viewedStoriesRef.current.add(storyId);
+    try {
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'record_story_view',
+          payload: { storyId, viewerId: user.id },
+        }),
+      });
+      // Locally clear has_unseen if all stories in this group are now viewed
+      setStoryGroups(prev => prev.map(g => {
+        if (!g.stories.some(s => s.id === storyId)) return g;
+        const allSeen = g.stories.every(s => s.id === storyId || viewedStoriesRef.current.has(s.id));
+        return allSeen ? { ...g, has_unseen: false } : g;
+      }));
+    } catch (err) {
+      console.warn('[stories] record view failed:', err);
+    }
+  }
+
   // ── Stories: reply via DM ──────────────────────────────────────────────
-  // Encodes the story media URL in the message content using a [story_reply]
-  // marker that the messages page knows how to render.
-  async function handleStoryReply(story: Story, text: string) {
+  async function handleStoryReply(story: Story, ownerUsername: string, text: string) {
+    return sendStoryDM(story, ownerUsername, text, /*isReaction*/ false);
+  }
+  async function handleStoryReact(story: Story, ownerUsername: string, emoji: string) {
+    return sendStoryDM(story, ownerUsername, emoji, /*isReaction*/ true);
+  }
+  async function sendStoryDM(story: Story, _ownerUsername: string, text: string, isReaction: boolean) {
     if (!user) return;
     try {
-      // Find or create a conversation between user and story author
       const convRes = await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1292,10 +1511,8 @@ export default function FeedPage() {
         alert("Couldn't open DM with that user.");
         return;
       }
-
-      // Send the message with the story-reply marker. The messages page
-      // parses [story_reply]: URL out and renders it as a small preview tile.
-      const content = `[story_reply]: ${story.media_url}\n${text}`;
+      const marker = isReaction ? '[story_reaction]' : '[story_reply]';
+      const content = `${marker}: ${story.media_url}\n${text}`;
       await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1305,8 +1522,8 @@ export default function FeedPage() {
         }),
       });
     } catch (err: any) {
-      console.warn('[stories] reply failed:', err);
-      alert(`Reply failed: ${err?.message || String(err)}`);
+      console.warn('[stories] DM failed:', err);
+      alert(`${isReaction ? 'Reaction' : 'Reply'} failed: ${err?.message || String(err)}`);
     }
   }
 
@@ -1709,16 +1926,29 @@ export default function FeedPage() {
       </div>
 
       {/* ── Story Viewer overlay ── */}
-      {viewingStory && (
+      {viewingGroupIdx !== null && storyGroups[viewingGroupIdx] && user && (
         <StoryViewer
-          story={viewingStory}
-          onClose={() => setViewingStory(null)}
+          group={storyGroups[viewingGroupIdx]}
+          currentUserId={user.id}
+          onClose={() => setViewingGroupIdx(null)}
           onDelete={handleDeleteStory}
           onReply={handleStoryReply}
+          onReact={handleStoryReact}
+          onView={handleStoryView}
+          onAdvanceGroup={
+            viewingGroupIdx < storyGroups.length - 1
+              ? () => setViewingGroupIdx(viewingGroupIdx + 1)
+              : undefined
+          }
+          onRewindGroup={
+            viewingGroupIdx > 0
+              ? () => setViewingGroupIdx(viewingGroupIdx - 1)
+              : undefined
+          }
         />
       )}
 
-      {/* Hidden file input — clicked programmatically when "+" is tapped */}
+      {/* Hidden file input */}
       <input
         ref={storyFileInputRef}
         type="file"
@@ -1727,64 +1957,92 @@ export default function FeedPage() {
         onChange={handlePostStory}
       />
 
-      {/* ── Stories Row (visible on all views) ── */}
+      {/* ── Stories Row ── */}
       <div style={{ padding:"12px 0 0", borderBottom:"1px solid #2D1F52", overflowX:"auto" }}>
         <div style={{ display:"flex", gap:16, padding:"4px 24px 14px", minWidth:"max-content" }}>
-          {/* "Your story" tile — always first. Tap to upload (or view if posted). */}
+          {/* "Your story" tile */}
           {(() => {
-            const myStory = stories.find(s => s.is_you);
+            const myGroupIdx = storyGroups.findIndex(g => g.is_you);
+            const myGroup = myGroupIdx >= 0 ? storyGroups[myGroupIdx] : null;
             const tier: Tier = "default";
             return (
               <button
                 key="my-story"
                 onClick={() => {
-                  if (myStory) setViewingStory(myStory);
+                  if (myGroup) setViewingGroupIdx(myGroupIdx);
                   else storyFileInputRef.current?.click();
                 }}
                 disabled={postingStory}
-                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0, opacity: postingStory ? 0.5 : 1 }}
+                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0, opacity: postingStory ? 0.5 : 1, position:"relative" }}
               >
                 <TierFrame tier={tier} size={60}>
-                  {myStory ? (
-                    <div style={{ width:"100%",height:"100%",position:"relative" }}>
-                      <img src={myStory.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
-                    </div>
+                  {myGroup?.preview_url ? (
+                    <img src={myGroup.preview_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
                   ) : (
                     <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff" }}>
                       {postingStory ? "…" : "＋"}
                     </div>
                   )}
                 </TierFrame>
+                {/* "+" overlay if you HAVE a story (so you can add another) */}
+                {myGroup && !postingStory && (
+                  <div
+                    onClick={(e) => { e.stopPropagation(); storyFileInputRef.current?.click(); }}
+                    style={{
+                      position:"absolute", bottom:18, right:-2, width:20, height:20, borderRadius:"50%",
+                      background: C.blue, border:"2px solid #0D0D0D",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:13, fontWeight:900, color:"#fff", cursor:"pointer",
+                    }}
+                  >＋</div>
+                )}
                 <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {myStory ? "Your story" : "Add story"}
+                  {myGroup ? "Your story" : "Add story"}
                 </span>
               </button>
             );
           })()}
 
-          {/* Other users' stories */}
-          {stories.filter(s => !s.is_you).map(story => {
+          {/* Other users' story groups */}
+          {storyGroups.filter(g => !g.is_you).map(group => {
+            const realIdx = storyGroups.findIndex(g => g.user_id === group.user_id);
             const tier: Tier = "default";
             return (
               <button
-                key={story.id}
-                onClick={() => setViewingStory(story)}
-                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0 }}
+                key={group.user_id}
+                onClick={() => setViewingGroupIdx(realIdx)}
+                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0, position:"relative" }}
               >
                 <TierFrame tier={tier} size={60}>
                   <div style={{ width:"100%",height:"100%",position:"relative",overflow:"hidden" }}>
-                    <img src={story.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                    {group.preview_url
+                      ? <img src={group.preview_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                      : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:"#fff" }}>{(group.username[0] || "?").toUpperCase()}</div>}
                   </div>
                 </TierFrame>
-                <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {story.username}
+                {/* Unseen dot badge — small purple dot in the corner */}
+                {group.has_unseen && (
+                  <div style={{
+                    position:"absolute", top:-2, right:-2, width:14, height:14, borderRadius:"50%",
+                    background: C.blue, border:"2px solid #0D0D0D",
+                  }}/>
+                )}
+                {/* Story count badge */}
+                {group.stories.length > 1 && (
+                  <div style={{
+                    position:"absolute", top:-2, left:-2,
+                    background: "rgba(0,0,0,0.7)", border:"1px solid rgba(255,255,255,0.3)",
+                    borderRadius:99, padding:"1px 6px", fontSize:9, fontWeight:800, color:"#fff",
+                  }}>{group.stories.length}</div>
+                )}
+                <span style={{ fontSize:11, fontWeight:600, color: group.has_unseen ? C.text : C.sub, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {group.username}
                 </span>
               </button>
             );
           })}
 
-          {/* Empty state — only show if NO stories AND user hasn't posted */}
-          {stories.length === 0 && (
+          {storyGroups.length === 0 && (
             <span style={{ alignSelf:"center", fontSize:12, color:C.sub, padding:"0 12px" }}>
               No stories yet · be the first to post one
             </span>
