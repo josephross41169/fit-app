@@ -27,6 +27,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
 
   // Account type + step
   const [accountType, setAccountType] = useState<"personal" | "business">("personal");
@@ -122,12 +123,19 @@ export default function SignupPage() {
         }
       }
 
-      // If session exists immediately, email confirm is disabled — go straight to feed
-      // If not, Supabase will send a confirm email — still show success and redirect
-      setSuccess(true);
-      // Redirect new users through onboarding wizard instead of straight to feed
-      setTimeout(() => router.push("/onboarding"), 1800);
-
+      // Detect whether Supabase requires email confirmation. When confirmation
+      // is enabled in the dashboard, signUp returns user but no session — the
+      // user must click the link in their email before they can log in. When
+      // disabled, session is present and we can drop them straight into onboarding.
+      if (data?.session) {
+        setSuccess(true);
+        setTimeout(() => router.push("/onboarding"), 1800);
+      } else {
+        // Email confirmation required — show the verification UI. User finishes
+        // by clicking the link in their email, which lands them in /feed; their
+        // first time there will redirect to /onboarding (handled in app layout).
+        setNeedsEmailVerification(true);
+      }
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
       setLoading(false);
@@ -145,6 +153,36 @@ export default function SignupPage() {
     outline: "none",
     boxSizing: "border-box",
   };
+
+  if (needsEmailVerification) return (
+    <div style={{ minHeight: "100vh", background: DARK_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 420, textAlign: "center" }}>
+        <div style={{ fontSize: 64, marginBottom: 12 }}>✉️</div>
+        <h1 style={{ fontSize: 28, fontWeight: 900, color: G, margin: "0 0 12px", letterSpacing: -0.5 }}>
+          Check Your Email
+        </h1>
+        <p style={{ color: "#9CA3AF", fontSize: 15, lineHeight: 1.6, marginBottom: 8 }}>
+          We sent a verification link to
+        </p>
+        <p style={{ color: "#E2E8F0", fontSize: 16, fontWeight: 700, marginBottom: 28 }}>
+          {email}
+        </p>
+        <div style={{ background: DARK_CARD, borderRadius: 16, padding: 22, border: `1.5px solid ${DARK_BORDER}`, marginBottom: 22, textAlign: "left" as const }}>
+          <div style={{ fontSize: 13, color: "#9CA3AF", lineHeight: 1.7 }}>
+            <div style={{ marginBottom: 8 }}>1. Open your inbox and find the email from FIT</div>
+            <div style={{ marginBottom: 8 }}>2. Click the &ldquo;Confirm your email&rdquo; link</div>
+            <div>3. You&apos;ll be redirected back to set up your profile</div>
+          </div>
+        </div>
+        <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 20 }}>
+          Don&apos;t see it? Check your spam folder. Link expires in 24 hours.
+        </p>
+        <a href="/login" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: "transparent", color: G, fontWeight: 700, fontSize: 15, border: `1.5px solid ${G}`, textDecoration: "none" }}>
+          Back to Sign In
+        </a>
+      </div>
+    </div>
+  );
 
   if (success) return (
     <div style={{ minHeight: "100vh", background: DARK_BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
