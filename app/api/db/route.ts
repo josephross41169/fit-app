@@ -566,6 +566,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ comment: inserted, comments: comments || [] });
     }
 
+    // Fetch all comments for a post (admin client bypasses RLS).
+    // Used by /post/[id] detail page and any other detail-style views.
+    if (action === 'get_post_comments') {
+      const { postId } = payload || {};
+      if (!postId) return NextResponse.json({ error: 'Missing postId' }, { status: 400 });
+      const { data: comments, error } = await admin.from('comments')
+        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ comments: comments || [] });
+    }
+
+    // Delete one of your own comments. Server checks ownership before deleting
+    // (defense in depth even though RLS would also block someone else's row).
+    if (action === 'delete_post_comment') {
+      const { commentId, userId } = payload || {};
+      if (!commentId || !userId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      // Verify ownership first
+      const { data: existing } = await admin.from('comments').select('user_id, post_id').eq('id', commentId).single();
+      if (!existing) return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+      if (existing.user_id !== userId) return NextResponse.json({ error: 'Not your comment' }, { status: 403 });
+      const { error } = await admin.from('comments').delete().eq('id', commentId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
     if (action === 'post_activity_comment') {
       const { cardId, commenterId, content, cardOwnerId } = payload;
       if (!cardId || !commenterId || !content) {
