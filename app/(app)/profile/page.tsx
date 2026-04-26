@@ -2731,7 +2731,7 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,flexShrink:0,width:isMobile?avatarSize:380}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
