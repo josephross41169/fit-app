@@ -1195,16 +1195,35 @@ export default function FeedPage() {
   async function fetchPosts(page: number, append = false) {
     if (page === 0) setLoadingFeed(true);
     else setLoadingMorePosts(true);
-    const { data } = await supabase
-      .from('posts')
-      .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, users (id, username, full_name, avatar_url))`)
-      .eq('is_public', true)
-      .order('created_at', { ascending: false })
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+    // Use /api/db so the admin client bypasses RLS on the comments nested
+    // select. Supabase nested selects respect RLS on the inner table — so
+    // a direct supabase.from('posts').select('*, comments(...)') would
+    // return empty comments arrays even when comments exist. The endpoint
+    // also hydrates `_liked` server-side.
+    let data: any[] | null = null;
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'get_feed_posts',
+          payload: { viewerId: user?.id, page, pageSize: PAGE_SIZE },
+        }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        console.error('[feed] fetchPosts failed:', json.error);
+      } else {
+        data = json.posts;
+      }
+    } catch (err) {
+      console.error('[feed] fetchPosts network error:', err);
+    }
 
     if (data) {
-      // Filter out posts from users blocked in either direction — they shouldn't
-      // see each other's content. loadBlockedUsers is cached per session.
+      // Filter out posts from users blocked in either direction — they
+      // shouldn't see each other's content. loadBlockedUsers is cached.
       let filtered = data;
       if (user) {
         const blocks = await loadBlockedUsers(user.id);
@@ -1212,17 +1231,8 @@ export default function FeedPage() {
           filtered = data.filter((p: any) => !blocks.has(p.user_id));
         }
       }
-
-      let likedPostIds: Set<string> = new Set();
-      if (user && filtered.length > 0) {
-        const postIds = filtered.map((p: any) => p.id);
-        const { data: likeData } = await supabase
-          .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
-        if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
-      }
-      const mapped = filtered.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
-      if (append) setDbPosts(prev => [...prev, ...mapped]);
-      else setDbPosts(mapped);
+      if (append) setDbPosts(prev => [...prev, ...filtered]);
+      else setDbPosts(filtered);
       setDbPostsHasMore(data.length === PAGE_SIZE);
       setDbPostsPage(page);
     }
