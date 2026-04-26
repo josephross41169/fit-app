@@ -1,448 +1,545 @@
 "use client";
-// ── app/(app)/onboarding/business/page.tsx ──────────────────────────────────
-// Dedicated onboarding for business accounts. The athlete onboarding asks
-// about fitness goals / macros / training frequency — all irrelevant for a
-// gym, studio, or brand. This wizard collects what businesses actually need:
-//   Step 1 — Confirm basics (name, type, short bio)
-//   Step 2 — Contact & location (address, phone, email)
-//   Step 3 — Online presence (website, social links)
-//   Step 4 — Operating hours
-//   Step 5 — Branding (logo/avatar + cover banner) + finish
-//
-// On finish, business lands on their public profile (not the athlete feed)
-// since that's their "home base" in this app.
-
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
-import { BUSINESS_TYPES, isBusinessAccount } from "@/lib/businessTypes";
+import { compressImage } from "@/lib/compressImage";
+import { isBusinessAccount } from "@/lib/businessTypes";
 
 const C = {
   purple: "#7C3AED",
   purpleDark: "#6D28D9",
+  purpleLight: "#F3F0FF",
+  purpleMid: "#DDD6FE",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
   bg: "#0D0D0D",
-  card: "#1A1D2E",
-  border: "#2A2D3E",
-  input: "#252A3D",
+  card: "#111111",
+  border: "#1A1228",
 };
 
-const DAYS = [
-  { key: "mon", label: "Mon" },
-  { key: "tue", label: "Tue" },
-  { key: "wed", label: "Wed" },
-  { key: "thu", label: "Thu" },
-  { key: "fri", label: "Fri" },
-  { key: "sat", label: "Sat" },
-  { key: "sun", label: "Sun" },
+const FITNESS_GOALS = [
+  { id: "lose_fat", emoji: "🔥", label: "Lose Fat", desc: "Cut body fat and get leaner" },
+  { id: "build_muscle", emoji: "💪", label: "Build Muscle", desc: "Gain strength and size" },
+  { id: "maintain", emoji: "⚖️", label: "Maintain", desc: "Stay consistent and healthy" },
+  { id: "improve_cardio", emoji: "🏃", label: "Cardio / Endurance", desc: "Run faster, go longer" },
+  { id: "sports_performance", emoji: "⚡", label: "Athletic Performance", desc: "Train for sport" },
+  { id: "wellness", emoji: "🧘", label: "Wellness & Recovery", desc: "Reduce stress, sleep better" },
+];
+
+const ACTIVITY_LEVELS = [
+  { id: "sedentary", emoji: "🪑", label: "Sedentary", desc: "Little to no exercise" },
+  { id: "light", emoji: "🚶", label: "Lightly Active", desc: "1–3 days/week" },
+  { id: "moderate", emoji: "🏋️", label: "Moderately Active", desc: "3–5 days/week" },
+  { id: "very", emoji: "⚡", label: "Very Active", desc: "6–7 days/week" },
+  { id: "athlete", emoji: "🏆", label: "Athlete", desc: "2× a day or competitive" },
+];
+
+const FOCUS_AREAS = [
+  { id: "chest", emoji: "💪", label: "Chest" },
+  { id: "back", emoji: "🦾", label: "Back" },
+  { id: "shoulders", emoji: "🏋️", label: "Shoulders" },
+  { id: "arms", emoji: "💪", label: "Arms" },
+  { id: "legs", emoji: "🦵", label: "Legs" },
+  { id: "core", emoji: "🎯", label: "Core" },
+  { id: "cardio", emoji: "🏃", label: "Cardio" },
+  { id: "full_body", emoji: "⚡", label: "Full Body" },
+];
+
+const EQUIPMENT = [
+  { id: "full_gym", emoji: "🏋️", label: "Full Gym" },
+  { id: "home_gym", emoji: "🏠", label: "Home Gym" },
+  { id: "dumbbells", emoji: "💪", label: "Dumbbells Only" },
+  { id: "bodyweight", emoji: "🤸", label: "Bodyweight" },
+  { id: "resistance_bands", emoji: "🔄", label: "Resistance Bands" },
+  { id: "cardio_machines", emoji: "🚴", label: "Cardio Machines" },
 ];
 
 type Step = 1 | 2 | 3 | 4 | 5;
-const TOTAL_STEPS = 5;
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 32 }}>
       {Array.from({ length: total }).map((_, i) => (
-        <div key={i} style={{
-          flex: 1, height: 4, borderRadius: 2,
-          background: i < step ? C.purple : "#2A2A2A",
-          transition: "background 0.3s ease",
-        }} />
+        <div
+          key={i}
+          style={{
+            flex: 1, height: 4, borderRadius: 2,
+            background: i < step ? C.purple : "#2A2A2A",
+            transition: "background 0.3s ease",
+          }}
+        />
       ))}
     </div>
   );
 }
 
-export default function BusinessOnboardingPage() {
-  const { user, refreshProfile } = useAuth();
+function SelectChip({
+  selected, onClick, emoji, label, desc,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  emoji: string;
+  label: string;
+  desc?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "14px 16px", borderRadius: 16,
+        border: `2px solid ${selected ? C.purple : "#2A2A2A"}`,
+        background: selected ? "rgba(124,58,237,0.12)" : C.card,
+        cursor: "pointer", textAlign: "left", width: "100%",
+        transition: "all 0.15s",
+        boxShadow: selected ? `0 0 0 1px ${C.purple}40` : "none",
+      }}
+    >
+      <span style={{ fontSize: 26, flexShrink: 0 }}>{emoji}</span>
+      <div>
+        <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{label}</div>
+        {desc && <div style={{ fontSize: 12, color: C.sub, marginTop: 1 }}>{desc}</div>}
+      </div>
+      {selected && (
+        <div style={{
+          marginLeft: "auto", width: 22, height: 22, borderRadius: "50%",
+          background: C.purple, display: "flex", alignItems: "center",
+          justifyContent: "center", flexShrink: 0, fontSize: 12, color: "#fff", fontWeight: 900,
+        }}>✓</div>
+      )}
+    </button>
+  );
+}
+
+function ChipGrid({
+  items, selected, onToggle, cols = 2,
+}: {
+  items: { id: string; emoji: string; label: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  cols?: number;
+}) {
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: `repeat(${cols}, 1fr)`,
+      gap: 10,
+    }}>
+      {items.map(item => {
+        const isSelected = selected.includes(item.id);
+        return (
+          <button
+            key={item.id}
+            onClick={() => onToggle(item.id)}
+            style={{
+              padding: "12px 10px", borderRadius: 14,
+              border: `2px solid ${isSelected ? C.purple : "#2A2A2A"}`,
+              background: isSelected ? "rgba(124,58,237,0.12)" : C.card,
+              cursor: "pointer", display: "flex", flexDirection: "column",
+              alignItems: "center", gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <span style={{ fontSize: 22 }}>{item.emoji}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: isSelected ? "#A78BFA" : C.sub }}>
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function OnboardingPage() {
+  const { user } = useAuth();
   const router = useRouter();
 
-  // Bounce personal accounts back to the athlete flow
+  // Business accounts get a completely different onboarding flow — no goals,
+  // no macros, no tier/rivals talk. They go to /onboarding/business instead.
   useEffect(() => {
     if (!user) return;
-    if (!isBusinessAccount(user.profile)) {
-      router.replace("/onboarding");
+    if (isBusinessAccount(user.profile)) {
+      router.replace("/onboarding/business");
     }
   }, [user, router]);
 
   const [step, setStep] = useState<Step>(1);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
 
-  // ── STEP 1 — Basics ────────────────────────────────────────────────────
-  // Pre-fill from signup data so user doesn't re-type business name
-  const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState("gym");
-  const [shortBio, setShortBio] = useState("");
-  const [longDescription, setLongDescription] = useState("");
-
-  // ── STEP 2 — Contact & Location ────────────────────────────────────────
-  const [address, setAddress] = useState("");
-  const [phone, setPhone] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-
-  // ── STEP 3 — Online presence ───────────────────────────────────────────
-  const [website, setWebsite] = useState("");
-  const [instagram, setInstagram] = useState("");
-  const [tiktok, setTiktok] = useState("");
-  const [twitter, setTwitter] = useState("");
-  const [youtube, setYoutube] = useState("");
-
-  // ── STEP 4 — Hours ─────────────────────────────────────────────────────
-  const [hours, setHours] = useState<Record<string, any>>({
-    mon: { open: "06:00", close: "22:00" },
-    tue: { open: "06:00", close: "22:00" },
-    wed: { open: "06:00", close: "22:00" },
-    thu: { open: "06:00", close: "22:00" },
-    fri: { open: "06:00", close: "22:00" },
-    sat: { open: "08:00", close: "20:00" },
-    sun: "closed",
-  });
-
-  // ── STEP 5 — Branding ──────────────────────────────────────────────────
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  // Step 1 — Profile basics
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
 
-  // ── Pre-fill from existing profile ─────────────────────────────────────
-  useEffect(() => {
-    if (!user?.profile) return;
-    const p = user.profile as any;
-    setBusinessName(p.business_name || p.full_name || "");
-    setBusinessType(p.business_type || "gym");
-    setShortBio(p.bio || "");
-    setLongDescription(p.business_description_long || "");
-    setAddress(p.business_address || "");
-    setPhone(p.business_phone || "");
-    setContactEmail(p.business_email || "");
-    setWebsite(p.business_website || "");
-    setInstagram(p.business_instagram || "");
-    setTiktok(p.business_tiktok || "");
-    setTwitter(p.business_twitter || "");
-    setYoutube(p.business_youtube || "");
-    if (p.business_hours) setHours(p.business_hours);
-    if (p.avatar_url) setAvatarPreview(p.avatar_url);
-    if (p.banner_url) setBannerPreview(p.banner_url);
-  }, [user]);
+  // Step 2 — Goal
+  const [goal, setGoal] = useState("");
+  const [activityLevel, setActivityLevel] = useState("");
 
-  // ── Per-step validation ────────────────────────────────────────────────
-  // Step 2+ are all optional so users can skip through and fill in later
-  // via settings/business. Only Step 1 requires a business name.
+  // Step 3 — Focus areas + equipment
+  const [focusAreas, setFocusAreas] = useState<string[]>([]);
+  const [equipment, setEquipment] = useState<string[]>([]);
+
+  // Step 4 — Macro goals
+  const [calories, setCalories] = useState("2500");
+  const [protein, setProtein] = useState("180");
+  const [carbs, setCarbs] = useState("250");
+  const [fat, setFat] = useState("70");
+  const [waterOz, setWaterOz] = useState("100");
+
+  function toggleFocus(id: string) {
+    setFocusAreas(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id]);
+  }
+  function toggleEquipment(id: string) {
+    setEquipment(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id]);
+  }
+
+  // Auto-suggest macros based on goal
+  function suggestMacros() {
+    if (goal === "lose_fat") { setCalories("2000"); setProtein("200"); setCarbs("180"); setFat("60"); }
+    else if (goal === "build_muscle") { setCalories("3000"); setProtein("220"); setCarbs("300"); setFat("80"); }
+    else if (goal === "improve_cardio") { setCalories("2400"); setProtein("160"); setCarbs("280"); setFat("65"); }
+    else { setCalories("2500"); setProtein("180"); setCarbs("250"); setFat("70"); }
+  }
+
+  function loadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => setAvatarPreview(ev.target!.result as string);
+    r.readAsDataURL(f);
+    e.target.value = "";
+  }
+
+  async function handleFinish() {
+    if (!user) return;
+    setSaving(true);
+
+    try {
+      let avatarUrl: string | null = null;
+      if (avatarPreview) {
+        const compressed = await compressImage(avatarPreview, 800, 0.85);
+        avatarUrl = await uploadPhoto(compressed, "avatars", `${user.id}/avatar.jpg`);
+      }
+
+      const updateData: Record<string, any> = {
+        onboarded: true,
+        nutrition_goals: {
+          calories: parseFloat(calories) || 2500,
+          protein: parseFloat(protein) || 180,
+          carbs: parseFloat(carbs) || 250,
+          fat: parseFloat(fat) || 70,
+          water_oz: parseFloat(waterOz) || 100,
+        },
+        fitness_goal: goal || null,
+        activity_level: activityLevel || null,
+        focus_areas: focusAreas.length > 0 ? focusAreas : null,
+        equipment_access: equipment.length > 0 ? equipment : null,
+      };
+      if (displayName.trim()) updateData.full_name = displayName.trim();
+      if (bio.trim()) updateData.bio = bio.trim();
+      if (avatarUrl) updateData.avatar_url = avatarUrl;
+
+      await supabase.from("users").update(updateData).eq("id", user.id);
+    } catch {}
+
+    setSaving(false);
+    router.push("/feed");
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "13px 16px",
+    borderRadius: 14,
+    border: "1.5px solid #2A2A2A",
+    background: C.card,
+    fontSize: 15,
+    color: C.text,
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
   const canProceed: Record<Step, boolean> = {
-    1: businessName.trim().length >= 2,
-    2: true,
-    3: true,
-    4: true,
+    1: true, // optional
+    2: !!goal && !!activityLevel,
+    3: focusAreas.length > 0 && equipment.length > 0,
+    4: true, // pre-filled
     5: true,
   };
 
-  // ── Hours helpers ──────────────────────────────────────────────────────
-  function toggleDay(day: string) {
-    setHours(h => {
-      const next = { ...h };
-      if (!next[day] || next[day] === "closed") {
-        next[day] = { open: "06:00", close: "22:00" };
-      } else {
-        next[day] = "closed";
-      }
-      return next;
-    });
-  }
-  function updateDayHour(day: string, field: "open" | "close", value: string) {
-    setHours(h => {
-      const next = { ...h };
-      if (!next[day] || next[day] === "closed") next[day] = { open: "06:00", close: "22:00" };
-      next[day] = { ...(next[day] as any), [field]: value };
-      return next;
-    });
-  }
-
-  // ── Image handlers ─────────────────────────────────────────────────────
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>, which: "avatar" | "banner") {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const data = reader.result as string;
-      if (which === "avatar") { setAvatarFile(f); setAvatarPreview(data); }
-      else { setBannerFile(f); setBannerPreview(data); }
-    };
-    reader.readAsDataURL(f);
-  }
-
-  // ── Finish ─────────────────────────────────────────────────────────────
-  async function finishOnboarding() {
-    if (!user || saving) return;
-    setSaving(true);
-    setError("");
-
-    try {
-      // Upload images first if provided
-      let avatarUrl: string | null = null;
-      let bannerUrl: string | null = null;
-      if (avatarFile) {
-        try { avatarUrl = await uploadPhoto(avatarFile, user.id, "avatars"); } catch {}
-      }
-      if (bannerFile) {
-        try { bannerUrl = await uploadPhoto(bannerFile, user.id, "banners"); } catch {}
-      }
-
-      // Clean hours — drop empty days so the DB only has meaningful entries
-      const cleanedHours: Record<string, any> = {};
-      for (const d of DAYS) {
-        const v = hours[d.key];
-        if (v === "closed") cleanedHours[d.key] = "closed";
-        else if (v && typeof v === "object" && v.open && v.close) cleanedHours[d.key] = v;
-      }
-
-      const updates: any = {
-        full_name: businessName,       // keep full_name in sync for places that fall back to it
-        business_name: businessName,
-        business_type: businessType,
-        bio: shortBio || null,
-        business_description_long: longDescription || null,
-        business_address: address || null,
-        business_phone: phone || null,
-        business_email: contactEmail || null,
-        business_website: website || null,
-        business_instagram: instagram || null,
-        business_tiktok: tiktok || null,
-        business_twitter: twitter || null,
-        business_youtube: youtube || null,
-        business_hours: Object.keys(cleanedHours).length > 0 ? cleanedHours : null,
-      };
-      if (avatarUrl) updates.avatar_url = avatarUrl;
-      if (bannerUrl) updates.banner_url = bannerUrl;
-
-      const { error: dbErr } = await supabase.from("users").update(updates).eq("id", user.id);
-      if (dbErr) throw dbErr;
-
-      await refreshProfile?.();
-      // Send them to their public profile — their new "home"
-      router.push(`/profile/${(user.profile as any)?.username || ""}`);
-    } catch (e: any) {
-      setError(e.message || "Couldn't save. Try again.");
-      setSaving(false);
-    }
-  }
-
-  if (!user) return <div style={{ minHeight: "100vh", background: C.bg }} />;
+  const TOTAL_STEPS = 5;
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, padding: "24px 20px 80px" }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+    <div style={{
+      minHeight: "100vh", background: C.bg,
+      display: "flex", flexDirection: "column",
+      alignItems: "center",
+      padding: "32px 20px 100px",
+    }}>
+      <div style={{ width: "100%", maxWidth: 480 }}>
+
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🏢</div>
-          <div style={{ color: C.sub, fontSize: 13, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🦾</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>
             Step {step} of {TOTAL_STEPS}
           </div>
         </div>
 
         <ProgressBar step={step} total={TOTAL_STEPS} />
 
-        {/* ── STEP 1 — Basics ────────────────────────────────────── */}
+        {/* ─── STEP 1: Profile Photo + Name ─────────────────────── */}
         {step === 1 && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Tell us about your business</h1>
-            <p style={{ color: C.sub, fontSize: 15, marginBottom: 28 }}>This is what people will see first on your profile.</p>
-
-            <Field label="Business name *">
-              <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Iron Gym Las Vegas" style={input} />
-            </Field>
-            <Field label="Business type">
-              <select value={businessType} onChange={e => setBusinessType(e.target.value)} style={input}>
-                {BUSINESS_TYPES.map(t => <option key={t.key} value={t.key}>{t.emoji} {t.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Short tagline" hint="One line that shows below your name (max 120 chars)">
-              <input type="text" maxLength={120} value={shortBio} onChange={e => setShortBio(e.target.value)} placeholder="Las Vegas' home for hardcore training" style={input} />
-            </Field>
-            <Field label="About your business" hint="Longer description shown on the About tab (max 500 chars)">
-              <textarea rows={4} maxLength={500} value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder="We're a locally-owned gym focused on..." style={{ ...input, resize: "vertical" }} />
-              <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4, textAlign: "right" }}>{longDescription.length}/500</div>
-            </Field>
-          </div>
-        )}
-
-        {/* ── STEP 2 — Contact & Location ───────────────────────── */}
-        {step === 2 && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>How can people reach you?</h1>
-            <p style={{ color: C.sub, fontSize: 15, marginBottom: 28 }}>Optional — but helps customers find and contact your business.</p>
-
-            <Field label="Address" hint="Shown publicly + linked to Google Maps">
-              <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St, Las Vegas, NV 89101" style={input} />
-            </Field>
-            <Field label="Phone">
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(702) 555-1234" style={input} />
-            </Field>
-            <Field label="Contact email" hint="Use a business email, not your personal account email">
-              <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="hello@yourbusiness.com" style={input} />
-            </Field>
-          </div>
-        )}
-
-        {/* ── STEP 3 — Online Presence ──────────────────────────── */}
-        {step === 3 && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Your online presence</h1>
-            <p style={{ color: C.sub, fontSize: 15, marginBottom: 28 }}>Link your website and social accounts so followers can find you everywhere.</p>
-
-            <Field label="🌐 Website">
-              <input type="url" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yourbusiness.com" style={input} />
-            </Field>
-            <Field label="📷 Instagram">
-              <input type="url" value={instagram} onChange={e => setInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" style={input} />
-            </Field>
-            <Field label="🎵 TikTok">
-              <input type="url" value={tiktok} onChange={e => setTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" style={input} />
-            </Field>
-            <Field label="𝕏 Twitter / X">
-              <input type="url" value={twitter} onChange={e => setTwitter(e.target.value)} placeholder="https://x.com/yourhandle" style={input} />
-            </Field>
-            <Field label="▶️ YouTube">
-              <input type="url" value={youtube} onChange={e => setYoutube(e.target.value)} placeholder="https://youtube.com/@yourhandle" style={input} />
-            </Field>
-          </div>
-        )}
-
-        {/* ── STEP 4 — Hours ────────────────────────────────────── */}
-        {step === 4 && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>When are you open?</h1>
-            <p style={{ color: C.sub, fontSize: 15, marginBottom: 28 }}>Toggle off any day you're closed. Don't have set hours? Just skip this step.</p>
-
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
-              {DAYS.map(d => {
-                const v = hours[d.key];
-                const isOpen = v && v !== "closed" && typeof v === "object";
-                return (
-                  <div key={d.key} style={{ display: "grid", gridTemplateColumns: "70px 80px 1fr 1fr", gap: 10, alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{d.label}</div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.sub, cursor: "pointer" }}>
-                      <input type="checkbox" checked={!!isOpen} onChange={() => toggleDay(d.key)} style={{ accentColor: C.purple }} />
-                      Open
-                    </label>
-                    {isOpen ? (
-                      <>
-                        <input type="time" value={v.open} onChange={e => updateDayHour(d.key, "open", e.target.value)} style={input} />
-                        <input type="time" value={v.close} onChange={e => updateDayHour(d.key, "close", e.target.value)} style={input} />
-                      </>
-                    ) : (
-                      <div style={{ gridColumn: "3 / span 2", fontSize: 12, color: "#6B7280" }}>Closed</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── STEP 5 — Branding (logo + banner) ─────────────────── */}
-        {step === 5 && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Add your branding</h1>
-            <p style={{ color: C.sub, fontSize: 15, marginBottom: 28 }}>Upload your logo and a cover banner. You can change these anytime.</p>
-
-            {/* Cover banner preview */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>Cover banner</div>
-              <label style={{ cursor: "pointer", display: "block" }}>
-                <div style={{
-                  width: "100%", aspectRatio: "3/1",
-                  background: bannerPreview ? `url(${bannerPreview}) center/cover` : "linear-gradient(135deg, #7C3AED, #A78BFA)",
-                  border: `2px dashed ${C.border}`, borderRadius: 14,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "rgba(255,255,255,0.8)", fontSize: 14, fontWeight: 600,
-                }}>
-                  {!bannerPreview && "📷 Click to upload cover banner"}
-                </div>
-                <input type="file" accept="image/*" onChange={e => handleFileSelect(e, "banner")} style={{ display: "none" }} />
-              </label>
-            </div>
-
-            {/* Logo / avatar preview */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>Logo / Profile photo</div>
-              <label style={{ cursor: "pointer", display: "inline-block" }}>
+              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>Let's set up your profile</h2>
+              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>You can always change this later.</p>
+            </div>
+
+            {/* Avatar upload */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <label style={{ cursor: "pointer" }}>
                 <div style={{
-                  width: 120, height: 120, borderRadius: 18,
-                  background: avatarPreview ? `url(${avatarPreview}) center/cover` : "#1A1A1A",
-                  border: `2px dashed ${C.border}`,
+                  width: 100, height: 100, borderRadius: "50%",
+                  background: avatarPreview ? "transparent" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                  border: "3px solid #7C3AED",
+                  overflow: "hidden",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  color: C.sub, fontSize: 28,
+                  fontSize: 36,
                 }}>
-                  {!avatarPreview && "🖼️"}
+                  {avatarPreview
+                    ? <img src={avatarPreview} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                    : "📷"
+                  }
                 </div>
-                <input type="file" accept="image/*" onChange={e => handleFileSelect(e, "avatar")} style={{ display: "none" }} />
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={loadAvatar} />
               </label>
+              <div style={{ fontSize: 13, color: C.sub }}>Tap to add profile photo</div>
             </div>
 
-            <div style={{ marginTop: 28, padding: 14, background: "rgba(124,58,237,0.1)", border: "1px solid #4B2A8E", borderRadius: 12, fontSize: 13, color: "#DDD" }}>
-              💡 After this, you can start posting announcements, create events, and build groups from your profile page.
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Display Name</label>
+              <input style={inputStyle} placeholder="Your name" value={displayName} onChange={e => setDisplayName(e.target.value)} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Bio (optional)</label>
+              <textarea
+                rows={3}
+                style={{ ...inputStyle, resize: "none" }}
+                placeholder="What drives you? What are you working toward?"
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+              />
             </div>
           </div>
         )}
 
-        {/* Error */}
-        {error && (
-          <div style={{ marginTop: 16, padding: "10px 14px", background: "#2A0F0F", border: "1px solid #DC2626", borderRadius: 10, fontSize: 13, color: "#FCA5A5" }}>
-            {error}
+        {/* ─── STEP 2: Fitness Goal + Activity Level ─────────────── */}
+        {step === 2 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>What's your main goal?</h2>
+              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>We'll personalize your experience.</p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {FITNESS_GOALS.map(g => (
+                <SelectChip
+                  key={g.id}
+                  selected={goal === g.id}
+                  onClick={() => setGoal(g.id)}
+                  emoji={g.emoji}
+                  label={g.label}
+                  desc={g.desc}
+                />
+              ))}
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: "0 0 12px" }}>Activity level</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {ACTIVITY_LEVELS.map(a => (
+                  <SelectChip
+                    key={a.id}
+                    selected={activityLevel === a.id}
+                    onClick={() => setActivityLevel(a.id)}
+                    emoji={a.emoji}
+                    label={a.label}
+                    desc={a.desc}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ── Nav buttons ───────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
+        {/* ─── STEP 3: Focus Areas + Equipment ───────────────────── */}
+        {step === 3 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>What do you train?</h2>
+              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>Pick all that apply.</p>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text, margin: "0 0 12px" }}>Focus areas</h3>
+              <ChipGrid items={FOCUS_AREAS} selected={focusAreas} onToggle={toggleFocus} cols={4} />
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text, margin: "0 0 12px" }}>Equipment access</h3>
+              <ChipGrid items={EQUIPMENT} selected={equipment} onToggle={toggleEquipment} cols={3} />
+            </div>
+          </div>
+        )}
+
+        {/* ─── STEP 4: Macro Goals ────────────────────────────────── */}
+        {step === 4 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>Set your daily targets</h2>
+              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>Used for your nutrition progress bars.</p>
+            </div>
+
+            {goal && (
+              <button
+                onClick={suggestMacros}
+                style={{
+                  padding: "12px 16px", borderRadius: 14,
+                  border: "2px solid #7C3AED", background: "rgba(124,58,237,0.1)",
+                  color: "#A78BFA", fontWeight: 800, fontSize: 14, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 8,
+                }}
+              >
+                ✨ Auto-suggest macros for my goal
+              </button>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {[
+                { label: "Daily Calories", unit: "kcal", val: calories, set: setCalories },
+                { label: "Protein", unit: "g/day", val: protein, set: setProtein },
+                { label: "Carbs", unit: "g/day", val: carbs, set: setCarbs },
+                { label: "Fat", unit: "g/day", val: fat, set: setFat },
+                { label: "Water", unit: "oz/day", val: waterOz, set: setWaterOz },
+              ].map(f => (
+                <div key={f.label}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    {f.label} <span style={{ color: "#6B7280" }}>({f.unit})</span>
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    inputMode="numeric"
+                    value={f.val}
+                    onChange={e => f.set(e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: C.card, borderRadius: 16, padding: "14px 16px", border: "1.5px solid #2A2A2A" }}>
+              <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>
+                💡 These power your daily nutrition progress bars on the Log screen. You can update them anytime under Nutrition → Edit Goals.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── STEP 5: Welcome / Ready ────────────────────────────── */}
+        {step === 5 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24, alignItems: "center", textAlign: "center" }}>
+            <div style={{ fontSize: 72 }}>🏆</div>
+            <div>
+              <h2 style={{ fontSize: 32, fontWeight: 900, color: C.text, margin: "0 0 10px" }}>You're all set!</h2>
+              <p style={{ fontSize: 16, color: C.sub, margin: 0, lineHeight: 1.6 }}>
+                Start logging your first workout, track your nutrition, and climb the ranks. The grind starts now.
+              </p>
+            </div>
+
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { emoji: "🏋️", text: "Log workouts & track PRs" },
+                { emoji: "🥗", text: "Track nutrition with macro goals" },
+                { emoji: "⚔️", text: "Get matched with rivals" },
+                { emoji: "🏆", text: "Earn badges & climb tier ranks" },
+                { emoji: "📊", text: "See your progress in Stats" },
+              ].map((item, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    background: C.card, borderRadius: 14, padding: "12px 16px",
+                    border: "1.5px solid #2A2A2A", textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontSize: 22 }}>{item.emoji}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Navigation buttons */}
+        <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
           {step > 1 && (
             <button
               onClick={() => setStep(s => (s - 1) as Step)}
-              style={{ flex: 1, padding: "14px", borderRadius: 14, border: `1px solid ${C.border}`, background: "transparent", color: C.text, fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+              style={{
+                flex: 1, padding: "15px 0", borderRadius: 16,
+                border: "1.5px solid #2A2A2A", background: "transparent",
+                color: C.sub, fontWeight: 800, fontSize: 15, cursor: "pointer",
+              }}
             >
               ← Back
             </button>
           )}
+
           {step < TOTAL_STEPS ? (
             <button
               onClick={() => setStep(s => (s + 1) as Step)}
               disabled={!canProceed[step]}
               style={{
-                flex: 2, padding: "14px", borderRadius: 14, border: "none",
-                background: canProceed[step] ? `linear-gradient(135deg, ${C.purple}, #A78BFA)` : "#2A2A2A",
+                flex: 2, padding: "15px 0", borderRadius: 16,
+                border: "none",
+                background: canProceed[step]
+                  ? "linear-gradient(135deg, #7C3AED, #A78BFA)"
+                  : "#2A2A2A",
                 color: canProceed[step] ? "#fff" : "#6B7280",
-                fontWeight: 900, fontSize: 16,
-                cursor: canProceed[step] ? "pointer" : "not-allowed",
+                fontWeight: 900, fontSize: 16, cursor: canProceed[step] ? "pointer" : "not-allowed",
+                transition: "all 0.2s",
               }}
             >
-              Next →
+              {step === 1 ? "Let's Go →" : "Next →"}
             </button>
           ) : (
             <button
-              onClick={finishOnboarding}
+              onClick={handleFinish}
               disabled={saving}
               style={{
-                flex: 2, padding: "14px", borderRadius: 14, border: "none",
-                background: saving ? "#4B1D8A" : `linear-gradient(135deg, ${C.purple}, #A78BFA)`,
-                color: "#fff", fontWeight: 900, fontSize: 16,
+                flex: 2, padding: "15px 0", borderRadius: 16,
+                border: "none",
+                background: saving ? "#2A2A2A" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                color: saving ? "#6B7280" : "#fff",
+                fontWeight: 900, fontSize: 16,
                 cursor: saving ? "not-allowed" : "pointer",
               }}
             >
-              {saving ? "Setting up..." : "🚀 Launch my page"}
+              {saving ? "Setting up..." : "🚀 Start Your Journey"}
             </button>
           )}
         </div>
 
-        {/* Skip link — step 2+ only, since step 1 has required fields */}
-        {step > 1 && step < TOTAL_STEPS && (
+        {/* Skip link (step 1 only) */}
+        {step === 1 && (
           <button
-            onClick={() => setStep((step + 1) as Step)}
-            style={{ display: "block", margin: "16px auto 0", background: "none", border: "none", color: C.sub, fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+            onClick={() => setStep(2)}
+            style={{ display: "block", width: "100%", marginTop: 14, background: "none", border: "none", color: C.sub, fontSize: 13, cursor: "pointer" }}
           >
             Skip for now
           </button>
@@ -451,27 +548,3 @@ export default function BusinessOnboardingPage() {
     </div>
   );
 }
-
-// ── Styled helpers ──────────────────────────────────────────────────────────
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</label>
-      {children}
-      {hint && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>{hint}</div>}
-    </div>
-  );
-}
-
-const input: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 14px",
-  background: "#252A3D",
-  border: "1px solid #2A2D3E",
-  borderRadius: 12,
-  color: "#E2E8F0",
-  fontSize: 14,
-  outline: "none",
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-};
