@@ -1196,12 +1196,13 @@ export default function FeedPage() {
     if (page === 0) setLoadingFeed(true);
     else setLoadingMorePosts(true);
 
-    // Use /api/db so the admin client bypasses RLS on the comments nested
-    // select. Supabase nested selects respect RLS on the inner table — so
-    // a direct supabase.from('posts').select('*, comments(...)') would
-    // return empty comments arrays even when comments exist. The endpoint
-    // also hydrates `_liked` server-side.
+    // Try /api/db first — admin client returns posts WITH comments hydrated.
+    // If that fails for any reason (env var missing, deploy lag, network),
+    // fall back to a direct supabase query so the feed still loads (just
+    // without comments). The fallback is the same query the feed used to
+    // run before the comment fix.
     let data: any[] | null = null;
+    let usedFallback = false;
     try {
       const res = await fetch('/api/db', {
         method: 'POST',
@@ -1213,17 +1214,39 @@ export default function FeedPage() {
       });
       const json = await res.json();
       if (json.error) {
-        console.error('[feed] fetchPosts failed:', json.error);
-      } else {
+        console.error('[feed] fetchPosts API error:', json.error);
+      } else if (Array.isArray(json.posts)) {
         data = json.posts;
       }
     } catch (err) {
       console.error('[feed] fetchPosts network error:', err);
     }
 
+    // Fallback: direct supabase query if API failed or returned nothing
+    if (data === null) {
+      console.warn('[feed] falling back to direct supabase query');
+      usedFallback = true;
+      const { data: directData } = await supabase
+        .from('posts')
+        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      if (directData) {
+        // Hydrate _liked client-side since the API helper isn't doing it
+        let likedPostIds: Set<string> = new Set();
+        if (user && directData.length > 0) {
+          const postIds = directData.map((p: any) => p.id);
+          const { data: likeData } = await supabase
+            .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
+          if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+        }
+        data = directData.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+      }
+    }
+
     if (data) {
-      // Filter out posts from users blocked in either direction — they
-      // shouldn't see each other's content. loadBlockedUsers is cached.
+      // Filter out posts from users blocked in either direction
       let filtered = data;
       if (user) {
         const blocks = await loadBlockedUsers(user.id);
@@ -1359,9 +1382,11 @@ export default function FeedPage() {
     if (feedTab !== "following" || !user) return;
     setLoadingFollowing(true);
     async function loadFollowingFeed() {
-      // Use the same /api/db endpoint as the For You feed but with the
-      // followingOnly flag. This ensures comments come back populated
-      // (the previous direct supabase query never selected comments).
+      // Try the unified /api/db endpoint first. Falls back to a direct
+      // supabase query if the API fails — same approach as the For You
+      // feed so the Following tab keeps working even if the API endpoint
+      // is broken (just without comments).
+      let posts: any[] | null = null;
       try {
         const res = await fetch('/api/db', {
           method: 'POST',
@@ -1373,15 +1398,39 @@ export default function FeedPage() {
         });
         const json = await res.json();
         if (json.error) {
-          console.error('[feed] following load failed:', json.error);
-          setFollowingPosts([]);
-        } else {
-          setFollowingPosts(json.posts || []);
+          console.error('[feed] following API error:', json.error);
+        } else if (Array.isArray(json.posts)) {
+          posts = json.posts;
         }
       } catch (err) {
         console.error('[feed] following network error:', err);
-        setFollowingPosts([]);
       }
+
+      // Fallback: direct supabase query (no comments — just posts)
+      if (posts === null) {
+        console.warn('[feed] following falling back to direct supabase query');
+        const { data: followData } = await supabase
+          .from('follows').select('following_id').eq('follower_id', user!.id);
+
+        if (!followData || followData.length === 0) {
+          setFollowingPosts([]);
+          setLoadingFollowing(false);
+          return;
+        }
+
+        const followingIds = followData.map(f => f.following_id);
+        const { data: fp } = await supabase
+          .from('posts')
+          .select('*, users(id, username, full_name, avatar_url), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))')
+          .in('user_id', followingIds)
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        posts = fp || [];
+      }
+
+      setFollowingPosts(posts);
       setLoadingFollowing(false);
     }
     loadFollowingFeed();
