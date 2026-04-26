@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { track } from "@/components/PostHogProvider";
 
 export default function FollowButton({ targetUserId, size = "md" }: { targetUserId: string; size?: "sm" | "md" }) {
   const { user } = useAuth();
@@ -29,9 +30,13 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
         .eq('follower_id', user.id)
         .eq('following_id', targetUserId);
       setFollowing(false);
+      track("unfollow_user", { target_user_id: targetUserId });
     } else {
       await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId });
       setFollowing(true);
+      // follow_user is the key social-graph growth signal — track every
+      // successful follow so we can measure network density over time.
+      track("follow_user", { target_user_id: targetUserId });
     }
     setLoading(false);
   }
