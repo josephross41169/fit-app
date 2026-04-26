@@ -1755,12 +1755,23 @@ export default function ProfilePage() {
              space for an oversized avatar. */
           .profile-avatar-col {
             order: 2 !important;
-            margin-top: -54px !important;
-            margin-bottom: 8px !important;
+            /* No lift on mobile — avatar+name now sit cleanly BELOW the
+               Edit Profile button, centered, with normal spacing. The
+               banner-overlap-avatar pattern only works when stats are
+               visually anchored elsewhere. */
+            margin-top: 16px !important;
+            margin-bottom: 16px !important;
             z-index: 5 !important;
             position: relative !important;
             padding: 0 !important;
+            /* Full-row width on mobile so the inner align-items:center
+               actually centers avatar + name on the page (not within the
+               narrow 120px avatar bounding box). The inline `width:avatarSize`
+               style from the JSX gets overridden here. */
+            width: 100% !important;
             align-items: center !important;
+            display: flex !important;
+            flex-direction: column !important;
           }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
