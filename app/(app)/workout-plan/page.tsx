@@ -220,6 +220,19 @@ export default function WorkoutPlanPage() {
   const [generating, setGenerating] = useState(false);
   const [activeEquipGroup, setActiveEquipGroup] = useState<string>("🏋️ Full Gym");
 
+  // Restore the most recent plan from localStorage on mount so users see
+  // their last generated plan when they return to this page (instead of
+  // having to re-generate).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("fit_ai_plan");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved?.plan) setPlan(saved.plan);
+      }
+    } catch { /* ignore corrupt cache */ }
+  }, []);
+
   const handleEquipGroup = (groupLabel: string, items: Equipment[]) => {
     setActiveEquipGroup(groupLabel);
     setEquipment(items);
@@ -234,11 +247,19 @@ export default function WorkoutPlanPage() {
 
   const generate = useCallback(() => {
     setGenerating(true);
-    // Simulate async to show loading state
     setTimeout(() => {
       const config: PlanConfig = { goal, level, daysPerWeek: days, equipment };
-      setPlan(generatePlan(config));
+      const newPlan = generatePlan(config);
+      setPlan(newPlan);
       setGenerating(false);
+      // Persist for the Post page to read. Saved with a timestamp so we
+      // could later show "Generated 2 days ago" or expire stale plans.
+      try {
+        localStorage.setItem("fit_ai_plan", JSON.stringify({
+          plan: newPlan,
+          generatedAt: Date.now(),
+        }));
+      } catch { /* localStorage might be full or disabled */ }
     }, 600);
   }, [goal, level, days, equipment]);
 
