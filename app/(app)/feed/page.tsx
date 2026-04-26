@@ -740,7 +740,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
 }
 
 // ── Post Card (left column — media + social only) ─────────────────────────────
-function PostCard({ post, onUpdate, onDelete, onReport, currentUser }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } } }) {
+function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
   const isOwner = currentUser && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username);
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
@@ -785,13 +785,12 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser }: { post: P
     const avatarInitials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
     const fullText = replyTo ? `@${replyTo.user.split(' ')[0]} ${commentText.trim()}` : commentText.trim();
     setReplyTo(null);
-    const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: fullText, time: "Just now" };
+
     if (isDbPost && currentUser) {
-      // Route through /api/db so the admin client bypasses RLS — direct
-      // supabase.from('comments').insert() was failing silently because the
-      // RLS policy on the comments table doesn't grant authenticated users
-      // INSERT permission. The API also handles the notification side-effect
-      // server-side so we don't need a separate fetch here.
+      // Submit via /api/db so the admin client bypasses RLS. The server
+      // returns the FULL updated comments list for this post, which we use
+      // to refresh the parent state authoritatively (no optimistic-state
+      // drift bugs — the UI reflects exactly what's in the database).
       try {
         const res = await fetch('/api/db', {
           method: 'POST',
@@ -813,7 +812,14 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser }: { post: P
           setCommentLoading(false);
           return;
         }
-        if (data.comment?.id) nc.id = data.comment.id;
+        // Refresh the parent's view of this post's comments using the
+        // authoritative list returned by the server.
+        if (onCommentsRefresh && data.comments) {
+          onCommentsRefresh(post.id, data.comments);
+        }
+        setCommentText("");
+        setCommentLoading(false);
+        return;
       } catch (err: any) {
         console.error('[comment] network error:', err);
         alert(`Couldn't post your comment: ${err?.message || 'Network error'}`);
@@ -821,6 +827,9 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser }: { post: P
         return;
       }
     }
+
+    // Mock posts (not in DB) — fall back to local-only optimistic update
+    const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: fullText, time: "Just now" };
     onUpdate({ ...post, comments: [...post.comments, nc] });
     setCommentText("");
     setCommentLoading(false);
@@ -1514,6 +1523,15 @@ export default function FeedPage() {
     }
   }
 
+  // After the server inserts a comment it returns the full updated list of
+  // comments for that post. Replace the dbPost's comments with that list so
+  // the UI reflects authoritative state (no optimistic drift).
+  function refreshPostComments(postId: string | number, comments: any[]) {
+    setDbPosts(prev => prev.map((p: any) =>
+      p.id === postId ? { ...p, comments } : p
+    ));
+  }
+
   async function deletePost(id: number | string) {
     // Try Supabase first for real posts
     const isDbPost = dbPosts.find((p: any) => p.id === id);
@@ -1900,7 +1918,7 @@ export default function FeedPage() {
                   wellness: null,
                   _ownerId: p.user_id,
                 };
-                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} />;
+                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onCommentsRefresh={refreshPostComments} />;
               })
             )
           ) : (
@@ -1924,7 +1942,7 @@ export default function FeedPage() {
                     </div>
                   )}
                   {displayPosts.map(post => (
-                    <PostCard key={post.id} post={post} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(post.id)} onReport={() => setReportTarget({ type: "post", id: post.id as string })} />
+                    <PostCard key={post.id} post={post} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(post.id)} onReport={() => setReportTarget({ type: "post", id: post.id as string })} onCommentsRefresh={refreshPostComments} />
                   ))}
                   {/* Load More posts */}
                   {dbPostsHasMore && dbPosts.length > 0 && (
@@ -2064,7 +2082,7 @@ export default function FeedPage() {
                 wellness: null,
                 _ownerId: p.user_id,
               };
-              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} />;
+              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onCommentsRefresh={refreshPostComments} />;
             })
           )
         ) : (
@@ -2076,7 +2094,7 @@ export default function FeedPage() {
         )}
         {mobileItems.map((item, idx) => {
           if (item.type === "post") {
-            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} />;
+            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} onCommentsRefresh={refreshPostComments} />;
           }
           if (item.type === "activity") {
             return (
