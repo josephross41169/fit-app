@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { track } from "@/components/PostHogProvider";
 import { EXERCISES } from "@/lib/exercises";
 import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 import { BADGES } from "@/lib/badges";
@@ -1320,6 +1321,14 @@ export default function PostPage() {
         submittingRef.current = false;
         setSaveError(error.message || "Something went wrong. Please try again.");
       } else {
+        // Track the feed post for analytics. Properties let us see which
+        // post types people are sharing in the PostHog dashboard.
+        track("post_created", {
+          has_photo: !!mediaUrl,
+          photo_count: uploadedUrls.length,
+          has_caption: !!caption,
+          has_location: !!location,
+        });
         // -- Auto-award post badges ------------------------------------------
         try {
           const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
