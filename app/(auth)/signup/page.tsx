@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/components/PostHogProvider";
 
 const G = "#7C3AED";
 const GL = "#F3F0FF";
@@ -99,6 +100,14 @@ export default function SignupPage() {
 
       // Also update the users table with additional fields
       if (data?.user) {
+        // Fire signup analytics event — primary funnel-top event for
+        // measuring acquisition. Properties let us segment by account
+        // type (personal vs business) in PostHog dashboards.
+        track("signup", {
+          account_type: accountType,
+          has_city: !!city,
+          has_business: !!businessName,
+        });
         try {
           await supabase.from('users').update({
             city: city || null,
