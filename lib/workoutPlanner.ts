@@ -289,3 +289,59 @@ export function generatePlan(config: PlanConfig): WeeklyPlan {
     weeklyVolume: `${totalSets} sets / week`,
   };
 }
+
+// ── Swap a single exercise for a different one ────────────────────────────────
+// Used by the AI Plan UI's per-exercise "🔄 Recycle" button. Picks a fresh
+// exercise from the same category that the user hasn't already got in their
+// day. Falls back to allowing duplicates only if the pool is too small.
+//
+// `excludeNames` should include the current exercise name AND every other
+// exercise in that day, so we don't pick something that's already there.
+export function swapExercise(
+  current: PlannedExercise,
+  equipment: Equipment[],
+  excludeNames: string[] = [],
+): PlannedExercise | null {
+  const exclude = new Set([current.name, ...excludeNames]);
+
+  // Pull from the same category — that keeps the swap meaningful (chest stays
+  // chest, back stays back). Filter to user's available equipment.
+  const pool = EXERCISES.filter(e =>
+    e.category === current.category &&
+    e.category !== "Cardio" &&
+    e.category !== "Stretching" &&
+    !exclude.has(e.name) &&
+    equipment.includes(e.equipment)
+  );
+
+  if (pool.length === 0) {
+    // Nothing left after excluding the day's other exercises — try again
+    // ignoring the day exclude list (still skip the current exercise itself
+    // so it actually swaps to something different).
+    const fallback = EXERCISES.filter(e =>
+      e.category === current.category &&
+      e.category !== "Cardio" &&
+      e.category !== "Stretching" &&
+      e.name !== current.name &&
+      equipment.includes(e.equipment)
+    );
+    if (fallback.length === 0) return null;
+    const pick = fallback[Math.floor(Math.random() * fallback.length)];
+    return {
+      ...current,
+      name: pick.name,
+      category: pick.category,
+      equipment: pick.equipment,
+      muscles: pick.muscles,
+    };
+  }
+
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return {
+    ...current,
+    name: pick.name,
+    category: pick.category,
+    equipment: pick.equipment,
+    muscles: pick.muscles,
+  };
+}
