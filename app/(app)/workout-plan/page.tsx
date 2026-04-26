@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
-import { generatePlan, Goal, Level, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
+import { generatePlan, swapExercise, Goal, Level, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
 import { Equipment, EQUIPMENT_TYPES } from "@/lib/exercises";
 import { getExerciseImage } from "@/lib/exerciseImages";
 
@@ -70,16 +70,21 @@ function CategoryBadge({ cat }: { cat: string }) {
   );
 }
 
-function ExerciseRow({ ex, idx }: { ex: PlannedExercise; idx: number }) {
+function ExerciseRow({ ex, idx, onRecycle }: { ex: PlannedExercise; idx: number; onRecycle?: () => void }) {
   const [open, setOpen] = useState(false);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [imgState, setImgState] = useState<"idle" | "loading" | "loaded" | "missing">("idle");
+  const [recycling, setRecycling] = useState(false);
 
-  // Lazy-fetch the image only the first time the row is opened
+  // Lazy-fetch the image only the first time the row is opened.
+  // Image is keyed on ex.name so re-fetches when the exercise gets swapped.
   useEffect(() => {
-    if (!open || imgState !== "idle") return;
+    if (!open) return;
     let cancelled = false;
+    // Reset state when name changes (recycle event) so the new exercise
+    // gets its own image fetch
     setImgState("loading");
+    setImgUrl(null);
     getExerciseImage(ex.name)
       .then(url => {
         if (cancelled) return;
@@ -94,27 +99,52 @@ function ExerciseRow({ ex, idx }: { ex: PlannedExercise; idx: number }) {
         if (!cancelled) setImgState("missing");
       });
     return () => { cancelled = true; };
-  }, [open, imgState, ex.name]);
+  }, [open, ex.name]);
+
+  function handleRecycle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!onRecycle || recycling) return;
+    setRecycling(true);
+    onRecycle();
+    // Brief flash so the user sees the change took effect
+    setTimeout(() => setRecycling(false), 400);
+  }
 
   return (
-    <div style={{ borderRadius: 10, background: "#161616", marginBottom: 6, overflow: "hidden" }}>
+    <div style={{ borderRadius: 10, background: "#161616", marginBottom: 6, overflow: "hidden", transition: "opacity 0.2s", opacity: recycling ? 0.5 : 1 }}>
       <button
         onClick={() => setOpen(o => !o)}
         style={{
           width: "100%", display: "grid",
-          gridTemplateColumns: "28px 1fr auto auto auto",
+          gridTemplateColumns: onRecycle ? "28px 1fr auto auto auto auto" : "28px 1fr auto auto auto",
           gap: 8, alignItems: "center",
           padding: "10px 12px", background: "none", border: "none",
           cursor: "pointer", textAlign: "left",
         }}
       >
         <span style={{ color: C.sub, fontSize: 12, fontWeight: 700 }}>{idx + 1}</span>
-        <div>
-          <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: C.text, fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ex.name}</div>
           <CategoryBadge cat={ex.category} />
         </div>
         <span style={{ color: C.gold, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>{ex.sets}×{ex.reps}</span>
         <span style={{ color: C.sub, fontSize: 11, whiteSpace: "nowrap" }}>{ex.rest}</span>
+        {/* Recycle / swap button — picks a different exercise from the same
+            muscle group. Stops propagation so the row doesn't expand on tap. */}
+        {onRecycle && (
+          <span
+            onClick={handleRecycle}
+            title="Swap for a different exercise"
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 28, height: 28, borderRadius: 8,
+              background: "rgba(124,58,237,0.15)",
+              border: "1px solid rgba(124,58,237,0.35)",
+              fontSize: 13, cursor: "pointer",
+            }}>
+            🔄
+          </span>
+        )}
         <span style={{ color: C.sub, fontSize: 11 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
@@ -161,7 +191,7 @@ function ExerciseRow({ ex, idx }: { ex: PlannedExercise; idx: number }) {
   );
 }
 
-function DayCard({ day, isRest }: { day?: TrainingDay; isRest: boolean; dayNum: number }) {
+function DayCard({ day, isRest, onRecycleExercise }: { day?: TrainingDay; isRest: boolean; dayNum: number; onRecycleExercise?: (exIdx: number) => void }) {
   const [expanded, setExpanded] = useState(false);
   if (isRest || !day) {
     return (
@@ -201,7 +231,14 @@ function DayCard({ day, isRest }: { day?: TrainingDay; isRest: boolean; dayNum: 
       {expanded && (
         <div style={{ padding: "0 12px 12px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ paddingTop: 12 }}>
-            {day.exercises.map((ex, i) => <ExerciseRow key={ex.name + i} ex={ex} idx={i} />)}
+            {day.exercises.map((ex, i) => (
+              <ExerciseRow
+                key={ex.name + i}
+                ex={ex}
+                idx={i}
+                onRecycle={onRecycleExercise ? () => onRecycleExercise(i) : undefined}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -262,6 +299,41 @@ export default function WorkoutPlanPage() {
       } catch { /* localStorage might be full or disabled */ }
     }, 600);
   }, [goal, level, days, equipment]);
+
+  // Swap a single exercise in a single training day for a different one
+  // from the same muscle group. Updates state AND localStorage so the
+  // change survives page reload. Excludes other exercises in the same day
+  // so the swap doesn't pick a duplicate.
+  const handleRecycleExercise = useCallback((dayNum: number, exIdx: number) => {
+    setPlan(prev => {
+      if (!prev) return prev;
+      const dayIdx = prev.days.findIndex(d => d.dayNum === dayNum);
+      if (dayIdx < 0) return prev;
+      const day = prev.days[dayIdx];
+      const current = day.exercises[exIdx];
+      if (!current) return prev;
+
+      const otherNames = day.exercises.filter((_, i) => i !== exIdx).map(e => e.name);
+      const replacement = swapExercise(current, equipment, otherNames);
+      if (!replacement) return prev; // no candidates available — leave unchanged
+
+      const newExercises = day.exercises.map((e, i) => i === exIdx ? replacement : e);
+      const newDay = { ...day, exercises: newExercises };
+      const newDays = prev.days.map((d, i) => i === dayIdx ? newDay : d);
+      const updated = { ...prev, days: newDays };
+
+      // Persist to localStorage so the Post page sees the swap when
+      // importing this day later.
+      try {
+        localStorage.setItem("fit_ai_plan", JSON.stringify({
+          plan: updated,
+          generatedAt: Date.now(),
+        }));
+      } catch { /* ignore */ }
+
+      return updated;
+    });
+  }, [equipment]);
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -435,7 +507,12 @@ export default function WorkoutPlanPage() {
                   <div style={{ paddingTop: 14, textAlign: "center" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase" }}>{DAY_NAMES[i]}</div>
                   </div>
-                  <DayCard day={trainingDay} isRest={isRest} dayNum={dayNum} />
+                  <DayCard
+                    day={trainingDay}
+                    isRest={isRest}
+                    dayNum={dayNum}
+                    onRecycleExercise={trainingDay ? (exIdx) => handleRecycleExercise(dayNum, exIdx) : undefined}
+                  />
                 </div>
               );
             })}
