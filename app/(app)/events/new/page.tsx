@@ -42,6 +42,35 @@ export default function CreateEventPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Tracks group-ownership check for the optional ?group_id param. When the
+  // event is being created for a specific group, only the group owner is
+  // allowed to do so — non-owners get bounced back to the group page.
+  const [groupCheckLoading, setGroupCheckLoading] = useState(!!groupId);
+  const [groupOwnerCheckFailed, setGroupOwnerCheckFailed] = useState(false);
+
+  // If we have a group_id in the URL, verify the user actually owns that group
+  // before letting them proceed. This is the client-side gate; for hardening,
+  // the API path (create_group_event) also checks ownership server-side.
+  useEffect(() => {
+    if (!groupId || !user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: g } = await supabase
+          .from("groups")
+          .select("created_by")
+          .eq("id", groupId)
+          .single();
+        if (cancelled) return;
+        if (!g || g.created_by !== user.id) {
+          setGroupOwnerCheckFailed(true);
+        }
+      } finally {
+        if (!cancelled) setGroupCheckLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [groupId, user?.id]);
 
   // Pre-fill city from user's profile
   useEffect(() => {
@@ -144,6 +173,29 @@ export default function CreateEventPage() {
       setError(err.message || "Couldn't create event. Try again.");
       setSaving(false);
     }
+  }
+
+  // Loading state while we verify group ownership
+  if (groupCheckLoading) {
+    return <div style={{ background: C.bg, minHeight: "100vh", color: C.sub, display: "flex", alignItems: "center", justifyContent: "center" }}>Loading...</div>;
+  }
+
+  // Block render if user tried to create an event for a group they don't own
+  if (groupOwnerCheckFailed) {
+    return (
+      <div style={{ background: C.bg, minHeight: "100vh", color: C.text, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <div style={{ textAlign: "center", maxWidth: 380 }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontWeight: 900, fontSize: 20, marginBottom: 8 }}>Owner only</div>
+          <div style={{ fontSize: 14, color: C.sub, marginBottom: 24, lineHeight: 1.5 }}>
+            Only the group&apos;s owner can create events for this group.
+          </div>
+          <Link href={`/groups/${groupId}`} style={{ display: "inline-block", padding: "12px 24px", borderRadius: 14, background: "#7C3AED", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+            Back to Group
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
