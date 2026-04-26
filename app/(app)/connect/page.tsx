@@ -853,16 +853,11 @@ export default function ConnectPage() {
     }
   }
 
-  // Merge DB groups with mock groups (DB groups take precedence)
-  const dbIds = new Set(dbGroups.map(g => g.db_id));
-  const allLocal = [
-    ...dbGroups.filter(g => g.is_local),
-    ...LOCAL_GROUPS_MOCK.filter(g => !dbIds.has(g.id)),
-  ];
-  const allOnline = [
-    ...dbGroups.filter(g => !g.is_local),
-    ...ONLINE_GROUPS_MOCK.filter(g => !dbIds.has(g.id)),
-  ];
+  // Show only real DB groups. The mock fallbacks created the impression that
+  // there were real Las Vegas groups when there weren't — better to show an
+  // honest empty state and let users create the first one.
+  const allLocal = dbGroups.filter(g => g.is_local);
+  const allOnline = dbGroups.filter(g => !g.is_local);
 
   const filteredLocal = allLocal.filter(g =>
     !search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category.toLowerCase().includes(search.toLowerCase())
