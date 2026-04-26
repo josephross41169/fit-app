@@ -12,6 +12,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { compressImage } from "@/lib/compressImage";
 import { EVENT_CATEGORIES, getEventCategory } from "@/lib/eventCategories";
 
 export default function CreateEventPage() {
@@ -98,8 +99,9 @@ export default function CreateEventPage() {
       let imageUrl: string | null = null;
       if (imageFile) {
         try {
+          const compressed = await compressImage(imageFile);
           imageUrl = await uploadPhoto(
-            imageFile,
+            compressed,
             "activity",
             `events/${user.id}/${Date.now()}.jpg`
           );
