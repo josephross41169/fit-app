@@ -1121,7 +1121,33 @@ export default function GroupPage() {
 
   // ── Join group ──
   async function handleJoinGroup() {
-    if (joined || joining) return;
+    if (joining) return;
+
+    // Toggle: if already joined, leave instead. Owners can't leave their own
+    // group — they must delete it (which is a separate flow).
+    if (joined) {
+      if (isOwnerDB) {
+        alert("You're the group owner. Delete the group from the ··· menu instead.");
+        return;
+      }
+      if (!confirm("Leave this group? You can rejoin anytime.")) return;
+      setJoining(true);
+      try {
+        if (currentUser && group._dbId) {
+          await fetch('/api/db', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'leave_group', payload: { userId: currentUser.id, groupId: group._dbId } }),
+          });
+          setIsMemberDB(false);
+          setJoined(false);
+        }
+      } finally {
+        setJoining(false);
+      }
+      return;
+    }
+
     setJoining(true);
     try {
       if (currentUser && group._dbId) {
@@ -1795,8 +1821,8 @@ export default function GroupPage() {
 
           {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
-            <button onClick={handleJoinGroup} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
-              {joining ? "Joining..." : joined ? "✓ Joined" : "Join Group"}
+            <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
+              {joining ? "Working..." : joined ? (isOwnerDB ? "✓ Owner" : "✓ Joined") : "Join Group"}
             </button>
             <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(22,163,74,0.1)` : C.white, border:`2px solid ${shareCopied ? "#16A34A" : C.blueMid}`, color:shareCopied ? "#16A34A" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
@@ -1809,6 +1835,12 @@ export default function GroupPage() {
                     <button onClick={() => { setDeleteConfirm(true); setShowMoreMenu(false); }}
                       style={{ width:"100%", padding:"13px 18px", background:"none", border:"none", color:"#EF4444", fontWeight:700, fontSize:14, cursor:"pointer", textAlign:"left" }}>
                       🗑️ Delete Group
+                    </button>
+                  )}
+                  {!isOwnerDB && joined && (
+                    <button onClick={() => { setShowMoreMenu(false); handleJoinGroup(); }}
+                      style={{ width:"100%", padding:"13px 18px", background:"none", border:"none", color:"#EF4444", fontWeight:700, fontSize:14, cursor:"pointer", textAlign:"left" }}>
+                      🚪 Leave Group
                     </button>
                   )}
                   <button onClick={() => setShowMoreMenu(false)}
@@ -2494,7 +2526,7 @@ export default function GroupPage() {
                   <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>🗓️ Upcoming Events</div>
                   <div style={{ fontSize:12, color:C.sub }}>{displayEvents.length} scheduled</div>
                 </div>
-                {group._dbId && (
+                {group._dbId && isOwnerDB && (
                   <Link href={`/events/new?group_id=${group._dbId}`} style={{ padding:"7px 14px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>+ Event</Link>
                 )}
               </div>
@@ -3147,7 +3179,7 @@ export default function GroupPage() {
                 <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>🗓️ Upcoming Events</div>
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{displayEvents.length} scheduled</div>
               </div>
-              {group._dbId && (
+              {group._dbId && isOwnerDB && (
                 <Link href={`/events/new?group_id=${group._dbId}`} style={{ padding:"5px 12px", borderRadius:8, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>+ Event</Link>
               )}
             </div>
