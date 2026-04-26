@@ -334,12 +334,15 @@ export async function POST(req: NextRequest) {
     // Uses the admin client so it bypasses RLS — same pattern as
     // post_activity_comment / banner uploads, since the policy on the
     // comments table is what was blocking direct client inserts.
+    // Returns the newly-inserted row AND the full updated comments list for
+    // the post so the client can refresh its UI authoritatively (avoids
+    // optimistic-state drift bugs).
     if (action === 'post_feed_comment') {
       const { postId, commenterId, content, postOwnerId } = payload || {};
       if (!postId || !commenterId || !content || !content.trim()) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
       }
-      const { data, error } = await admin.from('comments').insert({
+      const { data: inserted, error } = await admin.from('comments').insert({
         post_id: postId,
         user_id: commenterId,
         content: content.trim(),
@@ -347,7 +350,14 @@ export async function POST(req: NextRequest) {
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-      // Notify the post owner (best-effort — don't fail if notifications table breaks)
+      // Fetch full updated comments list for this post (with users joined),
+      // using the admin client so RLS doesn't filter rows.
+      const { data: comments } = await admin.from('comments')
+        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+
+      // Notify the post owner (best-effort)
       if (postOwnerId && postOwnerId !== commenterId) {
         try {
           const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
@@ -363,7 +373,7 @@ export async function POST(req: NextRequest) {
         } catch { /* notifications schema may differ — non-fatal */ }
       }
 
-      return NextResponse.json({ comment: data });
+      return NextResponse.json({ comment: inserted, comments: comments || [] });
     }
 
     if (action === 'post_activity_comment') {
