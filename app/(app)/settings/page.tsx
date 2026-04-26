@@ -129,6 +129,30 @@ export default function SettingsPage() {
         </div>
       </Section>
 
+      {/* ── SECTION: Account ──────────────────────────────────────────── */}
+      <Section title="👤 Account">
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            router.push("/login");
+          }}
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            background: "transparent",
+            border: "1.5px solid #2A2D3E",
+            borderRadius: 10,
+            color: "#E2E8F0",
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          Sign out
+        </button>
+      </Section>
+
       {/* ── SECTION: Danger zone ──────────────────────────────────────── */}
       <Section title="⚠️ Danger Zone" danger>
         <button
@@ -185,8 +209,8 @@ export default function SettingsPage() {
             </div>
             <div style={{ fontSize: 14, color: "#E2E8F0", lineHeight: 1.5, marginBottom: 20 }}>
               This is permanent. Your profile, username, and personal data will be anonymized.
-              Your posts and badges will remain but appear as "Deleted User". You will not be
-              able to log back in with this email.
+              Your posts and badges will remain but appear as &ldquo;Deleted User&rdquo;. Your username will
+              be reserved so nobody can impersonate you. You can sign up again later with the same email.
             </div>
 
             {/* Optional reason for our learning */}
