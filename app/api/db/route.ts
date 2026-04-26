@@ -35,9 +35,60 @@ export async function GET(req: NextRequest) {
         memberGroupIds = (memberships || []).map((m: any) => m.group_id);
       }
 
+      // Fetch upcoming events for all groups in two batched queries
+      // (one per source table) to avoid N+1. Cutoff is "now minus 24h" to
+      // match the per-group page filter so events that started today still
+      // show as upcoming.
+      const groupIds = (groups || []).map((g: any) => g.id);
+      const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      // events table (newer schema)
+      const { data: newEvents } = await admin
+        .from('events')
+        .select('id, title, event_date, date_tbd, group_id')
+        .in('group_id', groupIds)
+        .eq('is_public', true)
+        .or(`event_date.gte.${cutoffIso},date_tbd.eq.true`)
+        .order('event_date', { ascending: true });
+
+      // group_events legacy table — column subset chosen to match what the
+      // UI ultimately renders (name + date + time)
+      const { data: legacyEvents } = await admin
+        .from('group_events')
+        .select('id, name, event_date, group_id')
+        .in('group_id', groupIds)
+        .gte('event_date', cutoffIso)
+        .order('event_date', { ascending: true });
+
+      // Bucket the soonest upcoming event per group from either source.
+      const nextEventByGroup: Record<string, any> = {};
+      for (const ev of (newEvents || []) as any[]) {
+        if (nextEventByGroup[ev.group_id]) continue; // already have a sooner one
+        if (ev.date_tbd) {
+          nextEventByGroup[ev.group_id] = { name: ev.title, date: 'TBD', time: '' };
+        } else if (ev.event_date) {
+          const d = new Date(ev.event_date);
+          nextEventByGroup[ev.group_id] = {
+            name: ev.title,
+            date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          };
+        }
+      }
+      for (const ev of (legacyEvents || []) as any[]) {
+        if (nextEventByGroup[ev.group_id]) continue;
+        const d = new Date(ev.event_date);
+        nextEventByGroup[ev.group_id] = {
+          name: ev.name,
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        };
+      }
+
       const enriched = (groups || []).map((g: any) => ({
         ...g,
         is_member: memberGroupIds.includes(g.id),
+        next_event: nextEventByGroup[g.id] || null,
       }));
 
       return NextResponse.json({ groups: enriched });
