@@ -743,7 +743,12 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
 
 // ── Post Card (left column — media + social only) ─────────────────────────────
 function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
-  const isOwner = currentUser && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username);
+  // Determine ownership. Prefer comparing user IDs (reliable) over username
+  // (which can be stale or fall back to "User" if profile data didn't load).
+  const isOwner = !!currentUser && (
+    (typeof (post as any).user_id === "string" && (post as any).user_id === currentUser.id) ||
+    (post.username && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username))
+  );
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
   const [currentPhoto, setCurrentPhoto] = useState(0);
@@ -1024,7 +1029,32 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
                     <span style={{ fontSize:10,color:C.sub }}>{c.time}</span>
                   </div>
                   <p style={{ fontSize:13,color:C.text,margin:0,lineHeight:1.5 }}>{c.text}</p>
-                  <button onClick={()=>{ setReplyTo({id:c.id,user:c.user}); setCommentText(`@${c.user.split(' ')[0]} `); setTimeout(()=>commentInputRef.current?.focus(),50); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.sub,padding:"4px 0 0",marginTop:2 }}>Reply</button>
+                  <div style={{ display:"flex", gap:14, marginTop:2 }}>
+                    <button onClick={()=>{ setReplyTo({id:c.id,user:c.user}); setCommentText(`@${c.user.split(' ')[0]} `); setTimeout(()=>commentInputRef.current?.focus(),50); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.sub,padding:"4px 0 0" }}>Reply</button>
+                    {currentUser && (c as any).user_id === currentUser.id && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Delete this comment?")) return;
+                          try {
+                            const res = await fetch("/api/db", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ action: "delete_post_comment", payload: { commentId: c.id, userId: currentUser.id } }),
+                            });
+                            const json = await res.json();
+                            if (json.error) throw new Error(json.error);
+                            // Refresh comments via the parent's handler
+                            onCommentsRefresh?.(post.id, []);
+                          } catch (e: any) {
+                            alert(`Could not delete: ${e?.message || "unknown error"}`);
+                          }
+                        }}
+                        style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#EF4444",padding:"4px 0 0" }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -1638,6 +1668,7 @@ export default function FeedPage() {
         liked: p._liked || false,
         comments: (p.comments || []).map((c: any) => ({
           id: c.id,
+          user_id: c.user_id,
           user: c.users?.full_name || c.users?.username || "User",
           avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
           text: c.content || "",
@@ -1647,6 +1678,7 @@ export default function FeedPage() {
         nutrition: null,
         wellness: null,
         _ownerId: p.user_id,
+        user_id: p.user_id,
       } as any));
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
