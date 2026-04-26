@@ -92,12 +92,19 @@ export default function CreateEventPage() {
         endDateIso = new Date(`${endDate}T${endTime}`).toISOString();
       }
 
-      // Upload image if provided
+      // Upload image if provided. Uses the activity bucket (the one
+      // with public-read + admin-write that uploadPhoto routes through).
+      // Path scoped per user + timestamped to avoid collisions.
       let imageUrl: string | null = null;
       if (imageFile) {
         try {
-          imageUrl = await uploadPhoto(imageFile, user.id, "events");
-        } catch {
+          imageUrl = await uploadPhoto(
+            imageFile,
+            "activity",
+            `events/${user.id}/${Date.now()}.jpg`
+          );
+        } catch (err) {
+          console.error("Event image upload failed:", err);
           // Non-fatal — event still gets created without image
         }
       }
