@@ -969,6 +969,19 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
 export default function ProfilePage() {
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
+
+  // Mobile-aware sizing for the avatar. We listen for viewport changes so
+  // a desktop user resizing their window down to mobile breakpoint sees the
+  // avatar shrink correctly (120px instead of 184px).
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const avatarSize = isMobile ? 120 : 184;
+
   const [profile,setProfile] = useState({
     name: "",
     username: "",
@@ -1735,23 +1748,30 @@ export default function ProfilePage() {
             gap: 12px !important;
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
-          .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
-          /* Lift avatar enough that it cleanly overlaps the bottom edge of the banner.
-             Avatar is 184px so we lift -92px to half-overlap. margin-bottom: 100px
-             reserves space for the bottom half of the avatar circle so the
-             "Edit Profile" button below it has clearance and doesn't get covered. */
-          .profile-avatar-col { order: 2 !important; margin-top: -92px !important; margin-bottom: 100px !important; z-index: 2 !important; position: relative !important; padding: 0 !important; width: auto !important; }
+          .profile-header-wrap { flex-direction: column !important; align-items: stretch !important; text-align: center !important; gap: 0 !important; }
+          /* Avatar column — 120px avatar (set via avatarSize prop in JSX).
+             Lift -54px to overlap the bottom edge of the banner cleanly.
+             Just 8px bottom margin since we no longer need to reserve a huge
+             space for an oversized avatar. */
+          .profile-avatar-col {
+            order: 2 !important;
+            margin-top: -54px !important;
+            margin-bottom: 8px !important;
+            z-index: 5 !important;
+            position: relative !important;
+            padding: 0 !important;
+            align-items: center !important;
+          }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
           .profile-outer { padding: 0 0 100px !important; max-width: 100% !important; margin: 0 !important; }
-          .profile-stats-bio { padding: 0 16px !important; }
-          /* Stats row — keep the two big numbers on one horizontal line, tighter */
+          /* Stats area: clear breathing room above so it doesn't fight the avatar.
+             Edit Profile button gets its own clear row below the stats. */
+          .profile-stats-bio { padding: 16px !important; width: 100% !important; box-sizing: border-box !important; }
+          /* Stats row tighter spacing on small screens */
           .profile-stats-row { gap: 8px !important; margin-top: 12px !important; }
-          /* Hide desktop-only hover affordances on touch screens.
-             Reposition buttons require hover on desktop; on mobile they just
-             sit there cluttering the layout. Users can long-press the image
-             later — for now, hide them on the touch-primary breakpoint. */
+          /* Hide desktop-only hover affordances on touch screens. */
           .hide-on-mobile { display: none !important; }
         }
         @media (min-width: 768px) and (max-width: 1100px) {
@@ -2539,17 +2559,17 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:184}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
             >
-              <TierFrame tier={userTier} size={184}>
+              <TierFrame tier={userTier} size={avatarSize}>
               {profileImg
-                ? <img src={profileImg} style={{width:184,height:184,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
-                : <div style={{width:152,height:152,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                ? <img src={profileImg} style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                : <div style={{width:avatarSize-32,height:avatarSize-32,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
