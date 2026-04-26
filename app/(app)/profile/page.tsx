@@ -1045,7 +1045,7 @@ export default function ProfilePage() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const avatarSize = isMobile ? 120 : 184;
+  const avatarSize = isMobile ? 160 : 184;
 
   const [profile,setProfile] = useState({
     name: "",
