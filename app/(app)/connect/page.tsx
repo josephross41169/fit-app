@@ -361,6 +361,7 @@ interface DbGroup {
   banner_url?: string;
   is_online?: boolean;
   is_member?: boolean;
+  next_event?: { name: string; date: string; time: string } | null;
 }
 
 interface DisplayGroup {
@@ -375,7 +376,7 @@ interface DisplayGroup {
   location: string;
   tags: string[];
   description: string;
-  nextEvent: null;
+  nextEvent: { name: string; date: string; time: string } | null;
   recentPhoto: string;
   is_local: boolean;
   trending: boolean;
@@ -398,7 +399,7 @@ function normalizeDbGroup(g: DbGroup): DisplayGroup {
     location: g.location || '',
     tags: g.tags || [],
     description: g.description || '',
-    nextEvent: null,
+    nextEvent: g.next_event || null,
     recentPhoto: g.banner_url || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80',
     is_local: !(g.is_online || false),
     trending: false,
