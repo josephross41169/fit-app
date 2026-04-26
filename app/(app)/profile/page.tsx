@@ -425,7 +425,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div style={{background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}}>
+    <div className="diamond-shimmer-card" style={{background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}}>
 
       {/* HEADER */}
       <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?"#2D1F52":C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
@@ -1804,6 +1804,27 @@ export default function ProfilePage() {
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
 
       <style jsx global>{`
+        /* Diamond shimmer effect for activity cards. Sweeping light streak
+           that catches the eye every few seconds without being distracting.
+           Currently always-on for level 1+ for testing — gate on tier later. */
+        .diamond-shimmer-card { position: relative; }
+        .diamond-shimmer-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.10) 42%, rgba(255,255,255,0.40) 50%, rgba(255,255,255,0.10) 58%, transparent 70%);
+          transform: translateX(-100%);
+          animation: diamondShimmerSweep 4.5s ease-in-out infinite;
+          pointer-events: none;
+          z-index: 1;
+          mix-blend-mode: overlay;
+        }
+        .diamond-shimmer-card > * { position: relative; z-index: 2; }
+        @keyframes diamondShimmerSweep {
+          0% { transform: translateX(-100%); }
+          55% { transform: translateX(100%); }
+          100% { transform: translateX(100%); }
+        }
         @media (max-width: 767px) {
           .profile-layout {
             display: flex !important;
