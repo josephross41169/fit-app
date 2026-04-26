@@ -215,19 +215,22 @@ export default function MessagesFAB() {
           position: "fixed", inset: 0, zIndex: 100,
           background: "#0D0D0D",
           display: "flex", flexDirection: "column",
-          paddingTop: "var(--safe-top, 0px)",
+          // Push everything below the iOS notch / Dynamic Island. The fallback
+          // of 12px keeps a comfortable inset on devices without a safe-area.
+          paddingTop: "calc(var(--safe-top, 0px) + 12px)",
         }}>
           {/* Header */}
           <div style={{
             display: "flex", alignItems: "center", gap: 12,
-            padding: "16px 20px",
+            padding: "12px 20px",
             borderBottom: "1px solid #1A1228",
             background: "#0D0D0D",
+            flexShrink: 0,
           }}>
             <div style={{ flex: 1, fontWeight: 900, fontSize: 22, color: "#F0F0F0" }}>
               💬 Messages
             </div>
-            {/* "Send to side" button — slides the overlay back to the edge */}
+            {/* "Hide" button — slides the overlay back to the edge handle */}
             <button
               onClick={() => setOpen(false)}
               aria-label="Minimize"
@@ -262,8 +265,14 @@ export default function MessagesFAB() {
             >×</button>
           </div>
 
-          {/* Conversation list */}
-          <div style={{ flex: 1, overflowY: "auto" }}>
+          {/* Conversation list — bottom padding clears the iPhone home indicator
+              and any floating nav so the last conversation is fully reachable. */}
+          <div style={{
+            flex: 1,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch" as any,
+            paddingBottom: "calc(var(--safe-bottom, 0px) + 24px)",
+          }}>
             {loading ? (
               <div style={{ padding: "40px 20px", textAlign: "center", color: "#6B7280", fontSize: 14 }}>
                 Loading conversations...
