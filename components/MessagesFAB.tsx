@@ -156,73 +156,93 @@ export default function MessagesFAB() {
 
   return (
     <>
-      {/* ── Closed handle: floating arrow on right edge ────────────────────
-          Mobile only. Sits about 1/3 from the bottom — above the bottom nav
-          but well clear of the +Post button. Visible at all times so the
-          user always knows where messages live. */}
-      {!open && (
-        <button
-          className="md:hidden"
-          onClick={handleOpen}
-          aria-label="Open messages"
-          style={{
-            position: "fixed",
-            right: 0,
-            bottom: 200,
-            zIndex: 60,
-            width: 48,
-            height: 56,
-            background: PURPLE,
-            border: "none",
-            borderRadius: "16px 0 0 16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(124,58,237,0.5)",
-          }}
-        >
-          {/* Chat bubble icon */}
+      {/* ── Floating right-edge handle — toggles open/close ──────────────────
+          Always visible (when not on a hidden route). Tapping toggles the
+          overlay. When OPEN, the handle stays on top with a chevron pointing
+          inward and acts as the close button so the user has a consistent
+          way to dismiss. */}
+      <button
+        className="md:hidden"
+        onClick={() => {
+          if (open) {
+            setOpen(false);
+          } else {
+            handleOpen();
+          }
+        }}
+        aria-label={open ? "Close messages" : "Open messages"}
+        style={{
+          position: "fixed",
+          right: 0,
+          bottom: 200,
+          // Sit ABOVE the overlay so it's still clickable when overlay is open
+          zIndex: 10000,
+          width: 48,
+          height: 56,
+          background: PURPLE,
+          border: "none",
+          borderRadius: "16px 0 0 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 4px 14px rgba(124,58,237,0.5)",
+          padding: 0,
+        }}
+      >
+        {open ? (
+          // Close: chevron pointing right (push the panel back to the edge)
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        ) : (
+          // Open: chat bubble icon
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          {unreadTotal > 0 && (
-            <div style={{
-              position: "absolute",
-              top: 4, left: 4,
-              minWidth: 18, height: 18,
-              borderRadius: 9,
-              background: "#EF4444",
-              color: "#fff",
-              fontSize: 10,
-              fontWeight: 900,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 5px",
-              border: "2px solid #0D0D0D",
-              lineHeight: 1,
-            }}>
-              {unreadTotal > 99 ? "99+" : unreadTotal}
-            </div>
-          )}
-        </button>
-      )}
+        )}
+        {!open && unreadTotal > 0 && (
+          <div style={{
+            position: "absolute",
+            top: 4, left: 4,
+            minWidth: 18, height: 18,
+            borderRadius: 9,
+            background: "#EF4444",
+            color: "#fff",
+            fontSize: 10,
+            fontWeight: 900,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 5px",
+            border: "2px solid #0D0D0D",
+            lineHeight: 1,
+          }}>
+            {unreadTotal > 99 ? "99+" : unreadTotal}
+          </div>
+        )}
+      </button>
 
       {/* ── Open overlay: full-screen conversation list ──────────────────── */}
       {open && (
         <div className="md:hidden" style={{
-          position: "fixed", inset: 0, zIndex: 100,
+          position: "fixed",
+          // Cover the ENTIRE screen, including under the iPhone notch and home
+          // indicator. Using top:0 + bottom:0 instead of `inset:0` to be
+          // explicit. zIndex is set very high so nothing bleeds through —
+          // including page sticky headers (which use zIndex 100).
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 9999,
+          // SOLID background — was getting bleed-through from the page below.
           background: "#0D0D0D",
           display: "flex", flexDirection: "column",
-          // Push everything below the iOS notch / Dynamic Island. The fallback
-          // of 12px keeps a comfortable inset on devices without a safe-area.
-          paddingTop: "calc(var(--safe-top, 0px) + 12px)",
         }}>
-          {/* Header */}
+          {/* Header — pushed below the iOS notch / Dynamic Island via safe-area
+              padding so the close button and title are tappable. */}
           <div style={{
             display: "flex", alignItems: "center", gap: 12,
             padding: "12px 20px",
+            paddingTop: "calc(var(--safe-top, 0px) + 14px)",
             borderBottom: "1px solid #1A1228",
             background: "#0D0D0D",
             flexShrink: 0,
@@ -230,10 +250,10 @@ export default function MessagesFAB() {
             <div style={{ flex: 1, fontWeight: 900, fontSize: 22, color: "#F0F0F0" }}>
               💬 Messages
             </div>
-            {/* "Hide" button — slides the overlay back to the edge handle */}
+            {/* Open the full /messages page if you want to see threads */}
             <button
-              onClick={() => setOpen(false)}
-              aria-label="Minimize"
+              onClick={() => { setOpen(false); router.push('/messages'); }}
+              aria-label="Open full messages page"
               style={{
                 background: "rgba(124,58,237,0.15)",
                 border: "1px solid rgba(124,58,237,0.4)",
@@ -242,31 +262,31 @@ export default function MessagesFAB() {
                 color: PURPLE,
                 fontSize: 12, fontWeight: 700,
                 cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6,
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-              Hide
+              Open page →
             </button>
+            {/* Big obvious × button — primary close action */}
             <button
-              onClick={() => { setOpen(false); router.push('/messages'); }}
-              aria-label="Open full messages page"
+              onClick={() => setOpen(false)}
+              aria-label="Close messages"
               style={{
-                background: "transparent",
-                border: "none",
-                color: "#9CA3AF",
-                fontSize: 22,
+                width: 40, height: 40,
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "#F0F0F0",
+                fontSize: 24, fontWeight: 600,
                 cursor: "pointer",
-                padding: 0,
-                lineHeight: 1,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                lineHeight: 1, padding: 0,
+                flexShrink: 0,
               }}
             >×</button>
           </div>
 
-          {/* Conversation list — bottom padding clears the iPhone home indicator
-              and any floating nav so the last conversation is fully reachable. */}
+          {/* Conversation list — bottom padding clears the iPhone home
+              indicator so the last conversation is fully reachable. */}
           <div style={{
             flex: 1,
             overflowY: "auto",
