@@ -354,6 +354,10 @@ export default function PostPage() {
   const [cardioSubcategory, setCardioSubcategory] = useState<string>("running");
   const [cardioBlockDuration, setCardioBlockDuration] = useState("");
   const [cardioBlockDistance, setCardioBlockDistance] = useState("");
+  // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
+  // Kept separate from woDuration (which is the lifting block's duration)
+  // so users can have BOTH "Sports + Lifting" with independent times.
+  const [otherTypeDuration, setOtherTypeDuration] = useState("");
 
   // PR + Template state
   const [newPRs, setNewPRs] = useState<PRResult[]>([]);
@@ -521,7 +525,18 @@ export default function PostPage() {
       setTodayLogId(data.id);
       setWoCategory(data.workout_category || 'lifting');
       setWoType(data.workout_type || '');
-      setWoDuration(data.workout_duration_min ? String(data.workout_duration_min) : '');
+      // Route the stored duration into the correct field. For "other type"
+      // categories (sports/HIIT/yoga/etc.) the duration belongs in
+      // otherTypeDuration; for cardio/lifting it goes in woDuration.
+      const isOtherCat = !["running","walking","biking","swimming","rowing","lifting"].includes(data.workout_category || 'lifting');
+      const durStr = data.workout_duration_min ? String(data.workout_duration_min) : '';
+      if (isOtherCat) {
+        setOtherTypeDuration(durStr);
+        setWoDuration('');
+      } else {
+        setWoDuration(durStr);
+        setOtherTypeDuration('');
+      }
       setWoNotes(data.notes || '');
       // If the stored cardio array has a distance, restore it into the new single-distance field
       const firstCardio = Array.isArray(data.cardio) ? data.cardio[0] : null;
@@ -759,9 +774,15 @@ export default function PostPage() {
         const isOtherTypeMode = !["running","walking","biking","swimming","rowing","lifting"].includes(woCategory);
 
         if (isOtherTypeMode) {
-          // Primary activity = sports/HIIT/yoga/etc. The duration field at
-          // top of that block becomes the primary duration.
-          effectiveDuration = woDuration ? parseInt(woDuration) : null;
+          // Primary activity = sports/HIIT/yoga/etc. The dedicated
+          // otherTypeDuration field drives the primary log duration.
+          // Then if lifting is also toggled on, woDuration adds to it.
+          effectiveDuration = otherTypeDuration ? parseInt(otherTypeDuration) : null;
+          // Add lifting duration on top if user typed one in the lifting block
+          if (includeLifting && woDuration) {
+            const wd = parseInt(woDuration);
+            if (!isNaN(wd)) effectiveDuration = (effectiveDuration || 0) + wd;
+          }
           // woCategory stays as-is (sports/hiit/yoga/etc) — that's the
           // primary classifier. We still allow lifting exercises to
           // be attached via includeLifting (handled below in useExercises).
@@ -1558,7 +1579,7 @@ export default function PostPage() {
               {todayLogId && (
                 <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>✏️ Editing today's {todayLog?.type || 'workout'} · save will update it</div>
-                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoCategory('lifting'); setWoDuration(''); setWoDistance(''); setWoNotes(''); setIncludeCardio(false); setIncludeLifting(true); setCardioSubcategory('running'); setCardioBlockDuration(''); setCardioBlockDistance(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
+                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoCategory('lifting'); setWoDuration(''); setWoDistance(''); setWoNotes(''); setIncludeCardio(false); setIncludeLifting(true); setCardioSubcategory('running'); setCardioBlockDuration(''); setCardioBlockDistance(''); setOtherTypeDuration(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
                 </div>
               )}
 
@@ -1722,7 +1743,7 @@ export default function PostPage() {
                     <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
                       <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
+                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value)} />
                     </div>
                   );
                 })()}
