@@ -602,26 +602,38 @@ export default function GroupPage() {
 
         // Old group_events from API + new events from public.events table.
         // Both are merged so legacy events keep displaying alongside new ones.
-        const legacyEvents = (data.events || []) as any[];
+        // We filter out PAST events (>24h old) so the events tab doesn't fill
+        // up with stale stuff. Events with no date set (date_tbd) always show.
+        const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+        const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
+        const isUpcoming = (dateStr: string | null | undefined) =>
+          !dateStr || new Date(dateStr).getTime() > cutoff;
+
+        const legacyEvents = ((data.events || []) as any[])
+          .filter((e: any) => isUpcoming(e.event_date));
         const { data: newEvents } = await supabase
           .from("events_with_counts")
           .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count")
           .eq("group_id", data.group.id)
           .eq("is_public", true)
           .order("event_date", { ascending: true });
-        // Adapt new-schema rows to the shape the existing EventCard expects
-        const adapted = (newEvents || []).map((e: any) => ({
-          id: e.id,
-          name: e.title,
-          description: e.description,
-          event_date: e.date_tbd ? null : e.event_date,
-          location: e.location_name,
-          price: e.price,
-          emoji: "📅",
-          rsvp_count: e.going_count,
-          image_url: e.image_url,
-          _isNewEvent: true, // flag so card knows to link to /events/[id]
-        }));
+        // Adapt new-schema rows to the shape the existing EventCard expects.
+        // Filter out past events here too (date_tbd events are kept since
+        // they have no date to compare).
+        const adapted = (newEvents || [])
+          .filter((e: any) => e.date_tbd || isUpcoming(e.event_date))
+          .map((e: any) => ({
+            id: e.id,
+            name: e.title,
+            description: e.description,
+            event_date: e.date_tbd ? null : e.event_date,
+            location: e.location_name,
+            price: e.price,
+            emoji: "📅",
+            rsvp_count: e.going_count,
+            image_url: e.image_url,
+            _isNewEvent: true, // flag so card knows to link to /events/[id]
+          }));
         setDbEvents([...adapted, ...legacyEvents]);
 
         setDbChallenges(data.challenges || []);
@@ -1162,16 +1174,28 @@ export default function GroupPage() {
         });
         const data = await res.json();
         if (data.post) {
-          const p = data.post;
-          setDbPosts(prev => [{
-            id: p.id, user: p.user?.full_name || p.user?.username || 'You',
-            avatar: (currentUser?.email || 'Y').slice(0,2).toUpperCase(),
-            time: 'Just now', content: p.content, likes: 0, photo: null,
-          }, ...prev]);
+          // Push the raw API row into dbPosts. The allPosts mapping above
+          // already knows how to extract user.full_name + user.avatar_url
+          // from this shape — previously we were pre-mapping into a flat
+          // object that lost the user data, causing posts to render as
+          // "Unknown" with no avatar.
+          setDbPosts(prev => [data.post, ...prev]);
         }
       } else {
-        // Mock add
-        setDbPosts(prev => [{ id: String(Date.now()), user:'You', avatar:'JB', time:'Just now', content:postContent, likes_count:0, media_url:null, created_at:new Date().toISOString() }, ...prev]);
+        // Mock add (no DB) — used when group isn't a DB-backed group
+        setDbPosts(prev => [{
+          id: String(Date.now()),
+          content: postContent,
+          likes_count: 0,
+          media_url: null,
+          created_at: new Date().toISOString(),
+          user: {
+            id: currentUser?.id,
+            full_name: (currentUser as any)?.profile?.full_name || (currentUser as any)?.profile?.username || 'You',
+            username: (currentUser as any)?.profile?.username || 'you',
+            avatar_url: (currentUser as any)?.profile?.avatar_url || null,
+          },
+        }, ...prev]);
       }
       setPostContent("");
     } finally {
