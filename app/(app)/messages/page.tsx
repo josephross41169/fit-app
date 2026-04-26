@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { loadBlockedUsers } from "@/lib/blocks";
@@ -98,9 +99,21 @@ function AvatarCircle({ name, avatarUrl, size = 40 }: { name: string; avatarUrl?
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, color: "#9CA3AF" }}>Loading...</div>}>
+      <MessagesPageInner />
+    </Suspense>
+  );
+}
+
+function MessagesPageInner() {
   const { user } = useAuth();
+  // Read ?conv=<id> from URL so navigating in from a profile's "Send DM" button
+  // auto-opens that conversation instead of dropping the user on an empty page.
+  const searchParams = useSearchParams();
+  const initialConvId = searchParams?.get("conv") || null;
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [activeConvId, setActiveConvId] = useState<string | null>(initialConvId);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -108,7 +121,7 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<UserResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [mobileShowThread, setMobileShowThread] = useState(false);
+  const [mobileShowThread, setMobileShowThread] = useState(!!initialConvId);
 
   const [msgPhoto, setMsgPhoto] = useState<File | null>(null);
   const [msgPhotoPreview, setMsgPhotoPreview] = useState<string | null>(null);
@@ -259,6 +272,16 @@ export default function MessagesPage() {
     loadMessages(conv.id);
     setMobileShowThread(true);
   };
+
+  // Whenever activeConvId changes (including deep-link arrival via ?conv=...),
+  // load that thread's messages. selectConversation already does this for the
+  // click path; this effect covers the case where we set activeConvId without
+  // going through that handler.
+  useEffect(() => {
+    if (activeConvId) {
+      loadMessages(activeConvId);
+    }
+  }, [activeConvId, loadMessages]);
 
   // ── Send message ────────────────────────────────────────────────────────────
   const sendMessage = async () => {
