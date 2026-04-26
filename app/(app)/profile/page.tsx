@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -7,6 +7,7 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
+import FollowButton from "@/components/FollowButton";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
@@ -1144,10 +1145,23 @@ export default function ProfilePage() {
     loadHighlights();
   }, [user?.id]);
 
+  // Track whether we've already initialized avatar/banner from auth.profile.
+  // After upload we update the DB directly; the auth.profile value lags behind
+  // (it's cached in the auth context), so without this guard a stale re-render
+  // would overwrite the freshly uploaded URL with the old one.
+  const initedAvatarRef = useRef(false);
+  const initedBannerRef = useRef(false);
+
   // Load avatar/banner from profile
   useEffect(() => {
-    if (user?.profile?.avatar_url) setAvatar(user.profile.avatar_url);
-    if (user?.profile?.banner_url) setBanner(user.profile.banner_url);
+    if (user?.profile?.avatar_url && !initedAvatarRef.current) {
+      setAvatar(user.profile.avatar_url);
+      initedAvatarRef.current = true;
+    }
+    if (user?.profile?.banner_url && !initedBannerRef.current) {
+      setBanner(user.profile.banner_url);
+      initedBannerRef.current = true;
+    }
     if (user?.id) {
       // Load saved banner position
       try {
@@ -2026,7 +2040,11 @@ export default function ProfilePage() {
                       <div style={{fontWeight:800,fontSize:14,color:C.text}}>{u.full_name}</div>
                       <div style={{fontSize:12,color:C.sub}}>@{u.username}</div>
                     </div>
-                    <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:18,height:18,flexShrink:0}}><path d="M9 18l6-6-6-6"/></svg>
+                    {/* Inline follow/unfollow — stop propagation so clicks here
+                        don't ALSO navigate to the profile. */}
+                    <div onClick={e => e.stopPropagation()}>
+                      <FollowButton targetUserId={u.id} size="sm" />
+                    </div>
                   </div>
                 ))
               )}
@@ -2829,7 +2847,10 @@ export default function ProfilePage() {
               )}
             </div>
             <div style={{textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:6}}>{profile.name}</div>
+              <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>{profile.name}</div>
+              {profile.username && (
+                <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
+              )}
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap"}}>
                 <TierBadgeChip tier={userTier} />
               </div>
