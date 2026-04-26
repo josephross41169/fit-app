@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { compressImage } from "@/lib/compressImage";
 import FollowButton from "@/components/FollowButton";
 import ReportModal, { ReportTarget } from "@/components/ReportModal";
 import { clearBlockCache } from "@/lib/blocks";
@@ -134,8 +135,10 @@ export default function BusinessProfileView({
       const f = input.files?.[0];
       if (!f) return;
       try {
-        const folder = kind === "avatar" ? "avatars" : kind === "banner" ? "banners" : "highlights";
-        const url = await uploadPhoto(f, currentUser.id, folder);
+        const bucket = kind === "avatar" ? "avatars" : kind === "banner" ? "banners" : "avatars";
+        const subPath = kind === "highlight" ? `${currentUser.id}/highlights/${Date.now()}.jpg` : `${currentUser.id}/${Date.now()}.jpg`;
+        const compressed = await compressImage(f, kind === "banner" ? 1600 : 800, 0.85);
+        const url = await uploadPhoto(compressed, bucket, subPath);
         if (!url) return;
         if (kind === "avatar") setAvatarUrl(url);
         else if (kind === "banner") setBannerUrl(url);
