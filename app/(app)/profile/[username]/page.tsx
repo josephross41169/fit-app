@@ -537,7 +537,7 @@ export default function UserProfilePage() {
             body: JSON.stringify({ action: 'create_conversation', payload: { userId: currentUser.id, otherUserId: profile.id } }),
           });
           const json = await res.json();
-          if (json.conversationId) router.push('/messages');
+          if (json.conversationId) router.push(`/messages?conv=${json.conversationId}`);
         }}
         onBlock={() => router.push('/feed')}
       />
@@ -633,7 +633,7 @@ export default function UserProfilePage() {
                   const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({ action:'create_conversation', payload:{ userId: currentUser.id, otherUserId: profile.id }}) });
                   const json = await res.json();
-                  if (json.conversationId) router.push('/messages');
+                  if (json.conversationId) router.push(`/messages?conv=${json.conversationId}`);
                 }}
                 style={{padding:"8px 16px",borderRadius:12,border:`1.5px solid ${C.blue}`,background:C.white,color:C.blue,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
               >
