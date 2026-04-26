@@ -1459,6 +1459,9 @@ export default function ProfilePage() {
   // Source of truth: users.current_level + users.xp_in_level + counter columns
   // populated by the level-system-v2 migration. Loads in one query.
   const [counterData, setCounterData] = useState<CounterData | null>(null);
+  // Set of XP categories the user has already earned XP for today (resets daily).
+  // Used to highlight already-completed categories purple in the level modal.
+  const [todayXpCategories, setTodayXpCategories] = useState<Set<string>>(new Set());
   const [progressInfo, setProgressInfo] = useState<LevelProgressInfo | null>(null);
   // Modal-local state — which level is currently expanded in the breakdown
   const [modalSelectedLevel, setModalSelectedLevel] = useState<Level | null>(null);
@@ -1522,6 +1525,37 @@ export default function ProfilePage() {
       const info = getLevelProgress(cd);
       setProgressInfo(info);
       setModalSelectedLevel(((cd.currentLevel + 1) <= 6 ? cd.currentLevel + 1 : 6) as Level);
+
+      // Compute which XP categories the user already earned today, by querying
+      // activity_logs for the UTC day window. Used to highlight already-done
+      // categories purple in the level modal.
+      try {
+        const startOfDayUtc = new Date();
+        startOfDayUtc.setUTCHours(0, 0, 0, 0);
+        const { data: todayLogs } = await supabase
+          .from('activity_logs')
+          .select('log_type, workout_category')
+          .eq('user_id', user!.id)
+          .gte('created_at', startOfDayUtc.toISOString());
+        const cats = new Set<string>();
+        const cardioSet = new Set(['running', 'walking', 'biking', 'swimming', 'rowing']);
+        for (const log of (todayLogs || []) as any[]) {
+          if (log.log_type === 'workout') {
+            // Cardio types map to "cardio" XP, everything else to "workout"
+            if (log.workout_category && cardioSet.has(log.workout_category)) cats.add('cardio');
+            else cats.add('workout');
+          } else if (log.log_type === 'nutrition') cats.add('nutrition');
+          else if (log.log_type === 'wellness') cats.add('wellness');
+        }
+        // Also check if user posted to feed today (separate table)
+        const { count: feedCount } = await supabase
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .gte('created_at', startOfDayUtc.toISOString());
+        if ((feedCount ?? 0) > 0) cats.add('feed_post');
+        setTodayXpCategories(cats);
+      } catch { /* non-fatal — leaves the set empty */ }
 
       // If user is ready to level up (XP + challenges all met), trigger server-side level_up
       if (info.readyToLevelUp) {
@@ -2540,14 +2574,25 @@ export default function ProfilePage() {
                 🎯 How to earn XP
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                {XP_CATEGORIES.map(cat => (
-                  <div key={cat.key} style={{display:"flex",justifyContent:"space-between",
-                    alignItems:"center",padding:"7px 10px",background:"#0E0820",
-                    borderRadius:8,border:"1px solid #2D1F52"}}>
-                    <span style={{fontSize:12,color:"#F0F0F0"}}>{cat.icon} {cat.label}</span>
-                    <span style={{fontSize:11,fontWeight:800,color:"#A78BFA"}}>+{cat.xp}</span>
-                  </div>
-                ))}
+                {XP_CATEGORIES.map(cat => {
+                  const done = todayXpCategories.has(cat.key);
+                  return (
+                    <div key={cat.key} style={{
+                      display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"7px 10px",
+                      background: done ? "linear-gradient(135deg, rgba(124,58,237,0.45), rgba(167,139,250,0.30))" : "#0E0820",
+                      borderRadius:8,
+                      border: done ? "1px solid #A78BFA" : "1px solid #2D1F52",
+                      boxShadow: done ? "0 0 8px rgba(167,139,250,0.35)" : "none",
+                      transition: "all 0.2s",
+                    }}>
+                      <span style={{fontSize:12,color:"#F0F0F0",fontWeight:done?700:400}}>
+                        {cat.icon} {cat.label} {done && <span style={{fontSize:11,marginLeft:4}}>✓</span>}
+                      </span>
+                      <span style={{fontSize:11,fontWeight:800,color:done?"#FFFFFF":"#A78BFA"}}>+{cat.xp}</span>
+                    </div>
+                  );
+                })}
               </div>
               <div style={{fontSize:10,color:"#6B7280",marginTop:8,textAlign:"center" as const}}>
                 Max 3 XP per category per day · 15 XP/day max · XP resets on level up
