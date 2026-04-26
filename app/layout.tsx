@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import PWARegister from "@/components/PWARegister";
 import { AuthProvider } from "@/lib/auth";
+import PostHogProvider from "@/components/PostHogProvider";
 
 export const metadata: Metadata = {
   title: "FIT 💪 - Track. Connect. Compete.",
@@ -27,9 +29,15 @@ export default function RootLayout({
       </head>
       <body>
         <PWARegister />
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        {/* Suspense required because PostHogProvider uses useSearchParams,
+            which suspends during streaming server rendering. */}
+        <Suspense fallback={null}>
+          <PostHogProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </PostHogProvider>
+        </Suspense>
       </body>
     </html>
   );
