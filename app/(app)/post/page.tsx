@@ -359,6 +359,25 @@ export default function PostPage() {
   // so users can have BOTH "Sports + Lifting" with independent times.
   const [otherTypeDuration, setOtherTypeDuration] = useState("");
 
+  // ── AI Plan import state ──────────────────────────────────────────────
+  // The AI Plan page persists the most recent plan to localStorage when
+  // the user generates one. We read it here so users can import any of
+  // the plan's training days as a starting point for their workout post.
+  // After import, `loadedPlanLabel` shows a banner identifying the day.
+  const [aiPlan, setAiPlan] = useState<any | null>(null);
+  const [showPlanPicker, setShowPlanPicker] = useState(false);
+  const [loadedPlanLabel, setLoadedPlanLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("fit_ai_plan");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved?.plan) setAiPlan(saved.plan);
+      }
+    } catch { /* corrupt cache, ignore */ }
+  }, []);
+
   // PR + Template state
   const [newPRs, setNewPRs] = useState<PRResult[]>([]);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
@@ -476,6 +495,39 @@ export default function PostPage() {
       }
     } catch {}
   }, [user, prevSessions]);
+
+  // -- Import a training day from the AI Plan ------------------------------
+  // Pulls a TrainingDay's exercises into the form. Sets all sets to the
+  // AI's suggestion, reps too. Weight is left blank — the AI doesn't know
+  // the user's weight, so the user fills that in based on what they
+  // actually lifted. Per-set weights array is initialized to empty strings
+  // matching the planned set count.
+  const importPlanDay = useCallback((day: any) => {
+    if (!day || !Array.isArray(day.exercises)) return;
+    const newExercises: Exercise[] = day.exercises.map((ex: any) => {
+      const sets = String(ex.sets || 3);
+      const setCount = parseInt(sets) || 3;
+      // For "8-12" style rep ranges, take the lower bound as the starting
+      // value so users can edit up if they hit the higher end.
+      const repsRaw: string = String(ex.reps || "10");
+      const repStart = repsRaw.includes("-") ? repsRaw.split("-")[0].trim() : repsRaw;
+      return {
+        name: ex.name || "",
+        sets,
+        reps: repStart,
+        weight: "",
+        weights: Array(setCount).fill(""),
+        notes: ex.notes || "",
+      };
+    });
+    setExercises(newExercises);
+    setIncludeLifting(true);
+    setIncludeCardio(false);
+    setWoCategory("lifting");
+    if (!woType) setWoType(day.label || day.focus || "AI Plan Workout");
+    setLoadedPlanLabel(day.label || `Day ${day.dayNum}`);
+    setShowPlanPicker(false);
+  }, [woType]);
 
   // -- Fetch templates on first open ----------------------------------------
   const fetchTemplates = useCallback(async () => {
@@ -1440,6 +1492,74 @@ export default function PostPage() {
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh", paddingBottom: 100 }}>
+      {/* ── AI Plan picker modal ──
+          Shows a list of all training days from the saved AI plan. User
+          taps a day → its exercises auto-populate the post form. */}
+      {showPlanPicker && aiPlan && (
+        <div onClick={() => setShowPlanPicker(false)}
+          style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.75)",
+            display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              background:"#111118", borderRadius:20, padding:"20px 20px 16px",
+              maxWidth:480, width:"100%", maxHeight:"80vh", overflowY:"auto",
+              border:"1.5px solid #2D1F52",
+            }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:18, fontWeight:900, color:"#F0F0F0" }}>📋 Pick a workout day</div>
+                <div style={{ fontSize:12, color:"#9CA3AF", marginTop:2 }}>
+                  From your {aiPlan.splitName || "AI Plan"} · {aiPlan.goal} · {aiPlan.level}
+                </div>
+              </div>
+              <button onClick={() => setShowPlanPicker(false)}
+                style={{ background:"none", border:"none", color:"#9CA3AF", fontSize:24, cursor:"pointer", padding:0, lineHeight:1 }}>×</button>
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {(aiPlan.days || []).map((day: any, i: number) => (
+                <button key={i} onClick={() => importPlanDay(day)}
+                  style={{
+                    width:"100%", textAlign:"left",
+                    padding:"12px 14px", borderRadius:12,
+                    background:"rgba(124,58,237,0.10)",
+                    border:"1.5px solid rgba(124,58,237,0.35)",
+                    color:"#F0F0F0", cursor:"pointer",
+                    transition:"all 0.15s",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.20)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.10)"; }}
+                >
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:14, fontWeight:800, color:"#F0F0F0" }}>
+                      Day {day.dayNum} · {day.label}
+                    </span>
+                    <span style={{ fontSize:11, color:"#A78BFA", fontWeight:700, flexShrink:0 }}>
+                      {day.estimatedMinutes}m
+                    </span>
+                  </div>
+                  <div style={{ fontSize:12, color:"#9CA3AF", marginBottom:6 }}>{day.focus}</div>
+                  <div style={{ fontSize:11, color:"#6B7280" }}>
+                    {(day.exercises || []).length} exercise{(day.exercises || []).length === 1 ? "" : "s"}
+                    {(day.exercises || []).slice(0, 3).length > 0 && (
+                      <span> · {(day.exercises || []).slice(0, 3).map((ex: any) => ex.name).join(", ")}
+                        {(day.exercises || []).length > 3 ? "…" : ""}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ marginTop:14, padding:"10px 12px", background:"rgba(74,222,128,0.08)", border:"1px solid rgba(74,222,128,0.25)", borderRadius:10 }}>
+              <div style={{ fontSize:11, color:"#9CA3AF", lineHeight:1.5 }}>
+                💡 The exercises load with AI's suggested sets and reps. Add your actual weights and unmark anything you skipped.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         .post-layout { display: flex; min-height: 100vh; }
         .post-sidebar { display: none; }
@@ -1583,8 +1703,48 @@ export default function PostPage() {
                 </div>
               )}
 
+              {/* AI Plan import banner — shown after user picks a day from
+                  their saved plan. Reminds them what plan they're logging
+                  against. Tappable × dismisses without clearing exercises. */}
+              {loadedPlanLabel && (
+                <div style={{
+                  background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(74,222,128,0.10))",
+                  borderRadius: 14, padding: "10px 14px",
+                  border: "1.5px solid rgba(124,58,237,0.4)",
+                  marginBottom: 10,
+                  display: "flex", alignItems: "center", gap: 10,
+                }}>
+                  <div style={{ fontSize: 18 }}>📋</div>
+                  <div style={{ flex: 1, fontSize: 12, color: "#A78BFA", fontWeight: 700 }}>
+                    From your AI Plan: <span style={{ color: "#F0F0F0" }}>{loadedPlanLabel}</span>
+                  </div>
+                  <button onClick={() => setLoadedPlanLabel(null)}
+                    style={{ background: "none", border: "none", color: "#9CA3AF", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}>
+                    ×
+                  </button>
+                </div>
+              )}
+
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💪 Workout Details</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>💪 Workout Details</div>
+                  {/* "Use AI Plan" button — only shown if a plan was generated.
+                      Opens a picker so the user can choose which training day
+                      to import as a starting point. */}
+                  {aiPlan && (
+                    <button onClick={() => setShowPlanPicker(true)}
+                      style={{
+                        fontSize: 12, fontWeight: 800,
+                        padding: "7px 14px", borderRadius: 99,
+                        background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                        border: "none", color: "#fff",
+                        cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}>
+                      📋 Use AI Plan
+                    </button>
+                  )}
+                </div>
 
                 {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
                 <div style={{ marginBottom: 14 }}>
