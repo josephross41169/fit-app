@@ -81,11 +81,79 @@ function rivalryBadgeLabel(key: string) { return RIVALRY_BADGE_DISPLAY[key]?.lab
 
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
-function Lightbox({src,onClose}:{src:string;onClose:()=>void}) {
+function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; onClose: () => void; onSelectPhoto: (src: string) => void; }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
-    <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <button onClick={onClose} style={{position:"absolute",top:20,right:28,background:"none",border:"none",color:"#fff",fontSize:36,cursor:"pointer",lineHeight:1}}>×</button>
-      <img src={src} style={{maxWidth:"90vw",maxHeight:"85vh",borderRadius:20,objectFit:"contain"}} alt="" />
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9997, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#0E0820', borderBottom: '1px solid #2D1F52', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0 }}>
+        <div style={{ fontWeight: 900, fontSize: 18, color: '#F0F0F0' }}>
+          All Photos {photos.length > 0 && (<span style={{ color: '#9CA3AF', fontSize: 13, fontWeight: 600, marginLeft: 6 }}>({photos.length})</span>)}
+        </div>
+        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.10)', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>x</button>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', padding: '16px clamp(12px, 4vw, 32px) 32px', maxWidth: 1200, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        {photos.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9CA3AF' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u{1F4F7}'}</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>No feed photos yet.</div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+            {photos.map((src, idx) => (
+              <button key={idx} onClick={() => onSelectPhoto(src)} style={{ padding: 0, border: 'none', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', background: '#1A1228', aspectRatio: '1', display: 'block' }}>
+                <img src={src} loading='lazy' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt='' />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: string[]; onClose: () => void; onChange?: (newSrc: string) => void; }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (!photos || !onChange) return;
+      const idx = photos.indexOf(src);
+      if (idx === -1) return;
+      if (e.key === 'ArrowLeft' && idx > 0) onChange(photos[idx - 1]);
+      if (e.key === 'ArrowRight' && idx < photos.length - 1) onChange(photos[idx + 1]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [src, photos, onChange, onClose]);
+  const idx = photos ? photos.indexOf(src) : -1;
+  const hasPrev = photos && idx > 0;
+  const hasNext = photos && idx >= 0 && idx < photos.length - 1;
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 20, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>x</button>
+      {hasPrev && (
+        <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx - 1]); }} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'<'}</button>
+      )}
+      {hasNext && (
+        <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
+      )}
+      <img src={src} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      {photos && idx !== -1 && photos.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
+      )}
     </div>
   );
 }
@@ -970,7 +1038,6 @@ export default function ProfilePage() {
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
 
-  // Mobile-aware sizing for the avatar.
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false);
   useEffect(() => {
@@ -2516,33 +2583,21 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Highlight Lightbox */}
-      {highlightLb && <Lightbox src={highlightLb} onClose={()=>setHighlightLb(null)}/>}
+      {highlightLb && (
+        <Lightbox
+          src={highlightLb}
+          photos={feedPhotos}
+          onChange={(s) => setHighlightLb(s)}
+          onClose={() => setHighlightLb(null)}
+        />
+      )}
 
-      {/* ── All Photos Modal ── */}
       {showAllPhotos && (
-        <div style={{position:"fixed",inset:0,zIndex:9997,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          <div style={{background:C.white,borderRadius:"0 0 24px 24px",padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-            <div style={{fontWeight:900,fontSize:20,color:C.text}}>📸 All Photos</div>
-            <button onClick={()=>setShowAllPhotos(false)} style={{width:38,height:38,borderRadius:"50%",border:"none",background:"#2D1F52",color:C.text,fontSize:22,cursor:"pointer",lineHeight:"38px",textAlign:"center"}}>×</button>
-          </div>
-          <div style={{flex:1,overflowY:"auto",padding:"16px 24px 32px"}}>
-            {feedPhotos.length===0 ? (
-              <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
-                <div style={{fontSize:40,marginBottom:12}}>📭</div>
-                <div style={{fontSize:15,fontWeight:600}}>No feed photos yet. Post something!</div>
-              </div>
-            ) : (
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                {feedPhotos.map((src,idx)=>(
-                  <button key={idx} onClick={()=>setHighlightLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:"pointer",background:"none",aspectRatio:"1"}}>
-                    <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <AllPhotosModal
+          photos={feedPhotos}
+          onClose={() => setShowAllPhotos(false)}
+          onSelectPhoto={(p) => setHighlightLb(p)}
+        />
       )}
 
       <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
