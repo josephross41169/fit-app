@@ -270,8 +270,8 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
 }
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; earnedBadges?: string[] };
-function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, earnedBadges = []}:DayCardProps) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; earnedBadges?: string[]; userLevel?: number };
+function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, earnedBadges = [], userLevel = 1}:DayCardProps) {
   const { user } = useAuth();
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
@@ -425,10 +425,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div className="diamond-shimmer-card" style={{background:"linear-gradient(135deg, #0F172A 0%, #164E63 35%, #1E3A5F 50%, #164E63 65%, #0F172A 100%)",borderRadius:22,border:"1.5px solid #67E8F9",boxShadow:"0 0 16px rgba(34,211,238,0.35), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(186,230,253,0.2)",marginBottom:16,overflow:"hidden"}}>
+    <div className={userLevel >= 4 ? "diamond-shimmer-card" : ""} style={
+      userLevel >= 4
+        ? {background:"linear-gradient(135deg, #0F172A 0%, #164E63 35%, #1E3A5F 50%, #164E63 65%, #0F172A 100%)",borderRadius:22,border:"1.5px solid #67E8F9",boxShadow:"0 0 16px rgba(34,211,238,0.35), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(186,230,253,0.2)",marginBottom:16,overflow:"hidden"}
+        : {background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}
+    }>
 
       {/* HEADER */}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?"rgba(45,31,82,0.85)":"transparent",border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?(userLevel>=4?"rgba(45,31,82,0.85)":"#2D1F52"):(userLevel>=4?"transparent":C.white),border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,#4ADE80,#22C55E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(74,222,128,0.3)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
@@ -1069,6 +1073,8 @@ export default function ProfilePage() {
   const [profileImg,setAvatar]= useState<string|null>(null);
   const [editProfile,setEditProfile] = useState(false);
   const [showLevelModal,setShowLevelModal] = useState(false);
+  const [showCustomizations, setShowCustomizations] = useState(false);
+  const [customizationDetail, setCustomizationDetail] = useState<number | null>(null);
   const [repositionMode, setRepositionMode] = useState(false);
   const [bannerPosition, setBannerPosition] = useState(50); // 0-100, default center
   const [bannerHovered, setBannerHovered] = useState(false);
@@ -2374,6 +2380,104 @@ export default function ProfilePage() {
         );
       })()}
 
+      {/* Customizations Modal — shows unlocked rewards across all 6 levels */}
+      {showCustomizations && (() => {
+        const userLvl = progressInfo?.level ?? 1;
+        const REWARDS: Array<{ level: number; title: string; desc: string; emoji: string; preview: string; color: string }> = [
+          { level: 2, title: "Purple Borders",   desc: "Activity log cards get a subtle purple glow.",          emoji: "💜", preview: "purple",   color: "#A78BFA" },
+          { level: 3, title: "Gold Accents",     desc: "Add warm gold glow + sparkle to your profile name.",    emoji: "🏅", preview: "gold",     color: "#F59E0B" },
+          { level: 4, title: "Diamond Cards",    desc: "Activity log cards transform into shimmering diamond.", emoji: "💎", preview: "diamond",  color: "#67E8F9" },
+          { level: 5, title: "Holographic Name", desc: "Your name shifts through magenta holographic colors.",  emoji: "🌸", preview: "holo",     color: "#E879F9" },
+          { level: 6, title: "Crimson Aura",     desc: "MAX-level red flame aura around your avatar.",          emoji: "🔥", preview: "crimson",  color: "#FF4444" },
+        ];
+        return (
+          <div onClick={() => { setShowCustomizations(false); setCustomizationDetail(null); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          >
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ background: "#0E0820", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "20px 20px 32px", width: "100%", maxWidth: 540, maxHeight: "85vh", overflowY: "auto", border: "1px solid #2D1F52" }}
+            >
+              {/* Drag handle */}
+              <div style={{ width: 40, height: 4, background: "#2D1F52", borderRadius: 99, margin: "0 auto 16px" }} />
+
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 22, color: C.text }}>✨ Customizations</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>Auto-applied as you level up.</div>
+                </div>
+                <button onClick={() => setShowCustomizations(false)} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.10)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>x</button>
+              </div>
+
+              {/* Detail view */}
+              {customizationDetail !== null ? (() => {
+                const reward = REWARDS.find(r => r.level === customizationDetail);
+                if (!reward) return null;
+                const unlocked = userLvl >= reward.level;
+                return (
+                  <div>
+                    <button onClick={() => setCustomizationDetail(null)} style={{ background: "none", border: "none", color: "#A78BFA", fontSize: 13, fontWeight: 700, padding: 0, marginBottom: 16, cursor: "pointer" }}>
+                      ← Back to all rewards
+                    </button>
+                    <div style={{ background: unlocked ? `linear-gradient(135deg, ${reward.color}33, ${reward.color}11)` : "rgba(255,255,255,0.04)", borderRadius: 18, padding: 24, border: `1.5px solid ${unlocked ? reward.color : "#2D1F52"}`, marginBottom: 16 }}>
+                      <div style={{ fontSize: 48, textAlign: "center", marginBottom: 12 }}>{reward.emoji}</div>
+                      <div style={{ fontWeight: 900, fontSize: 20, color: C.text, textAlign: "center", marginBottom: 6 }}>{reward.title}</div>
+                      <div style={{ fontSize: 13, color: C.sub, textAlign: "center", marginBottom: 16 }}>Unlocks at Level {reward.level}</div>
+                      <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6, textAlign: "center" }}>{reward.desc}</div>
+                    </div>
+                    {unlocked ? (
+                      <div style={{ background: "rgba(16,185,129,0.12)", border: "1.5px solid #10B981", borderRadius: 14, padding: "14px 18px", textAlign: "center" }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#34D399" }}>✓ Unlocked & active</div>
+                      </div>
+                    ) : (
+                      <div style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid #2D1F52", borderRadius: 14, padding: "14px 18px", textAlign: "center" }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#9CA3AF" }}>🔒 Reach Level {reward.level} to unlock</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+                /* List view */
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {REWARDS.map(reward => {
+                    const unlocked = userLvl >= reward.level;
+                    return (
+                      <button key={reward.level} onClick={() => setCustomizationDetail(reward.level)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
+                          background: unlocked ? `linear-gradient(135deg, ${reward.color}1F, ${reward.color}0A)` : "rgba(255,255,255,0.03)",
+                          border: `1.5px solid ${unlocked ? reward.color : "#2D1F52"}`,
+                          borderRadius: 14, cursor: "pointer", textAlign: "left" as const,
+                          opacity: unlocked ? 1 : 0.65,
+                        }}
+                      >
+                        <div style={{ fontSize: 28, flexShrink: 0, filter: unlocked ? "none" : "grayscale(100%)" }}>{reward.emoji}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                            <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{reward.title}</div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: unlocked ? reward.color : "#6B7280", padding: "2px 7px", borderRadius: 99, background: unlocked ? `${reward.color}22` : "rgba(255,255,255,0.06)" }}>
+                              LVL {reward.level}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.4 }}>{reward.desc}</div>
+                        </div>
+                        <div style={{ fontSize: 16, color: unlocked ? "#10B981" : "#6B7280", flexShrink: 0 }}>
+                          {unlocked ? "✓" : "🔒"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <div style={{ fontSize: 11, color: C.sub, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>
+                    More cosmetic rewards coming soon.<br/>
+                    Got an idea? Send feedback from Settings.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Level Progress Modal — v2 (6-level XP + challenges system) */}
       {showLevelModal && progressInfo && counterData && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
@@ -2821,6 +2925,37 @@ export default function ProfilePage() {
               )}
             </button>
 
+            {/* Customizations panel — shows what's unlocked at each level */}
+            <button
+              onClick={() => setShowCustomizations(true)}
+              style={{
+                width: "100%",
+                marginBottom: 12,
+                background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(167,139,250,0.10))",
+                border: "1.5px solid rgba(167,139,250,0.45)",
+                borderRadius: 16,
+                padding: "14px 16px",
+                cursor: "pointer",
+                textAlign: "left" as const,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: C.text }}>
+                  ✨ Customizations
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA" }}>
+                  {(() => {
+                    const lvl = progressInfo?.level ?? 1;
+                    const unlockedCount = [2, 3, 4, 5, 6].filter(l => lvl >= l).length;
+                    return `${unlockedCount}/5 unlocked`;
+                  })()}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: C.sub }}>
+                Tap to see your unlocked profile rewards →
+              </div>
+            </button>
+
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
@@ -2898,6 +3033,7 @@ export default function ProfilePage() {
                       workoutLogId={(day as any)._workoutLogId}
                       nutritionLogIds={(day as any)._nutritionLogIds}
                       earnedBadges={earnedBadges.map(b => b.badge_id)}
+                      userLevel={progressInfo?.level ?? 1}
                       onDelete={isReal ? async () => {
                         const wid = (day as any)._workoutLogId;
                         const nids: string[] = (day as any)._nutritionLogIds || [];
