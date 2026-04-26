@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { loadBlockedUsers } from "@/lib/blocks";
+import { track } from "@/components/PostHogProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -307,6 +308,12 @@ export default function MessagesPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'send_message', payload: { conversationId: activeConvId, senderId: user.id, content } }),
+    });
+
+    // DM activity is a deep-engagement signal — track every send.
+    track("message_sent", {
+      conversation_id: activeConvId,
+      message_length: content.length,
     });
 
     // Replace the temp message with the real one from the server so future
