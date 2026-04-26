@@ -10,6 +10,27 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key-for-build';
 const admin = createClient(supabaseUrl, serviceKey);
 
+// Helper for the For You + Following feeds: takes raw post rows from
+// supabase, sorts each post's nested comments chronologically, and hydrates
+// the "_liked" boolean per viewer. Used by both the ranked For You feed
+// and the simpler followingOnly path so they share consistent shape.
+async function hydrateFeedPosts(rows: any[], viewerId: string | undefined, db: any) {
+  const sorted = rows.map((p: any) => ({
+    ...p,
+    comments: (p.comments || []).sort((a: any, b: any) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+  }));
+
+  let likedPostIds = new Set<string>();
+  if (viewerId && sorted.length > 0) {
+    const postIds = sorted.map((p: any) => p.id);
+    const { data: likeData } = await db.from('likes')
+      .select('post_id').eq('user_id', viewerId).in('post_id', postIds);
+    if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+  }
+  return sorted.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -393,52 +414,110 @@ export async function POST(req: NextRequest) {
       const PAGE_SIZE = pageSize || 10;
       const PAGE = page || 0;
 
-      // Resolve "followingOnly" → list of user IDs the viewer follows.
-      // If they follow nobody, return an empty list immediately so we don't
-      // run a useless `in()` query with an empty array.
-      let restrictedUserIds: string[] | null = null;
-      if (followingOnly && viewerId) {
+      // ── Following-only mode (used by the Following tab) ────────────────
+      if (followingOnly) {
+        if (!viewerId) return NextResponse.json({ posts: [] });
         const { data: follows } = await admin.from('follows')
           .select('following_id').eq('follower_id', viewerId);
         if (!follows || follows.length === 0) {
           return NextResponse.json({ posts: [] });
         }
-        restrictedUserIds = follows.map((f: any) => f.following_id);
+        const followingIds = follows.map((f: any) => f.following_id);
+
+        const { data, error } = await admin
+          .from('posts')
+          .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+          .eq('is_public', true)
+          .in('user_id', followingIds)
+          .order('created_at', { ascending: false })
+          .range(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE - 1);
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ posts: await hydrateFeedPosts(data || [], viewerId, admin) });
       }
 
-      let query = admin
-        .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+      // ── For You ranking ─────────────────────────────────────────────────
+      // Three priority buckets, chronological within each:
+      //   1. Posts from users the viewer follows
+      //   2. Posts from users in the viewer's city (excluding follows)
+      //   3. Everyone else
+      // We over-fetch each bucket so pagination still works as we drain them.
+      // Pagination is approximate — at the seams between buckets you may see
+      // a "newer" post sandwiched after older ones because the buckets are
+      // ranked, not strictly time-ordered. Acceptable tradeoff for a v1.
+      let followingIds: string[] = [];
+      let viewerCity: string | null = null;
+      if (viewerId) {
+        const [{ data: follows }, { data: viewer }] = await Promise.all([
+          admin.from('follows').select('following_id').eq('follower_id', viewerId),
+          admin.from('users').select('city').eq('id', viewerId).single(),
+        ]);
+        followingIds = (follows || []).map((f: any) => f.following_id);
+        viewerCity = viewer?.city || null;
+      }
+
+      // Find users in the same city as the viewer (excluding self + follows).
+      let cityUserIds: string[] = [];
+      if (viewerCity) {
+        const { data: cityUsers } = await admin
+          .from('users')
+          .select('id')
+          .eq('city', viewerCity)
+          .neq('id', viewerId);
+        cityUserIds = (cityUsers || [])
+          .map((u: any) => u.id)
+          .filter((id: string) => !followingIds.includes(id));
+      }
+
+      // We pull a wider window than PAGE_SIZE from each bucket to handle
+      // pagination smoothly. If a bucket runs out, the next bucket fills.
+      const FETCH_LIMIT = (PAGE + 1) * PAGE_SIZE * 2;
+
+      const baseSelect = `*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`;
+
+      // Bucket 1: posts from followed users
+      const followingPromise = followingIds.length > 0
+        ? admin.from('posts').select(baseSelect).eq('is_public', true).in('user_id', followingIds).order('created_at', { ascending: false }).limit(FETCH_LIMIT)
+        : Promise.resolve({ data: [] as any[] });
+
+      // Bucket 2: posts from same-city users (excluding follows)
+      const cityPromise = cityUserIds.length > 0
+        ? admin.from('posts').select(baseSelect).eq('is_public', true).in('user_id', cityUserIds).order('created_at', { ascending: false }).limit(FETCH_LIMIT)
+        : Promise.resolve({ data: [] as any[] });
+
+      // Bucket 3: everyone else (excluding self + follows + city already shown)
+      const excludeUserIds = [
+        ...(viewerId ? [viewerId] : []),
+        ...followingIds,
+        ...cityUserIds,
+      ];
+      let everyoneQuery = admin.from('posts').select(baseSelect)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
-        .range(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE - 1);
-
-      if (restrictedUserIds) {
-        query = query.in('user_id', restrictedUserIds);
+        .limit(FETCH_LIMIT);
+      if (excludeUserIds.length > 0) {
+        // Postgres `not.in` with a comma-joined string works for uuid[] columns
+        everyoneQuery = everyoneQuery.not('user_id', 'in', `(${excludeUserIds.join(',')})`);
       }
 
-      const { data, error } = await query;
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const [followingRes, cityRes, everyoneRes] = await Promise.all([
+        followingPromise, cityPromise, everyoneQuery,
+      ]);
 
-      // Sort each post's comments oldest→newest so the UI displays in
-      // chronological order (Supabase nested selects don't guarantee order).
-      const sorted = (data || []).map((p: any) => ({
-        ...p,
-        comments: (p.comments || []).sort((a: any, b: any) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
-      }));
-
-      // Hydrate "_liked" — which posts has the viewer liked?
-      let likedPostIds = new Set<string>();
-      if (viewerId && sorted.length > 0) {
-        const postIds = sorted.map((p: any) => p.id);
-        const { data: likeData } = await admin.from('likes')
-          .select('post_id').eq('user_id', viewerId).in('post_id', postIds);
-        if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+      // Concatenate buckets in priority order, dedupe by post id (defensive),
+      // then slice the page window.
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const bucket of [followingRes.data || [], cityRes.data || [], everyoneRes.data || []]) {
+        for (const p of bucket) {
+          if (seen.has(p.id)) continue;
+          seen.add(p.id);
+          merged.push(p);
+        }
       }
-      const mapped = sorted.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
 
-      return NextResponse.json({ posts: mapped });
+      const pageSlice = merged.slice(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE);
+      return NextResponse.json({ posts: await hydrateFeedPosts(pageSlice, viewerId, admin) });
     }
 
     // ── Post a comment on a feed post ──────────────────────────────────────
@@ -1121,17 +1200,19 @@ export async function POST(req: NextRequest) {
         .eq('id', userId);
       if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
-      // 4. Ban the auth user so they can't log back in. We use a ~100-year
-      //    ban duration as a practical "permanent." Supabase exposes this
-      //    via the admin.updateUserById call. If it fails the account is
-      //    still effectively dead (anonymized + client-signed-out) but we
-      //    log the failure for manual cleanup.
+      // 4. Free up the original email for re-registration. We swap the auth
+      //    user's email to a placeholder so the original is reusable, then
+      //    ban the auth row to prevent the deleted account from logging in.
+      //    This way: original email can sign up again as a fresh account,
+      //    old data stays (anonymized) for content integrity.
       try {
+        const placeholderEmail = `deleted+${userId}@deleted.fit`;
         await admin.auth.admin.updateUserById(userId, {
-          ban_duration: '876000h', // 100 years
+          email: placeholderEmail,
+          ban_duration: '876000h', // 100 years — defense in depth
         });
       } catch (authErr: any) {
-        console.error('[delete_account] auth ban failed (non-fatal):', authErr);
+        console.error('[delete_account] auth update failed (non-fatal):', authErr);
       }
 
       return NextResponse.json({ success: true });
