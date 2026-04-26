@@ -98,6 +98,7 @@ interface Post {
   tags?: string[];
   likes?: number;
   likes_count?: number;
+  comments_count?: number;
 }
 
 interface DbEvent {
@@ -185,10 +186,13 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
           </svg>
           <span style={{ fontSize:14,fontWeight:700,color:liked?"#FF6B6B":C.sub }}>{likes.toLocaleString()}</span>
         </button>
-        <button style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
+        <button onClick={() => router.push(`/post/${post.id}`)} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }} aria-label="Comment">
           <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
+          {(post.comments_count ?? 0) > 0 && (
+            <span style={{ fontSize:14,fontWeight:700,color:C.sub }}>{post.comments_count}</span>
+          )}
         </button>
         <button style={{ marginLeft:"auto",display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
