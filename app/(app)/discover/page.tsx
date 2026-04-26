@@ -3,7 +3,9 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { getEventCategory } from "@/lib/eventCategories";
+import FollowButton from "@/components/FollowButton";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -125,10 +127,39 @@ interface LocalPost extends Post {
 // -----------------------------------------------------------------------------
 
 function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }) {
+  const { user } = useAuth();
   const [liked, setLiked] = useState(initLiked);
   // Support both mock (post.likes) and real DB (post.likes_count)
   const [likes, setLikes] = useState(post.likes ?? post.likes_count ?? 0);
+  const [likeBusy, setLikeBusy] = useState(false);
   const router = useRouter();
+
+  // Persist like/unlike to post_likes. Optimistic update with revert on failure.
+  // Only attempts the DB call for real DB posts (UUID id) — mock posts have
+  // numeric ids and no matching DB row.
+  async function handleToggleLike() {
+    if (likeBusy || !user) return;
+    // Mock posts have numeric ids — skip DB write but still toggle visually
+    const isRealPost = typeof post.id === "string" && post.id.includes("-");
+    setLikeBusy(true);
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikes(n => wasLiked ? n - 1 : n + 1);
+    if (!isRealPost) { setLikeBusy(false); return; }
+    try {
+      if (wasLiked) {
+        await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", user.id);
+      } else {
+        await supabase.from("post_likes").insert({ post_id: post.id, user_id: user.id });
+      }
+    } catch {
+      // Revert on failure
+      setLiked(wasLiked);
+      setLikes(n => wasLiked ? n + 1 : n - 1);
+    } finally {
+      setLikeBusy(false);
+    }
+  }
 
   // Normalize fields · handle both mock data shapes and real DB posts
   // DB posts: post.user = joined users row (object), post.users = same via alternate join key
@@ -155,9 +186,9 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
           <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{displayName}</div>
           <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} · {post.time || ""}</div>
         </div>
-        <button style={{ padding:"6px 16px",borderRadius:20,background:C.greenLight,border:`1.5px solid ${C.blue}`,color:C.blue,fontWeight:800,fontSize:12,cursor:"pointer" }}>
-          + Follow
-        </button>
+        {userObj?.id && user && userObj.id !== user.id && (
+          <FollowButton targetUserId={userObj.id} size="sm" />
+        )}
       </div>
 
       {/* Photo */}
@@ -180,7 +211,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
 
       {/* Actions */}
       <div style={{ padding:"8px 18px 14px",display:"flex",alignItems:"center",gap:20,borderTop:`1px solid ${C.greenLight}`,marginTop:4 }}>
-        <button onClick={() => { setLiked(l => !l); setLikes(n => liked ? n-1 : n+1); }} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
+        <button onClick={handleToggleLike} disabled={likeBusy} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:likeBusy?"default":"pointer",padding:0 }}>
           <svg viewBox="0 0 24 24" fill={liked?"#FF6B6B":"none"} stroke={liked?"#FF6B6B":C.sub} strokeWidth="2" style={{ width:22,height:22,transition:"all 0.15s" }}>
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
