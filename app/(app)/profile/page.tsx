@@ -3212,10 +3212,6 @@ export default function ProfilePage() {
                   <button onClick={()=>setList(l=>l.filter((_:any,j:number)=>j!==i))} style={{width:28,height:28,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer"}}>×</button>
                 </div>
               )}/>
-
-            <button style={{width:"100%",padding:"14px 0",borderRadius:16,border:`2px solid ${C.purpleMid}`,background:C.white,color:C.sub,fontWeight:700,fontSize:14,cursor:"pointer"}}>
-              Sign Out
-            </button>
           </div>
         </div>
       </div>
