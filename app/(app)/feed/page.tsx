@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { track } from "@/components/PostHogProvider";
 import FollowButton from "@/components/FollowButton";
 import ActivityComments from "@/components/ActivityComments";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
@@ -817,6 +818,12 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
         if (onCommentsRefresh && data.comments) {
           onCommentsRefresh(post.id, data.comments);
         }
+        // Analytics: comments are a strong engagement signal — track per
+        // post so we can compute "% of users commenting" funnels.
+        track("comment_created", {
+          post_id: post.id,
+          comment_length: fullText.length,
+        });
         setCommentText("");
         setCommentLoading(false);
         return;
