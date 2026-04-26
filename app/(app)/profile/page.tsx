@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { compressImage } from "@/lib/compressImage";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
@@ -315,10 +316,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         setPhotos(p=>[...p, dataUrl]); // show preview immediately
         // Upload to Supabase via server API
         const { uploadPhoto: up } = await import('@/lib/uploadPhoto');
+        const { compressImage: ci } = await import('@/lib/compressImage');
         const logId = workoutLogId || (nutritionLogIds?.[0]);
         const bucket = 'activity';
         const path = `${logId || Date.now()}/photo-${Date.now()}.jpg`;
-        const publicUrl = await up(dataUrl, bucket, path);
+        const compressed = await ci(dataUrl);
+        const publicUrl = await up(compressed, bucket, path);
         if (publicUrl) {
           setPhotos(p => p.map(u => u === dataUrl ? publicUrl : u));
           // Save URL back to the activity log
@@ -1601,7 +1604,8 @@ export default function ProfilePage() {
       const dataUrl = ev.target!.result as string;
       set(dataUrl); // show immediately
       if (supabasePath && user) {
-        const publicUrl = await uploadPhoto(dataUrl, supabasePath.bucket, supabasePath.path);
+        const compressed = await compressImage(dataUrl);
+        const publicUrl = await uploadPhoto(compressed, supabasePath.bucket, supabasePath.path);
         if (publicUrl) {
           set(publicUrl);
           await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
@@ -1692,7 +1696,8 @@ export default function ProfilePage() {
       setHighlights(h => [...h, dataUrl]);
       if (!user) return;
       // Upload to storage to get a real URL
-      const publicUrl = await uploadPhoto(dataUrl, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
+      const compressed = await compressImage(dataUrl);
+      const publicUrl = await uploadPhoto(compressed, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
       if (!publicUrl || !publicUrl.startsWith('http')) {
         // Upload failed — remove the preview so user knows something went wrong
         setHighlights(h => h.filter(u => u !== dataUrl));
@@ -1966,7 +1971,9 @@ export default function ProfilePage() {
                   // Show base64 preview while upload happens
                   setHighlights(h => [...h, dataUrl]);
                   const {uploadPhoto:up}=await import('@/lib/uploadPhoto');
-                  const publicUrl=await up(dataUrl,'avatars',`${user.id}/highlights/${Date.now()}.jpg`);
+                  const {compressImage:ci}=await import('@/lib/compressImage');
+                  const compressed = await ci(dataUrl);
+                  const publicUrl=await up(compressed,'avatars',`${user.id}/highlights/${Date.now()}.jpg`);
                   if(!publicUrl || !publicUrl.startsWith('http')){
                     setHighlights(h => h.filter(u => u !== dataUrl));
                     alert("Couldn't upload that image. Try again.");
@@ -2776,7 +2783,7 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,flex:isMobile?"none":"1 1 0",flexShrink:0,minWidth:isMobile?undefined:avatarSize,width:isMobile?avatarSize:undefined}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:60,marginRight:isMobile?0:20}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
