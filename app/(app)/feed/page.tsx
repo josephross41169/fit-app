@@ -1359,27 +1359,29 @@ export default function FeedPage() {
     if (feedTab !== "following" || !user) return;
     setLoadingFollowing(true);
     async function loadFollowingFeed() {
-      const { data: followData } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', user!.id);
-
-      if (!followData || followData.length === 0) {
+      // Use the same /api/db endpoint as the For You feed but with the
+      // followingOnly flag. This ensures comments come back populated
+      // (the previous direct supabase query never selected comments).
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'get_feed_posts',
+            payload: { viewerId: user!.id, page: 0, pageSize: 20, followingOnly: true },
+          }),
+        });
+        const json = await res.json();
+        if (json.error) {
+          console.error('[feed] following load failed:', json.error);
+          setFollowingPosts([]);
+        } else {
+          setFollowingPosts(json.posts || []);
+        }
+      } catch (err) {
+        console.error('[feed] following network error:', err);
         setFollowingPosts([]);
-        setLoadingFollowing(false);
-        return;
       }
-
-      const followingIds = followData.map(f => f.following_id);
-      const { data: fp } = await supabase
-        .from('posts')
-        .select('*, users(id, username, full_name, avatar_url)')
-        .in('user_id', followingIds)
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      setFollowingPosts(fp || []);
       setLoadingFollowing(false);
     }
     loadFollowingFeed();
@@ -1534,10 +1536,14 @@ export default function FeedPage() {
   }
 
   // After the server inserts a comment it returns the full updated list of
-  // comments for that post. Replace the dbPost's comments with that list so
-  // the UI reflects authoritative state (no optimistic drift).
+  // comments for that post. Replace the post's comments with that list in
+  // BOTH dbPosts (For You) and followingPosts (Following) so whichever feed
+  // the user is on, the comment shows up immediately.
   function refreshPostComments(postId: string | number, comments: any[]) {
     setDbPosts(prev => prev.map((p: any) =>
+      p.id === postId ? { ...p, comments } : p
+    ));
+    setFollowingPosts(prev => prev.map((p: any) =>
       p.id === postId ? { ...p, comments } : p
     ));
   }
@@ -1921,8 +1927,17 @@ export default function FeedPage() {
                   photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
                   caption: p.caption || "",
                   likes: p.likes_count || 0,
-                  liked: false,
-                  comments: [],
+                  liked: p._liked || false,
+                  // Map comments same shape PostCard expects (matching the
+                  // For You feed mapping). Without this they default to []
+                  // and never render.
+                  comments: (p.comments || []).map((c: any) => ({
+                    id: c.id,
+                    user: c.users?.full_name || c.users?.username || "User",
+                    avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+                    text: c.content || "",
+                    time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                  })),
                   workout: null,
                   nutrition: null,
                   wellness: null,
@@ -2085,8 +2100,14 @@ export default function FeedPage() {
                 photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
                 caption: p.caption || "",
                 likes: p.likes_count || 0,
-                liked: false,
-                comments: [],
+                liked: p._liked || false,
+                comments: (p.comments || []).map((c: any) => ({
+                  id: c.id,
+                  user: c.users?.full_name || c.users?.username || "User",
+                  avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+                  text: c.content || "",
+                  time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                })),
                 workout: null,
                 nutrition: null,
                 wellness: null,
