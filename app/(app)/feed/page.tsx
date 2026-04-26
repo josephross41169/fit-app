@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { compressImage } from "@/lib/compressImage";
 import { track } from "@/components/PostHogProvider";
 import FollowButton from "@/components/FollowButton";
 import ActivityComments from "@/components/ActivityComments";
@@ -1295,9 +1296,11 @@ export default function FeedPage() {
     if (!file || !user) return;
     setPostingStory(true);
     try {
-      // Upload the photo to the activity bucket via existing helper.
-      // Path is namespaced under stories/ so we can find them later if needed.
-      const url = await uploadPhoto(file, 'activity', `stories/${user.id}/${Date.now()}.jpg`);
+      // iPhone photos can be 4-8MB and may be HEIC, both of which break the
+      // upload pipeline (Vercel 4.5MB body limit + Supabase rejects HEIC).
+      // Re-encode through a canvas to get a clean ~1MB JPEG every time.
+      const compressed = await compressImage(file, 1600, 0.85);
+      const url = await uploadPhoto(compressed, 'activity', `stories/${user.id}/${Date.now()}.jpg`);
       if (!url) {
         alert("Couldn't upload that photo. Try another one.");
         return;
@@ -1616,8 +1619,11 @@ export default function FeedPage() {
   }
 
   // Use real DB posts when available, fall back to mock
-  const displayPosts = dbPosts.length > 0
-    ? dbPosts.map((p: any) => ({
+  // displayPosts: real DB posts only. The "empty state" message below
+  // handles the no-posts-yet case. Previously this fell back to mock data,
+  // which made the feed look populated with fake profiles when the user
+  // actually had nothing to see — confusing and looked broken.
+  const displayPosts = dbPosts.map((p: any) => ({
         id: p.id,
         user: p.users?.full_name || p.users?.username || "User",
         username: p.users?.username || "user",
@@ -1641,8 +1647,7 @@ export default function FeedPage() {
         nutrition: null,
         wellness: null,
         _ownerId: p.user_id,
-      } as any))
-    : posts;
+      } as any));
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
 
