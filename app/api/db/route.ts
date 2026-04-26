@@ -330,6 +330,44 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Post activity comment ──────────────────────────────────────────────
+    // ── Get feed posts (with comments) ──────────────────────────────────────
+    // Uses the admin client so the nested comments select isn't filtered by
+    // RLS. Without this, the comments come back as empty arrays even when
+    // they exist in the DB.
+    if (action === 'get_feed_posts') {
+      const { viewerId, page, pageSize } = payload || {};
+      const PAGE_SIZE = pageSize || 10;
+      const PAGE = page || 0;
+      const { data, error } = await admin
+        .from('posts')
+        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .range(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE - 1);
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Sort each post's comments oldest→newest so the UI displays in
+      // chronological order (Supabase nested selects don't guarantee order).
+      const sorted = (data || []).map((p: any) => ({
+        ...p,
+        comments: (p.comments || []).sort((a: any, b: any) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+      }));
+
+      // Hydrate "_liked" — which posts has the viewer liked?
+      let likedPostIds = new Set<string>();
+      if (viewerId && sorted.length > 0) {
+        const postIds = sorted.map((p: any) => p.id);
+        const { data: likeData } = await admin.from('likes')
+          .select('post_id').eq('user_id', viewerId).in('post_id', postIds);
+        if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+      }
+      const mapped = sorted.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+
+      return NextResponse.json({ posts: mapped });
+    }
+
     // ── Post a comment on a feed post ──────────────────────────────────────
     // Uses the admin client so it bypasses RLS — same pattern as
     // post_activity_comment / banner uploads, since the policy on the
