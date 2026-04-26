@@ -545,14 +545,17 @@ export default function MessagesPage() {
                 // Parse photo from content
                 const photoMatch = msg.content.match(/^\[photo\]: (https?:\/\/\S+)(\n|$)/);
                 const photoUrl = photoMatch ? photoMatch[1] : null;
-                // Parse story_reply from content — these get a special header
-                // ("Replied to your story") and the story image as a small preview tile
-                // above the actual reply text. Format: [story_reply]: URL\ntext
+                // Parse story_reply
                 const storyMatch = msg.content.match(/^\[story_reply\]: (https?:\/\/\S+)(\n|$)/);
                 const storyReplyUrl = storyMatch ? storyMatch[1] : null;
+                // Parse story_reaction — same format but rendered as a big single emoji
+                const reactMatch = msg.content.match(/^\[story_reaction\]: (https?:\/\/\S+)(\n|$)/);
+                const storyReactUrl = reactMatch ? reactMatch[1] : null;
 
                 let textContent: string;
-                if (storyReplyUrl) {
+                if (storyReactUrl) {
+                  textContent = msg.content.replace(/^\[story_reaction\]: https?:\/\/\S+\n?/, '').trim();
+                } else if (storyReplyUrl) {
                   textContent = msg.content.replace(/^\[story_reply\]: https?:\/\/\S+\n?/, '').trim();
                 } else if (photoUrl) {
                   textContent = msg.content.replace(/^\[photo\]: https?:\/\/\S+\n?/, '').trim();
@@ -565,65 +568,82 @@ export default function MessagesPage() {
                     key={msg.id}
                     className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
                   >
-                    {/* Story-reply header tag — only on incoming messages so the
-                        recipient knows this DM is in response to their story */}
-                    {storyReplyUrl && !isMine && (
+                    {/* Story-reply / story-reaction header tag */}
+                    {(storyReplyUrl || storyReactUrl) && !isMine && (
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
                         <span>↩️</span>
-                        <span>Replied to your story</span>
+                        <span>{storyReactUrl ? "Reacted to your story" : "Replied to your story"}</span>
                       </div>
                     )}
-                    {storyReplyUrl && isMine && (
+                    {(storyReplyUrl || storyReactUrl) && isMine && (
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
                         <span>↩️</span>
-                        <span>You replied to their story</span>
+                        <span>You {storyReactUrl ? "reacted to" : "replied to"} their story</span>
                       </div>
                     )}
-                    <div
-                      className="max-w-xs lg:max-w-md rounded-2xl text-sm overflow-hidden"
-                      style={{
-                        background: isMine ? "#7C3AED" : "#1A1228",
-                        color: isMine ? "#fff" : "#E2E8F0",
-                        borderBottomRightRadius: isMine ? 4 : undefined,
-                        borderBottomLeftRadius: !isMine ? 4 : undefined,
-                      }}
-                    >
-                      {storyReplyUrl && (
-                        // Small preview tile of the story being replied to.
-                        // Click opens the image full-size in a new tab.
-                        <a
-                          href={storyReplyUrl} target="_blank" rel="noopener noreferrer"
-                          style={{ display:"block", padding:"6px 6px 0", textDecoration:"none" }}
-                        >
-                          <div style={{
-                            display:"flex", alignItems:"center", gap:8,
-                            padding:"6px 8px",
-                            background: isMine ? "rgba(0,0,0,0.2)" : "rgba(124,58,237,0.15)",
-                            border: `1px solid ${isMine ? "rgba(255,255,255,0.2)" : "rgba(124,58,237,0.4)"}`,
-                            borderRadius: 10,
-                          }}>
-                            <img src={storyReplyUrl} alt=""
-                              style={{ width:36, height:48, borderRadius:6, objectFit:"cover", flexShrink:0 }}/>
-                            <div style={{ fontSize:11, fontWeight:600, opacity:0.85, lineHeight:1.3 }}>
-                              {isMine ? "Your reply to" : "Their reply to"}<br/>this story
-                            </div>
-                          </div>
+
+                    {/* Reaction render: large emoji + small story tile */}
+                    {storyReactUrl ? (
+                      <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                        <a href={storyReactUrl} target="_blank" rel="noopener noreferrer">
+                          <img src={storyReactUrl} alt=""
+                            style={{ width:42, height:56, borderRadius:8, objectFit:"cover",
+                              border:"1.5px solid #2D1F52" }}/>
                         </a>
-                      )}
-                      {photoUrl && (
-                        <img
-                          src={photoUrl}
-                          alt=""
-                          style={{ maxWidth: 220, display: "block", borderRadius: textContent ? "12px 12px 0 0" : 12 }}
-                        />
-                      )}
-                      {textContent && (
-                        <div className="px-4 py-2.5">{textContent}</div>
-                      )}
-                      {!textContent && !photoUrl && !storyReplyUrl && (
-                        <div className="px-4 py-2.5">{msg.content}</div>
-                      )}
-                    </div>
+                        <div style={{
+                          fontSize:36, lineHeight:1,
+                          padding:"6px 12px", borderRadius:99,
+                          background: isMine ? "rgba(124,58,237,0.18)" : "#1A1228",
+                          border: `1.5px solid ${isMine ? "#7C3AED" : "#2D1F52"}`,
+                        }}>
+                          {textContent || "❤️"}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className="max-w-xs lg:max-w-md rounded-2xl text-sm overflow-hidden"
+                        style={{
+                          background: isMine ? "#7C3AED" : "#1A1228",
+                          color: isMine ? "#fff" : "#E2E8F0",
+                          borderBottomRightRadius: isMine ? 4 : undefined,
+                          borderBottomLeftRadius: !isMine ? 4 : undefined,
+                        }}
+                      >
+                        {storyReplyUrl && (
+                          <a
+                            href={storyReplyUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ display:"block", padding:"6px 6px 0", textDecoration:"none" }}
+                          >
+                            <div style={{
+                              display:"flex", alignItems:"center", gap:8,
+                              padding:"6px 8px",
+                              background: isMine ? "rgba(0,0,0,0.2)" : "rgba(124,58,237,0.15)",
+                              border: `1px solid ${isMine ? "rgba(255,255,255,0.2)" : "rgba(124,58,237,0.4)"}`,
+                              borderRadius: 10,
+                            }}>
+                              <img src={storyReplyUrl} alt=""
+                                style={{ width:36, height:48, borderRadius:6, objectFit:"cover", flexShrink:0 }}/>
+                              <div style={{ fontSize:11, fontWeight:600, opacity:0.85, lineHeight:1.3 }}>
+                                {isMine ? "Your reply to" : "Their reply to"}<br/>this story
+                              </div>
+                            </div>
+                          </a>
+                        )}
+                        {photoUrl && (
+                          <img
+                            src={photoUrl}
+                            alt=""
+                            style={{ maxWidth: 220, display: "block", borderRadius: textContent ? "12px 12px 0 0" : 12 }}
+                          />
+                        )}
+                        {textContent && (
+                          <div className="px-4 py-2.5">{textContent}</div>
+                        )}
+                        {!textContent && !photoUrl && !storyReplyUrl && (
+                          <div className="px-4 py-2.5">{msg.content}</div>
+                        )}
+                      </div>
+                    )}
                     <span className="text-xs mt-0.5 px-1" style={{ color: "#8892A4" }}>
                       {formatTime(msg.created_at)}
                     </span>
