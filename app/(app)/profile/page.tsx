@@ -425,7 +425,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div className="diamond-shimmer-card" style={{background:"linear-gradient(135deg, #1E2547 0%, #2A3A6B 25%, #3D5A8C 50%, #2A3A6B 75%, #1E2547 100%)",borderRadius:22,border:"2px solid #93C5FD",boxShadow:"0 4px 24px rgba(147,197,253,0.25), inset 0 1px 0 rgba(255,255,255,0.15)",marginBottom:16,overflow:"hidden"}}>
+    <div className="diamond-shimmer-card" style={{background:"linear-gradient(135deg, #0EA5E9 0%, #06B6D4 25%, #67E8F9 50%, #06B6D4 75%, #0EA5E9 100%)",borderRadius:22,border:"2px solid #BAE6FD",boxShadow:"0 0 20px rgba(34,211,238,0.6), 0 4px 24px rgba(14,165,233,0.5), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 0 30px rgba(255,255,255,0.15)",marginBottom:16,overflow:"hidden"}}>
 
       {/* HEADER */}
       <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?"rgba(45,31,82,0.85)":"transparent",border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
@@ -1804,8 +1804,8 @@ export default function ProfilePage() {
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
 
       <style jsx global>{`
-        /* Diamond shimmer effect for activity cards. Sweeping light streak
-           that catches the eye every few seconds without being distracting.
+        /* Diamond shimmer effect for activity cards. League-of-Legends-style
+           bright cyan diamond with fast prismatic light streak.
            Currently always-on for level 1+ for testing — gate on tier later. */
         .diamond-shimmer-card { position: relative; }
         .diamond-shimmer-card::before {
@@ -1815,16 +1815,32 @@ export default function ProfilePage() {
           left: 0;
           right: 0;
           bottom: 0;
-          background: linear-gradient(115deg, transparent 35%, rgba(186,230,253,0.30) 47%, rgba(255,255,255,0.70) 50%, rgba(186,230,253,0.30) 53%, transparent 65%);
+          background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.5) 45%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.5) 55%, transparent 70%);
           transform: translateX(-120%);
-          animation: diamondShimmerSweep 3.5s ease-in-out infinite;
+          animation: diamondShimmerSweep 2.5s ease-in-out infinite;
           pointer-events: none;
           z-index: 3;
+        }
+        .diamond-shimmer-card::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: radial-gradient(ellipse 60% 40% at 30% 30%, rgba(255,255,255,0.4) 0%, transparent 60%);
+          pointer-events: none;
+          z-index: 2;
+          animation: diamondGlowPulse 3s ease-in-out infinite;
         }
         @keyframes diamondShimmerSweep {
           0% { transform: translateX(-120%); }
           50% { transform: translateX(120%); }
           100% { transform: translateX(120%); }
+        }
+        @keyframes diamondGlowPulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
         }
         @media (max-width: 767px) {
           .profile-layout {
