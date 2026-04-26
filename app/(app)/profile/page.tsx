@@ -970,9 +970,7 @@ export default function ProfilePage() {
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
 
-  // Mobile-aware sizing for the avatar. We listen for viewport changes so
-  // a desktop user resizing their window down to mobile breakpoint sees the
-  // avatar shrink correctly (120px instead of 184px).
+  // Mobile-aware sizing for the avatar.
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false);
   useEffect(() => {
@@ -1748,41 +1746,23 @@ export default function ProfilePage() {
             gap: 12px !important;
           }
           .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
-          .profile-header-wrap { flex-direction: column !important; align-items: stretch !important; text-align: center !important; gap: 0 !important; }
-          /* Avatar column — 120px avatar (set via avatarSize prop in JSX).
-             Lift -54px to overlap the bottom edge of the banner cleanly.
-             Just 8px bottom margin since we no longer need to reserve a huge
-             space for an oversized avatar. */
-          .profile-avatar-col {
-            order: 2 !important;
-            /* No lift on mobile — avatar+name now sit cleanly BELOW the
-               Edit Profile button, centered, with normal spacing. The
-               banner-overlap-avatar pattern only works when stats are
-               visually anchored elsewhere. */
-            margin-top: 16px !important;
-            margin-bottom: 16px !important;
-            z-index: 5 !important;
-            position: relative !important;
-            padding: 0 !important;
-            /* Full-row width on mobile so the inner align-items:center
-               actually centers avatar + name on the page (not within the
-               narrow 120px avatar bounding box). The inline `width:avatarSize`
-               style from the JSX gets overridden here. */
-            width: 100% !important;
-            align-items: center !important;
-            display: flex !important;
-            flex-direction: column !important;
-          }
+          .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
+          /* Lift avatar enough that it cleanly overlaps the bottom edge of the banner.
+             Avatar is 184px so we lift -92px to half-overlap. margin-bottom: 100px
+             reserves space for the bottom half of the avatar circle so the
+             "Edit Profile" button below it has clearance and doesn't get covered. */
+          .profile-avatar-col { order: 2 !important; margin-top: 16px !important; margin-bottom: 16px !important; z-index: 5 !important; position: relative !important; padding: 0 !important; width: 100% !important; align-items: center !important; display: flex !important; flex-direction: column !important; }
           .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
           /* Shorter banner on mobile — 320px was eating half the viewport */
           .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
           .profile-outer { padding: 0 0 100px !important; max-width: 100% !important; margin: 0 !important; }
-          /* Stats area: clear breathing room above so it doesn't fight the avatar.
-             Edit Profile button gets its own clear row below the stats. */
           .profile-stats-bio { padding: 16px !important; width: 100% !important; box-sizing: border-box !important; }
-          /* Stats row tighter spacing on small screens */
+          /* Stats row — keep the two big numbers on one horizontal line, tighter */
           .profile-stats-row { gap: 8px !important; margin-top: 12px !important; }
-          /* Hide desktop-only hover affordances on touch screens. */
+          /* Hide desktop-only hover affordances on touch screens.
+             Reposition buttons require hover on desktop; on mobile they just
+             sit there cluttering the layout. Users can long-press the image
+             later — for now, hide them on the touch-primary breakpoint. */
           .hide-on-mobile { display: none !important; }
         }
         @media (min-width: 768px) and (max-width: 1100px) {
