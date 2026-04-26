@@ -1811,19 +1811,20 @@ export default function ProfilePage() {
         .diamond-shimmer-card::before {
           content: '';
           position: absolute;
-          inset: 0;
-          background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.10) 42%, rgba(255,255,255,0.40) 50%, rgba(255,255,255,0.10) 58%, transparent 70%);
-          transform: translateX(-100%);
-          animation: diamondShimmerSweep 4.5s ease-in-out infinite;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(115deg, transparent 35%, rgba(167,139,250,0.25) 47%, rgba(255,255,255,0.55) 50%, rgba(167,139,250,0.25) 53%, transparent 65%);
+          transform: translateX(-120%);
+          animation: diamondShimmerSweep 3.5s ease-in-out infinite;
           pointer-events: none;
-          z-index: 1;
-          mix-blend-mode: overlay;
+          z-index: 3;
         }
-        .diamond-shimmer-card > * { position: relative; z-index: 2; }
         @keyframes diamondShimmerSweep {
-          0% { transform: translateX(-100%); }
-          55% { transform: translateX(100%); }
-          100% { transform: translateX(100%); }
+          0% { transform: translateX(-120%); }
+          50% { transform: translateX(120%); }
+          100% { transform: translateX(120%); }
         }
         @media (max-width: 767px) {
           .profile-layout {
