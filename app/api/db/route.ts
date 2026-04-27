@@ -554,9 +554,10 @@ export async function POST(req: NextRequest) {
       const followingSet = new Set(followingIds);
       const citySet = new Set(cityUserIds);
 
-      // Pull a deep enough window of Share-to-Feed rows before filtering to
-      // picture posts. Users may have many older/non-photo feed rows, but old
-      // photo posts should still appear in For You.
+      // Pull a deep enough window of feed posts to give the bucketing
+      // logic something to work with. We don't filter out non-photo posts
+      // anymore — Joey wants For You to behave as a chronological-but-
+      // ranked feed of EVERYTHING public, not just photo posts.
       const FETCH_LIMIT = Math.max((PAGE + 1) * PAGE_SIZE * 20, 500);
       const { data: allPosts, error: feedErr } = await admin
         .from('posts')
@@ -570,22 +571,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ posts: [] });
       }
 
-      const picturePosts = (allPosts || []).filter(hasFeedPhoto);
-
-      // Score each picture post: lower number = higher priority in the feed.
-      //   0 = post from someone you follow
-      //   1 = post from someone in your city
-      //   2 = everyone else
-      // Within each bucket we keep date-descending order (already sorted).
-      const scored = picturePosts.map((p: any) => {
-        let bucket = 2;
-        if (followingSet.has(p.user_id)) bucket = 0;
-        else if (citySet.has(p.user_id)) bucket = 1;
+      // Score each post: lower number = higher priority in the feed.
+      //   0 = the viewer's OWN posts (always at the top of their own For You)
+      //   1 = posts from users you follow
+      //   2 = posts from users in your city (excluding follows)
+      //   3 = everyone else
+      // Within each bucket we keep date-descending order (already sorted by
+      // the SQL query above). Array.prototype.sort is stable in modern JS so
+      // date order within a bucket is preserved.
+      const scored = (allPosts || []).map((p: any) => {
+        let bucket = 3;
+        if (viewerId && p.user_id === viewerId) bucket = 0;
+        else if (followingSet.has(p.user_id)) bucket = 1;
+        else if (citySet.has(p.user_id)) bucket = 2;
         return { post: p, bucket };
       });
 
-      // Stable sort by bucket — ties keep the date-descending order from the
-      // SQL query above. Array.prototype.sort is stable in modern JS.
       scored.sort((a, b) => a.bucket - b.bucket);
 
       const merged = scored.map(s => s.post);
