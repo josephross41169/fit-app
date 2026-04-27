@@ -519,7 +519,7 @@ export async function POST(req: NextRequest) {
         viewerCity = viewer?.city || null;
       }
 
-      // Find users in the same city as the viewer (excluding self + follows).
+      // Find other users in the same city as the viewer (excluding follows).
       let cityUserIds: string[] = [];
       if (viewerCity) {
         const { data: cityUsers } = await admin
@@ -532,17 +532,6 @@ export async function POST(req: NextRequest) {
           .filter((id: string) => !followingIds.includes(id));
       }
 
-      // ── For You ranking — simplified, bulletproof version ─────────────
-      // Previously we ran 3 separate queries (follows / city / everyone)
-      // and merged them. That approach had a bug where if any single bucket
-      // errored silently (e.g. .not.in syntax issues with empty arrays),
-      // the whole feed could end up empty. Worse: when nobody else had a
-      // post yet, even your OWN posts wouldn't show.
-      //
-      // The simpler approach: pull a wide window of all public posts in
-      // one query, then SCORE them in memory by which "bucket" they fall in.
-      // Same effective ranking, no silent failures, your own posts always
-      // appear at the top, and even a brand-new app with one user works.
       const followingSet = new Set(followingIds);
       const citySet = new Set(cityUserIds);
 
@@ -559,17 +548,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ posts: [] });
       }
 
-      // Score each post: lower number = higher priority in the feed.
-      //   0 = your own post (always at the top of For You)
-      //   1 = post from someone you follow
-      //   2 = post from someone in your city
-      //   3 = everyone else
+      const picturePosts = (allPosts || []).filter((p: any) => {
+        if (p.media_url) return true;
+        if (Array.isArray(p.media_urls)) return p.media_urls.length > 0;
+        if (typeof p.media_urls === 'string') return p.media_urls.trim().length > 0;
+        return !!p.photo_url;
+      });
+
+      // Score each picture post: lower number = higher priority in the feed.
+      //   0 = post from someone you follow
+      //   1 = post from someone in your city
+      //   2 = everyone else
       // Within each bucket we keep date-descending order (already sorted).
-      const scored = (allPosts || []).map((p: any) => {
-        let bucket = 3;
-        if (viewerId && p.user_id === viewerId) bucket = 0;
-        else if (followingSet.has(p.user_id)) bucket = 1;
-        else if (citySet.has(p.user_id)) bucket = 2;
+      const scored = picturePosts.map((p: any) => {
+        let bucket = 2;
+        if (followingSet.has(p.user_id)) bucket = 0;
+        else if (citySet.has(p.user_id)) bucket = 1;
         return { post: p, bucket };
       });
 
