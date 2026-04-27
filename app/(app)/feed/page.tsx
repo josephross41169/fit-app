@@ -2072,7 +2072,7 @@ export default function FeedPage() {
                 <>
                   {displayPosts.length === 0 && (
                     <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-                      No picture posts yet. Share a photo to the feed or follow more people to see photos here.
+                      No Share to Feed photos found yet.
                     </div>
                   )}
                   {displayPosts.map((post: any) => (
