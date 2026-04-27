@@ -499,6 +499,9 @@ export default function GroupPage() {
   const [dbGroup, setDbGroup] = useState<any>(null);
   const [dbPosts, setDbPosts] = useState<any[]>([]);
   const [dbEvents, setDbEvents] = useState<any[]>([]);
+  // Pending event submissions awaiting owner approval. Only loaded + shown
+  // to the group's owner. Members see only approved events; owner sees both.
+  const [pendingEvents, setPendingEvents] = useState<any[]>([]);
   const [dbChallenges, setDbChallenges] = useState<any[]>([]);
   const [dbNotes, setDbNotes] = useState<any[]>([]);
   const [dbMembers, setDbMembers] = useState<any[]>([]);
@@ -611,11 +614,14 @@ export default function GroupPage() {
 
         const legacyEvents = ((data.events || []) as any[])
           .filter((e: any) => isUpcoming(e.event_date));
+        // Only show approved events in the public list. Pending submissions
+        // go into the admin's approval queue (see pendingEvents below).
         const { data: newEvents } = await supabase
           .from("events_with_counts")
-          .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count")
+          .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved")
           .eq("group_id", data.group.id)
           .eq("is_public", true)
+          .or("approved.is.null,approved.eq.true")
           .order("event_date", { ascending: true });
         // Adapt new-schema rows to the shape the existing EventCard expects.
         // Filter out past events here too (date_tbd events are kept since
@@ -635,6 +641,20 @@ export default function GroupPage() {
             _isNewEvent: true, // flag so card knows to link to /events/[id]
           }));
         setDbEvents([...adapted, ...legacyEvents]);
+
+        // If the user is the group owner, load any pending event submissions
+        // that need their approval. Pending = approved=false on the events table.
+        if (user && data.group.created_by === user.id) {
+          const { data: pending } = await supabase
+            .from("events")
+            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, creator_id, users:creator_id (id, username, full_name, avatar_url)")
+            .eq("group_id", data.group.id)
+            .eq("approved", false)
+            .order("created_at", { ascending: false });
+          setPendingEvents(pending || []);
+        } else {
+          setPendingEvents([]);
+        }
 
         setDbChallenges(data.challenges || []);
         setDbNotes(data.notes || []);
@@ -825,11 +845,79 @@ export default function GroupPage() {
   }
 
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
-  const isOwnerOrMod = group._isOwner || isMemberDB;
+  // Owner-only check. Previously this was `_isOwner || isMemberDB` which
+  // meant any MEMBER counted as a moderator — wrong. Members shouldn't be
+  // able to create goals, wars, or perform admin actions on a group they
+  // don't own. Group goals + wars + (admin-only event approval) all gate on this.
+  const isOwnerOrMod = group._isOwner || isOwnerDB;
+
+  // Approve a pending event submission. Flips approved=true so it shows up
+  // in the public events list. Pulls the approved row out of the pending
+  // queue + reloads the page's event list.
+  const approvePendingEvent = async (eventId: string) => {
+    if (!isOwnerDB) return;
+    try {
+      const { error } = await supabase.from("events").update({ approved: true }).eq("id", eventId);
+      if (error) throw error;
+      // Optimistic: pull from pending list, will refresh on next nav
+      setPendingEvents(prev => prev.filter(e => e.id !== eventId));
+      // Reload the page-level events list so the approved one appears immediately
+      const dbId = group._dbId;
+      if (dbId) {
+        const { data: newEvents } = await supabase
+          .from("events_with_counts")
+          .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved")
+          .eq("group_id", dbId)
+          .eq("is_public", true)
+          .or("approved.is.null,approved.eq.true")
+          .order("event_date", { ascending: true });
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const adapted = (newEvents || [])
+          .filter((e: any) => e.date_tbd || !e.event_date || new Date(e.event_date).getTime() > cutoff)
+          .map((e: any) => ({
+            id: e.id,
+            name: e.title,
+            description: e.description,
+            event_date: e.date_tbd ? null : e.event_date,
+            location: e.location_name,
+            price: e.price,
+            emoji: "📅",
+            rsvp_count: e.going_count,
+            image_url: e.image_url,
+            _isNewEvent: true,
+          }));
+        setDbEvents(prev => [...adapted, ...prev.filter((p:any) => !p._isNewEvent)]);
+      }
+    } catch (e: any) {
+      alert(`Couldn't approve: ${e?.message || "unknown error"}`);
+    }
+  };
+
+  // Reject a pending event submission. Hard-delete since it never went live —
+  // no comments, RSVPs, or other dependencies to worry about.
+  const rejectPendingEvent = async (eventId: string) => {
+    if (!isOwnerDB) return;
+    if (!confirm("Reject this event? It will be permanently deleted.")) return;
+    try {
+      const { error } = await supabase.from("events").delete().eq("id", eventId);
+      if (error) throw error;
+      setPendingEvents(prev => prev.filter(e => e.id !== eventId));
+    } catch (e: any) {
+      alert(`Couldn't reject: ${e?.message || "unknown error"}`);
+    }
+  };
 
   const createGroupGoal = async () => {
     const dbId = group._dbId || (dbGroup as any)?.id;
     if (!dbId || !currentUser) return;
+    // Goals are admin-only. Hard-stop here if the user isn't the group owner —
+    // the modal is gated server-side too, but we don't want to ever submit if
+    // somehow opened.
+    if (!isOwnerOrMod) {
+      alert("Only the group's admin can set group goals.");
+      setShowGoalModal(false);
+      return;
+    }
     if (!goalForm.title.trim()) return alert("Add a title");
     if (goalForm.target <= 0) return alert("Set a target number");
     setGoalSaving(true);
@@ -926,6 +1014,12 @@ export default function GroupPage() {
   const createWarChallenge = async () => {
     const dbId = group._dbId;
     if (!dbId || !currentUser) return;
+    // Wars are admin-only. Hard-stop here if the user isn't the group owner.
+    if (!isOwnerOrMod) {
+      alert("Only the group's admin can start a war.");
+      setShowCreateWar(false);
+      return;
+    }
     if (!warForm.title.trim()) return alert("Add a title");
     if (warSelectedMembers.length === 0) return alert("Select at least 1 team member");
     if (warForm.metric === "weight_lifted" && !warForm.lift_type) return alert("Select a lift type");
@@ -2078,7 +2172,9 @@ export default function GroupPage() {
                     color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
                   }}>+ Set Goal</button>
                 )}
-                {group._dbId && isOwnerOrMod && challengeViewTab==="active" && (
+                {/* Challenges are open to ALL group members (not just admins).
+                    Owners get goals + wars + challenges; members get challenges. */}
+                {group._dbId && isMemberDB && challengeViewTab==="active" && (
                   <button onClick={()=>setShowChallengeModal(true)} style={{
                     padding:"8px 14px",borderRadius:12,border:"none",flexShrink:0,
                     background:"#1A1228",border:"1px solid #2D1F52",
@@ -2526,10 +2622,43 @@ export default function GroupPage() {
                   <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>🗓️ Upcoming Events</div>
                   <div style={{ fontSize:12, color:C.sub }}>{displayEvents.length} scheduled</div>
                 </div>
-                {group._dbId && isOwnerDB && (
+                {group._dbId && (isOwnerDB || isMemberDB) && (
                   <Link href={`/events/new?group_id=${group._dbId}`} style={{ padding:"7px 14px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>+ Event</Link>
                 )}
               </div>
+
+              {/* Approval queue — owner only. Members see only approved events. */}
+              {isOwnerDB && pendingEvents.length > 0 && (
+                <div style={{ background: "rgba(245,166,35,0.08)", border: "1.5px solid rgba(245,166,35,0.3)", borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: "#F5A623", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    📋 Pending Approval
+                    <span style={{ background: "#F5A623", color: "#000", fontSize: 11, fontWeight: 900, padding: "2px 8px", borderRadius: 99 }}>{pendingEvents.length}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {pendingEvents.map((e: any) => {
+                      const userObj = (e as any).users;
+                      const creatorName = userObj?.full_name || userObj?.username || "Member";
+                      return (
+                        <div key={e.id} style={{ background: C.white, border: `1.5px solid ${C.blueMid}`, borderRadius: 12, padding: 12 }}>
+                          <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 4 }}>{e.title}</div>
+                          <div style={{ fontSize: 11, color: C.sub, marginBottom: 8 }}>
+                            Submitted by <strong>{creatorName}</strong>
+                            {e.event_date && !e.date_tbd && ` · ${new Date(e.event_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                            {e.location_name && ` · ${e.location_name}`}
+                          </div>
+                          {e.description && (
+                            <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{e.description.slice(0, 180)}{e.description.length > 180 ? "..." : ""}</div>
+                          )}
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✓ Approve</button>
+                            <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1.5px solid #2D1F52", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✗ Reject</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {displayEvents.map((event:any) => (
                 <EventCard key={event.id} event={event} catColor={catColor}
                   commentInputs={commentInputs} setCommentInputs={setCommentInputs}
@@ -3179,10 +3308,37 @@ export default function GroupPage() {
                 <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>🗓️ Upcoming Events</div>
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{displayEvents.length} scheduled</div>
               </div>
-              {group._dbId && isOwnerDB && (
+              {group._dbId && (isOwnerDB || isMemberDB) && (
                 <Link href={`/events/new?group_id=${group._dbId}`} style={{ padding:"5px 12px", borderRadius:8, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", textDecoration:"none", display:"inline-block" }}>+ Event</Link>
               )}
             </div>
+
+            {/* Approval queue — owner only on desktop sidebar */}
+            {isOwnerDB && pendingEvents.length > 0 && (
+              <div style={{ background: "rgba(245,166,35,0.08)", border: "1.5px solid rgba(245,166,35,0.3)", borderRadius: 12, padding: 10, marginBottom: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 11, color: "#F5A623", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  📋 Pending
+                  <span style={{ background: "#F5A623", color: "#000", fontSize: 10, fontWeight: 900, padding: "1px 7px", borderRadius: 99 }}>{pendingEvents.length}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+                  {pendingEvents.map((e: any) => {
+                    const userObj = (e as any).users;
+                    const creatorName = userObj?.full_name || userObj?.username || "Member";
+                    return (
+                      <div key={e.id} style={{ background: "#1A1228", border: `1px solid ${C.darkBorder}`, borderRadius: 10, padding: 9 }}>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: "#E2E8F0", marginBottom: 2 }}>{e.title}</div>
+                        <div style={{ fontSize: 10, color: C.darkSub, marginBottom: 7 }}>by {creatorName}</div>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Approve</button>
+                          <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "1px solid #2D1F52", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {displayEvents.length === 0 && <div style={{ fontSize:12, color:C.darkSub, textAlign:"center", padding:"12px 0" }}>No events yet</div>}
             {displayEvents.map((event:any) => (
               <EventCard key={event.id} event={event} catColor={catColor}
