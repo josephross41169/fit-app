@@ -1273,14 +1273,16 @@ export default function FeedPage() {
       console.error('[feed] fetchPosts network error:', err);
     }
 
-    // Fallback only if the API call actually failed (network error, malformed
-    // response, error field). Empty arrays from a successful call are valid.
-    if (!apiSucceeded) {
-      console.warn('[feed] falling back to direct supabase query');
+    // If the API fails OR returns no picture rows, query Share-to-Feed posts
+    // directly. Feed photos live in public.posts.media_url/media_urls, not in
+    // activity_logs; this fallback keeps old/already-seen photo posts visible.
+    if (!apiSucceeded || (Array.isArray(data) && data.length === 0)) {
+      console.warn('[feed] falling back to direct Share-to-Feed photo query');
       const { data: directData } = await supabase
         .from('posts')
         .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
+        .or('media_url.not.is.null,media_urls.not.is.null')
         .order('created_at', { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
       if (directData) {
