@@ -10,12 +10,15 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || user.id === targetUserId) { setLoading(false); return; }
+    // Bail early if no user or invalid target. Without this guard, an undefined
+    // targetUserId produces a malformed PostgREST query that returns 400 and
+    // pollutes the console with errors that look like real bugs.
+    if (!user || !targetUserId || user.id === targetUserId) { setLoading(false); return; }
     supabase.from('follows')
       .select('follower_id')
       .eq('follower_id', user.id)
       .eq('following_id', targetUserId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         setFollowing(!!data);
         setLoading(false);
