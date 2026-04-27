@@ -535,7 +535,10 @@ export async function POST(req: NextRequest) {
       const followingSet = new Set(followingIds);
       const citySet = new Set(cityUserIds);
 
-      const FETCH_LIMIT = (PAGE + 1) * PAGE_SIZE * 4;
+      // Pull a deep enough window of Share-to-Feed rows before filtering to
+      // picture posts. Users may have many older/non-photo feed rows, but old
+      // photo posts should still appear in For You.
+      const FETCH_LIMIT = Math.max((PAGE + 1) * PAGE_SIZE * 20, 500);
       const { data: allPosts, error: feedErr } = await admin
         .from('posts')
         .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
