@@ -117,86 +117,39 @@ function ReactionBar({
   const activeEmojis = REACTION_EMOJIS.filter(r => counts[r.key] > 0 || mine.has(r.key));
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative" }}>
-      {/* Active reaction pills */}
-      {activeEmojis.map(r => (
-        <button
-          key={r.key}
-          onClick={() => toggleReaction(r.key)}
-          disabled={!!loading}
-          title={r.label}
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "4px 10px", borderRadius: 99,
-            border: mine.has(r.key) ? "1.5px solid #7C3AED" : "1.5px solid #2D1F52",
-            background: mine.has(r.key) ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.04)",
-            cursor: loading ? "default" : "pointer",
-            transition: "all 0.15s",
-            opacity: loading === r.key ? 0.6 : 1,
-          }}
-        >
-          <span style={{ fontSize: 14, lineHeight: 1 }}>{r.emoji}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: mine.has(r.key) ? "#A78BFA" : "#9CA3AF" }}>
-            {counts[r.key]}
-          </span>
-        </button>
-      ))}
-
-      {/* Add reaction button */}
-      <div style={{ position: "relative" }}>
-        <button
-          onClick={() => setShowPicker(p => !p)}
-          title="Add reaction"
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "4px 10px", borderRadius: 99,
-            border: "1.5px solid #2D1F52",
-            background: showPicker ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.04)",
-            cursor: "pointer",
-            color: "#9CA3AF", fontSize: 14,
-          }}
-        >
-          {totalReactions === 0 ? "😄 React" : "＋"}
-        </button>
-
-        {/* Picker dropdown */}
-        {showPicker && (
-          <div style={{
-            position: "absolute", bottom: "calc(100% + 8px)", left: 0,
-            background: "#1A1228", border: "1.5px solid #2D1F52",
-            borderRadius: 16, padding: "8px 10px",
-            display: "flex", gap: 6,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-            zIndex: 100,
-            animation: "fadeIn 0.1s ease",
-          }}>
-            {REACTION_EMOJIS.map(r => (
-              <button
-                key={r.key}
-                onClick={() => toggleReaction(r.key)}
-                title={r.label}
-                style={{
-                  background: mine.has(r.key) ? "rgba(124,58,237,0.25)" : "transparent",
-                  border: mine.has(r.key) ? "1.5px solid #7C3AED" : "1.5px solid transparent",
-                  borderRadius: 10, padding: "6px 8px",
-                  cursor: "pointer", fontSize: 20,
-                  transition: "transform 0.1s",
-                  transform: "scale(1)",
-                }}
-                onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.3)")}
-                onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
-              >
-                {r.emoji}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Total if >0 */}
-      {totalReactions > 0 && activeEmojis.length === 0 && (
-        <span style={{ fontSize: 12, color: "#9CA3AF" }}>{totalReactions} reactions</span>
-      )}
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      {/* All 5 reactions always visible. No "React" button — tap any emoji
+          to toggle. Active ones (you've reacted OR has count) show the
+          count and purple highlight; inactive ones are dimmed. */}
+      {REACTION_EMOJIS.map(r => {
+        const count = counts[r.key];
+        const userHas = mine.has(r.key);
+        const isActive = count > 0 || userHas;
+        return (
+          <button
+            key={r.key}
+            onClick={() => toggleReaction(r.key)}
+            disabled={!!loading}
+            title={r.label}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "4px 10px", borderRadius: 99,
+              border: userHas ? "1.5px solid #7C3AED" : "1.5px solid #2D1F52",
+              background: userHas ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.04)",
+              cursor: loading ? "default" : "pointer",
+              transition: "all 0.15s",
+              opacity: loading === r.key ? 0.6 : (isActive ? 1 : 0.55),
+            }}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>{r.emoji}</span>
+            {count > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 700, color: userHas ? "#A78BFA" : "#9CA3AF" }}>
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1043,8 +996,14 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
                             });
                             const json = await res.json();
                             if (json.error) throw new Error(json.error);
-                            // Refresh comments via the parent's handler
-                            onCommentsRefresh?.(post.id, []);
+                            // Fetch the fresh comment list and propagate via onCommentsRefresh
+                            const freshRes = await fetch("/api/db", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ action: "get_post_comments", payload: { postId: post.id } }),
+                            });
+                            const fresh = await freshRes.json();
+                            onCommentsRefresh?.(post.id, fresh.comments || []);
                           } catch (e: any) {
                             alert(`Could not delete: ${e?.message || "unknown error"}`);
                           }
@@ -1301,7 +1260,11 @@ export default function FeedPage() {
     else setLoadingMorePosts(false);
   }
 
-  useEffect(() => { fetchPosts(0); }, []);
+  // Fetch the For You feed once on mount AND once when user resolves so we
+  // get personalized ranking. The first fetch on mount runs with user=null
+  // (auth context still resolving) and gives an unranked fallback; the
+  // refetch when user.id appears gives the proper bucketed ranking.
+  useEffect(() => { fetchPosts(0); }, [user?.id]);
 
   // ── Stories: load active stories (last 24h) ────────────────────────────
   async function loadStories() {
@@ -2026,6 +1989,7 @@ export default function FeedPage() {
                   // and never render.
                   comments: (p.comments || []).map((c: any) => ({
                     id: c.id,
+                    user_id: c.user_id,
                     user: c.users?.full_name || c.users?.username || "User",
                     avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
                     text: c.content || "",
@@ -2035,8 +1999,9 @@ export default function FeedPage() {
                   nutrition: null,
                   wellness: null,
                   _ownerId: p.user_id,
+                  user_id: p.user_id,
                 };
-                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onCommentsRefresh={refreshPostComments} />;
+                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onDelete={() => deletePost(p.id)} onCommentsRefresh={refreshPostComments} />;
               })
             )
           ) : (
@@ -2196,6 +2161,7 @@ export default function FeedPage() {
                 liked: p._liked || false,
                 comments: (p.comments || []).map((c: any) => ({
                   id: c.id,
+                  user_id: c.user_id,
                   user: c.users?.full_name || c.users?.username || "User",
                   avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
                   text: c.content || "",
@@ -2205,8 +2171,9 @@ export default function FeedPage() {
                 nutrition: null,
                 wellness: null,
                 _ownerId: p.user_id,
+                user_id: p.user_id,
               };
-              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onCommentsRefresh={refreshPostComments} />;
+              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onDelete={() => deletePost(p.id)} onCommentsRefresh={refreshPostComments} />;
             })
           )
         ) : (
