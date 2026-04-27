@@ -1311,16 +1311,23 @@ export default function FeedPage() {
         }
 
         const followingSet = new Set(followingIds);
-        const pictureRows = directData.filter((p: any) =>
-          normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url).length > 0
-        );
+        // No photo filter — For You shows ALL public posts, not just ones
+        // with photos. A previous version filtered to photo-only posts here,
+        // which made the feed empty for users whose posts were text-only or
+        // had photos in a format `normalizePhotoUrls` didn't recognize.
+        const allRows = directData;
 
-        const rankedRows = pictureRows
+        const rankedRows = allRows
           .map((p: any, index: number) => {
             const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
-            let bucket = 2;
-            if (followingSet.has(p.user_id)) bucket = 0;
-            else if (viewerCity && postCity && postCity === viewerCity) bucket = 1;
+            // Bucket 0 = your own posts (top of YOUR For You)
+            // Bucket 1 = posts from people you follow
+            // Bucket 2 = same-city users
+            // Bucket 3 = everyone else
+            let bucket = 3;
+            if (user && p.user_id === user.id) bucket = 0;
+            else if (followingSet.has(p.user_id)) bucket = 1;
+            else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
             return { post: p, bucket, index };
           })
           .sort((a: any, b: any) => a.bucket - b.bucket || a.index - b.index)
@@ -1351,10 +1358,22 @@ export default function FeedPage() {
           filtered = data.filter((p: any) => !blocks.has(p.user_id));
         }
       }
+      // Diagnostic: log final state so we can see in browser DevTools whether
+      // posts are being received from the server vs lost client-side. Open
+      // the browser console and reload the feed to debug.
+      console.log('[feed] fetchPosts complete:', {
+        apiSucceeded,
+        rawCount: data.length,
+        filteredCount: filtered.length,
+        page,
+        firstPostId: filtered[0]?.id,
+      });
       if (append) setDbPosts(prev => [...prev, ...filtered]);
       else setDbPosts(filtered);
       setDbPostsHasMore(data.length === PAGE_SIZE);
       setDbPostsPage(page);
+    } else {
+      console.warn('[feed] fetchPosts ended with no data — both API and fallback failed');
     }
     if (page === 0) setLoadingFeed(false);
     else setLoadingMorePosts(false);
