@@ -184,10 +184,20 @@ function normalizePhotoUrls(...sources: any[]): string[] {
       value.forEach(add);
       return;
     }
+    if (typeof value === 'object') {
+      Object.values(value).forEach(add);
+      return;
+    }
     if (typeof value === 'string') {
       const trimmed = value.trim();
       if (!trimmed) return;
       if (trimmed.startsWith('[')) {
+        try {
+          add(JSON.parse(trimmed));
+          return;
+        } catch {}
+      }
+      if (trimmed.startsWith('{')) {
         try {
           add(JSON.parse(trimmed));
           return;
@@ -2321,5 +2331,4 @@ export default function FeedPage() {
     </div>
   );
 }
-
 
