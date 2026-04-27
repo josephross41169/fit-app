@@ -21,7 +21,12 @@ const FREE_DB_IMG_PREFIX =
 const REVALIDATE_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 export const revalidate = REVALIDATE_SECONDS;
-export const dynamic = "force-static";
+// Run at request time, not build time. force-static was making Next try to
+// fetch from GitHub + wger.de during the build, which routinely timed out
+// the build worker (60s limit) and failed deploys. The 7-day Cache-Control
+// header in the response still gives us edge caching, just on first request
+// per region instead of at build.
+export const dynamic = "force-dynamic";
 
 function normalize(name: string): string {
   return name
