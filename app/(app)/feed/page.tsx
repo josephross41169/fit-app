@@ -1742,7 +1742,14 @@ export default function FeedPage() {
         wellness: null,
         _ownerId: p.user_id,
         user_id: p.user_id,
-      } as any)).filter((post: any) => post.photos.length > 0);
+      } as any));
+  // NOTE: We deliberately do NOT filter to "photos only" here. An earlier
+  // version had `.filter(p => p.photos.length > 0)` which made For You drop
+  // every text-only or activity-only post — including the user's own posts —
+  // making the feed look empty even when posts existed. Following uses no
+  // such filter, which is exactly why Following showed posts but For You
+  // didn't despite querying the same table. If a "Photos only" tab is
+  // wanted later, add it as a separate filtered view, not a global drop.
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
 
@@ -2118,7 +2125,7 @@ export default function FeedPage() {
                 <>
                   {displayPosts.length === 0 && (
                     <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-                      No Share to Feed photos found yet.
+                      👋 No posts yet. Share something to the feed to see it here!
                     </div>
                   )}
                   {displayPosts.map((post: any) => (
