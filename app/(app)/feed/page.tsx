@@ -1242,88 +1242,45 @@ export default function FeedPage() {
     if (page === 0) setLoadingFeed(true);
     else setLoadingMorePosts(true);
 
-    // Try /api/db first — admin client returns posts WITH comments hydrated.
-    // If that fails for any reason (env var missing, deploy lag, network),
-    // fall back to a direct supabase query so the feed still loads (just
-    // without comments). The fallback is the same query the feed used to
-    // run before the comment fix.
+    // ── Direct supabase query — same shape Discover uses, which works ─────
+    // Earlier versions tried to go through /api/db with a nested comments
+    // join. That kept breaking in subtle ways: server filters that dropped
+    // posts, RLS issues on the comments table killing the whole nested
+    // select, env-var/deploy mismatches between client and server. Since
+    // Discover, Following, and Profile all show posts fine using a plain
+    // direct query, For You will too.
     //
-    // CRITICAL: distinguish "API returned []" from "API failed to respond".
-    // An empty array is a valid response (just no posts yet) and we should
-    // NOT fall back. A null/error means the API broke and we SHOULD.
+    // Trade-off: comments don't come pre-joined. But comments are loaded
+    // lazily per-post when the user expands a card — so this is fine.
     let data: any[] | null = null;
-    let apiSucceeded = false;
     try {
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'get_feed_posts',
-          payload: { viewerId: user?.id, page, pageSize: PAGE_SIZE },
-        }),
-      });
-      const json = await res.json();
-      if (json.error) {
-        console.error('[feed] fetchPosts API error:', json.error);
-      } else if (Array.isArray(json.posts)) {
-        data = json.posts;
-        apiSucceeded = true;
-      }
-    } catch (err) {
-      console.error('[feed] fetchPosts network error:', err);
-    }
-
-    // If the API fails OR returns no picture rows, query Share-to-Feed posts
-    // directly. Feed photos live in public.posts.media_url/media_urls, not in
-    // activity_logs; this fallback keeps old/already-seen photo posts visible.
-    //
-    // Important: do NOT rely on Supabase's `.or(media_url.not.is.null,...)`
-    // filter here. The Following tab already proves the rows are readable from
-    // `posts`, so fetch a deep public window and use the same photo normalizer
-    // the renderer uses. This catches old rows, single-image rows, array rows,
-    // and JSON/stringified media arrays.
-    if (!apiSucceeded || (Array.isArray(data) && data.length === 0)) {
-      console.warn('[feed] falling back to direct Share-to-Feed photo query');
-
-      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 20, 500);
-      const { data: directData, error: directError } = await supabase
+      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
+      const { data: posts, error: queryErr } = await supabase
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .select('*, users:users!posts_user_id_fkey(id, username, full_name, avatar_url, tier, logs_last_28_days, city)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
 
-      if (directError) {
-        console.error('[feed] direct Share-to-Feed query failed:', directError);
-      }
-
-      if (directData) {
+      if (queryErr) {
+        console.error('[feed] posts query failed:', queryErr);
+      } else if (posts) {
+        // Rank: bucket 0 = your own posts, 1 = follows, 2 = same city, 3 = rest
         let followingIds: string[] = [];
-        let viewerCity = ((user as any)?.profile?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
-
+        let viewerCity = '';
         if (user) {
-          const [{ data: follows }, { data: viewerRow }] = await Promise.all([
+          const [followsRes, viewerRes] = await Promise.all([
             supabase.from('follows').select('following_id').eq('follower_id', user.id),
             supabase.from('users').select('city').eq('id', user.id).single(),
           ]);
-          followingIds = (follows || []).map((f: any) => f.following_id);
-          viewerCity = (viewerRow?.city || viewerCity || '').split(',')[0]?.trim()?.toLowerCase();
+          followingIds = (followsRes.data || []).map((f: any) => f.following_id);
+          viewerCity = (viewerRes.data?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
         }
-
         const followingSet = new Set(followingIds);
-        // No photo filter — For You shows ALL public posts, not just ones
-        // with photos. A previous version filtered to photo-only posts here,
-        // which made the feed empty for users whose posts were text-only or
-        // had photos in a format `normalizePhotoUrls` didn't recognize.
-        const allRows = directData;
 
-        const rankedRows = allRows
+        const ranked = posts
           .map((p: any, index: number) => {
             const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
-            // Bucket 0 = your own posts (top of YOUR For You)
-            // Bucket 1 = posts from people you follow
-            // Bucket 2 = same-city users
-            // Bucket 3 = everyone else
             let bucket = 3;
             if (user && p.user_id === user.id) bucket = 0;
             else if (followingSet.has(p.user_id)) bucket = 1;
@@ -1331,12 +1288,11 @@ export default function FeedPage() {
             return { post: p, bucket, index };
           })
           .sort((a: any, b: any) => a.bucket - b.bucket || a.index - b.index)
-          .map((item: any) => item.post);
+          .map((r: any) => r.post);
 
-        const pageRows = rankedRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+        const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-        // Hydrate _liked client-side since the direct fallback does not use
-        // the server helper.
+        // Hydrate _liked client-side
         let likedPostIds: Set<string> = new Set();
         if (user && pageRows.length > 0) {
           const postIds = pageRows.map((p: any) => p.id);
@@ -1344,13 +1300,14 @@ export default function FeedPage() {
             .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
           if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
         }
-
-        data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+        data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id), comments: [] }));
       }
+    } catch (err) {
+      console.error('[feed] fetchPosts error:', err);
     }
 
     if (data) {
-      // Filter out posts from users blocked in either direction
+      // Filter out blocked users in either direction
       let filtered = data;
       if (user) {
         const blocks = await loadBlockedUsers(user.id);
@@ -1358,11 +1315,7 @@ export default function FeedPage() {
           filtered = data.filter((p: any) => !blocks.has(p.user_id));
         }
       }
-      // Diagnostic: log final state so we can see in browser DevTools whether
-      // posts are being received from the server vs lost client-side. Open
-      // the browser console and reload the feed to debug.
       console.log('[feed] fetchPosts complete:', {
-        apiSucceeded,
         rawCount: data.length,
         filteredCount: filtered.length,
         page,
@@ -1373,7 +1326,7 @@ export default function FeedPage() {
       setDbPostsHasMore(data.length === PAGE_SIZE);
       setDbPostsPage(page);
     } else {
-      console.warn('[feed] fetchPosts ended with no data — both API and fallback failed');
+      console.warn('[feed] fetchPosts ended with no data');
     }
     if (page === 0) setLoadingFeed(false);
     else setLoadingMorePosts(false);
