@@ -48,6 +48,7 @@ export default function EventsListPage() {
       .from("events_with_counts")
       .select("*")
       .eq("is_public", true)
+      .or("approved.is.null,approved.eq.true")
       .order("event_date", { ascending: true });
 
     if (categoryFilter !== "all") query = query.eq("category", categoryFilter);
