@@ -1280,7 +1280,7 @@ export default function FeedPage() {
         // Match Following's fallback shape exactly. No FK-constraint hint.
         const { data: posts } = await supabase
           .from('posts')
-          .select('*, users(id, username, full_name, avatar_url, tier, logs_last_28_days, city)')
+          .select('*, users(id, username, full_name, avatar_url, logs_last_28_days, city)')
           .eq('is_public', true)
           .order('created_at', { ascending: false })
           .limit(FETCH_LIMIT);
