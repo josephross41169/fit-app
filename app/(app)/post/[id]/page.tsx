@@ -96,7 +96,7 @@ export default function PostDetailPage() {
 
         // 4. Has the viewer liked this?
         const { data: likeRow } = await supabase
-          .from("post_likes")
+          .from("likes")
           .select("post_id")
           .eq("post_id", id)
           .eq("user_id", user.id)
@@ -184,9 +184,9 @@ export default function PostDetailPage() {
     setPost(p => p ? { ...p, liked: !wasLiked, likes_count: (p.likes_count || 0) + (wasLiked ? -1 : 1) } : p);
     try {
       if (wasLiked) {
-        await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", user.id);
+        await supabase.from("likes").delete().eq("post_id", post.id).eq("user_id", user.id);
       } else {
-        await supabase.from("post_likes").insert({ post_id: post.id, user_id: user.id });
+        await supabase.from("likes").insert({ post_id: post.id, user_id: user.id });
       }
     } catch {
       // Revert on failure
