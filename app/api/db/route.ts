@@ -31,6 +31,25 @@ async function hydrateFeedPosts(rows: any[], viewerId: string | undefined, db: a
   return sorted.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
 }
 
+function hasFeedPhoto(post: any) {
+  const values = [post?.media_urls, post?.media_url, post?.photo_url];
+  for (const value of values) {
+    if (!value) continue;
+    if (Array.isArray(value) && value.some(Boolean)) return true;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed === '[]') continue;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) && parsed.some(Boolean)) return true;
+      } catch {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -541,7 +560,7 @@ export async function POST(req: NextRequest) {
       const FETCH_LIMIT = Math.max((PAGE + 1) * PAGE_SIZE * 20, 500);
       const { data: allPosts, error: feedErr } = await admin
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
@@ -551,12 +570,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ posts: [] });
       }
 
-      const picturePosts = (allPosts || []).filter((p: any) => {
-        if (p.media_url) return true;
-        if (Array.isArray(p.media_urls)) return p.media_urls.length > 0;
-        if (typeof p.media_urls === 'string') return p.media_urls.trim().length > 0;
-        return !!p.photo_url;
-      });
+      const picturePosts = (allPosts || []).filter(hasFeedPhoto);
 
       // Score each picture post: lower number = higher priority in the feed.
       //   0 = post from someone you follow
