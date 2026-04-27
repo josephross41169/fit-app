@@ -1696,7 +1696,7 @@ export default function FeedPage() {
         wellness: null,
         _ownerId: p.user_id,
         user_id: p.user_id,
-      } as any));
+      } as any)).filter((post: any) => post.photos.length > 0);
 
   const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
 
@@ -2070,52 +2070,22 @@ export default function FeedPage() {
                 </div>
               ) : (
                 <>
-                  {/* ── New Members panel — top of For You feed ── */}
-                  {newMembers.length > 0 && (
-                    <NewMembersPanel members={newMembers} currentUser={user} />
-                  )}
-
-                  {/* True empty: no feed posts AND no activity to show */}
-                  {displayPosts.length === 0 && activityPosts.length === 0 && sidebarActivityPosts.length === 0 && (
+                  {displayPosts.length === 0 && (
                     <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-                      👋 No posts yet. Share something to the feed or log a workout to see it here!
+                      No picture posts yet. Share a photo to the feed or follow more people to see photos here.
                     </div>
                   )}
-                  {/* Desktop For You: interleave feed posts AND activity logs
-                      (workouts, nutrition, wellness) the same way mobile does.
-                      Previously this column only showed feed posts (caption +
-                      photo via "Post to Feed"), which made For You look empty
-                      even when the user had logged plenty of activity. Now
-                      activity cards render here too. */}
-                  {mobileItems.map((item, idx) => {
-                    if (item.type === "post") {
-                      return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} onCommentsRefresh={refreshPostComments} />;
-                    }
-                    if (item.type === "activity") {
-                      return (
-                        <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
-                          <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
-                            <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                              <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
-                              <div>
-                                <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
-                                <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
-                              </div>
-                            </div>
-                            <div style={{ padding:"10px 12px 4px" }}>
-                              {item.data.workout && <SideWorkout workout={item.data.workout} />}
-                              {item.data.nutrition && <SideNutrition nutrition={item.data.nutrition} />}
-                              {item.data.wellness && <SideWellness wellness={item.data.wellness} />}
-                            </div>
-                            <ActivityComments cardId={item.data.id as string} cardOwnerId={(item.data as any)._userId as string} />
-                          </div>
-                        </div>
-                      );
-                    }
-                    // Skip "suggested" cards in desktop main column — they
-                    // already appear elsewhere via Suggested For You section.
-                    return null;
-                  })}
+                  {displayPosts.map((post: any) => (
+                    <PostCard
+                      key={`post-${post.id}`}
+                      post={post}
+                      onUpdate={updatePost}
+                      currentUser={user}
+                      onDelete={() => deletePost(post.id)}
+                      onReport={() => setReportTarget({ type: "post", id: post.id as string })}
+                      onCommentsRefresh={refreshPostComments}
+                    />
+                  ))}
                   {/* Load More posts */}
                   {dbPostsHasMore && dbPosts.length > 0 && (
                     <div style={{ textAlign:"center", marginBottom:24 }}>
@@ -2331,4 +2301,3 @@ export default function FeedPage() {
     </div>
   );
 }
-
