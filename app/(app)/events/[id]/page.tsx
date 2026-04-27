@@ -85,6 +85,27 @@ export default function EventDetailPage() {
       setLoading(false);
       return;
     }
+
+    // If this event is pending approval (approved=false), only the creator
+    // and the group owner can view it. Hide from everyone else by 404'ing.
+    if (data.approved === false) {
+      const isCreator = user?.id && data.creator_id === user.id;
+      let isGroupOwner = false;
+      if (data.group_id && user?.id) {
+        const { data: g } = await supabase
+          .from("groups")
+          .select("created_by")
+          .eq("id", data.group_id)
+          .single();
+        isGroupOwner = !!g && g.created_by === user.id;
+      }
+      if (!isCreator && !isGroupOwner) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+    }
+
     setEvent(data);
 
     // Load creator profile
@@ -96,7 +117,7 @@ export default function EventDetailPage() {
     setCreatorProfile(cp);
 
     setLoading(false);
-  }, [eventId]);
+  }, [eventId, user?.id]);
 
   const loadRsvp = useCallback(async () => {
     if (!user || !eventId) return;
