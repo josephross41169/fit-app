@@ -1276,25 +1276,69 @@ export default function FeedPage() {
     // If the API fails OR returns no picture rows, query Share-to-Feed posts
     // directly. Feed photos live in public.posts.media_url/media_urls, not in
     // activity_logs; this fallback keeps old/already-seen photo posts visible.
+    //
+    // Important: do NOT rely on Supabase's `.or(media_url.not.is.null,...)`
+    // filter here. The Following tab already proves the rows are readable from
+    // `posts`, so fetch a deep public window and use the same photo normalizer
+    // the renderer uses. This catches old rows, single-image rows, array rows,
+    // and JSON/stringified media arrays.
     if (!apiSucceeded || (Array.isArray(data) && data.length === 0)) {
       console.warn('[feed] falling back to direct Share-to-Feed photo query');
-      const { data: directData } = await supabase
+
+      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 20, 500);
+      const { data: directData, error: directError } = await supabase
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
-        .or('media_url.not.is.null,media_urls.not.is.null')
         .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+        .limit(FETCH_LIMIT);
+
+      if (directError) {
+        console.error('[feed] direct Share-to-Feed query failed:', directError);
+      }
+
       if (directData) {
-        // Hydrate _liked client-side since the API helper isn't doing it
+        let followingIds: string[] = [];
+        let viewerCity = ((user as any)?.profile?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
+
+        if (user) {
+          const [{ data: follows }, { data: viewerRow }] = await Promise.all([
+            supabase.from('follows').select('following_id').eq('follower_id', user.id),
+            supabase.from('users').select('city').eq('id', user.id).single(),
+          ]);
+          followingIds = (follows || []).map((f: any) => f.following_id);
+          viewerCity = (viewerRow?.city || viewerCity || '').split(',')[0]?.trim()?.toLowerCase();
+        }
+
+        const followingSet = new Set(followingIds);
+        const pictureRows = directData.filter((p: any) =>
+          normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url).length > 0
+        );
+
+        const rankedRows = pictureRows
+          .map((p: any, index: number) => {
+            const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
+            let bucket = 2;
+            if (followingSet.has(p.user_id)) bucket = 0;
+            else if (viewerCity && postCity && postCity === viewerCity) bucket = 1;
+            return { post: p, bucket, index };
+          })
+          .sort((a: any, b: any) => a.bucket - b.bucket || a.index - b.index)
+          .map((item: any) => item.post);
+
+        const pageRows = rankedRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+        // Hydrate _liked client-side since the direct fallback does not use
+        // the server helper.
         let likedPostIds: Set<string> = new Set();
-        if (user && directData.length > 0) {
-          const postIds = directData.map((p: any) => p.id);
+        if (user && pageRows.length > 0) {
+          const postIds = pageRows.map((p: any) => p.id);
           const { data: likeData } = await supabase
             .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
           if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
         }
-        data = directData.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
+
+        data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
       }
     }
 
