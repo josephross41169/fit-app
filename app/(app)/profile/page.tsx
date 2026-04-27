@@ -3169,54 +3169,111 @@ export default function ProfilePage() {
             {/* Badges & Awards */}
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
-              {earnedBadges.length === 0 && completedChallenges.length === 0 ? (
-                <div style={{textAlign:"center",padding:"28px 16px",background:"#1A1230",borderRadius:16,marginBottom:16}}>
-                  <div style={{fontSize:36,marginBottom:8}}>🏆</div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.sub,lineHeight:1.5}}>Complete fitness milestones to earn badges</div>
-                </div>
-              ) : (
-                <>
-                  {/* Preview grid - show only first 4-6 badges */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
-                    {BADGES.filter(b=>earnedBadges.some(eb=>eb.badge_id===b.id)).slice(0,6).map(b => (
-                      <div key={b.id} style={{
-                        borderRadius:14,
-                        padding:"12px 6px",
-                        textAlign:"center",
-                        border:"1.5px solid #F5A623",
-                        background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
-                        boxShadow:"0 0 12px rgba(245,166,35,0.3)",
-                      }}>
-                        <div style={{fontSize:22,marginBottom:3}}>{b.emoji}</div>
-                        <div style={{fontWeight:800,fontSize:10,color:"#FFD700",lineHeight:1.2}}>{b.label}</div>
-                      </div>
-                    ))}
-                    {completedChallenges.slice(0, Math.max(0, 6 - earnedBadges.length)).map((cp: any, i: number) => {
-                      const ch = cp.challenges;
-                      if (!ch) return null;
-                      return (
-                        <div key={`challenge-${i}`} style={{
-                          borderRadius:14,
-                          padding:"12px 6px",
-                          textAlign:"center",
-                          border:"1.5px solid #F5A623",
-                          background:"linear-gradient(135deg,#2A1F00,#3D2D00)",
-                          boxShadow:"0 0 12px rgba(245,166,35,0.3)",
-                        }}>
-                          <div style={{fontSize:22,marginBottom:3}}>{ch.emoji || '🏆'}</div>
-                          <div style={{fontWeight:800,fontSize:10,color:"#FFD700",lineHeight:1.2}}>Challenge</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* View all button if there are more than 6 badges */}
-                  {(earnedBadges.length + completedChallenges.length) > 6 && (
-                    <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:"#2D1F52",color:"#A78BFA",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                      👀 View all {earnedBadges.length + completedChallenges.length} badges
-                    </button>
-                  )}
-                </>
-              )}
+              {(() => {
+                // Use the same family grouping the modal uses, so the preview
+                // grid matches the new badge design (BadgeTile with sigils,
+                // tier ornaments, shimmer) instead of the old hand-rolled
+                // gold-bordered tiles which referenced renamed badge IDs.
+                const previewFamilies: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
+                const totalBadges = previewFamilies.length + completedChallenges.length;
+
+                if (totalBadges === 0) {
+                  return (
+                    <div style={{textAlign:"center",padding:"28px 16px",background:"#1A1230",borderRadius:16,marginBottom:16}}>
+                      <div style={{fontSize:36,marginBottom:8}}>🏆</div>
+                      <div style={{fontSize:14,fontWeight:700,color:C.sub,lineHeight:1.5}}>Complete fitness milestones to earn badges</div>
+                    </div>
+                  );
+                }
+
+                // Show first 6 families. Modal shows them all.
+                const previewSlice = previewFamilies.slice(0, 6);
+
+                return (
+                  <>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                      {previewSlice.map(g => {
+                        // ── CREDENTIAL: holographic prestige look (compact) ──
+                        if (g.renderType === "credential") {
+                          return (
+                            <div key={g.key} style={{
+                              borderRadius:14,
+                              padding:"12px 6px",
+                              textAlign:"center",
+                              position:"relative",
+                              overflow:"hidden",
+                              border:"2px solid transparent",
+                              background: `
+                                linear-gradient(#0A0A14, #0A0A14) padding-box,
+                                linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
+                              `,
+                              boxShadow:"0 0 12px rgba(120, 115, 245, 0.3)",
+                            }}>
+                              <div style={{
+                                position:"absolute",inset:0,pointerEvents:"none",
+                                background:"linear-gradient(125deg, rgba(255,110,196,0.08), rgba(120,115,245,0.12), rgba(74,222,128,0.08), rgba(250,204,21,0.1))",
+                                backgroundSize:"200% 200%",
+                                animation:"holoShimmer 5s ease infinite",
+                              }} />
+                              <div style={{position:"relative"}}>
+                                <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                                <div style={{fontWeight:800,fontSize:10,color:"#F0F0F0",lineHeight:1.2}}>{g.label}</div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // ── YEARLY: year-stamped (compact) ──
+                        if (g.renderType === "yearly") {
+                          return (
+                            <div key={g.key} style={{
+                              borderRadius:14,
+                              padding:"12px 6px",
+                              textAlign:"center",
+                              position:"relative",
+                              overflow:"hidden",
+                              border:"2px solid #F472B6",
+                              background:"linear-gradient(135deg, #4C1D4D, #2B1550, #183B4E)",
+                              animation:"birthdayPulse 3s ease-in-out infinite",
+                            }}>
+                              {g.year && (
+                                <div style={{position:"absolute",top:3,right:5,
+                                  fontSize:8,fontWeight:900,
+                                  color:"#FFD1E6",letterSpacing:0.5,
+                                  textShadow:"0 0 6px rgba(244,114,182,0.6)"}}>
+                                  {g.year}
+                                </div>
+                              )}
+                              <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                              <div style={{fontWeight:900,fontSize:10,color:"#FFE5F1",lineHeight:1.2}}>{g.label}</div>
+                            </div>
+                          );
+                        }
+
+                        // ── PROGRESSION: BadgeTile component (proper sigils, tier rings, shimmer) ──
+                        return (
+                          <BadgeTile
+                            key={g.key}
+                            tier={g.tier ?? 1}
+                            emoji={g.emoji}
+                            label={g.label}
+                            desc={g.desc}
+                            category={g.category}
+                            earnedCount={g.earnedCount}
+                            maxTier={g.maxTier}
+                            compact
+                          />
+                        );
+                      })}
+                    </div>
+                    {totalBadges > 6 && (
+                      <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:"#2D1F52",color:"#A78BFA",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                        👀 View all {totalBadges} badges
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
               <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement
               </button>
