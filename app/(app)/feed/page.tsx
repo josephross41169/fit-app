@@ -2095,22 +2095,45 @@ export default function FeedPage() {
                 </div>
               ) : (
                 <>
-                  {displayPosts.length === 0 && (
+                  {/* Empty state only when there's truly nothing — no feed
+                      posts AND no activity. Previously this said "no posts"
+                      even when the user had logged plenty of activity. */}
+                  {mobileItems.length === 0 && (
                     <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-                      👋 No posts yet. Share something to the feed to see it here!
+                      👋 No posts yet. Share something to the feed or log a workout to see it here!
                     </div>
                   )}
-                  {displayPosts.map((post: any) => (
-                    <PostCard
-                      key={`post-${post.id}`}
-                      post={post}
-                      onUpdate={updatePost}
-                      currentUser={user}
-                      onDelete={() => deletePost(post.id)}
-                      onReport={() => setReportTarget({ type: "post", id: post.id as string })}
-                      onCommentsRefresh={refreshPostComments}
-                    />
-                  ))}
+                  {/* Desktop For You: interleave feed posts + activity logs.
+                      Same items mobile shows. Without this, desktop For You
+                      was empty whenever the user had no feed posts even though
+                      they had plenty of logged activity. */}
+                  {mobileItems.map((item, idx) => {
+                    if (item.type === "post") {
+                      return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} onCommentsRefresh={refreshPostComments} />;
+                    }
+                    if (item.type === "activity") {
+                      return (
+                        <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
+                          <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
+                            <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
+                              <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
+                              <div>
+                                <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
+                                <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
+                              </div>
+                            </div>
+                            <div style={{ padding:"10px 12px 4px" }}>
+                              {item.data.workout && <SideWorkout workout={item.data.workout} />}
+                              {item.data.nutrition && <SideNutrition nutrition={item.data.nutrition} />}
+                              {item.data.wellness && <SideWellness wellness={item.data.wellness} />}
+                            </div>
+                            <ActivityComments cardId={item.data.id as string} cardOwnerId={(item.data as any)._userId as string} />
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null; // skip "suggested" cards in desktop main column
+                  })}
                   {/* Load More posts */}
                   {dbPostsHasMore && dbPosts.length > 0 && (
                     <div style={{ textAlign:"center", marginBottom:24 }}>
@@ -2262,9 +2285,9 @@ export default function FeedPage() {
           )
         ) : (
         <>
-        {dbPosts.length === 0 && !loadingFeed && (
+        {mobileItems.length === 0 && !loadingFeed && (
           <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-            👋 These are sample posts. Log a workout or share to feed to see real content!
+            👋 No posts yet. Log a workout or share to feed to see content here!
           </div>
         )}
         {mobileItems.map((item, idx) => {
