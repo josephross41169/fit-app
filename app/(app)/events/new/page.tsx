@@ -42,17 +42,15 @@ export default function CreateEventPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // Tracks group-ownership check for the optional ?group_id param. When the
-  // event is being created for a specific group, only the group owner is
-  // allowed to do so — non-owners get bounced back to the group page.
+  // Tracks group-ownership for approval flow. If the user IS the owner,
+  // events auto-approve. If they're a member, the event goes into the
+  // pending queue (approved=false) for the owner to approve.
   const [groupCheckLoading, setGroupCheckLoading] = useState(!!groupId);
-  const [groupOwnerCheckFailed, setGroupOwnerCheckFailed] = useState(false);
+  const [isGroupOwner, setIsGroupOwner] = useState(false);
 
-  // If we have a group_id in the URL, verify the user actually owns that group
-  // before letting them proceed. This is the client-side gate; for hardening,
-  // the API path (create_group_event) also checks ownership server-side.
+  // Check group ownership so we know whether to auto-approve.
   useEffect(() => {
-    if (!groupId || !user) return;
+    if (!groupId || !user) { setGroupCheckLoading(false); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -62,9 +60,7 @@ export default function CreateEventPage() {
           .eq("id", groupId)
           .single();
         if (cancelled) return;
-        if (!g || g.created_by !== user.id) {
-          setGroupOwnerCheckFailed(true);
-        }
+        setIsGroupOwner(!!g && g.created_by === user.id);
       } finally {
         if (!cancelled) setGroupCheckLoading(false);
       }
@@ -142,6 +138,12 @@ export default function CreateEventPage() {
 
       const maxNum = maxAttendees.trim() ? parseInt(maxAttendees, 10) : null;
 
+      // Approval logic:
+      //   - No group_id  → public event, no approval needed → approved=true
+      //   - Group owner   → auto-approve their own submission
+      //   - Group member → approved=false, owner sees in pending queue
+      const willAutoApprove = !groupId || isGroupOwner;
+
       const { data, error: dbErr } = await supabase
         .from("events")
         .insert({
@@ -162,11 +164,20 @@ export default function CreateEventPage() {
           image_url: imageUrl,
           is_public: true,
           source: "user",
+          approved: willAutoApprove,
         })
         .select()
         .single();
 
       if (dbErr) throw dbErr;
+
+      // If awaiting approval, route them back to the group with a friendly
+      // message rather than the event page (since the event isn't live yet).
+      if (!willAutoApprove && groupId) {
+        alert("Event submitted! The group's admin will review and approve it before it goes live.");
+        router.push(`/groups/${groupId}`);
+        return;
+      }
 
       router.push(`/events/${data.id}`);
     } catch (err: any) {
@@ -180,24 +191,6 @@ export default function CreateEventPage() {
     return <div style={{ background: C.bg, minHeight: "100vh", color: C.sub, display: "flex", alignItems: "center", justifyContent: "center" }}>Loading...</div>;
   }
 
-  // Block render if user tried to create an event for a group they don't own
-  if (groupOwnerCheckFailed) {
-    return (
-      <div style={{ background: C.bg, minHeight: "100vh", color: C.text, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-        <div style={{ textAlign: "center", maxWidth: 380 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
-          <div style={{ fontWeight: 900, fontSize: 20, marginBottom: 8 }}>Owner only</div>
-          <div style={{ fontSize: 14, color: C.sub, marginBottom: 24, lineHeight: 1.5 }}>
-            Only the group&apos;s owner can create events for this group.
-          </div>
-          <Link href={`/groups/${groupId}`} style={{ display: "inline-block", padding: "12px 24px", borderRadius: 14, background: "#7C3AED", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
-            Back to Group
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, paddingBottom: 80 }}>
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
@@ -209,6 +202,16 @@ export default function CreateEventPage() {
         <p style={{ color: C.sub, fontSize: 14, marginBottom: 24 }}>
           Build community. Get people out. Make it happen.
         </p>
+
+        {groupId && !isGroupOwner && (
+          <div style={{ background: "rgba(245,166,35,0.12)", border: "1.5px solid rgba(245,166,35,0.4)", borderRadius: 12, padding: "12px 16px", marginBottom: 18, display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <div style={{ fontSize: 18, lineHeight: 1 }}>📋</div>
+            <div style={{ fontSize: 13, color: "#F5A623", lineHeight: 1.5 }}>
+              <strong style={{ display: "block", marginBottom: 2 }}>Awaiting approval</strong>
+              You&apos;re creating this event for a group you don&apos;t admin. The group&apos;s admin will review and approve before it goes live.
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Cover image */}
