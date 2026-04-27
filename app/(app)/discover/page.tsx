@@ -527,8 +527,9 @@ export default function DiscoverPage() {
       const now = new Date().toISOString();
       let query = supabase
         .from('events_with_counts')
-        .select('id, title, category, subcategory, event_date, date_tbd, location_name, city, price, going_count')
+        .select('id, title, category, subcategory, event_date, date_tbd, location_name, city, price, going_count, approved')
         .eq('is_public', true)
+        .or('approved.is.null,approved.eq.true')
         .gte('event_date', now)
         .order('event_date', { ascending: true })
         .limit(50);
