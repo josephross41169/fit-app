@@ -517,6 +517,20 @@ export async function POST(req: NextRequest) {
       }
 
       const pageSlice = merged.slice(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE);
+
+      // Belt-and-braces: if the ranked query returned nothing for page 0,
+      // fall back to "any public post in date order" so the feed is never
+      // empty. Caused by tiny networks where bucket 3 over-filters via the
+      // exclude list and you happen to be the only post author in your city.
+      if (pageSlice.length === 0 && PAGE === 0) {
+        const { data: anyPosts } = await admin.from('posts')
+          .select(baseSelect)
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(PAGE_SIZE);
+        return NextResponse.json({ posts: await hydrateFeedPosts(anyPosts || [], viewerId, admin) });
+      }
+
       return NextResponse.json({ posts: await hydrateFeedPosts(pageSlice, viewerId, admin) });
     }
 
