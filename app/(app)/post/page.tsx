@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
 import { track } from "@/components/PostHogProvider";
+import AIFoodScanner from "@/components/AIFoodScanner";
 import { EXERCISES } from "@/lib/exercises";
 import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 import { BADGES } from "@/lib/badges";
@@ -402,6 +403,8 @@ export default function PostPage() {
   const [water, setWater] = useState("");
   const [nutNotes, setNutNotes] = useState("");
   const [nutPhoto, setNutPhoto] = useState<string | null>(null);
+  // AI food scanner modal state. When open, shows the photo→nutrition flow.
+  const [showAIScanner, setShowAIScanner] = useState(false);
   const [mealPhotos, setMealPhotos] = useState<Record<string, string>>({});
   // Macro goals & daily tracking
   const [macroGoals, setMacroGoals] = useState<NutritionGoals | null>(null);
@@ -2285,12 +2288,18 @@ export default function PostPage() {
 
               {/* Food search + items */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Food Items</div>
-                  <button onClick={() => setFoodItems(f => [...f, { name: "", calories: "" }])}
-                    style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
-                    + Manual
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setShowAIScanner(true)}
+                      style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                      🤖 Scan with AI
+                    </button>
+                    <button onClick={() => setFoodItems(f => [...f, { name: "", calories: "" }])}
+                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                      + Manual
+                    </button>
+                  </div>
                 </div>
 
 
@@ -2690,6 +2699,36 @@ export default function PostPage() {
         )}
         </div>{/* end post-main */}
       </div>{/* end post-layout */}
+
+      {/* ── AI Food Scanner modal ───────────────────────────────
+           Snap a food photo → AI estimates → user reviews + edits →
+           items get pushed into the log AND the photo becomes the
+           nutrition log's photo (so the activity card has the meal pic). */}
+      {showAIScanner && user && (
+        <AIFoodScanner
+          userId={user.id}
+          onClose={() => setShowAIScanner(false)}
+          onResult={(items, photoDataUrl) => {
+            // Append AI items to the existing food list (don't replace —
+            // user might have already added items manually before scanning)
+            setFoodItems(prev => [
+              ...prev,
+              ...items.map(it => ({
+                name: it.name,
+                calories: it.calories,
+                protein: it.protein,
+                carbs: it.carbs,
+                fat: it.fat,
+                servingSize: it.servingSize,
+                qty: it.qty || "1",
+              })),
+            ]);
+            // Photo becomes the nutrition log's photo. Only set if not
+            // already set — don't overwrite if user already picked one.
+            if (!nutPhoto) setNutPhoto(photoDataUrl);
+          }}
+        />
+      )}
     </div>
   );
 }
