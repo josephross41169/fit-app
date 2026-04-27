@@ -171,10 +171,34 @@ type Post = {
   likes: number;
   liked: boolean;
   comments: Comment[];
-  workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string}[]; } | null;
-  nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; } | null;
-  wellness: { entries: { emoji: string; activity: string; notes: string; }[]; } | null;
+  workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string}[]; photoUrls?: string[]; } | null;
+  nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; photoUrls?: string[]; } | null;
+  wellness: { entries: { emoji: string; activity: string; notes: string; }[]; photoUrls?: string[]; } | null;
 };
+
+function normalizePhotoUrls(...sources: any[]): string[] {
+  const out: string[] = [];
+  const add = (value: any) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(add);
+      return;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith('[')) {
+        try {
+          add(JSON.parse(trimmed));
+          return;
+        } catch {}
+      }
+      if (trimmed.startsWith('http') || trimmed.startsWith('/')) out.push(trimmed);
+    }
+  };
+  sources.forEach(add);
+  return Array.from(new Set(out));
+}
 
 // ── Suggested Users (shown when following feed runs out) ─────────────────────
 const SUGGESTED_USERS = [
@@ -477,6 +501,11 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
         </div>
       </button>
+      {workout.photoUrls && workout.photoUrls.length > 0 && (
+        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
+          <img src={workout.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+        </div>
+      )}
       {/* Always-visible top-3 strip */}
       {!open && exercises.length > 0 && (
         <div style={{ background:"#1E2235", padding:"8px 14px", fontSize:11, color:C.darkSub, borderBottom:`1px solid ${C.darkBorder}` }}>
@@ -540,6 +569,11 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
         </div>
       </button>
+      {nutrition.photoUrls && nutrition.photoUrls.length > 0 && (
+        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
+          <img src={nutrition.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+        </div>
+      )}
       {/* Macro pills always visible */}
       <div style={{ background:"#1E2235",padding:"12px 14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:open?12:0 }}>
@@ -597,6 +631,11 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
         </div>
       </button>
+      {wellness.photoUrls && wellness.photoUrls.length > 0 && (
+        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
+          <img src={wellness.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+        </div>
+      )}
       {open && (
         <div style={{ background:"#1E2235",padding:"10px 14px",display:"flex",flexDirection:"column",gap:7 }}>
           {wellness.entries.map((e,i) => (
@@ -1630,7 +1669,7 @@ export default function FeedPage() {
         time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
-        photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
+        photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
         caption: p.caption || "",
         likes: p.likes_count || 0,
         liked: p._liked || false,
@@ -1700,6 +1739,7 @@ export default function FeedPage() {
           distance: c.distance || '',
         })) : [],
         notes: wl.notes,
+        photoUrls: normalizePhotoUrls(wl.photo_url, wl.media_url, wl.media_urls),
       } : null;
 
       const nutrition = nls.length > 0 ? {
@@ -1714,11 +1754,12 @@ export default function FeedPage() {
           name: Array.isArray(l.food_items) && l.food_items.length > 0 ? l.food_items.map((f: any) => f.name).join(', ') : (l.notes || 'Logged meal'),
           cal: l.calories_total || 0,
         })),
-        photoUrls: nls.map((l: any) => l.photo_url).filter(Boolean),
+        photoUrls: normalizePhotoUrls(...nls.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
       } : null;
 
       const wellness = wels.length > 0 ? {
         entries: wels.map((l: any) => ({ activity: l.wellness_type || 'Wellness', emoji: '🌿', notes: l.notes || '' })),
+        photoUrls: normalizePhotoUrls(...wels.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
       } : null;
 
       return { ...entry, workout, nutrition, wellness };
@@ -1985,7 +2026,7 @@ export default function FeedPage() {
                   time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                   dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                  photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
+                  photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
                   caption: p.caption || "",
                   likes: p.likes_count || 0,
                   liked: p._liked || false,
@@ -2193,7 +2234,7 @@ export default function FeedPage() {
                 time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                 dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                photos: (() => { if (p.media_urls && Array.isArray(p.media_urls) && p.media_urls.length > 0) return p.media_urls; if (p.media_url) return [p.media_url]; return []; })(),
+                photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
                 caption: p.caption || "",
                 likes: p.likes_count || 0,
                 liked: p._liked || false,
