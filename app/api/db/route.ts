@@ -469,67 +469,53 @@ export async function POST(req: NextRequest) {
           .filter((id: string) => !followingIds.includes(id));
       }
 
-      // We pull a wider window than PAGE_SIZE from each bucket to handle
-      // pagination smoothly. If a bucket runs out, the next bucket fills.
-      const FETCH_LIMIT = (PAGE + 1) * PAGE_SIZE * 2;
+      // ── For You ranking — simplified, bulletproof version ─────────────
+      // Previously we ran 3 separate queries (follows / city / everyone)
+      // and merged them. That approach had a bug where if any single bucket
+      // errored silently (e.g. .not.in syntax issues with empty arrays),
+      // the whole feed could end up empty. Worse: when nobody else had a
+      // post yet, even your OWN posts wouldn't show.
+      //
+      // The simpler approach: pull a wide window of all public posts in
+      // one query, then SCORE them in memory by which "bucket" they fall in.
+      // Same effective ranking, no silent failures, your own posts always
+      // appear at the top, and even a brand-new app with one user works.
+      const followingSet = new Set(followingIds);
+      const citySet = new Set(cityUserIds);
 
-      const baseSelect = `*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`;
-
-      // Bucket 1: posts from followed users
-      const followingPromise = followingIds.length > 0
-        ? admin.from('posts').select(baseSelect).eq('is_public', true).in('user_id', followingIds).order('created_at', { ascending: false }).limit(FETCH_LIMIT)
-        : Promise.resolve({ data: [] as any[] });
-
-      // Bucket 2: posts from same-city users (excluding follows)
-      const cityPromise = cityUserIds.length > 0
-        ? admin.from('posts').select(baseSelect).eq('is_public', true).in('user_id', cityUserIds).order('created_at', { ascending: false }).limit(FETCH_LIMIT)
-        : Promise.resolve({ data: [] as any[] });
-
-      // Bucket 3: everyone else (excluding self + follows + city already shown)
-      const excludeUserIds = [
-        ...(viewerId ? [viewerId] : []),
-        ...followingIds,
-        ...cityUserIds,
-      ];
-      let everyoneQuery = admin.from('posts').select(baseSelect)
+      const FETCH_LIMIT = (PAGE + 1) * PAGE_SIZE * 4;
+      const { data: allPosts, error: feedErr } = await admin
+        .from('posts')
+        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
-      if (excludeUserIds.length > 0) {
-        // Postgres `not.in` with a comma-joined string works for uuid[] columns
-        everyoneQuery = everyoneQuery.not('user_id', 'in', `(${excludeUserIds.join(',')})`);
+
+      if (feedErr) {
+        console.error('[get_feed_posts] query failed:', feedErr);
+        return NextResponse.json({ posts: [] });
       }
 
-      const [followingRes, cityRes, everyoneRes] = await Promise.all([
-        followingPromise, cityPromise, everyoneQuery,
-      ]);
+      // Score each post: lower number = higher priority in the feed.
+      //   0 = your own post (always at the top of For You)
+      //   1 = post from someone you follow
+      //   2 = post from someone in your city
+      //   3 = everyone else
+      // Within each bucket we keep date-descending order (already sorted).
+      const scored = (allPosts || []).map((p: any) => {
+        let bucket = 3;
+        if (viewerId && p.user_id === viewerId) bucket = 0;
+        else if (followingSet.has(p.user_id)) bucket = 1;
+        else if (citySet.has(p.user_id)) bucket = 2;
+        return { post: p, bucket };
+      });
 
-      // Concatenate buckets in priority order, dedupe by post id (defensive),
-      // then slice the page window.
-      const seen = new Set<string>();
-      const merged: any[] = [];
-      for (const bucket of [followingRes.data || [], cityRes.data || [], everyoneRes.data || []]) {
-        for (const p of bucket) {
-          if (seen.has(p.id)) continue;
-          seen.add(p.id);
-          merged.push(p);
-        }
-      }
+      // Stable sort by bucket — ties keep the date-descending order from the
+      // SQL query above. Array.prototype.sort is stable in modern JS.
+      scored.sort((a, b) => a.bucket - b.bucket);
 
+      const merged = scored.map(s => s.post);
       const pageSlice = merged.slice(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE);
-
-      // Belt-and-braces: if the ranked query returned nothing for page 0,
-      // fall back to "any public post in date order" so the feed is never
-      // empty. Caused by tiny networks where bucket 3 over-filters via the
-      // exclude list and you happen to be the only post author in your city.
-      if (pageSlice.length === 0 && PAGE === 0) {
-        const { data: anyPosts } = await admin.from('posts')
-          .select(baseSelect)
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-          .limit(PAGE_SIZE);
-        return NextResponse.json({ posts: await hydrateFeedPosts(anyPosts || [], viewerId, admin) });
-      }
 
       return NextResponse.json({ posts: await hydrateFeedPosts(pageSlice, viewerId, admin) });
     }
