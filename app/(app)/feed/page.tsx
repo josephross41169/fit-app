@@ -1242,76 +1242,88 @@ export default function FeedPage() {
     if (page === 0) setLoadingFeed(true);
     else setLoadingMorePosts(true);
 
-    // ── Direct supabase query — same shape Discover uses, which works ─────
-    // Earlier versions tried to go through /api/db with a nested comments
-    // join. That kept breaking in subtle ways: server filters that dropped
-    // posts, RLS issues on the comments table killing the whole nested
-    // select, env-var/deploy mismatches between client and server. Since
-    // Discover, Following, and Profile all show posts fine using a plain
-    // direct query, For You will too.
-    //
-    // Trade-off: comments don't come pre-joined. But comments are loaded
-    // lazily per-post when the user expands a card — so this is fine.
+    // ── Use the same /api/db endpoint Following uses ──────────────────────
+    // Following calls this exact endpoint with `followingOnly: true` and
+    // it works — posts render. For You is the SAME endpoint, just without
+    // the `followingOnly` flag, so the server returns ALL public posts
+    // ranked by bucket (own → follows → city → everyone). The server uses
+    // the admin client which bypasses RLS; the direct-supabase approach
+    // we tried before was hitting RLS edge cases (the `comments` join in
+    // particular kills the whole nested SELECT under client RLS even when
+    // posts themselves are readable).
     let data: any[] | null = null;
     try {
-      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
-      // Use the EXACT same select shape Following uses (line 1499) — that
-      // query is proven to work in Joey's Supabase. Earlier attempts used
-      // the explicit FK-constraint syntax `users:users!posts_user_id_fkey`
-      // which can return zero rows if the named constraint doesn't exist.
-      const { data: posts, error: queryErr } = await supabase
-        .from('posts')
-        .select('*, users(id, username, full_name, avatar_url, tier, logs_last_28_days, city)')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(FETCH_LIMIT);
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'get_feed_posts',
+          payload: { viewerId: user?.id, page, pageSize: PAGE_SIZE },
+        }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        console.error('[feed] fetchPosts API error:', json.error);
+      } else if (Array.isArray(json.posts)) {
+        data = json.posts;
+      }
+    } catch (err) {
+      console.error('[feed] fetchPosts network error:', err);
+    }
 
-      if (queryErr) {
-        console.error('[feed] posts query failed:', queryErr);
-      } else if (posts) {
-        // Rank: bucket 0 = your own posts, 1 = follows, 2 = same city, 3 = rest
-        let followingIds: string[] = [];
-        let viewerCity = '';
-        if (user) {
+    // Fallback ONLY if the API totally failed (network error, malformed
+    // response). Empty array from a successful API call is a valid result.
+    if (data === null && user) {
+      console.warn('[feed] API failed — falling back to direct supabase query');
+      try {
+        const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
+        // Match Following's fallback shape exactly. No FK-constraint hint.
+        const { data: posts } = await supabase
+          .from('posts')
+          .select('*, users(id, username, full_name, avatar_url, tier, logs_last_28_days, city)')
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(FETCH_LIMIT);
+
+        if (posts) {
+          // Rank in memory: own → follows → city → everyone
           const [followsRes, viewerRes] = await Promise.all([
             supabase.from('follows').select('following_id').eq('follower_id', user.id),
             supabase.from('users').select('city').eq('id', user.id).single(),
           ]);
-          followingIds = (followsRes.data || []).map((f: any) => f.following_id);
-          viewerCity = (viewerRes.data?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
+          const followingIds = (followsRes.data || []).map((f: any) => f.following_id);
+          const viewerCity = (viewerRes.data?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
+          const followingSet = new Set(followingIds);
+
+          const ranked = posts
+            .map((p: any, index: number) => {
+              const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
+              let bucket = 3;
+              if (p.user_id === user.id) bucket = 0;
+              else if (followingSet.has(p.user_id)) bucket = 1;
+              else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
+              return { post: p, bucket, index };
+            })
+            .sort((a: any, b: any) => a.bucket - b.bucket || a.index - b.index)
+            .map((r: any) => r.post);
+
+          const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+          let likedPostIds: Set<string> = new Set();
+          if (pageRows.length > 0) {
+            const postIds = pageRows.map((p: any) => p.id);
+            const { data: likeData } = await supabase
+              .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
+            if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+          }
+          data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id), comments: [] }));
         }
-        const followingSet = new Set(followingIds);
-
-        const ranked = posts
-          .map((p: any, index: number) => {
-            const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
-            let bucket = 3;
-            if (user && p.user_id === user.id) bucket = 0;
-            else if (followingSet.has(p.user_id)) bucket = 1;
-            else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
-            return { post: p, bucket, index };
-          })
-          .sort((a: any, b: any) => a.bucket - b.bucket || a.index - b.index)
-          .map((r: any) => r.post);
-
-        const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-        // Hydrate _liked client-side
-        let likedPostIds: Set<string> = new Set();
-        if (user && pageRows.length > 0) {
-          const postIds = pageRows.map((p: any) => p.id);
-          const { data: likeData } = await supabase
-            .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
-          if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
-        }
-        data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id), comments: [] }));
+      } catch (err) {
+        console.error('[feed] direct supabase fallback error:', err);
       }
-    } catch (err) {
-      console.error('[feed] fetchPosts error:', err);
     }
 
     if (data) {
-      // Filter out blocked users in either direction
       let filtered = data;
       if (user) {
         const blocks = await loadBlockedUsers(user.id);
