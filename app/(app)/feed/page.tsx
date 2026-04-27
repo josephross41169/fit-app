@@ -1198,8 +1198,12 @@ export default function FeedPage() {
     // fall back to a direct supabase query so the feed still loads (just
     // without comments). The fallback is the same query the feed used to
     // run before the comment fix.
+    //
+    // CRITICAL: distinguish "API returned []" from "API failed to respond".
+    // An empty array is a valid response (just no posts yet) and we should
+    // NOT fall back. A null/error means the API broke and we SHOULD.
     let data: any[] | null = null;
-    let usedFallback = false;
+    let apiSucceeded = false;
     try {
       const res = await fetch('/api/db', {
         method: 'POST',
@@ -1214,15 +1218,16 @@ export default function FeedPage() {
         console.error('[feed] fetchPosts API error:', json.error);
       } else if (Array.isArray(json.posts)) {
         data = json.posts;
+        apiSucceeded = true;
       }
     } catch (err) {
       console.error('[feed] fetchPosts network error:', err);
     }
 
-    // Fallback: direct supabase query if API failed or returned nothing
-    if (data === null) {
+    // Fallback only if the API call actually failed (network error, malformed
+    // response, error field). Empty arrays from a successful call are valid.
+    if (!apiSucceeded) {
       console.warn('[feed] falling back to direct supabase query');
-      usedFallback = true;
       const { data: directData } = await supabase
         .from('posts')
         .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
