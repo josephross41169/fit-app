@@ -1255,9 +1255,13 @@ export default function FeedPage() {
     let data: any[] | null = null;
     try {
       const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
+      // Use the EXACT same select shape Following uses (line 1499) — that
+      // query is proven to work in Joey's Supabase. Earlier attempts used
+      // the explicit FK-constraint syntax `users:users!posts_user_id_fkey`
+      // which can return zero rows if the named constraint doesn't exist.
       const { data: posts, error: queryErr } = await supabase
         .from('posts')
-        .select('*, users:users!posts_user_id_fkey(id, username, full_name, avatar_url, tier, logs_last_28_days, city)')
+        .select('*, users(id, username, full_name, avatar_url, tier, logs_last_28_days, city)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
