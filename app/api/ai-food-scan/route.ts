@@ -15,6 +15,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Run at request time. This route depends on per-request data (image upload,
+// user identity, runtime env vars), so it can't be statically generated.
+export const dynamic = "force-dynamic";
+
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
