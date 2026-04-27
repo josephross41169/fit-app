@@ -316,6 +316,69 @@ export async function POST(req: NextRequest) {
   try {
     const { action, payload } = await req.json();
 
+    if (action === 'award_xp') {
+      const { userId, category } = payload || {};
+      const allowed = new Set(['workout', 'cardio', 'nutrition', 'wellness', 'feed_post']);
+      if (!userId || !allowed.has(category)) {
+        return NextResponse.json({ error: 'Missing or invalid XP award fields' }, { status: 400 });
+      }
+
+      const xpAmount = 3;
+      const { error: insertError } = await admin
+        .from('user_xp_log')
+        .insert({ user_id: userId, category, xp_amount: xpAmount });
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          const { data: profile, error: profileError } = await admin
+            .from('users')
+            .select('xp_in_level, current_level')
+            .eq('id', userId)
+            .single();
+          if (profileError) {
+            console.error('[xp] duplicate award lookup failed:', profileError.message);
+            return NextResponse.json({ error: profileError.message }, { status: 500 });
+          }
+          return NextResponse.json({
+            awarded: false,
+            newXp: profile?.xp_in_level ?? 0,
+            currentLevel: profile?.current_level ?? 1,
+            leveledUp: false,
+          });
+        }
+
+        console.error('[xp] service-role insert failed:', insertError.message, { userId, category });
+        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      }
+
+      const { data: profile, error: readError } = await admin
+        .from('users')
+        .select('xp_in_level, current_level')
+        .eq('id', userId)
+        .single();
+      if (readError || !profile) {
+        console.error('[xp] profile read failed after insert:', readError?.message, { userId, category });
+        return NextResponse.json({ error: readError?.message || 'User profile not found after XP insert' }, { status: 500 });
+      }
+
+      const newXp = (profile.xp_in_level ?? 0) + xpAmount;
+      const { error: updateError } = await admin
+        .from('users')
+        .update({ xp_in_level: newXp })
+        .eq('id', userId);
+      if (updateError) {
+        console.error('[xp] xp_in_level update failed:', updateError.message, { userId, category, newXp });
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        awarded: true,
+        newXp,
+        currentLevel: profile.current_level ?? 1,
+        leveledUp: false,
+      });
+    }
+
     // ── Create or find conversation between two users ──────────────────────
     if (action === 'create_conversation') {
       const { userId, otherUserId } = payload;

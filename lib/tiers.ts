@@ -240,14 +240,22 @@ export const LEVEL_COLORS: Record<Level, {
 // ── Backwards compatibility shims ────────────────────────────────────────────
 // Old code may still import these. Map old names to new system so nothing breaks
 // at compile time. These are NO LONGER USED for level computation.
-export type Tier = "1" | "2" | "3" | "4" | "5" | "6";
 export type OldTier = "default" | "active" | "grinder" | "elite" | "untouchable";
+export type Tier = OldTier;
 
 /** @deprecated kept for old imports; returns Level 1 always */
-export function computeTier(_a: number, _b: number): OldTier { return "default"; }
+export function computeTier(logsLast28: number, longestStreak: number): OldTier {
+  if (logsLast28 >= 24 || longestStreak >= 21) return "untouchable";
+  if (logsLast28 >= 16 || longestStreak >= 14) return "elite";
+  if (logsLast28 >= 8 || longestStreak >= 7) return "grinder";
+  if (logsLast28 >= 3 || longestStreak >= 3) return "active";
+  return "default";
+}
 
 /** @deprecated kept for old imports — returns minimal shape */
 export function getTierInfo(_a: number, _b: number) {
+  const computedTier = computeTier(_a, _b);
+  if (computedTier !== "default") return { tier: computedTier, ...TIER_INFO[computedTier] };
   return {
     tier: "default" as OldTier,
     label: "Level 1",
@@ -260,4 +268,27 @@ export function getTierInfo(_a: number, _b: number) {
   };
 }
 
-export const TIER_COLORS = LEVEL_COLORS;
+export const TIER_INFO: Record<OldTier, {
+  icon: string;
+  label: string;
+  title: string;
+  description: string;
+  nextTier: OldTier | null;
+  nextDescription: string | null;
+  progress: number;
+}> = {
+  default: { icon: "", label: "Level 1", title: "Level 1", description: "", nextTier: "active", nextDescription: "Log 3 activities in 28 days", progress: 0 },
+  active: { icon: "L2", label: "Level 2", title: "Level 2", description: "Building consistency", nextTier: "grinder", nextDescription: "Log 8 activities in 28 days", progress: 25 },
+  grinder: { icon: "L3", label: "Level 3", title: "Level 3", description: "Showing up often", nextTier: "elite", nextDescription: "Log 16 activities in 28 days", progress: 50 },
+  elite: { icon: "L4", label: "Level 4", title: "Level 4", description: "High-output training", nextTier: "untouchable", nextDescription: "Log 24 activities in 28 days", progress: 75 },
+  untouchable: { icon: "L5", label: "Level 5", title: "Level 5", description: "Top-tier consistency", nextTier: null, nextDescription: null, progress: 100 },
+};
+
+export const TIER_COLORS = {
+  ...LEVEL_COLORS,
+  default: LEVEL_COLORS[1],
+  active: LEVEL_COLORS[2],
+  grinder: LEVEL_COLORS[3],
+  elite: LEVEL_COLORS[4],
+  untouchable: LEVEL_COLORS[5],
+} as Record<Level | OldTier, typeof LEVEL_COLORS[Level]>;

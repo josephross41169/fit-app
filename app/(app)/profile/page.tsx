@@ -1151,9 +1151,19 @@ export default function ProfilePage() {
   // would overwrite the freshly uploaded URL with the old one.
   const initedAvatarRef = useRef(false);
   const initedBannerRef = useRef(false);
+  const latestUploadedAvatarUrlRef = useRef<string | null>(null);
+  const latestUploadedBannerUrlRef = useRef<string | null>(null);
 
   // Load avatar/banner from profile
   useEffect(() => {
+    if (latestUploadedAvatarUrlRef.current) {
+      setAvatar(latestUploadedAvatarUrlRef.current);
+      initedAvatarRef.current = true;
+    }
+    if (latestUploadedBannerUrlRef.current) {
+      setBanner(latestUploadedBannerUrlRef.current);
+      initedBannerRef.current = true;
+    }
     if (user?.profile?.avatar_url && !initedAvatarRef.current) {
       setAvatar(user.profile.avatar_url);
       initedAvatarRef.current = true;
@@ -1621,8 +1631,17 @@ export default function ProfilePage() {
         const compressed = await compressImage(dataUrl);
         const publicUrl = await uploadPhoto(compressed, supabasePath.bucket, supabasePath.path);
         if (publicUrl) {
+          if (supabasePath.dbField === "avatar_url") {
+            latestUploadedAvatarUrlRef.current = publicUrl;
+            initedAvatarRef.current = true;
+          }
+          if (supabasePath.dbField === "banner_url") {
+            latestUploadedBannerUrlRef.current = publicUrl;
+            initedBannerRef.current = true;
+          }
           set(publicUrl);
-          await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
+          const { error } = await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
+          if (error) console.error(`[profile] failed to save ${supabasePath.dbField}:`, error.message);
         }
       }
     };
