@@ -336,10 +336,13 @@ export interface BadgeTileProps {
     label: string;
     isMaxed: boolean;
   };
+  /** Compact size for preview grids — smaller padding, smaller fonts, hides
+   *  description text. Defaults to false (full-size). */
+  compact?: boolean;
 }
 
 export function BadgeTile({
-  tier, emoji, label, desc, category, earnedCount, maxTier, progress,
+  tier, emoji, label, desc, category, earnedCount, maxTier, progress, compact,
 }: BadgeTileProps) {
   const style = TIER_STYLES[tier];
   const theme = getTheme(category);
@@ -352,7 +355,7 @@ export function BadgeTile({
   return (
     <div style={{
       borderRadius: 16,
-      padding: "16px 10px",
+      padding: compact ? "12px 6px" : "16px 10px",
       textAlign: "center",
       border: `2px solid ${style.border}`,
       background: style.gradient,
@@ -424,17 +427,17 @@ export function BadgeTile({
       {/* Content */}
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{
-          fontSize: 36, marginBottom: 6,
+          fontSize: compact ? 22 : 36, marginBottom: compact ? 3 : 6,
           filter: `drop-shadow(0 2px 5px rgba(0,0,0,0.7)) drop-shadow(0 0 8px ${theme.accent}88)`,
         }}>{emoji}</div>
         <div style={{
-          fontWeight: 900, fontSize: 12,
+          fontWeight: 900, fontSize: compact ? 10 : 12,
           color: style.textColor,
-          lineHeight: 1.3, marginBottom: 4,
+          lineHeight: 1.3, marginBottom: compact ? 0 : 4,
           textShadow: "0 1px 3px rgba(0,0,0,0.85)",
           letterSpacing: 0.3,
         }}>{label}</div>
-        {desc && (
+        {desc && !compact && (
           <div style={{
             fontSize: 10,
             color: style.accentColor,
@@ -443,7 +446,7 @@ export function BadgeTile({
           }}>{desc}</div>
         )}
 
-        {progress && (
+        {progress && !compact && (
           <div style={{ marginBottom: 6 }}>
             <div style={{
               fontSize: 10, fontWeight: 800,
