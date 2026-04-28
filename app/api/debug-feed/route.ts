@@ -1,66 +1,90 @@
 // app/api/debug-feed/route.ts
-// Diagnostic endpoint. Visit https://fit-app-ecru.vercel.app/api/debug-feed
-// in a browser. Returns JSON with:
-//   - Total public posts count
-//   - First 5 public posts (id, user_id, caption, has_media)
-//   - Whether the get_feed_posts action returns the same posts
-// This bypasses every layer of UI/render to show ground truth.
+// Tests the exact query the rewritten For You feed runs.
+// Visit https://fit-app-ecru.vercel.app/api/debug-feed in browser.
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
+const JOEY_ID = "70e170ca-4428-4357-8e8e-410135fc3948";
+
 export async function GET() {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-  if (!SUPABASE_URL || !SERVICE_KEY) {
+  if (!SUPABASE_URL || !SERVICE || !ANON) {
     return NextResponse.json({ error: "missing env vars" }, { status: 500 });
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const admin = createClient(SUPABASE_URL, SERVICE);
+  const anon = createClient(SUPABASE_URL, ANON);
 
-  // 1. Raw count of public posts
-  const { count: publicCount, error: countErr } = await admin
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("is_public", true);
+  // 1. ADMIN raw count of public posts
+  const { count: adminCount } = await admin
+    .from("posts").select("id", { count: "exact", head: true }).eq("is_public", true);
 
-  // 2. First 5 public posts
-  const { data: samplePosts, error: sampleErr } = await admin
+  // 2. ADMIN exact query the new For You uses
+  const { data: adminFeed, error: adminFeedErr } = await admin
     .from("posts")
-    .select("id, user_id, caption, media_url, is_public, created_at")
+    .select("id, user_id, caption, media_url, media_urls, photo_url, media_type, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(20);
 
-  // 3. Same query the For You feed uses — including the users/comments joins
-  const { data: feedShape, error: feedShapeErr } = await admin
+  // 3. ANON (public client = same as browser) exact same query
+  const { data: anonFeed, error: anonFeedErr } = await anon
     .from("posts")
-    .select("*, users(id, username, full_name, avatar_url, tier, logs_last_28_days, city), comments(id, content, created_at, user_id, users(id, username, full_name, avatar_url))")
+    .select("id, user_id, caption, media_url, media_urls, photo_url, media_type, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(20);
+
+  // 4. Joey's posts specifically (admin so RLS doesn't hide them)
+  const { data: joeyPosts, error: joeyErr } = await admin
+    .from("posts")
+    .select("id, caption, media_url, is_public, created_at")
+    .eq("user_id", JOEY_ID)
+    .order("created_at", { ascending: false })
+    .limit(10);
 
   return NextResponse.json({
-    diagnostic: "feed",
     timestamp: new Date().toISOString(),
-    rawPublicPostCount: publicCount ?? null,
-    rawCountError: countErr?.message || null,
-    samplePostsCount: samplePosts?.length ?? 0,
-    samplePostsError: sampleErr?.message || null,
-    samplePosts: (samplePosts || []).map(p => ({
-      id: p.id,
-      user_id: p.user_id,
-      has_caption: !!p.caption,
-      has_media: !!p.media_url,
-      caption_preview: p.caption ? p.caption.slice(0, 40) : null,
-    })),
-    feedShapeQueryCount: feedShape?.length ?? 0,
-    feedShapeError: feedShapeErr?.message || null,
-    feedShapeFirstPostHasUserJoined: feedShape?.[0]?.users ? true : false,
-    feedShapeFirstPostUserId: feedShape?.[0]?.user_id || null,
-    feedShapeFirstPostCommentsCount: Array.isArray(feedShape?.[0]?.comments) ? feedShape[0].comments.length : null,
+    adminPublicCount: adminCount ?? null,
+    adminFeedQuery: {
+      count: adminFeed?.length ?? 0,
+      error: adminFeedErr?.message || null,
+      firstThree: (adminFeed || []).slice(0, 3).map((p: any) => ({
+        id: p.id,
+        user_id: p.user_id,
+        caption_preview: p.caption?.slice(0, 30) || null,
+        has_media: !!p.media_url,
+        users_joined: !!p.users,
+        users_username: p.users?.username || null,
+      })),
+    },
+    anonFeedQuery: {
+      count: anonFeed?.length ?? 0,
+      error: anonFeedErr?.message || null,
+      firstThree: (anonFeed || []).slice(0, 3).map((p: any) => ({
+        id: p.id,
+        user_id: p.user_id,
+        caption_preview: p.caption?.slice(0, 30) || null,
+        has_media: !!p.media_url,
+        users_joined: !!p.users,
+      })),
+    },
+    joeyPosts: {
+      count: joeyPosts?.length ?? 0,
+      error: joeyErr?.message || null,
+      posts: (joeyPosts || []).map((p: any) => ({
+        id: p.id,
+        caption: p.caption,
+        is_public: p.is_public,
+        has_media: !!p.media_url,
+        created_at: p.created_at,
+      })),
+    },
   });
 }
