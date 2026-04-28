@@ -893,10 +893,10 @@ export default function PostPage() {
           photo_url: woPhotoUrl,
           source: 'manual',                              // future wearables will set 'fitbit'/'apple-watch'/etc.
         };
-        // If resuming today's log, update it instead of inserting a new one
-        const res = todayLogId
-          ? await supabase.from('activity_logs').update(workoutPayload).eq('id', todayLogId)
-          : await supabase.from('activity_logs').insert({ ...base, log_type: 'workout', ...workoutPayload });
+        // Always insert a new row — users can log multiple workouts per day.
+        // Group goals, rivalries, challenges, and wars all aggregate by COUNT/SUM
+        // across the date window, so each insert is tracked independently.
+        const res = await supabase.from('activity_logs').insert({ ...base, log_type: 'workout', ...workoutPayload });
         error = res.error;
       } else if (logTab === 'nutrition') {
         // Upload per-meal photos
@@ -1693,28 +1693,10 @@ export default function PostPage() {
               {/* -- Fitbit Connect -- */}
               <FitbitConnect />
 
-              {/* -- Resume today's workout banner -- */}
-              {todayLog && !todayLogId && (
-                <div style={{ background: "linear-gradient(135deg, #1A1228, #2D1B69)", borderRadius: 18, padding: "14px 18px", border: `2px solid ${C.blue}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0" }}>? Continue today's workout</div>
-                    <div style={{ fontSize: 12, color: "#A78BFA", marginTop: 3 }}>{todayLog.type} · already logged today. Add more exercises or update it.</div>
-                  </div>
-                  <button
-                    onClick={resumeTodayWorkout}
-                    style={{ padding: "9px 16px", borderRadius: 14, border: "none", background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>
-                    Continue ?
-                  </button>
-                </div>
-              )}
-
-              {/* Resume mode indicator */}
-              {todayLogId && (
-                <div style={{ background: "#0D1A0D", borderRadius: 14, padding: "10px 16px", border: "2px solid #7C3AED", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>✏️ Editing today's {todayLog?.type || 'workout'} · save will update it</div>
-                  <button onClick={() => { setTodayLogId(null); setExercises([]); setWoType(''); setWoCategory('lifting'); setWoDuration(''); setWoDistance(''); setWoNotes(''); setIncludeCardio(false); setIncludeLifting(true); setCardioSubcategory('running'); setCardioBlockDuration(''); setCardioBlockDistance(''); setOtherTypeDuration(''); }} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>Start fresh instead</button>
-                </div>
-              )}
+              {/* -- Resume banner removed -- users can now log multiple
+                  workouts per day. Each save inserts a new row. To edit a
+                  previously logged workout, edit it from the activity feed
+                  (TODO: add edit affordance there). */}
 
               {/* AI Plan import banner — shown after user picks a day from
                   their saved plan. Reminds them what plan they're logging
