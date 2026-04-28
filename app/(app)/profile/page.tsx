@@ -1597,16 +1597,20 @@ export default function ProfilePage() {
       setModalSelectedLevel(((cd.currentLevel + 1) <= 6 ? cd.currentLevel + 1 : 6) as Level);
 
       // Compute which XP categories the user already earned today, by querying
-      // activity_logs for the UTC day window. Used to highlight already-done
-      // categories purple in the level modal.
+      // activity_logs for the LOCAL calendar day window. Used to highlight
+      // already-done categories purple in the level modal.
+      // Bug fix: previously used setUTCHours(0,0,0,0) which is 4-5pm Pacific.
+      // That meant logs from yesterday afternoon Pacific stayed highlighted
+      // into the next morning. Now uses local midnight so the bars reset on
+      // calendar day rollover in the user's timezone.
       try {
-        const startOfDayUtc = new Date();
-        startOfDayUtc.setUTCHours(0, 0, 0, 0);
+        const localMidnight = new Date();
+        localMidnight.setHours(0, 0, 0, 0);
         const { data: todayLogs } = await supabase
           .from('activity_logs')
           .select('log_type, workout_category')
           .eq('user_id', user!.id)
-          .gte('created_at', startOfDayUtc.toISOString());
+          .gte('logged_at', localMidnight.toISOString());
         const cats = new Set<string>();
         const cardioSet = new Set(['running', 'walking', 'biking', 'swimming', 'rowing']);
         for (const log of (todayLogs || []) as any[]) {
@@ -1622,7 +1626,7 @@ export default function ProfilePage() {
           .from('posts')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user!.id)
-          .gte('created_at', startOfDayUtc.toISOString());
+          .gte('created_at', localMidnight.toISOString());
         if ((feedCount ?? 0) > 0) cats.add('feed_post');
         setTodayXpCategories(cats);
       } catch { /* non-fatal — leaves the set empty */ }
