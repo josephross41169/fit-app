@@ -1260,7 +1260,7 @@ export default function FeedPage() {
       const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
       const { data: posts, error: queryErr } = await supabase
         .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, photo_url, media_type, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)')
+        .select('id, user_id, caption, media_url, media_urls, media_type, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
