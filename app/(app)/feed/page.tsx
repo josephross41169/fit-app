@@ -1238,98 +1238,94 @@ export default function FeedPage() {
 
   const PAGE_SIZE = 10;
 
+  // ── For You feed loader ───────────────────────────────────────────────
+  // CLEAN REBUILD. Direct supabase query. Only columns we KNOW exist
+  // (proven by Discover and Profile working with them). No /api/db dependency
+  // — that endpoint had multiple sources of silent failure.
+  //
+  // Columns selected: id, username, full_name, avatar_url, city — exactly
+  // what Discover uses (proven to work). NOT tier (column missing), NOT
+  // logs_last_28_days (also potentially missing). Tier is computed in the
+  // renderer fallback.
+  //
+  // No nested comments join — that hits RLS edge cases. Comments load
+  // lazily per post when expanded.
   async function fetchPosts(page: number, append = false) {
     if (page === 0) setLoadingFeed(true);
     else setLoadingMorePosts(true);
 
-    // ── Use the same /api/db endpoint Following uses ──────────────────────
-    // Following calls this exact endpoint with `followingOnly: true` and
-    // it works — posts render. For You is the SAME endpoint, just without
-    // the `followingOnly` flag, so the server returns ALL public posts
-    // ranked by bucket (own → follows → city → everyone). The server uses
-    // the admin client which bypasses RLS; the direct-supabase approach
-    // we tried before was hitting RLS edge cases (the `comments` join in
-    // particular kills the whole nested SELECT under client RLS even when
-    // posts themselves are readable).
     let data: any[] | null = null;
+
     try {
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'get_feed_posts',
-          payload: { viewerId: user?.id, page, pageSize: PAGE_SIZE },
-        }),
-      });
-      const json = await res.json();
-      if (json.error) {
-        console.error('[feed] fetchPosts API error:', json.error);
-      } else if (Array.isArray(json.posts)) {
-        data = json.posts;
-      }
-    } catch (err) {
-      console.error('[feed] fetchPosts network error:', err);
-    }
+      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
+      const { data: posts, error: queryErr } = await supabase
+        .from('posts')
+        .select('id, user_id, caption, media_url, media_urls, photo_url, media_type, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(FETCH_LIMIT);
 
-    // Fallback ONLY if the API totally failed (network error, malformed
-    // response). Empty array from a successful API call is a valid result.
-    if (data === null && user) {
-      console.warn('[feed] API failed — falling back to direct supabase query');
-      try {
-        const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
-        // Match Following's fallback shape exactly. No FK-constraint hint.
-        const { data: posts } = await supabase
-          .from('posts')
-          .select('*, users(id, username, full_name, avatar_url, logs_last_28_days, city)')
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-          .limit(FETCH_LIMIT);
+      if (queryErr) {
+        console.error('[feed] posts query failed:', queryErr.message, queryErr);
+      } else if (Array.isArray(posts)) {
+        // Score for ranking. Tier 0 = own posts, 1 = follows, 2 = same city, 3 = rest
+        let followingIds: string[] = [];
+        let viewerCity = '';
+        if (user) {
+          try {
+            const [followsRes, viewerRes] = await Promise.all([
+              supabase.from('follows').select('following_id').eq('follower_id', user.id),
+              supabase.from('users').select('city').eq('id', user.id).maybeSingle(),
+            ]);
+            followingIds = (followsRes.data || []).map((f: any) => f.following_id);
+            viewerCity = (viewerRes.data?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
+          } catch (followErr) {
+            console.warn('[feed] couldnt fetch follows/city for ranking:', followErr);
+          }
+        }
+        const followingSet = new Set(followingIds);
 
-        if (posts) {
-          // Rank in memory: own → follows → city → everyone
-          const [followsRes, viewerRes] = await Promise.all([
-            supabase.from('follows').select('following_id').eq('follower_id', user.id),
-            supabase.from('users').select('city').eq('id', user.id).single(),
-          ]);
-          const followingIds = (followsRes.data || []).map((f: any) => f.following_id);
-          const viewerCity = (viewerRes.data?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
-          const followingSet = new Set(followingIds);
+        const ranked = posts
+          .map((p: any, index: number) => {
+            const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
+            let bucket = 3;
+            if (user && p.user_id === user.id) bucket = 0;
+            else if (followingSet.has(p.user_id)) bucket = 1;
+            else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
+            return { post: p, bucket, index };
+          })
+          .sort((a, b) => a.bucket - b.bucket || a.index - b.index)
+          .map(r => r.post);
 
-          const ranked = posts
-            .map((p: any, index: number) => {
-              const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
-              let bucket = 3;
-              if (p.user_id === user.id) bucket = 0;
-              else if (followingSet.has(p.user_id)) bucket = 1;
-              else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
-              return { post: p, bucket, index };
-            })
-            .sort((a: any, b: any) => a.bucket - b.bucket || a.index - b.index)
-            .map((r: any) => r.post);
+        const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-          const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-          let likedPostIds: Set<string> = new Set();
-          if (pageRows.length > 0) {
+        // Hydrate _liked client-side
+        let likedPostIds: Set<string> = new Set();
+        if (user && pageRows.length > 0) {
+          try {
             const postIds = pageRows.map((p: any) => p.id);
             const { data: likeData } = await supabase
               .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
             if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
+          } catch (likeErr) {
+            console.warn('[feed] couldnt fetch likes:', likeErr);
           }
-          data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id), comments: [] }));
         }
-      } catch (err) {
-        console.error('[feed] direct supabase fallback error:', err);
+        data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id), comments: [] }));
       }
+    } catch (err) {
+      console.error('[feed] fetchPosts unexpected error:', err);
     }
 
     if (data) {
       let filtered = data;
       if (user) {
-        const blocks = await loadBlockedUsers(user.id);
-        if (blocks.size > 0) {
-          filtered = data.filter((p: any) => !blocks.has(p.user_id));
-        }
+        try {
+          const blocks = await loadBlockedUsers(user.id);
+          if (blocks.size > 0) {
+            filtered = data.filter((p: any) => !blocks.has(p.user_id));
+          }
+        } catch {}
       }
       console.log('[feed] fetchPosts complete:', {
         rawCount: data.length,
@@ -1347,6 +1343,7 @@ export default function FeedPage() {
     if (page === 0) setLoadingFeed(false);
     else setLoadingMorePosts(false);
   }
+
 
   // Fetch the For You feed once on mount AND once when user resolves so we
   // get personalized ranking. The first fetch on mount runs with user=null
@@ -2114,42 +2111,28 @@ export default function FeedPage() {
                   {/* Empty state only when there's truly nothing — no feed
                       posts AND no activity. Previously this said "no posts"
                       even when the user had logged plenty of activity. */}
-                  {mobileItems.length === 0 && (
+                  {displayPosts.length === 0 && (
                     <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-                      👋 No posts yet. Share something to the feed or log a workout to see it here!
+                      👋 No posts yet. Share something to the feed to see it here!
                     </div>
                   )}
-                  {/* Desktop For You: interleave feed posts + activity logs.
-                      Same items mobile shows. Without this, desktop For You
-                      was empty whenever the user had no feed posts even though
-                      they had plenty of logged activity. */}
-                  {mobileItems.map((item, idx) => {
-                    if (item.type === "post") {
-                      return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} onCommentsRefresh={refreshPostComments} />;
-                    }
-                    if (item.type === "activity") {
-                      return (
-                        <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
-                          <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
-                            <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                              <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
-                              <div>
-                                <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
-                                <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
-                              </div>
-                            </div>
-                            <div style={{ padding:"10px 12px 4px" }}>
-                              {item.data.workout && <SideWorkout workout={item.data.workout} />}
-                              {item.data.nutrition && <SideNutrition nutrition={item.data.nutrition} />}
-                              {item.data.wellness && <SideWellness wellness={item.data.wellness} />}
-                            </div>
-                            <ActivityComments cardId={item.data.id as string} cardOwnerId={(item.data as any)._userId as string} />
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null; // skip "suggested" cards in desktop main column
-                  })}
+                  {/* Desktop For You: ONLY feed posts (Share to Feed) in the
+                      main column. Activity logs (workouts/nutrition/wellness)
+                      live in the right-side Activity Feed sidebar — they do
+                      NOT appear here. This matches Instagram-style behavior
+                      where the main column is photo posts. Mobile interleaves
+                      because there's no sidebar on small screens. */}
+                  {displayPosts.map((post: any) => (
+                    <PostCard
+                      key={`post-${post.id}`}
+                      post={post}
+                      onUpdate={updatePost}
+                      currentUser={user}
+                      onDelete={() => deletePost(post.id)}
+                      onReport={() => setReportTarget({ type: "post", id: post.id as string })}
+                      onCommentsRefresh={refreshPostComments}
+                    />
+                  ))}
                   {/* Load More posts */}
                   {dbPostsHasMore && dbPosts.length > 0 && (
                     <div style={{ textAlign:"center", marginBottom:24 }}>
