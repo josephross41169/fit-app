@@ -1235,7 +1235,12 @@ export default function ProfilePage() {
 
         const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-        const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
+        // CHANGED: was .map() returning one card per date with .find() picking
+        // only the first workout. Now .flatMap() returns one card per workout
+        // when a day has multiple workouts logged. Nutrition + wellness
+        // aggregates attach to the FIRST (newest) card only to avoid double-
+        // counting in any downstream consumer.
+        const days: typeof DAYS = Array.from(byDate.entries()).flatMap(([dateKey, logs]) => {
           // dateKey is now "MM/DD/YYYY"
           const [month, day, year] = dateKey.split('/').map(Number);
           const date = new Date(year, month - 1, day);
@@ -1245,13 +1250,15 @@ export default function ProfilePage() {
           const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
           const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
           const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-          const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
+          const baseLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
 
-          const workoutLog = logs.find((l: any) => l.log_type === 'workout');
+          // Filter — multiple workouts per day are now allowed
+          const workoutLogs   = logs.filter((l: any) => l.log_type === 'workout');
           const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
-          const wellnessLogs = logs.filter((l: any) => l.log_type === 'wellness');
+          const wellnessLogs  = logs.filter((l: any) => l.log_type === 'wellness');
 
-          const workout = workoutLog ? {
+          // Build the singular `workout` shape consumed by DayCard
+          const buildWorkout = (workoutLog: any) => ({
             type: workoutLog.workout_type || 'Workout',
             duration: workoutLog.workout_duration_min ? `${workoutLog.workout_duration_min} min` : '—',
             calories: workoutLog.workout_calories || 0,
@@ -1271,7 +1278,7 @@ export default function ProfilePage() {
                   distance: c.distance || '',
                 }))
               : [],
-          } : null;
+          });
 
           const totalCalories = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
           const totalProtein  = nutritionLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
@@ -1304,19 +1311,55 @@ export default function ProfilePage() {
             })),
           } : null;
 
-          return {
-            id: dateKey,
-            label: friendlyLabel,
-            emoji: workout ? '💪' : (nutrition ? '🥗' : (wellness ? '🌿' : '🌅')),
-            workout,
-            nutrition,
-            wellness,
-            _workoutLogId: workoutLog?.id || null,
-            _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
-            _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
-            photo_url: workoutLog?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
-            _date: date.getTime(), // for sorting
-          };
+          // No workouts → single rest-day or food-only / wellness-only card
+          if (workoutLogs.length === 0) {
+            return [{
+              id: dateKey,
+              label: baseLabel,
+              emoji: nutrition ? '🥗' : (wellness ? '🌿' : '🌅'),
+              workout: null,
+              nutrition,
+              wellness,
+              _workoutLogId: null,
+              _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
+              _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
+              photo_url: nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
+              _date: date.getTime(),
+            }];
+          }
+
+          // One or more workouts → newest first, one card per workout.
+          // Nutrition + wellness summary attaches only to the newest card.
+          const sortedWorkouts = [...workoutLogs].sort((a, b) =>
+            new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime()
+          );
+
+          return sortedWorkouts.map((workoutLog: any, idx: number) => {
+            // When >1 workout same day, append the time so each card is distinguishable
+            let label = baseLabel;
+            if (sortedWorkouts.length > 1) {
+              const t = new Date(workoutLog.logged_at);
+              const timeStr = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+              label = `${baseLabel} · ${timeStr}`;
+            }
+            // Offset _date so newest workout sorts above older ones same day
+            const dateMs = date.getTime() + (sortedWorkouts.length - idx);
+            return {
+              id: `${dateKey}__${workoutLog.id}`,
+              label,
+              emoji: '💪',
+              workout: buildWorkout(workoutLog),
+              // Nutrition + wellness only ride on the newest workout-card
+              nutrition: idx === 0 ? nutrition : null,
+              wellness:  idx === 0 ? wellness  : null,
+              _workoutLogId: workoutLog.id,
+              _nutritionLogIds: idx === 0 ? nutritionLogs.map((l: any) => l.id) : [],
+              _wellnessLogIds:  idx === 0 ? wellnessLogs.map((l: any) => l.id)  : [],
+              photo_url: workoutLog.photo_url
+                || (idx === 0 ? (nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null) : null),
+              _date: dateMs,
+            };
+          });
         });
 
         // Sort newest first so today's card is always at the top
@@ -2871,22 +2914,7 @@ export default function ProfilePage() {
                 <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
               )}
               <div style={{display:"flex",alignItems:"center",justifyContent:isMobile?"center":"flex-start",gap:6,flexWrap:"wrap"}}>
-                {progressInfo && progressInfo.level > 1 && (() => {
-                  const lc = LEVEL_COLORS[progressInfo.level];
-                  const ICONS: Record<number, string> = { 2: "🟣", 3: "🔥", 4: "⚡", 5: "💀", 6: "🔥" };
-                  return (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 3,
-                      padding: "2px 9px", borderRadius: 20,
-                      background: lc.badge, border: `1px solid ${lc.border}`,
-                      color: lc.badgeText, fontSize: 11, fontWeight: 800,
-                      letterSpacing: 0.5, textTransform: "uppercase" as const,
-                      boxShadow: `0 0 5px ${lc.glow}`, flexShrink: 0,
-                    }}>
-                      {ICONS[progressInfo.level]} {lc.label}
-                    </span>
-                  );
-                })()}
+                <TierBadgeChip tier={userTier} />
               </div>
               {profile.city && (
                 <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
