@@ -2871,7 +2871,22 @@ export default function ProfilePage() {
                 <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
               )}
               <div style={{display:"flex",alignItems:"center",justifyContent:isMobile?"center":"flex-start",gap:6,flexWrap:"wrap"}}>
-                <TierBadgeChip tier={userTier} />
+                {progressInfo && progressInfo.level > 1 && (() => {
+                  const lc = LEVEL_COLORS[progressInfo.level];
+                  const ICONS: Record<number, string> = { 2: "🟣", 3: "🔥", 4: "⚡", 5: "💀", 6: "🔥" };
+                  return (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      padding: "2px 9px", borderRadius: 20,
+                      background: lc.badge, border: `1px solid ${lc.border}`,
+                      color: lc.badgeText, fontSize: 11, fontWeight: 800,
+                      letterSpacing: 0.5, textTransform: "uppercase" as const,
+                      boxShadow: `0 0 5px ${lc.glow}`, flexShrink: 0,
+                    }}>
+                      {ICONS[progressInfo.level]} {lc.label}
+                    </span>
+                  );
+                })()}
               </div>
               {profile.city && (
                 <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
