@@ -508,7 +508,7 @@ export async function POST(req: NextRequest) {
 
         const { data, error } = await admin
           .from('posts')
-          .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+          .select(`*, users (id, username, full_name, avatar_url, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
           .eq('is_public', true)
           .in('user_id', followingIds)
           .order('created_at', { ascending: false })
@@ -561,7 +561,7 @@ export async function POST(req: NextRequest) {
       const FETCH_LIMIT = Math.max((PAGE + 1) * PAGE_SIZE * 20, 500);
       const { data: allPosts, error: feedErr } = await admin
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, tier, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .select(`*, users (id, username, full_name, avatar_url, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
