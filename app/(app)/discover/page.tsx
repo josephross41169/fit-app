@@ -150,7 +150,14 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
     const isRealPost = typeof post.id === "string" && post.id.includes("-");
     if (!isRealPost || commentsLoaded) return;
     try {
-      const res = await fetch(`/api/db?action=get_post_comments&postId=${post.id}`);
+      // Must POST — the GET handler in /api/db doesn't expose this action.
+      // Earlier version used GET with a query string and silently returned
+      // nothing, which is why comments only appeared after the user posted.
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_post_comments', payload: { postId: post.id } }),
+      });
       const data = await res.json();
       if (Array.isArray(data.comments)) {
         setComments(data.comments);
