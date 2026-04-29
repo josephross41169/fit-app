@@ -669,61 +669,103 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
             </button>
             {woOpen && <div style={{background:"#1A1230",padding:"12px 16px"}}>
-              {/* Exercises — only show table if there are exercises */}
-              {workout.exercises && workout.exercises.length > 0 && (()=>{
-                const totalSets = workout.exercises.reduce((s,ex)=>s+(ex.sets||0),0);
-                const totalVol = workout.exercises.reduce((s,ex)=>{
-                  const w = parseFloat(String(ex.weight))||0;
-                  return s+(w*(ex.sets||0)*(ex.reps||0));
-                },0);
-                return (<>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
-                  {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
-                </div>
-                {workout.exercises.map((ex,i)=>{
-                  const wsArr: string[] = (ex as any).weights && Array.isArray((ex as any).weights) ? (ex as any).weights : [];
-                  const weightDisplay = wsArr.length > 1
-                    ? wsArr.join(' / ') + ' lbs'
-                    : (wsArr[0] || ex.weight || '—');
-                  const exVol = (parseFloat(String(ex.weight))||0)*(ex.sets||0)*(ex.reps||0);
+              {(() => {
+                // When the bucketing layer attached _workoutParts (>= 2 entries),
+                // render a labeled section per workout instead of one combined
+                // exercise + cardio table. This keeps the totals header but
+                // makes each individual workout visible/distinguishable.
+                const parts: any[] = (day as any)._workoutParts || [];
+                const hasMultiple = parts.length >= 2;
+
+                // Helper that renders a single workout's exercise + cardio
+                // tables. Used for both "single combined" and "section per
+                // workout" modes.
+                const renderWorkoutBody = (w: any, key: string) => {
+                  const exList = w.exercises || [];
+                  const carList = w.cardio || [];
+                  const totalSets = exList.reduce((s: number, ex: any) => s + (ex.sets || 0), 0);
+                  const totalVol = exList.reduce((s: number, ex: any) => {
+                    const wt = parseFloat(String(ex.weight)) || 0;
+                    return s + (wt * (ex.sets || 0) * (ex.reps || 0));
+                  }, 0);
                   return (
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                    <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
-                    <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
-                    <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
-                    <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
-                  </div>
-                  );
-                })}
-                {/* Totals footer row */}
-                {totalVol > 0 && (
-                  <div style={{display:"flex",gap:16,padding:"10px 8px 4px",borderTop:`1px solid ${C.purpleMid}`,marginTop:4,flexWrap:"wrap"}}>
-                    <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.text,fontWeight:800}}>{totalSets}</strong> total sets</span>
-                    <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.gold,fontWeight:800}}>📊 {totalVol>=1000?`${(totalVol/1000).toFixed(1)}k`:totalVol.toFixed(0)} lbs</strong> total volume</span>
-                  </div>
-                )}
-                </>);
-              })()}
-              {/* Cardio — always shown when present, no separator if no exercises above */}
-              {workout.cardio && workout.cardio.length > 0 && (
-                <div style={{marginTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, paddingTop: workout.exercises && workout.exercises.length > 0 ? 12 : 0, borderTop: workout.exercises && workout.exercises.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
-                    {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
-                  </div>
-                  {workout.cardio.map((c,i)=>(
-                    <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                      <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
+                    <div key={key}>
+                      {exList.length > 0 && (<>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
+                          {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+                        </div>
+                        {exList.map((ex: any, i: number) => {
+                          const wsArr: string[] = ex.weights && Array.isArray(ex.weights) ? ex.weights : [];
+                          const weightDisplay = wsArr.length > 1
+                            ? wsArr.join(' / ') + ' lbs'
+                            : (wsArr[0] || ex.weight || '—');
+                          return (
+                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                              <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                              <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
+                              <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
+                              <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
+                            </div>
+                          );
+                        })}
+                        {totalVol > 0 && (
+                          <div style={{display:"flex",gap:16,padding:"10px 8px 4px",borderTop:`1px solid ${C.purpleMid}`,marginTop:4,flexWrap:"wrap"}}>
+                            <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.text,fontWeight:800}}>{totalSets}</strong> total sets</span>
+                            <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.gold,fontWeight:800}}>📊 {totalVol>=1000?`${(totalVol/1000).toFixed(1)}k`:totalVol.toFixed(0)} lbs</strong> total volume</span>
+                          </div>
+                        )}
+                      </>)}
+                      {carList.length > 0 && (
+                        <div style={{marginTop: exList.length > 0 ? 12 : 0, paddingTop: exList.length > 0 ? 12 : 0, borderTop: exList.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
+                          <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
+                            {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+                          </div>
+                          {carList.map((c: any, i: number)=>(
+                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                              <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
+                              <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
+                              <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {exList.length === 0 && carList.length === 0 && (
+                        <div style={{textAlign:"center",padding:"12px 0",color:C.sub,fontSize:13}}>No exercises logged</div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-              {/* Fallback if somehow both are empty */}
-              {(!workout.exercises || workout.exercises.length === 0) && (!workout.cardio || workout.cardio.length === 0) && (
-                <div style={{textAlign:"center",padding:"12px 0",color:C.sub,fontSize:13}}>No exercises logged</div>
-              )}
+                  );
+                };
+
+                if (hasMultiple) {
+                  return parts.map((p: any, idx: number) => {
+                    // Format the workout time as "7:14 AM" using the user's locale.
+                    let timeStr = '';
+                    try {
+                      timeStr = new Date(p.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    } catch { timeStr = ''; }
+                    return (
+                      <div key={p.id} style={{ marginBottom: idx < parts.length - 1 ? 16 : 0, paddingBottom: idx < parts.length - 1 ? 16 : 0, borderBottom: idx < parts.length - 1 ? `2px dashed ${C.purpleMid}` : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 900, color: '#fff', background: `linear-gradient(135deg, ${C.purple}, #A78BFA)`, padding: '4px 10px', borderRadius: 999, letterSpacing: 0.5 }}>WORKOUT {idx + 1}</span>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{p.type}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, fontSize: 12, color: C.sub, flexWrap: 'wrap' }}>
+                            {timeStr && <span>🕐 {timeStr}</span>}
+                            {p.duration && p.duration !== '—' && <span>⏱ {p.duration}</span>}
+                            {p.calories > 0 && <span>🔥 {p.calories} cal</span>}
+                          </div>
+                        </div>
+                        {renderWorkoutBody(p, p.id)}
+                      </div>
+                    );
+                  });
+                }
+
+                // Single workout (or legacy) — render the merged shape directly.
+                return renderWorkoutBody(workout, 'single');
+              })()}
             </div>}
           </div>
         ) : (
@@ -1235,35 +1277,40 @@ export default function ProfilePage() {
 
         const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-        // CHANGED: was .map() returning one card per date with .find() picking
-        // only the first workout. Now .flatMap() returns one card per workout
-        // when a day has multiple workouts logged. Nutrition + wellness
-        // aggregates attach to the FIRST (newest) card only to avoid double-
-        // counting in any downstream consumer.
-        const days: typeof DAYS = Array.from(byDate.entries()).flatMap(([dateKey, logs]) => {
-          // dateKey is now "MM/DD/YYYY"
+        // Build one card per calendar date. When multiple workouts are logged
+        // on the same day, the card aggregates totals (calories/duration) but
+        // RENDERS each workout as its own labeled section ("Workout 1", etc.)
+        // so the user can tell them apart.
+        const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
+          // dateKey is "MM/DD/YYYY"
           const [month, day, year] = dateKey.split('/').map(Number);
           const date = new Date(year, month - 1, day);
           const dayName = DAY_NAMES[date.getDay()];
-          // Build a human-friendly label: "Today", "Yesterday", or "Mon 3/31"
           const today = new Date();
           const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
           const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
           const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-          const baseLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
+          const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
 
-          // Filter — multiple workouts per day are now allowed
           const workoutLogs   = logs.filter((l: any) => l.log_type === 'workout');
           const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
           const wellnessLogs  = logs.filter((l: any) => l.log_type === 'wellness');
 
-          // Build the singular `workout` shape consumed by DayCard
-          const buildWorkout = (workoutLog: any) => ({
-            type: workoutLog.workout_type || 'Workout',
-            duration: workoutLog.workout_duration_min ? `${workoutLog.workout_duration_min} min` : '—',
-            calories: workoutLog.workout_calories || 0,
-            exercises: Array.isArray(workoutLog.exercises)
-              ? workoutLog.exercises.map((e: any) => ({
+          // Sort workouts by their logged_at time, earliest first. The first
+          // becomes "Workout 1", second "Workout 2", etc.
+          const sortedWorkouts = [...workoutLogs].sort((a, b) =>
+            new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+          );
+
+          // Build per-workout parts (rendered as labeled sections in the card)
+          const parts = sortedWorkouts.map((w: any) => ({
+            id: w.id,
+            type: w.workout_type || 'Workout',
+            time: w.logged_at, // ISO; consumer formats with toLocaleTimeString
+            duration: w.workout_duration_min ? `${w.workout_duration_min} min` : '—',
+            calories: w.workout_calories || 0,
+            exercises: Array.isArray(w.exercises)
+              ? w.exercises.map((e: any) => ({
                   name: e.name || '',
                   sets: parseInt(e.sets) || 0,
                   reps: parseInt(e.reps) || 0,
@@ -1271,22 +1318,53 @@ export default function ProfilePage() {
                   weights: Array.isArray(e.weights) ? e.weights : [],
                 }))
               : [],
-            cardio: Array.isArray(workoutLog.cardio)
-              ? workoutLog.cardio.map((c: any) => ({
+            cardio: Array.isArray(w.cardio)
+              ? w.cardio.map((c: any) => ({
                   type: c.type || 'Cardio',
                   duration: c.duration || '—',
                   distance: c.distance || '',
                 }))
               : [],
-          });
+          }));
 
-          const totalCalories = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
+          // Aggregate totals for the header summary (uses MERGED arrays so
+          // header summary chips like "🔥 X cal" and "⏱ X min" reflect the
+          // whole day's lifting + cardio across all workouts).
+          let totalDurationMin = 0;
+          let totalCalories = 0;
+          const allExercises: any[] = [];
+          const allCardio: any[] = [];
+          for (const p of parts) {
+            totalDurationMin += parseInt(String(p.duration)) || 0;
+            totalCalories    += parseInt(String(p.calories)) || 0;
+            for (const e of p.exercises) allExercises.push(e);
+            for (const c of p.cardio) allCardio.push(c);
+          }
+
+          // Headline: first workout's type, plus "(+N more)" hint when there
+          // are multiple workouts. Sections below the header label them.
+          let workout: any = null;
+          if (parts.length > 0) {
+            const extraCount = parts.length - 1;
+            const headline = extraCount > 0
+              ? `${parts[0].type} (+${extraCount} more)`
+              : parts[0].type;
+            workout = {
+              type: headline,
+              duration: totalDurationMin > 0 ? `${totalDurationMin} min` : '—',
+              calories: totalCalories,
+              exercises: allExercises,
+              cardio: allCardio,
+            };
+          }
+
+          const totalNutCal = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
           const totalProtein  = nutritionLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
           const totalCarbs    = nutritionLogs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
           const totalFat      = nutritionLogs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
 
           const nutrition = nutritionLogs.length > 0 ? {
-            calories: Math.round(totalCalories),
+            calories: Math.round(totalNutCal),
             protein:  Math.round(totalProtein),
             carbs:    Math.round(totalCarbs),
             fat:      Math.round(totalFat),
@@ -1311,55 +1389,26 @@ export default function ProfilePage() {
             })),
           } : null;
 
-          // No workouts → single rest-day or food-only / wellness-only card
-          if (workoutLogs.length === 0) {
-            return [{
-              id: dateKey,
-              label: baseLabel,
-              emoji: nutrition ? '🥗' : (wellness ? '🌿' : '🌅'),
-              workout: null,
-              nutrition,
-              wellness,
-              _workoutLogId: null,
-              _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
-              _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
-              photo_url: nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
-              _date: date.getTime(),
-            }];
-          }
+          // Workout log IDs — array form so delete wipes ALL workouts on a day.
+          const workoutLogIds = parts.map((p: any) => p.id);
 
-          // One or more workouts → newest first, one card per workout.
-          // Nutrition + wellness summary attaches only to the newest card.
-          const sortedWorkouts = [...workoutLogs].sort((a, b) =>
-            new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime()
-          );
-
-          return sortedWorkouts.map((workoutLog: any, idx: number) => {
-            // When >1 workout same day, append the time so each card is distinguishable
-            let label = baseLabel;
-            if (sortedWorkouts.length > 1) {
-              const t = new Date(workoutLog.logged_at);
-              const timeStr = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-              label = `${baseLabel} · ${timeStr}`;
-            }
-            // Offset _date so newest workout sorts above older ones same day
-            const dateMs = date.getTime() + (sortedWorkouts.length - idx);
-            return {
-              id: `${dateKey}__${workoutLog.id}`,
-              label,
-              emoji: '💪',
-              workout: buildWorkout(workoutLog),
-              // Nutrition + wellness only ride on the newest workout-card
-              nutrition: idx === 0 ? nutrition : null,
-              wellness:  idx === 0 ? wellness  : null,
-              _workoutLogId: workoutLog.id,
-              _nutritionLogIds: idx === 0 ? nutritionLogs.map((l: any) => l.id) : [],
-              _wellnessLogIds:  idx === 0 ? wellnessLogs.map((l: any) => l.id)  : [],
-              photo_url: workoutLog.photo_url
-                || (idx === 0 ? (nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null) : null),
-              _date: dateMs,
-            };
-          });
+          return {
+            id: dateKey,
+            label: friendlyLabel,
+            emoji: workout ? '💪' : (nutrition ? '🥗' : (wellness ? '🌿' : '🌅')),
+            workout,
+            // _workoutParts is read by DayCard. When >1 part, DayCard renders
+            // labeled sections instead of one combined exercise/cardio table.
+            _workoutParts: parts,
+            nutrition,
+            wellness,
+            _workoutLogId: workoutLogIds[0] || null,
+            _workoutLogIds: workoutLogIds,
+            _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
+            _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
+            photo_url: sortedWorkouts[0]?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
+            _date: date.getTime(),
+          };
         });
 
         // Sort newest first so today's card is always at the top
@@ -3174,10 +3223,12 @@ export default function ProfilePage() {
                       earnedBadges={earnedBadges.map(b => b.badge_id)}
                       userLevel={progressInfo?.level ?? 1}
                       onDelete={isReal ? async () => {
-                        const wid = (day as any)._workoutLogId;
+                        // Delete every log row tied to this card. With multi-
+                        // workout merging, _workoutLogIds may contain >1 entry.
+                        const wids: string[] = (day as any)._workoutLogIds || ((day as any)._workoutLogId ? [(day as any)._workoutLogId] : []);
                         const nids: string[] = (day as any)._nutritionLogIds || [];
-                        const wids: string[] = (day as any)._wellnessLogIds || [];
-                        const allIds = [...(wid ? [wid] : []), ...nids, ...wids];
+                        const wellIds: string[] = (day as any)._wellnessLogIds || [];
+                        const allIds = [...wids, ...nids, ...wellIds];
                         if (allIds.length > 0) {
                           await supabase.from('activity_logs').delete().in('id', allIds);
                         }
