@@ -1523,30 +1523,107 @@ export default function ProfilePage() {
       const uid = user.id;
       try {
         const [
+          // Existing
           runs, liftSessions, totalWorkouts, yoga, meditation, coldPlunges,
           sauna, breathwork, walks, stretching, totalWellness, nutritionLogs,
           postCount, followerCount,
+          // Newly added — workout category counters
+          biking, swimming, rowing, hiit, boxing, sports, pilates,
+          // Newly added — wellness modality counters
+          infraredSauna, redLight, massage, floatTank, mobility, journaling, sunlight,
+          // Newly added — social counters
+          likesReceived, commentsMade,
+          // Newly added — strength PR counters (read all logs and pick max client-side)
+          strengthLogs,
+          // Newly added — 5K detection from running cardio entries
+          fiveKLogs,
         ] = await Promise.all([
-          // Running — now uses the standardized workout_category column
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
-          // Lifting — standardized category
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
-          // Total workouts — any log_type=workout row
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout'),
-          // Wellness categories — still read from log_type='wellness' with Title Case strings
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'yoga'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'meditation'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.cold plunge,wellness_type.ilike.ice bath'),
+          // Sauna — must NOT match Infrared Sauna. We do exact match instead of ilike '%sauna%'.
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'sauna'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'breathwork'),
-          // Walking is now a workout category (moved out of wellness)
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'walking'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'stretching'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'nutrition'),
           supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', uid),
           supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', uid),
+          // Workout categories that were missing
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'biking'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'swimming'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'rowing'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'hiit'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'boxing'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'sports'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'pilates'),
+          // Wellness modalities — wellness_type matches the strings the post UI writes
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'infrared sauna'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'red light therapy'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'massage'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'float tank'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.mobility%,wellness_type.ilike.foam rolling'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'journaling'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.sunlight%,wellness_type.ilike.grounding,wellness_type.ilike.nature walk'),
+          // Likes received — sum likes_count across all the user's posts.
+          // We can't COUNT from `likes` because there's no post_user_id column;
+          // would require a join Supabase REST won't permit through RLS. The
+          // posts.likes_count denormalized counter is updated by a trigger.
+          supabase.from('posts').select('likes_count').eq('user_id', uid),
+          supabase.from('comments').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+          // Strength — fetch lifting logs with exercises array; compute max bench/squat/deadlift client-side
+          supabase.from('activity_logs').select('exercises').eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
+          // 5K — fetch running cardio entries; count rows where distance ≥ 3.1mi.
+          // Easier than parsing JSON in Postgres. Distance lives inside the
+          // cardio jsonb array as `[{ type, duration, distance }]`.
+          supabase.from('activity_logs').select('cardio').eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
         ]);
+
+        // Compute strength PRs from exercises array. Each `weights` array entry
+        // is parsed as a number; the max across all sessions becomes the PR.
+        // Total = best bench + best squat + best deadlift across all logs.
+        let benchMax = 0, squatMax = 0, deadliftMax = 0;
+        const liftRows = (strengthLogs as any).data || [];
+        for (const row of liftRows) {
+          const exs = Array.isArray(row.exercises) ? row.exercises : [];
+          for (const e of exs) {
+            const name = (e.name || '').toLowerCase();
+            const weightsArr: any[] = Array.isArray(e.weights) ? e.weights : [e.weight];
+            for (const w of weightsArr) {
+              const num = parseFloat(String(w)) || 0;
+              if (num <= 0) continue;
+              if (name.includes('bench')) benchMax = Math.max(benchMax, num);
+              else if (name.includes('squat')) squatMax = Math.max(squatMax, num);
+              else if (name.includes('deadlift')) deadliftMax = Math.max(deadliftMax, num);
+            }
+          }
+        }
+        const totalLiftMax = benchMax + squatMax + deadliftMax;
+
+        // 5K count — number of running workouts with at least one cardio entry
+        // ≥ 3.1 miles. Distance is stored as a string inside cardio jsonb;
+        // parseFloat strips any unit suffix like "5.2 mi".
+        let fiveKCount = 0;
+        const runningRows = ((fiveKLogs as any).data || []) as any[];
+        for (const row of runningRows) {
+          const cardioEntries = Array.isArray(row.cardio) ? row.cardio : [];
+          const has5K = cardioEntries.some((c: any) => {
+            const dist = parseFloat(String(c.distance ?? '')) || 0;
+            return dist >= 3.1;
+          });
+          if (has5K) fiveKCount++;
+        }
+
+        // Sum likes_count across the user's posts (since `likesReceived` is
+        // a sum of counts, not a row count).
+        const likesReceivedTotal = ((likesReceived as any).data || []).reduce(
+          (s: number, p: any) => s + (p.likes_count || 0), 0
+        );
+
         setBadgeCounters({
           runs: runs.count ?? 0,
           liftSessions: liftSessions.count ?? 0,
@@ -1562,6 +1639,28 @@ export default function ProfilePage() {
           nutritionLogs: nutritionLogs.count ?? 0,
           postCount: postCount.count ?? 0,
           followerCount: followerCount.count ?? 0,
+          // Newly wired
+          bikingSessions: biking.count ?? 0,
+          swimmingSessions: swimming.count ?? 0,
+          rowingSessions: rowing.count ?? 0,
+          hiitSessions: hiit.count ?? 0,
+          boxingSessions: boxing.count ?? 0,
+          sportsSessions: sports.count ?? 0,
+          pilatesSessions: pilates.count ?? 0,
+          infraredSaunaSessions: infraredSauna.count ?? 0,
+          redLightSessions: redLight.count ?? 0,
+          massageSessions: massage.count ?? 0,
+          floatTankSessions: floatTank.count ?? 0,
+          mobilitySessions: mobility.count ?? 0,
+          journalingSessions: journaling.count ?? 0,
+          sunlightSessions: sunlight.count ?? 0,
+          likesReceived: likesReceivedTotal,
+          commentsMade: commentsMade.count ?? 0,
+          benchMax,
+          squatMax,
+          deadliftMax,
+          totalLiftMax,
+          fiveKCount,
         });
       } catch (e) {
         console.error('Failed to fetch badge counters:', e);
