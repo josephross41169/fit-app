@@ -9,7 +9,7 @@
 // and liability. Fitness apps have unique liability exposure (injury claims).
 
 export const metadata = {
-  title: "Terms of Service · Fit App",
+  title: "Terms of Service · Livelee",
 };
 
 export default function TermsPage() {
@@ -30,12 +30,12 @@ export default function TermsPage() {
       </p>
 
       <p style={{ marginBottom: 20 }}>
-        Welcome to Fit App. By creating an account or using our services, you agree to these
+        Welcome to Livelee. By creating an account or using our services, you agree to these
         Terms of Service. Please read them carefully.
       </p>
 
       <Section title="1. Who We Are">
-        Fit App is a social fitness and wellness platform operated by Joey Ross
+        Livelee is a social fitness and wellness platform operated by Joey Ross
         ("we", "us", "our"). The app is accessible at fit-app-ecru.vercel.app and
         through our iOS and Android applications.
       </Section>
@@ -56,13 +56,13 @@ export default function TermsPage() {
 
       <Section title="4. User Content">
         You retain ownership of the photos, text, workout data, and other content you
-        post to Fit App ("User Content"). By posting, you grant us a non-exclusive,
+        post to Livelee ("User Content"). By posting, you grant us a non-exclusive,
         worldwide, royalty-free license to store, display, and distribute your content
         within the service for the purpose of operating the app.
       </Section>
 
       <Section title="5. Acceptable Use">
-        You agree not to use Fit App to post content that is illegal, harassing,
+        You agree not to use Livelee to post content that is illegal, harassing,
         hateful, obscene, violent, misleading, or infringes on others' rights. We
         reserve the right to remove any content and suspend any account at our
         discretion. Prohibited activities include:
@@ -84,7 +84,7 @@ export default function TermsPage() {
       </Section>
 
       <Section title="7. Health Disclaimer">
-        <strong>Fit App is not a medical service.</strong> The information, workouts,
+        <strong>Livelee is not a medical service.</strong> The information, workouts,
         nutrition logs, and community content available through the app are provided
         for general informational and motivational purposes. You should consult a
         qualified healthcare professional before starting any exercise or nutrition
@@ -94,14 +94,14 @@ export default function TermsPage() {
       </Section>
 
       <Section title="8. Third-Party Services">
-        Fit App integrates with third-party services including Supabase (data
+        Livelee integrates with third-party services including Supabase (data
         storage), Vercel (hosting), and in the future may include fitness tracker
         integrations (Apple Health, Fitbit, Whoop, etc.). Your use of those services
         is subject to their own terms of service and privacy policies.
       </Section>
 
       <Section title="9. In-App Purchases">
-        Fit App is free to use. We may introduce optional in-app purchases,
+        Livelee is free to use. We may introduce optional in-app purchases,
         subscriptions, or sponsored products in the future. Any such purchases will
         be clearly marked and subject to additional terms at the time of purchase.
         Purchases made through the Apple App Store or Google Play Store are governed
@@ -117,7 +117,7 @@ export default function TermsPage() {
       </Section>
 
       <Section title="11. Limitation of Liability">
-        To the fullest extent permitted by law, Fit App and its operators are not
+        To the fullest extent permitted by law, Livelee and its operators are not
         liable for indirect, incidental, or consequential damages arising from your
         use of the service. Our total liability for any claim relating to the service
         shall not exceed the greater of $100 USD or the amount you paid us in the
@@ -126,7 +126,7 @@ export default function TermsPage() {
 
       <Section title="12. Changes to These Terms">
         We may modify these Terms from time to time. If we make material changes,
-        we will notify you via the app or by email. Your continued use of Fit App
+        we will notify you via the app or by email. Your continued use of Livelee
         after the changes take effect constitutes acceptance of the updated Terms.
       </Section>
 
@@ -146,7 +146,7 @@ export default function TermsPage() {
       </Section>
 
       <p style={{ marginTop: 32, fontSize: 13, color: "#6B7280" }}>
-        By using Fit App, you acknowledge that you have read, understood, and agreed to
+        By using Livelee, you acknowledge that you have read, understood, and agreed to
         be bound by these Terms of Service.
       </p>
     </div>
