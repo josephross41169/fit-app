@@ -236,7 +236,7 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "marathon",       name: "Marathons",       category: "cardio",      members: ["marathon-1","marathon-3","marathon-5","marathon-10","marathon-20"],                                       thresholds: [1,3,5,10,20] },
   { key: "ultra",          name: "Ultras",          category: "cardio",      members: ["ultra-1","ultra-3","ultra-5","ultra-10","ultra-20"],                                                      thresholds: [1,3,5,10,20] },
   { key: "half-marathon",  name: "Half Marathons",  category: "cardio",      members: ["half-marathon-1","half-marathon-3","half-marathon-5","half-marathon-10","half-marathon-20"],              thresholds: [1,3,5,10,20] },
-  { key: "5k-events",      name: "5K Races",        category: "cardio",      members: ["5k-1","5k-3","5k-5","5k-10","5k-20"],                                                                     thresholds: [1,3,5,10,20] },
+  { key: "5k",            name: "5K Runs",           category: "cardio",      members: ["5k-1","5k-5","5k-20","5k-50","5k-100","5k-200","5k-500","5k-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "fiveKCount" },
   { key: "10k-events",     name: "10K Races",       category: "cardio",      members: ["10k-1","10k-3","10k-5","10k-10","10k-20"],                                                                thresholds: [1,3,5,10,20] },
   { key: "ironman",        name: "Ironman",         category: "cardio",      members: ["ironman-1","ironman-3","ironman-5","ironman-10","ironman-20"],                                            thresholds: [1,3,5,10,20] },
   { key: "triathlon",      name: "Triathlon",       category: "cardio",      members: ["triathlon-1","triathlon-3","triathlon-5","triathlon-10","triathlon-20"],                                  thresholds: [1,3,5,10,20] },
@@ -352,6 +352,7 @@ const PROGRESS_LABEL_BY_COUNTER: Record<string, string> = {
   likesReceived: "likes",
   commentsMade: "comments",
   earlyBirdCount: "pre-7am",
+  fiveKCount: "5Ks",
   // Strength weight-based (uses different units)
   benchMax: "lbs",
   squatMax: "lbs",
