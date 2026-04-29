@@ -1,9 +1,11 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
+import { compressImage } from "@/lib/compressImage";
+import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
@@ -553,6 +555,9 @@ export default function GroupPage() {
   // ── Post form state ──
   const [postContent, setPostContent] = useState("");
   const [postSubmitting, setPostSubmitting] = useState(false);
+  // Photo attached to a group post — base64 data URL preview before upload
+  const [postPhotoDataUrl, setPostPhotoDataUrl] = useState<string | null>(null);
+  const postPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // ── Create Event modal ──
   const [showEventModal, setShowEventModal] = useState(false);
@@ -1282,15 +1287,31 @@ export default function GroupPage() {
   }
 
   // ── Submit post ──
+  // Allow either text alone OR text + photo OR photo alone (text optional when photo attached).
   async function submitPost() {
-    if (!postContent.trim() || postSubmitting) return;
+    const hasContent = postContent.trim().length > 0;
+    const hasPhoto = !!postPhotoDataUrl;
+    if ((!hasContent && !hasPhoto) || postSubmitting) return;
     setPostSubmitting(true);
     try {
+      // Upload photo first (if any). If upload fails, show alert and abort
+      // — we don't want to silently post text-only when the user attached a photo.
+      let mediaUrl: string | null = null;
+      if (hasPhoto && postPhotoDataUrl) {
+        const path = `group-posts/${group._dbId || 'mock'}/${Date.now()}.jpg`;
+        mediaUrl = await uploadPhoto(postPhotoDataUrl, 'posts', path);
+        if (!mediaUrl) {
+          alert("Photo upload failed. Try again or remove the photo.");
+          setPostSubmitting(false);
+          return;
+        }
+      }
+
       if (currentUser && group._dbId) {
         const res = await fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create_group_post', payload: { userId: currentUser.id, groupId: group._dbId, content: postContent } }),
+          body: JSON.stringify({ action: 'create_group_post', payload: { userId: currentUser.id, groupId: group._dbId, content: postContent || '', media_url: mediaUrl } }),
         });
         const data = await res.json();
         if (data.post) {
@@ -1307,7 +1328,7 @@ export default function GroupPage() {
           id: String(Date.now()),
           content: postContent,
           likes_count: 0,
-          media_url: null,
+          media_url: mediaUrl,
           created_at: new Date().toISOString(),
           user: {
             id: currentUser?.id,
@@ -1318,8 +1339,26 @@ export default function GroupPage() {
         }, ...prev]);
       }
       setPostContent("");
+      setPostPhotoDataUrl(null);
+      if (postPhotoInputRef.current) postPhotoInputRef.current.value = "";
     } finally {
       setPostSubmitting(false);
+    }
+  }
+
+  // Pick + compress + preview a photo for the next post.
+  async function onPickPostPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      // compressImage returns a File; convert to data URL for preview
+      const compressed = await compressImage(f, 1600, 0.82);
+      const reader = new FileReader();
+      reader.onload = () => setPostPhotoDataUrl(typeof reader.result === 'string' ? reader.result : null);
+      reader.readAsDataURL(compressed);
+    } catch (err) {
+      console.error("Photo compress error:", err);
+      alert("Couldn't process that photo. Try a different one.");
     }
   }
 
@@ -2001,10 +2040,40 @@ export default function GroupPage() {
                   <textarea value={postContent} onChange={e => setPostContent(e.target.value)}
                     placeholder="Share something with the group..."
                     style={{ width:"100%", background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text, resize:"vertical", minHeight:80, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />
-                  <button onClick={submitPost} disabled={!postContent.trim() || postSubmitting}
-                    style={{ marginTop:10, padding:"9px 22px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!postContent.trim()||postSubmitting)?0.6:1 }}>
-                    {postSubmitting ? "Posting..." : "Post 📸"}
-                  </button>
+
+                  {/* Photo preview — shown only when one is attached. Tap "Remove" to clear. */}
+                  {postPhotoDataUrl && (
+                    <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}` }}>
+                      <img src={postPhotoDataUrl} alt="Post preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
+                      <button
+                        onClick={() => { setPostPhotoDataUrl(null); if (postPhotoInputRef.current) postPhotoInputRef.current.value = ""; }}
+                        style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
+                        ✕ Remove
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Hidden file input — triggered by the 📷 button below */}
+                  <input
+                    ref={postPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={onPickPostPhoto}
+                    style={{ display:"none" }}
+                  />
+
+                  <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10 }}>
+                    <button
+                      onClick={() => postPhotoInputRef.current?.click()}
+                      disabled={postSubmitting}
+                      style={{ padding:"9px 14px", borderRadius:12, border:`1.5px solid ${C.blueMid}`, background:C.blueLight, color:C.text, fontWeight:800, fontSize:13, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+                      📷 {postPhotoDataUrl ? "Change" : "Add photo"}
+                    </button>
+                    <button onClick={submitPost} disabled={(!postContent.trim() && !postPhotoDataUrl) || postSubmitting}
+                      style={{ marginLeft:"auto", padding:"9px 22px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:((!postContent.trim()&&!postPhotoDataUrl)||postSubmitting)?0.6:1 }}>
+                      {postSubmitting ? "Posting..." : "Post"}
+                    </button>
+                  </div>
                 </div>
               )}
               {displayPosts.map((post:any) => (
