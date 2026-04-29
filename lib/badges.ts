@@ -276,13 +276,11 @@ export const BADGES: Badge[] = [
     { threshold: 20, emoji:"⚰️", label:"13.1 Immortal",        desc:"Completed 20 half marathons" },
   ]}),
 
-  ...hardLadder({ prefix: "5k", category: "cardio", tiers: [
-    { threshold: 1,  emoji:"🎽", label:"5K Striker",      desc:"Completed your first 5K" },
-    { threshold: 3,  emoji:"🔱", label:"Triple Threat",   desc:"Completed 3 5Ks" },
-    { threshold: 5,  emoji:"🎯", label:"5K Hunter",       desc:"Completed 5 5Ks" },
-    { threshold: 10, emoji:"🪓", label:"5K Reaper",       desc:"Completed 10 5Ks" },
-    { threshold: 20, emoji:"👑", label:"5K Apex",         desc:"Completed 20 5Ks" },
-  ]}),
+  // 5K — moved from hard ladder (1/3/5/10/20) to easy ladder (1/5/20/50/100/200/500/1000)
+  // because hitting a 5K distance is common, not "hard". Auto-detects: counts
+  // any running workout where distance ≥ 3.1 mi. Uses wilderness/trail naming.
+  ...easyLadder({ prefix: "5k", emoji: "🎽", noun: "5K", nounPlural: "5Ks", category: "cardio",
+    tierNames: ["First 5K", "Trail 5K", "5K Regular", "5K Hunter", "Hundred 5Ks Deep", "5K Tracker", "5K Native", "5K Lifer"] }),
 
   ...hardLadder({ prefix: "10k", category: "cardio", tiers: [
     { threshold: 1,  emoji:"🏁", label:"10K Crusher",          desc:"Completed your first 10K" },
@@ -423,6 +421,8 @@ export const EASY_LADDER_PREFIXES = [
   "journaling", "sunlight",
   "wellness", "nutrition", "fasting-12h", "posts",
   "followers", "likes", "comments", "early-bird",
+  // Moved from hard ladder Apr 2026 — 5K is common, not a rare event
+  "5k",
 ];
 
 export const EASY_LADDER_THRESHOLDS = [1, 5, 20, 50, 100, 200, 500, 1000];
@@ -430,7 +430,7 @@ export const EASY_LADDER_THRESHOLDS = [1, 5, 20, 50, 100, 200, 500, 1000];
 export const STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 90, 180, 365];
 
 export const HARD_LADDER_PREFIXES = [
-  "marathon", "ultra", "ironman", "half-marathon", "5k", "10k",
+  "marathon", "ultra", "ironman", "half-marathon", "10k",
   "triathlon", "century-ride", "swim-mile", "murph", "75-hard",
   "spartan", "tough-mudder", "crossfit-open", "powerlifter",
 ];
