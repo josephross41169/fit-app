@@ -134,6 +134,92 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
   const [likeBusy, setLikeBusy] = useState(false);
   const router = useRouter();
 
+  // ── Inline comments (added so users can comment without navigating away) ──
+  // showComments toggles the input + list. comments holds the list once
+  // we've loaded it from the DB (or seeded from mock post.comments).
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [comments, setComments] = useState<any[]>(Array.isArray((post as any).comments) ? (post as any).comments : []);
+  const [commentsCount, setCommentsCount] = useState<number>(post.comments_count ?? (Array.isArray((post as any).comments) ? (post as any).comments.length : 0));
+  const [commentsLoaded, setCommentsLoaded] = useState(!!(post as any).comments);
+
+  async function loadCommentsIfNeeded() {
+    // Only fetch from API for real DB posts (UUID id). Mock posts already
+    // have any comments inline.
+    const isRealPost = typeof post.id === "string" && post.id.includes("-");
+    if (!isRealPost || commentsLoaded) return;
+    try {
+      const res = await fetch(`/api/db?action=get_post_comments&postId=${post.id}`);
+      const data = await res.json();
+      if (Array.isArray(data.comments)) {
+        setComments(data.comments);
+        setCommentsCount(data.comments.length);
+      }
+    } catch { /* leave list empty on failure */ }
+    setCommentsLoaded(true);
+  }
+
+  function toggleComments() {
+    const next = !showComments;
+    setShowComments(next);
+    if (next) loadCommentsIfNeeded();
+  }
+
+  async function submitComment() {
+    if (!commentText.trim() || commentSubmitting || !user) return;
+    setCommentSubmitting(true);
+    const isRealPost = typeof post.id === "string" && post.id.includes("-");
+    const text = commentText.trim();
+
+    if (isRealPost) {
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'post_feed_comment',
+            payload: {
+              postId: post.id,
+              commenterId: user.id,
+              content: text,
+              postOwnerId: (post as any)._ownerId || null,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          alert(`Couldn't post your comment: ${data?.error || 'Server error'}`);
+          setCommentSubmitting(false);
+          return;
+        }
+        if (Array.isArray(data.comments)) {
+          setComments(data.comments);
+          setCommentsCount(data.comments.length);
+        }
+        setCommentText("");
+      } catch (err: any) {
+        alert(`Couldn't post your comment: ${err?.message || 'Network error'}`);
+      } finally {
+        setCommentSubmitting(false);
+      }
+      return;
+    }
+
+    // Mock posts — local optimistic update only
+    const displayName = (user as any)?.profile?.full_name || (user as any)?.user_metadata?.full_name || "You";
+    const newC = {
+      id: `local-${Date.now()}`,
+      content: text,
+      created_at: new Date().toISOString(),
+      user: { full_name: displayName, username: (user as any)?.profile?.username || 'you', avatar_url: (user as any)?.profile?.avatar_url || null },
+    };
+    setComments(prev => [...prev, newC]);
+    setCommentsCount(n => n + 1);
+    setCommentText("");
+    setCommentSubmitting(false);
+  }
+
   // Persist like/unlike to post_likes. Optimistic update with revert on failure.
   // Only attempts the DB call for real DB posts (UUID id) — mock posts have
   // numeric ids and no matching DB row.
@@ -217,12 +303,12 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
           </svg>
           <span style={{ fontSize:14,fontWeight:700,color:liked?"#FF6B6B":C.sub }}>{likes.toLocaleString()}</span>
         </button>
-        <button onClick={() => router.push(`/post/${post.id}`)} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }} aria-label="Comment">
-          <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
+        <button onClick={toggleComments} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }} aria-label="Comment">
+          <svg viewBox="0 0 24 24" fill="none" stroke={showComments ? C.blue : C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          {(post.comments_count ?? 0) > 0 && (
-            <span style={{ fontSize:14,fontWeight:700,color:C.sub }}>{post.comments_count}</span>
+          {commentsCount > 0 && (
+            <span style={{ fontSize:14,fontWeight:700,color:showComments ? C.blue : C.sub }}>{commentsCount}</span>
           )}
         </button>
         <button style={{ marginLeft:"auto",display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
@@ -232,6 +318,55 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
           </svg>
         </button>
       </div>
+
+      {/* ── Inline comments — added so users can comment from Discover
+          without navigating away to the post detail page. Mirrors the
+          feed's comment composer pattern. */}
+      {showComments && (
+        <div style={{ borderTop:`1px solid ${C.greenLight}`, padding:"10px 18px 14px", background:"#0F1A0F" }}>
+          {comments.length === 0 ? (
+            <div style={{ fontSize:12, color:C.sub, padding:"6px 0 10px" }}>No comments yet — be the first.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:10, maxHeight:240, overflowY:"auto" }}>
+              {comments.map((c: any) => {
+                const cu = c.user || c.users || {};
+                const cname = cu.full_name || cu.username || c.user || "User";
+                const ctext = c.content || c.text || "";
+                const cini  = (cname || "U").split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
+                return (
+                  <div key={c.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                    <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#A78BFA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                      {cu.avatar_url
+                        ? <img src={cu.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                        : cini}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:C.text }}>{cname}</div>
+                      <div style={{ fontSize:13, color:C.text, lineHeight:1.4, wordBreak:"break-word" }}>{ctext}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Composer */}
+          <div style={{ display:"flex", gap:8, alignItems:"center", background:"#1A2A1A", borderRadius:999, padding:"6px 6px 6px 14px", border:`1.5px solid ${C.greenMid}` }}>
+            <input
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
+              placeholder="Add a comment..."
+              style={{ flex:1, background:"none", border:"none", outline:"none", fontSize:13, color:C.text }}
+            />
+            <button
+              onClick={submitComment}
+              disabled={!commentText.trim() || commentSubmitting}
+              style={{ background:`linear-gradient(135deg,${C.blue},#A78BFA)`, color:"#fff", border:"none", borderRadius:999, padding:"6px 14px", fontWeight:800, fontSize:12, cursor:"pointer", opacity:(!commentText.trim() || commentSubmitting) ? 0.5 : 1 }}>
+              {commentSubmitting ? "..." : "Post"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
