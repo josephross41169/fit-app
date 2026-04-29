@@ -168,7 +168,7 @@ function FoodSearchInput({
       setSearching(true);
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&page_size=8&fields=product_name,nutriments,serving_size,brands`;
-        const res = await fetch(url, { headers: { 'User-Agent': 'FitApp/1.0 (fitapp@example.com)' } });
+        const res = await fetch(url, { headers: { 'User-Agent': 'FitApp/1.0 (support@liveleeapp.com)' } });
         const data = await res.json();
         const products: FoodSearchResult[] = (data.products || [])
           .filter((p: any) => p.product_name && p.nutriments)
