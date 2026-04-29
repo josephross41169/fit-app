@@ -1,34 +1,27 @@
 {
-  "name": "Fit ⚡ - Fitness Social",
-  "short_name": "Fit ⚡",
-  "description": "Your fitness community. Track, share, and connect.",
+  "name": "Livelee — Fitness & Wellness Social",
+  "short_name": "Livelee",
+  "description": "Your fitness and wellness community. Track, share, and connect.",
   "start_url": "/feed",
   "display": "standalone",
-  "background_color": "#F8F5FF",
+  "background_color": "#0E0820",
   "theme_color": "#7C3AED",
   "orientation": "portrait",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/favicon.ico", "type": "image/x-icon", "sizes": "16x16 32x32" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/icon-192-maskable.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "/icon-512-maskable.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ],
   "categories": ["fitness", "health", "social"],
   "screenshots": [],
   "shortcuts": [
     {
-      "name": "Track Food",
+      "name": "Track",
       "short_name": "Track",
-      "url": "/track",
-      "description": "Log your meals and workouts"
+      "url": "/post",
+      "description": "Log your workouts, meals, and wellness"
     },
     {
       "name": "Feed",
