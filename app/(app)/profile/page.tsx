@@ -3016,8 +3016,10 @@ export default function ProfilePage() {
         <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:24,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
           {/* Desktop-only nudge: shifted left/down to improve visual balance
-              with the banner. Mobile centering is unchanged. */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:isMobile?"center":"flex-start",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:-60,marginTop:isMobile?0:96}}>
+              with the banner. Mobile centering is unchanged.
+              Children stack with alignItems: "center" so name/handle/city
+              text sits centered under the round profile photo. */}
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:-60,marginTop:isMobile?0:96}}>
             <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
@@ -3062,7 +3064,7 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
-            <div style={{textAlign:isMobile?"center":"left",width:"100%"}}>
+            <div style={{textAlign:"center",width:"100%"}}>
               <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>{profile.name}</div>
               {profile.username && (
                 <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
@@ -3073,7 +3075,7 @@ export default function ProfilePage() {
               )}
 
               {(user?.profile as any)?.account_type === 'business' && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: isMobile?"center":"flex-start" }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
                   <span style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
                     🏢 {(user?.profile as any)?.business_type || 'Business'}
                   </span>
