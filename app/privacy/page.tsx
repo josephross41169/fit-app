@@ -10,7 +10,7 @@
 //   - Register for CCPA "Do Not Sell" if monetizing with ads later
 
 export const metadata = {
-  title: "Privacy Policy · Fit App",
+  title: "Privacy Policy · Livelee",
 };
 
 export default function PrivacyPage() {
@@ -31,7 +31,7 @@ export default function PrivacyPage() {
       </p>
 
       <p style={{ marginBottom: 20 }}>
-        This Privacy Policy describes how Fit App ("we", "us", "our") collects,
+        This Privacy Policy describes how Livelee ("we", "us", "our") collects,
         uses, and shares personal information when you use our service.
       </p>
 
@@ -72,7 +72,7 @@ export default function PrivacyPage() {
         <ul style={{ marginTop: 8, marginBottom: 4, paddingLeft: 24 }}>
           <li>
             <strong>With other users:</strong> Your profile, posts, and public activity
-            are visible to other users of Fit App depending on your privacy settings.
+            are visible to other users of Livelee depending on your privacy settings.
           </li>
           <li>
             <strong>Service providers:</strong> We use Supabase (database, authentication,
@@ -81,10 +81,10 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Legal requirements:</strong> If required by law, court order, or to
-            protect the rights, safety, or property of Fit App or its users.
+            protect the rights, safety, or property of Livelee or its users.
           </li>
           <li>
-            <strong>Business transfers:</strong> If Fit App is acquired or merged, user
+            <strong>Business transfers:</strong> If Livelee is acquired or merged, user
             data may transfer to the new entity, subject to this Policy.
           </li>
         </ul>
@@ -120,7 +120,7 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="7. Children's Privacy">
-        Fit App is not intended for children under 13. We do not knowingly collect
+        Livelee is not intended for children under 13. We do not knowingly collect
         personal information from children under 13. If we learn that we have
         collected data from a child under 13, we will delete it promptly. Parents
         who believe their child has submitted information can contact us to request
@@ -128,17 +128,17 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="8. Health Data">
-        Fit App collects fitness and wellness data including workout details,
+        Livelee collects fitness and wellness data including workout details,
         nutrition logs, and body measurements. This data is not treated as
-        "Protected Health Information" under HIPAA — Fit App is not a covered
+        "Protected Health Information" under HIPAA — Livelee is not a covered
         healthcare entity. However, we treat health-related data with care and do
         not sell or share it for advertising purposes.
       </Section>
 
       <Section title="9. International Users">
-        Fit App is operated from the United States. If you access the service from
+        Livelee is operated from the United States. If you access the service from
         outside the United States, your data will be transferred to and processed
-        in the United States. By using Fit App, you consent to this transfer.
+        in the United States. By using Livelee, you consent to this transfer.
       </Section>
 
       <Section title="10. Third-Party Services">
