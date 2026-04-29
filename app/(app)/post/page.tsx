@@ -1164,6 +1164,27 @@ export default function PostPage() {
         await awardLadder(ladderPrefix, count);
       }
 
+      // 5K ladder — running workouts with any cardio entry ≥ 3.1 mi.
+      // Recount client-side after each log so tier awards fire correctly.
+      if (woCat === 'running') {
+        try {
+          const { data: runRows } = await supabase
+            .from('activity_logs')
+            .select('cardio')
+            .eq('user_id', userId)
+            .eq('log_type', 'workout')
+            .eq('workout_category', 'running');
+          let fives = 0;
+          for (const row of (runRows || []) as any[]) {
+            const entries = Array.isArray(row.cardio) ? row.cardio : [];
+            if (entries.some((c: any) => (parseFloat(String(c.distance ?? '')) || 0) >= 3.1)) {
+              fives++;
+            }
+          }
+          if (fives > 0) await awardLadder('5k', fives);
+        } catch { /* non-fatal */ }
+      }
+
       // Early Bird — workouts before 7am (uses created_at hour)
       // Approximation: count workouts where created_at hour is < 7.
       // Postgres function call would be cleaner but we keep it client-side
