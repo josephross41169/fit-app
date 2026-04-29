@@ -84,116 +84,137 @@ export const BADGES: Badge[] = [
   //  EASY COUNTER LADDERS (8 tiers, auto-awarded from posts)
   // ════════════════════════════════════════════════════════════════════════
 
+  // ─── Tier-name aesthetic guide (for future maintainers) ────────────────────
+  // Tone: evocative single/double words. NOT WoW raid loot. NOT "Starter".
+  // Think: a real adult could earn this without cringing. Categories anchor:
+  //   running   → wilderness / trail / instinct
+  //   walking   → roaming / wandering / pilgrim
+  //   biking    → wind / road / open horizon
+  //   swimming  → water / current / tide
+  //   rowing    → oar / wake / silent water
+  //   lifting   → iron / forge / weight
+  //   hiit      → fire / lungs / fury
+  //   boxing    → fists / canvas / round
+  //   sports    → grit / arena / play
+  //   yoga/etc  → stillness / breath / inner light
+  //   sauna     → heat / glow / coal
+  //   coldplunge→ winter / frost / ice (Joey-approved)
+  //   nutrition → discipline / fuel
+  //   social    → voice / signal / presence
+  //   consistency→ time / patience / weather
+  // ────────────────────────────────────────────────────────────────────────
+
   ...easyLadder({ prefix: "workouts", emoji: "🎉", noun: "workout", nounPlural: "workouts", category: "consistency",
-    tierNames: ["First Workout", "Workout Starter", "Workout Regular", "50 Strong", "Centurion", "200 Titan", "500 Legend", "1000 Immortal"] }),
+    tierNames: ["Day One", "Showed Up", "Built Different", "Hundred In", "Centurion", "Two Hundred Strong", "Five Hundred Forged", "Thousand Sessions Deep"] }),
 
   ...easyLadder({ prefix: "runs", emoji: "👟", noun: "run", nounPlural: "runs", category: "cardio",
-    tierNames: ["First Run", "Pavement Starter", "Pavement Regular", "Pavement Hunter", "100 Run Club", "200 Run Society", "500 Run Immortal", "1000 Run Legend"] }),
+    tierNames: ["First Step", "Trail Found", "Trailblazer", "Pack Runner", "Hundred Mile Heart", "Wildbound", "Trail Reaper", "The Long Way Home"] }),
 
   ...easyLadder({ prefix: "lifts", emoji: "🏋️", noun: "lift", nounPlural: "lifts", category: "strength",
-    tierNames: ["First Lift", "Iron Starter", "Iron Regular", "Iron Devotee", "Iron Veteran", "Iron Dynasty", "Iron Immortal", "Iron God"] }),
+    tierNames: ["First Lift", "Rack Regular", "Iron Patient", "Heavy Hands", "Forged In Reps", "Steel Spine", "Iron Lifer", "Anvil Soul"] }),
 
   ...easyLadder({ prefix: "yoga", emoji: "🧘", noun: "yoga session", nounPlural: "yoga sessions", category: "wellness",
-    tierNames: ["First Yoga", "Yoga Starter", "Yoga Regular", "Yoga Dedicated", "Yoga Lover", "Yoga Devotee", "Yoga Master", "Yoga Immortal"] }),
+    tierNames: ["First Breath In", "Mat Found", "Quiet Body", "Steady Mind", "Inner Stillness", "Open Channel", "Living Practice", "Deep Stillness"] }),
 
   ...easyLadder({ prefix: "walks", emoji: "🚶", noun: "walk", nounPlural: "walks", category: "cardio",
-    tierNames: ["First Walk", "Walk Starter", "Walk Regular", "Mile Hunter", "Path Devotee", "Trail Master", "Walk Legend", "Walk Immortal"] }),
+    tierNames: ["First Mile", "Wanderer", "Long Walker", "Pavement Pilgrim", "Hundred Miles On", "Quiet Roamer", "Pilgrim's Mile", "Endless Walker"] }),
 
   ...easyLadder({ prefix: "biking", emoji: "🚴", noun: "ride", nounPlural: "rides", category: "cardio",
-    tierNames: ["First Ride", "Pedal Starter", "Pedal Regular", "Saddle Veteran", "Pedal Devotee", "Wheel Master", "Cyclist Legend", "Cyclist Immortal"] }),
+    tierNames: ["First Ride", "Wind Caught", "Open Road", "Pedal Heart", "Hundred Miles Out", "Wind Drinker", "Long Hauler", "Horizon Chaser"] }),
 
   ...easyLadder({ prefix: "swimming", emoji: "🏊", noun: "swim", nounPlural: "swims", category: "cardio",
-    tierNames: ["First Swim", "Pool Starter", "Pool Regular", "Lap Hunter", "Pool Devotee", "Stroke Master", "Aqua Legend", "Aqua Immortal"] }),
+    tierNames: ["First Lap", "In the Water", "Smooth Stroke", "Lap Hunter", "Hundred Lengths Down", "Saltbound", "Tide Reader", "Born Wet"] }),
 
   ...easyLadder({ prefix: "rowing", emoji: "🚣", noun: "row session", nounPlural: "row sessions", category: "cardio",
-    tierNames: ["First Row", "Row Starter", "Row Regular", "Stroke Hunter", "Row Devotee", "Row Master", "Row Legend", "Row Immortal"] }),
+    tierNames: ["First Pull", "Steady Oar", "Long Pull", "Wake Maker", "Hundred Pulls In", "Silent Water", "Oar in Hand", "Quiet Wake"] }),
 
   ...easyLadder({ prefix: "hiit", emoji: "🔥", noun: "HIIT session", nounPlural: "HIIT sessions", category: "cardio",
-    tierNames: ["First HIIT", "HIIT Starter", "HIIT Regular", "HIIT Hunter", "HIIT Devotee", "Burn Master", "HIIT Legend", "HIIT Immortal"] }),
+    tierNames: ["First Burn", "Lungs Lit", "Burn Through", "Heart Pounder", "Hundred Burns Deep", "Fury Tempered", "Engine Run", "Inferno Trained"] }),
 
   ...easyLadder({ prefix: "pilates", emoji: "🤸", noun: "pilates session", nounPlural: "pilates sessions", category: "wellness",
-    tierNames: ["First Pilates", "Pilates Starter", "Pilates Regular", "Core Hunter", "Pilates Devotee", "Core Master", "Pilates Legend", "Pilates Immortal"] }),
+    tierNames: ["First Hundred", "Found the Core", "Quiet Strength", "Spine of Steel", "Hundred Sessions In", "Core Carved", "Hidden Power", "Built Quiet"] }),
 
   ...easyLadder({ prefix: "boxing", emoji: "🥊", noun: "boxing session", nounPlural: "boxing sessions", category: "cardio",
-    tierNames: ["First Round", "Boxing Starter", "Boxing Regular", "Combo Hunter", "Boxing Devotee", "Glove Master", "Boxing Legend", "Boxing Immortal"] }),
+    tierNames: ["First Round", "Glove On", "Sharp Hands", "Combo Heavy", "Hundred Rounds Deep", "Canvas Marked", "Round Twelve", "Cornered No More"] }),
 
   ...easyLadder({ prefix: "sports", emoji: "🏀", noun: "sports session", nounPlural: "sports sessions", category: "cardio",
-    tierNames: ["First Game", "Sports Starter", "Sports Regular", "Game Hunter", "Sports Devotee", "Game Master", "Sports Legend", "Sports Immortal"] }),
+    tierNames: ["First Game", "In the Arena", "Game Sharp", "Box Score Regular", "Hundred Games In", "Court Vision", "Field Veteran", "Game Lifer"] }),
 
   ...easyLadder({ prefix: "sauna", emoji: "🔆", noun: "sauna session", nounPlural: "sauna sessions", category: "wellness",
-    tierNames: ["First Sauna", "Sauna Starter", "Sauna Regular", "Sauna Dedicated", "Sauna Devotee", "Heat Veteran", "Heat Master", "Sauna Immortal"] }),
+    tierNames: ["First Heat", "Warm Bones", "Sweat Out", "Heat Patient", "Hundred Sweats", "Glowed Through", "Coal Walker", "Born of Heat"] }),
 
   ...easyLadder({ prefix: "cold-plunge", emoji: "🧊", noun: "cold plunge", nounPlural: "cold plunges", category: "wellness",
-    tierNames: ["First Plunge", "Cold Starter", "Cold Regular", "Ice Warrior", "Ice Veteran", "Ice Devotee", "Ice Master", "Ice Immortal"] }),
+    tierNames: ["First Frost", "Arctic Bliss", "Glacier Born", "Frozen Veins", "Deep Winter", "Cold Blooded", "Iceblood Sovereign", "Envoy of Winter"] }),
 
   ...easyLadder({ prefix: "meditation", emoji: "🕊️", noun: "meditation", nounPlural: "meditations", category: "wellness",
-    tierNames: ["First Meditation", "Mindful Starter", "Mindful Regular", "Mindful Devotee", "Mindful Master", "Zen Veteran", "Zen Legend", "Enlightened"] }),
+    tierNames: ["First Sit", "Settled", "Quiet Hour", "Steady Sitter", "Hundred Sits", "Open Sky Mind", "Empty Bowl", "Stillness Itself"] }),
 
   ...easyLadder({ prefix: "breathwork", emoji: "🫁", noun: "breathwork session", nounPlural: "breathwork sessions", category: "wellness",
-    tierNames: ["First Breath", "Breath Starter", "Breath Regular", "Breath Dedicated", "Breath Devotee", "Breath Master", "Breath Legend", "Breath Immortal"] }),
+    tierNames: ["First Breath", "Slow Inhale", "Long Exhale", "Breath Patient", "Hundred Cycles", "Steady Lungs", "Breath Keeper", "Air Mastered"] }),
 
   ...easyLadder({ prefix: "stretching", emoji: "🤸", noun: "stretch session", nounPlural: "stretch sessions", category: "wellness",
-    tierNames: ["First Stretch", "Stretch Starter", "Stretch Regular", "Flexibility Pro", "Stretch Devotee", "Mobility Master", "Stretch Legend", "Stretch Immortal"] }),
+    tierNames: ["First Stretch", "Lengthened", "Open Hips", "Mobile Body", "Hundred Sessions Loose", "Free Spine", "Limber Lifer", "Bend Like Water"] }),
 
   // ── Recovery & therapy modalities ────────────────────────────────────────
   ...easyLadder({ prefix: "infrared-sauna", emoji: "♨️", noun: "infrared sauna session", nounPlural: "infrared sauna sessions", category: "wellness",
-    tierNames: ["First Infrared", "Infrared Starter", "Infrared Regular", "Deep Heat Pro", "Infrared Devotee", "Infrared Master", "Infrared Legend", "Infrared Immortal"] }),
+    tierNames: ["First Glow", "Warmed Through", "Deep Heat", "Sweat Lodge", "Hundred Glows", "Cellular Quiet", "Light Cooked", "Slow Burn"] }),
 
   ...easyLadder({ prefix: "red-light", emoji: "🔴", noun: "red light therapy session", nounPlural: "red light therapy sessions", category: "wellness",
-    tierNames: ["First Red Light", "Photon Starter", "Photon Regular", "Photon Devotee", "Light Bather", "Photon Master", "Red Light Legend", "Red Light Immortal"] }),
+    tierNames: ["First Light", "Photon Caught", "Red Bath", "Light Patient", "Hundred Sessions Lit", "Slow Repair", "Light Worker", "Sun Mimic"] }),
 
   ...easyLadder({ prefix: "massage", emoji: "💆", noun: "massage", nounPlural: "massages", category: "wellness",
-    tierNames: ["First Massage", "Massage Starter", "Massage Regular", "Knot Slayer", "Massage Devotee", "Bodywork Master", "Massage Legend", "Massage Immortal"] }),
+    tierNames: ["First Knead", "Tension Released", "Knot Loosener", "Soft Tissue Patient", "Hundred Sessions Smooth", "Loose Body", "Bodywork Veteran", "Fully Unwound"] }),
 
   ...easyLadder({ prefix: "float-tank", emoji: "🌊", noun: "float tank session", nounPlural: "float tank sessions", category: "wellness",
-    tierNames: ["First Float", "Float Starter", "Float Regular", "Sensory Adept", "Float Devotee", "Float Master", "Float Legend", "Float Immortal"] }),
+    tierNames: ["First Float", "Suspended", "Sensory Quiet", "Weightless", "Hundred Floats Deep", "Brine Soaked", "Long Drift", "Inner Sea"] }),
 
   ...easyLadder({ prefix: "mobility", emoji: "🦵", noun: "mobility session", nounPlural: "mobility sessions", category: "wellness",
-    tierNames: ["First Mobility", "Mobility Starter", "Mobility Regular", "Joint Wizard", "Mobility Devotee", "Mobility Master", "Mobility Legend", "Mobility Immortal"] }),
+    tierNames: ["First Open", "Joints Awake", "Range Found", "Free Hips", "Hundred Sessions Loose", "Limber Architect", "Mobility Lifer", "Move Like Water"] }),
 
   ...easyLadder({ prefix: "journaling", emoji: "📓", noun: "journal entry", nounPlural: "journal entries", category: "wellness",
-    tierNames: ["First Entry", "Journal Starter", "Journal Regular", "Reflection Pro", "Journal Devotee", "Journal Master", "Journal Legend", "Journal Immortal"] }),
+    tierNames: ["First Page", "Honest Ink", "Daily Pages", "Reflection Habit", "Hundred Entries In", "Open Pages", "Self-Witness", "Recorded Life"] }),
 
   ...easyLadder({ prefix: "sunlight", emoji: "☀️", noun: "sunlight session", nounPlural: "sunlight sessions", category: "wellness",
-    tierNames: ["First Sun", "Sun Starter", "Sun Regular", "Vitamin D Pro", "Sun Devotee", "Sun Master", "Sun Legend", "Sun Immortal"] }),
+    tierNames: ["First Light", "Sun Caught", "Daily Dose", "Sunwarm", "Hundred Mornings Lit", "Sun Native", "Light Drinker", "Sun Born"] }),
   // ─────────────────────────────────────────────────────────────────────────
 
   ...easyLadder({ prefix: "wellness", emoji: "🌱", noun: "wellness activity", nounPlural: "wellness activities", category: "wellness",
-    tierNames: ["First Wellness", "Wellness Starter", "Wellness Regular", "Wellness Devotee", "Wellness Dedicated", "Wellness Master", "Wellness Legend", "Wellness Immortal"] }),
+    tierNames: ["First Practice", "Tending", "Inward Habit", "Quiet Discipline", "Hundred Practices In", "Whole-Self Care", "Soul Maintained", "Inner Garden"] }),
 
   ...easyLadder({ prefix: "nutrition", emoji: "🥗", noun: "nutrition log", nounPlural: "nutrition logs", category: "nutrition",
-    tierNames: ["First Log", "Log Starter", "Log Regular", "Log Dedicated", "100 Logs", "Nutrition Devotee", "Nutrition Legend", "Nutrition Immortal"] }),
+    tierNames: ["First Log", "Eating Honest", "Fuel Aware", "Macro Conscious", "Hundred Logs Strong", "Disciplined Plate", "Built From Food", "Lifelong Fueled"] }),
 
   // Fasting ladder — counts fasts ≥ 12 hours. Hours don't matter beyond
   // the 12h threshold; every qualifying fast = +1 toward the ladder.
   // The existing "fasting" credential (24h fast) stays separate.
   ...easyLadder({ prefix: "fasting-12h", emoji: "⏳", noun: "12+ hour fast", nounPlural: "12+ hour fasts", category: "nutrition",
-    tierNames: ["Fasted Faithful", "Hunger Tamed", "Disciplined Soul", "Hollow Warrior", "Empty Vessel", "Monk Mode", "Ascetic", "Eternal Fasted"] }),
+    tierNames: ["First Fast", "Hunger Tamed", "Empty Patient", "Discipline Found", "Hundred Fasts Through", "Hollow Strong", "Monk Mode", "Ascetic"] }),
 
   ...easyLadder({ prefix: "posts", emoji: "📸", noun: "post", nounPlural: "posts", category: "social",
-    tierNames: ["First Post", "Content Starter", "Content Creator", "Content Hunter", "Content Devotee", "Feed Master", "Content Legend", "Content Immortal"] }),
+    tierNames: ["First Post", "Showing Up", "Voice Found", "Regular Signal", "Hundred Posts Deep", "Storyteller", "Always Posting", "Lifelong Sharer"] }),
 
   ...easyLadder({ prefix: "followers", emoji: "👥", noun: "follower", nounPlural: "followers", category: "social",
-    tierNames: ["First Follower", "Rising", "Rising Star", "Influencer", "Big Following", "Star", "Superstar", "Icon"] }),
+    tierNames: ["First Follower", "Rising", "Got a Crowd", "Voice Heard", "Hundred Following", "Star", "Beacon", "Icon"] }),
 
   ...easyLadder({ prefix: "likes", emoji: "❤️", noun: "like received", nounPlural: "likes received", category: "social",
-    tierNames: ["First Like", "Liked", "Crowd Pleaser", "Fan Favorite", "Motivator", "Inspiration", "Idol", "Legend"] }),
+    tierNames: ["First Like", "Liked", "Crowd Pleaser", "Fan Favorite", "Hundred Hearts Strong", "Inspiration", "Idol", "Adored"] }),
 
   ...easyLadder({ prefix: "comments", emoji: "💬", noun: "comment", nounPlural: "comments", category: "social",
-    tierNames: ["First Comment", "Active Voice", "Conversationalist", "Community Voice", "Pillar", "Mentor", "Sage", "Oracle"] }),
+    tierNames: ["First Word", "Speaking Up", "Conversationalist", "Community Voice", "Hundred Conversations", "Pillar", "Mentor", "Sage"] }),
 
   ...easyLadder({ prefix: "early-bird", emoji: "🌅", noun: "pre-7am workout", nounPlural: "pre-7am workouts", category: "consistency",
-    tierNames: ["Early Bird", "Dawn Starter", "Dawn Regular", "Dawn Hunter", "Sunrise Master", "Dawn Devotee", "Dawn Legend", "First Light"] }),
+    tierNames: ["Early Bird", "Up With the Sun", "Dawn Regular", "Sunrise Hunter", "Hundred Mornings Up", "First Light", "Day Earned", "Wakes the Sun"] }),
 
   // ── Streak (different thresholds: 3/7/14/30/60/90/180/365) ──
-  { id:"streak-3",   emoji:"🔥", label:"3 Day Streak",    desc:"Logged activity 3 days in a row",   category:"consistency" },
-  { id:"streak-7",   emoji:"🔥", label:"7 Day Streak",    desc:"Logged activity 7 days in a row",   category:"consistency" },
-  { id:"streak-14",  emoji:"🔥", label:"14 Day Streak",   desc:"Logged activity 14 days in a row",  category:"consistency" },
-  { id:"streak-30",  emoji:"🔥", label:"30 Day Streak",   desc:"Logged activity 30 days in a row",  category:"consistency" },
-  { id:"streak-60",  emoji:"🔥", label:"60 Day Streak",   desc:"Logged activity 60 days in a row",  category:"consistency" },
-  { id:"streak-90",  emoji:"🔥", label:"90 Day Grind",    desc:"Logged activity 90 days in a row",  category:"consistency" },
-  { id:"streak-180", emoji:"💎", label:"180 Day Beast",   desc:"Logged activity 180 days in a row", category:"consistency" },
-  { id:"streak-365", emoji:"🌋", label:"Year Warrior",    desc:"Logged activity 365 days in a row", category:"consistency" },
+  // Cohesive theme: time / weather / patience. Same vibe as Cold Plunge ladder.
+  { id:"streak-3",   emoji:"🔥", label:"Three Days Lit",   desc:"Logged activity 3 days in a row",   category:"consistency" },
+  { id:"streak-7",   emoji:"🔥", label:"Week Strong",      desc:"Logged activity 7 days in a row",   category:"consistency" },
+  { id:"streak-14",  emoji:"🔥", label:"Fourteen Deep",    desc:"Logged activity 14 days in a row",  category:"consistency" },
+  { id:"streak-30",  emoji:"🔥", label:"Month In",         desc:"Logged activity 30 days in a row",  category:"consistency" },
+  { id:"streak-60",  emoji:"🔥", label:"Two Months Hot",   desc:"Logged activity 60 days in a row",  category:"consistency" },
+  { id:"streak-90",  emoji:"🔥", label:"Quarter Year",     desc:"Logged activity 90 days in a row",  category:"consistency" },
+  { id:"streak-180", emoji:"💎", label:"Half a Year",      desc:"Logged activity 180 days in a row", category:"consistency" },
+  { id:"streak-365", emoji:"🌋", label:"Year Round",       desc:"Logged activity 365 days in a row", category:"consistency" },
 
   // ════════════════════════════════════════════════════════════════════════
   //  STRENGTH LADDERS (4 tiers @ weight thresholds)
