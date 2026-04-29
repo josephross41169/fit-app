@@ -36,7 +36,7 @@ export default function TermsPage() {
 
       <Section title="1. Who We Are">
         Livelee is a social fitness and wellness platform operated by Joey Ross
-        ("we", "us", "our"). The app is accessible at fit-app-ecru.vercel.app and
+        ("we", "us", "our"). The app is accessible at liveleeapp.com and
         through our iOS and Android applications.
       </Section>
 
@@ -139,8 +139,8 @@ export default function TermsPage() {
 
       <Section title="14. Contact">
         Questions about these Terms? Email us at{" "}
-        <a href="mailto:support@fitapp.example" style={{ color: "#A78BFA" }}>
-          support@fitapp.example
+        <a href="mailto:support@liveleeapp.com" style={{ color: "#A78BFA" }}>
+          support@liveleeapp.com
         </a>
         . (Contact email to be updated before production launch.)
       </Section>
