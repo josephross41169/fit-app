@@ -155,8 +155,8 @@ export default function PrivacyPage() {
 
       <Section title="12. Contact Us">
         Questions or concerns about your privacy? Email us at{" "}
-        <a href="mailto:privacy@fitapp.example" style={{ color: "#A78BFA" }}>
-          privacy@fitapp.example
+        <a href="mailto:support@liveleeapp.com" style={{ color: "#A78BFA" }}>
+          support@liveleeapp.com
         </a>
         . (Contact email to be updated before production launch.)
       </Section>
