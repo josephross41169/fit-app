@@ -160,6 +160,14 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
     setCommentsLoaded(true);
   }
 
+  // Auto-load comments on mount so the first comment shows as a preview
+  // under the post without the user having to click. Lazy import effect:
+  // run once when post.id changes (which is effectively just on mount).
+  useEffect(() => {
+    loadCommentsIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+
   function toggleComments() {
     const next = !showComments;
     setShowComments(next);
@@ -318,6 +326,33 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
           </svg>
         </button>
       </div>
+
+      {/* ── First comment preview — always visible when comments exist
+          and the full thread isn't expanded. Tapping it opens the full
+          comments section. */}
+      {!showComments && comments.length > 0 && (() => {
+        const c = comments[0];
+        const cu = c.user || c.users || {};
+        const cname = cu.full_name || cu.username || c.user || "User";
+        const ctext = c.content || c.text || "";
+        const remaining = comments.length - 1;
+        return (
+          <div
+            onClick={toggleComments}
+            style={{ borderTop:`1px solid ${C.greenLight}`, padding:"10px 18px", background:"#0F1A0F", cursor:"pointer" }}>
+            <div style={{ fontSize:13, color:C.text, lineHeight:1.4, wordBreak:"break-word" }}>
+              <span style={{ fontWeight:800 }}>{cname}</span>
+              <span style={{ color:C.sub }}> · </span>
+              <span>{ctext}</span>
+            </div>
+            {remaining > 0 && (
+              <div style={{ fontSize:12, color:C.sub, marginTop:6, fontWeight:700 }}>
+                View {remaining} more comment{remaining === 1 ? "" : "s"}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Inline comments — added so users can comment from Discover
           without navigating away to the post detail page. Mirrors the
