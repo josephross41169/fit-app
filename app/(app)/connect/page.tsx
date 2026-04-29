@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import RivalCard, { type Rival } from "@/components/RivalCard";
 
@@ -798,8 +798,25 @@ function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joi
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
-export default function ConnectPage() {
-  const [tab, setTab] = useState<"local"|"online"|"joined"|"rivals">("local");
+// Inner component reads URL search params, so it must be wrapped in Suspense
+// (Next 15 requirement) — see default export below.
+function ConnectPageInner() {
+  // Read URL params so the BottomNav "My Groups" link (?tab=mygroups) lands on
+  // the right tab. Sidebar uses tab=mygroups; this page uses tab=joined; we
+  // accept both for backwards compat.
+  const searchParams = useSearchParams();
+  const initialTab: "local"|"online"|"joined"|"rivals" = (() => {
+    const t = searchParams?.get("tab");
+    if (t === "mygroups" || t === "joined") return "joined";
+    if (t === "online") return "online";
+    if (t === "rivals") return "rivals";
+    return "local";
+  })();
+
+  const [tab, setTab] = useState<"local"|"online"|"joined"|"rivals">(initialTab);
+  // Category filter for the My Groups tab — "all" shows everything,
+  // otherwise filters joined groups by their `category` field.
+  const [joinedCategory, setJoinedCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [dbGroups, setDbGroups] = useState<any[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
@@ -957,7 +974,7 @@ export default function ConnectPage() {
           )}
 
           {tab === "joined" && (
-            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:16, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
               <div style={{ fontSize:40 }}>✅</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>My Groups</div>
@@ -967,6 +984,47 @@ export default function ConnectPage() {
               </div>
             </div>
           )}
+
+          {/* Category filter chips for My Groups tab. Renders only categories
+              the user actually has groups in, so the filter is never empty.
+              "All" is always present and is the default. */}
+          {tab === "joined" && joinedGroups.length > 0 && (() => {
+            const cats = Array.from(new Set(joinedGroups.map(g => g.category || "General")));
+            return (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:18 }}>
+                <button
+                  onClick={() => setJoinedCategory("all")}
+                  style={{
+                    padding:"8px 16px", borderRadius:999, border:"none", cursor:"pointer",
+                    fontWeight:800, fontSize:12,
+                    background: joinedCategory === "all" ? "linear-gradient(135deg,#7C3AED,#A78BFA)" : C.darkCard,
+                    color: joinedCategory === "all" ? "#fff" : C.sub,
+                    border: joinedCategory === "all" ? "none" : `1.5px solid ${C.darkBorder}`,
+                  }}>
+                  All ({joinedGroups.length})
+                </button>
+                {cats.map(cat => {
+                  const count = joinedGroups.filter(g => (g.category || "General") === cat).length;
+                  const active = joinedCategory === cat;
+                  const color = CATEGORY_COLORS[cat] ?? C.blue;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setJoinedCategory(cat)}
+                      style={{
+                        padding:"8px 16px", borderRadius:999, cursor:"pointer",
+                        fontWeight:800, fontSize:12,
+                        background: active ? `linear-gradient(135deg,${color},${color}CC)` : C.darkCard,
+                        color: active ? "#fff" : C.sub,
+                        border: active ? "none" : `1.5px solid ${C.darkBorder}`,
+                      }}>
+                      {cat} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {loadingGroups && tab !== "joined" && tab !== "rivals" && (
             <div style={{ textAlign:"center", padding:"40px 0", color:C.sub, fontSize:14 }}>Loading groups...</div>
@@ -991,7 +1049,9 @@ export default function ConnectPage() {
                       <div style={{ fontSize:13, color:C.sub }}>Browse Local or Online groups to find your community!</div>
                     </div>
                   )
-                  : joinedGroups.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadJoinedGroups()} />)
+                  : joinedGroups
+                      .filter(g => joinedCategory === "all" || (g.category || "General") === joinedCategory)
+                      .map(g => <GroupCard key={g.id} group={g} onJoin={() => loadJoinedGroups()} />)
           )}
 
           {!loadingGroups && tab !== "joined" && tab !== "rivals" && (
@@ -1004,6 +1064,16 @@ export default function ConnectPage() {
         <ConnectSidebar tab={tab as "local" | "online" | "joined" | "rivals"} onCreateGroup={() => setShowCreateModal(true)} />
       </div>
     </div>
+  );
+}
+
+// Suspense wrapper required because the inner component reads URL search params.
+// Without this, Next 15 build will fail.
+export default function ConnectPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "60vh" }} />}>
+      <ConnectPageInner />
+    </Suspense>
   );
 }
 
