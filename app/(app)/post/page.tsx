@@ -341,6 +341,11 @@ export default function PostPage() {
   // (24h). When empty, save uses now(). When set, save uses today's date at
   // that time so the activity card and feed show the correct time.
   const [woTime, setWoTime] = useState("");
+  // Optional date the workout actually happened. Stored as "YYYY-MM-DD".
+  // Empty = today (current behavior). When set, save uses that date.
+  // Validated to be within the last 3 calendar days. Set up below in
+  // the UI block — woDateMin / woDateMax build the picker bounds.
+  const [woDate, setWoDate] = useState("");
   const [woDuration, setWoDuration] = useState("");
   const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -796,15 +801,43 @@ export default function PostPage() {
     // Best-effort profile creation · never block the save
     await ensureProfile().catch(() => {});
 
-    // Build logged_at — if user picked a workout time, anchor to today at that
-    // local time. Otherwise stamp "now". Stored as ISO; consumers always read
-    // back via toLocaleTimeString so timezone is preserved correctly.
+    // Build logged_at — combine optional date + time fields.
+    //   woDate empty + woTime empty → "now"
+    //   woDate set + woTime empty → that date at noon (so it doesn't drift to
+    //     midnight which can flip days in some timezones)
+    //   woDate empty + woTime set → today at that time
+    //   woDate set + woTime set → that date at that time
+    // Date is validated to be within the last 3 calendar days client-side AND
+    // re-validated here as a safety net (a malformed date silently falls back
+    // to "now").
     let loggedAtIso = new Date().toISOString();
-    if (logTab === 'workout' && woTime && /^\d{2}:\d{2}$/.test(woTime)) {
-      const [hh, mm] = woTime.split(':').map(Number);
-      const d = new Date();
-      d.setHours(hh, mm, 0, 0);
-      loggedAtIso = d.toISOString();
+    if (logTab === 'workout') {
+      let baseDate = new Date();
+      let dateValid = true;
+
+      if (woDate && /^\d{4}-\d{2}-\d{2}$/.test(woDate)) {
+        // Build the date in local timezone (avoid the UTC drift of new Date("YYYY-MM-DD"))
+        const [y, m, d] = woDate.split('-').map(Number);
+        const candidate = new Date(y, m - 1, d, 12, 0, 0, 0); // noon as default
+        // Confirm it's within the allowed 3-day window (today + 3 prior days)
+        const today = new Date(); today.setHours(0,0,0,0);
+        const minDate = new Date(today); minDate.setDate(today.getDate() - 3);
+        if (candidate >= minDate && candidate <= new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)) {
+          baseDate = candidate;
+        } else {
+          dateValid = false;
+        }
+      }
+
+      if (dateValid && woTime && /^\d{2}:\d{2}$/.test(woTime)) {
+        const [hh, mm] = woTime.split(':').map(Number);
+        baseDate.setHours(hh, mm, 0, 0);
+      }
+
+      // Only override "now" if at least one field was provided AND valid
+      if (dateValid && (woDate || woTime)) {
+        loggedAtIso = baseDate.toISOString();
+      }
     }
     const base = { user_id: user.id, is_public: !isPrivate, logged_at: loggedAtIso };
     let error: any = null;
@@ -1783,6 +1816,61 @@ export default function PostPage() {
                   </label>
                   <input style={iStyle} placeholder={`e.g. ${includeLifting ? 'Push Day A' : includeCardio ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
                 </div>
+
+                {/* Date — optional. Defaults to today. Bounded to the last 3
+                    calendar days so users can backfill recent missed workouts
+                    without being able to retroactively edit ancient history. */}
+                {(() => {
+                  const today = new Date();
+                  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                  const todayStr = ymd(today);
+                  const min = new Date(today); min.setDate(today.getDate() - 3);
+                  const minStr = ymd(min);
+                  // Friendly chip — what does the chosen date look like in plain English?
+                  let chip = "";
+                  if (woDate) {
+                    const [y, mo, d] = woDate.split('-').map(Number);
+                    const picked = new Date(y, mo - 1, d);
+                    const yest = new Date(today); yest.setDate(today.getDate() - 1);
+                    if (woDate === todayStr) chip = "Today";
+                    else if (woDate === ymd(yest)) chip = "Yesterday";
+                    else {
+                      const days = Math.round((today.getTime() - picked.getTime()) / 86400000);
+                      chip = `${days} days ago · ${picked.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+                    }
+                  }
+                  return (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                        Date <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · log a late workout up to 3 days back)</span>
+                      </label>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <input
+                          type="date"
+                          min={minStr}
+                          max={todayStr}
+                          style={{ ...iStyle, flex: 1, minWidth: 160 }}
+                          value={woDate}
+                          onChange={e => setWoDate(e.target.value)}
+                        />
+                        {chip && (
+                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#7C3AED33", color: woDate === todayStr ? C.green : "#A78BFA", fontWeight: 800, fontSize: 12 }}>
+                            {chip}
+                          </span>
+                        )}
+                        {woDate && (
+                          <button
+                            onClick={() => setWoDate("")}
+                            style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
+                            type="button"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Workout time — optional. If set, uses today's date at this
                     time. Defaults to "now" when blank. Lets users log after
