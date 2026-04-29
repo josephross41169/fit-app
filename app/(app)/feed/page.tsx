@@ -1325,7 +1325,46 @@ export default function FeedPage() {
             console.warn('[feed] couldnt fetch likes:', likeErr);
           }
         }
-        data = pageRows.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id), comments: [] }));
+
+        // Batch-load comments for the visible posts so the first-comment
+        // preview renders on initial paint instead of waiting for the user
+        // to click. One /api/db call per post — done in parallel. We map
+        // DB shape (content, users) → display shape (text, user) here so
+        // PostCard's existing render code Just Works.
+        const postCommentsMap: Record<string, any[]> = {};
+        if (pageRows.length > 0) {
+          await Promise.all(pageRows.map(async (p: any) => {
+            try {
+              const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get_post_comments', payload: { postId: p.id } }),
+              });
+              const cdata = await res.json();
+              if (Array.isArray(cdata.comments)) {
+                postCommentsMap[p.id] = cdata.comments.map((c: any) => {
+                  const cu = c.users || c.user || {};
+                  const cname = cu.full_name || cu.username || 'User';
+                  const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+                  return {
+                    id: c.id,
+                    user: cname,
+                    avatar: cu.avatar_url || cini,
+                    text: c.content || '',
+                    time: c.created_at ? new Date(c.created_at).toLocaleDateString() : '',
+                    user_id: c.user_id,
+                  };
+                });
+              }
+            } catch { /* leave empty on failure */ }
+          }));
+        }
+
+        data = pageRows.map((p: any) => ({
+          ...p,
+          _liked: likedPostIds.has(p.id),
+          comments: postCommentsMap[p.id] || [],
+        }));
       }
     } catch (err) {
       console.error('[feed] fetchPosts unexpected error:', err);
