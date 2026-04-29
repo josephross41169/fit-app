@@ -337,6 +337,10 @@ export default function PostPage() {
   // Workout state
   const [woCategory, setWoCategory] = useState("lifting"); // primary category; drives stats/badges/rivalries
   const [woType, setWoType] = useState("");                 // user-facing workout NAME ("Push Day A")
+  // Optional time of day the workout actually happened. Stored as "HH:MM"
+  // (24h). When empty, save uses now(). When set, save uses today's date at
+  // that time so the activity card and feed show the correct time.
+  const [woTime, setWoTime] = useState("");
   const [woDuration, setWoDuration] = useState("");
   const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -792,7 +796,17 @@ export default function PostPage() {
     // Best-effort profile creation · never block the save
     await ensureProfile().catch(() => {});
 
-    const base = { user_id: user.id, is_public: !isPrivate, logged_at: new Date().toISOString() };
+    // Build logged_at — if user picked a workout time, anchor to today at that
+    // local time. Otherwise stamp "now". Stored as ISO; consumers always read
+    // back via toLocaleTimeString so timezone is preserved correctly.
+    let loggedAtIso = new Date().toISOString();
+    if (logTab === 'workout' && woTime && /^\d{2}:\d{2}$/.test(woTime)) {
+      const [hh, mm] = woTime.split(':').map(Number);
+      const d = new Date();
+      d.setHours(hh, mm, 0, 0);
+      loggedAtIso = d.toISOString();
+    }
+    const base = { user_id: user.id, is_public: !isPrivate, logged_at: loggedAtIso };
     let error: any = null;
 
     try {
@@ -1747,6 +1761,32 @@ export default function PostPage() {
                     Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
                   </label>
                   <input style={iStyle} placeholder={`e.g. ${includeLifting ? 'Push Day A' : includeCardio ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
+                </div>
+
+                {/* Workout time — optional. If set, uses today's date at this
+                    time. Defaults to "now" when blank. Lets users log after
+                    the fact and still show the correct time on their card. */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Time <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · defaults to now)</span>
+                  </label>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="time"
+                      style={{ ...iStyle, flex: 1 }}
+                      value={woTime}
+                      onChange={e => setWoTime(e.target.value)}
+                    />
+                    {woTime && (
+                      <button
+                        onClick={() => setWoTime("")}
+                        style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
+                        type="button"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* What did you do? — toggle Cardio + Lifting independently
