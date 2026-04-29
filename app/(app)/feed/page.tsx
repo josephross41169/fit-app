@@ -1285,11 +1285,25 @@ export default function FeedPage() {
         }
         const followingSet = new Set(followingIds);
 
+        // Find the user's single most recent post id (if any). Only THAT id
+        // gets bucket 0; the user's older posts fall to bucket 3 with everyone
+        // else. This prevents the feed from being a wall of your own old
+        // content before you ever see anyone you follow. Posts come in already
+        // sorted desc by created_at, so the first match is the most recent.
+        let mostRecentOwnPostId: string | null = null;
+        if (user) {
+          const ownPost = posts.find((p: any) => p.user_id === user.id);
+          if (ownPost) mostRecentOwnPostId = ownPost.id;
+        }
+
         const ranked = posts
           .map((p: any, index: number) => {
             const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
             let bucket = 3;
-            if (user && p.user_id === user.id) bucket = 0;
+            // Bucket 0 is RESERVED for your single most recent post.
+            // All your older posts fall through to follow / city / rest.
+            if (mostRecentOwnPostId && p.id === mostRecentOwnPostId) bucket = 0;
+            else if (user && p.user_id === user.id) bucket = 3; // your older posts join "rest"
             else if (followingSet.has(p.user_id)) bucket = 1;
             else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
             return { post: p, bucket, index };
