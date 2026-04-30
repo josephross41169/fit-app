@@ -259,7 +259,6 @@ function FoodSearchInput({
   );
 }
 
-const MOOD_EMOJIS = ["😊", "💪", "😴", "😤", "🔥"];
 // Standardized workout categories — the source of truth for stats, badges, rivalries.
 // Each category defines which detail fields the form should show.
 //    distance: show a distance input (mi/km/laps/meters)
@@ -422,13 +421,20 @@ export default function PostPage() {
   const [showGoalsEditor, setShowGoalsEditor] = useState(false);
   const [editGoals, setEditGoals] = useState<NutritionGoals>({ calories: 2500, protein: 180, carbs: 250, fat: 70, water_oz: 100 });
 
-  // Wellness state
-  const [wellnessType, setWellnessType] = useState("Meditation");
-  const [wellnessDuration, setWellnessDuration] = useState("");
+  // Wellness state — supports multiple activities at once. Each entry in
+  // `wellnessActivities` becomes its own activity_logs row on save, all
+  // sharing the same logged_at + is_public + notes + photo. Sleep + Fasting
+  // are handled as special-case dedicated activities (see below) since they
+  // have richer data (hours+quality+bedtime / fasting hours).
+  type WellnessEntry = { id: string; type: string; duration: string };
+  const [wellnessActivities, setWellnessActivities] = useState<WellnessEntry[]>([
+    { id: `w-${Date.now()}`, type: "Meditation", duration: "" }
+  ]);
   const [wellnessNotes, setWellnessNotes] = useState("");
-  const [mood, setMood] = useState("");
   const [wellnessPhotoUrl, setWellnessPhotoUrl] = useState<string | null>(null);
-  // Extended wellness tracking fields
+  // Extended wellness tracking fields — only relevant when a Sleep or
+  // Fasting entry is in the activities list. Sleep/Fasting can each only
+  // appear ONCE per save (enforced in UI).
   const [sleepHours, setSleepHours] = useState("");
   const [sleepQuality, setSleepQuality] = useState<number | null>(null);
   const [sleepBedtime, setSleepBedtime] = useState("");
@@ -436,8 +442,12 @@ export default function PostPage() {
   const [steps, setSteps] = useState("");
   const [hrv, setHrv] = useState("");
   const [restingHR, setRestingHR] = useState("");
-  // Fasting state — only used when wellnessType === 'Fasting'
   const [fastingHours, setFastingHours] = useState("");
+
+  // Convenience derived flags — used by the UI to know whether to render
+  // the Sleep and Fasting detail panels.
+  const hasSleep = wellnessActivities.some(a => a.type === 'Sleep');
+  const hasFasting = wellnessActivities.some(a => a.type === 'Fasting');
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
@@ -987,8 +997,22 @@ export default function PostPage() {
         });
         error = res.error;
       } else if (logTab === 'wellness') {
-        // Fasting validation — minimum 12 hours, anything less rejected
-        if (wellnessType === 'Fasting') {
+        // ── Multi-activity wellness save ─────────────────────────────────
+        // Each entry in `wellnessActivities` becomes its own activity_logs
+        // row. They all share the same logged_at, is_public, notes, and
+        // photo so they group naturally on the profile timeline. Empty
+        // entries (no type) are silently dropped.
+        const validActivities = wellnessActivities.filter(a => a.type && a.type.trim());
+        if (validActivities.length === 0) {
+          setSaveError("Add at least one wellness activity before saving.");
+          setLoading(false);
+          submittingRef.current = false;
+          return;
+        }
+
+        // Validate Fasting (minimum 12 hours) — applies if Fasting is in the list
+        const fastingEntry = validActivities.find(a => a.type === 'Fasting');
+        if (fastingEntry) {
           const hours = parseFloat(fastingHours);
           if (!fastingHours.trim() || isNaN(hours)) {
             setSaveError("Enter how many hours you fasted (minimum 12).");
@@ -997,44 +1021,42 @@ export default function PostPage() {
             return;
           }
           if (hours < 12) {
-            setSaveError("Fasts under 12 hours don't count — that's just sleeping and breakfast 😅. Try logging another wellness activity instead.");
+            setSaveError("Fasts under 12 hours don't count — that's just sleeping and breakfast 😅. Remove the fasting entry or fast longer.");
             setLoading(false);
             submittingRef.current = false;
             return;
           }
         }
-        // Upload wellness photo if present
+
+        // Upload wellness photo once — same URL stored on each row.
         let wellnessUploadedUrl: string | null = null;
         if (wellnessPhotoUrl) {
           wellnessUploadedUrl = await uploadPhoto(await compressImage(wellnessPhotoUrl), 'activity', `${user.id}/wellness-${Date.now()}.jpg`);
         }
-        // Build extended wellness_data object
-        const wellnessData: Record<string, any> = {};
-        if (wellnessType === 'Sleep') {
-          if (sleepHours) wellnessData.sleep_hours = parseFloat(sleepHours);
-          if (sleepQuality !== null) wellnessData.sleep_quality = sleepQuality;
-          if (sleepBedtime) wellnessData.sleep_bedtime = sleepBedtime;
-          if (sleepWakeTime) wellnessData.sleep_wake_time = sleepWakeTime;
-        }
-        if (steps) wellnessData.steps = parseInt(steps);
-        if (hrv) wellnessData.hrv = parseInt(hrv);
-        if (restingHR) wellnessData.resting_hr = parseInt(restingHR);
-        // For fasting, store hours converted to minutes in wellness_duration_min
-        // (since hours don't matter for badges, this is just for personal tracking)
-        const durationToStore =
-          wellnessType === 'Fasting' && fastingHours
-            ? Math.round(parseFloat(fastingHours) * 60)
-            : (wellnessDuration ? parseInt(wellnessDuration) : null);
-        const res = await supabase.from('activity_logs').insert({
-          ...base,
-          log_type: 'wellness',
-          wellness_type: wellnessType,
-          wellness_duration_min: durationToStore,
-          mood: mood || null,
-          notes: wellnessNotes || null,
-          photo_url: wellnessUploadedUrl || null,
-          // wellness_data omitted — column requires migration: lib/migration-wellness-data.sql
+
+        // Build the row for each activity. Sleep + Fasting carry their
+        // special detail fields; everything else just uses duration.
+        const rows = validActivities.map(act => {
+          const row: Record<string, any> = {
+            ...base,
+            log_type: 'wellness',
+            wellness_type: act.type,
+            notes: wellnessNotes || null,
+            photo_url: wellnessUploadedUrl || null,
+          };
+          if (act.type === 'Fasting' && fastingHours) {
+            row.wellness_duration_min = Math.round(parseFloat(fastingHours) * 60);
+          } else if (act.duration && act.duration.trim()) {
+            const d = parseInt(act.duration);
+            if (!isNaN(d)) row.wellness_duration_min = d;
+          }
+          // wellness_data column is omitted — requires migration:
+          // lib/migration-wellness-data.sql. Sleep / steps / HRV detail
+          // fields land here once the column exists.
+          return row;
         });
+
+        const res = await supabase.from('activity_logs').insert(rows);
         error = res.error;
       }
     } catch (e: any) {
@@ -1049,9 +1071,12 @@ export default function PostPage() {
       // -- Auto-award activity badges ----------------------------------------
       // NOTE: now passes woCategory (standardized) so badge-award can reliably
       // detect category (running/lifting/etc.) instead of keyword-matching
-      // the free-text workout name.
+      // the free-text workout name. For multi-wellness saves, we pass the
+      // first activity's type — the engine pulls actual counts from the DB
+      // anyway, so all the wellness rows we just inserted get counted.
       try {
-        const awarded = await awardActivityBadges(user.id, logTab, wellnessType, cardioType, woType, woCategory, exercises);
+        const firstWellnessType = wellnessActivities.find(a => a.type)?.type || '';
+        const awarded = await awardActivityBadges(user.id, logTab, firstWellnessType, cardioType, woType, woCategory, exercises);
         if (awarded && awarded.length > 0) setNewBadges(awarded);
       } catch {}
       // -- Award XP for level system ----------------------------------------
@@ -2598,29 +2623,99 @@ export default function PostPage() {
           {logTab === "wellness" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🧘 Wellness Activity</div>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity Type</label>
-                  <select style={iStyle} value={wellnessType} onChange={e => setWellnessType(e.target.value)}>
-                    {WELLNESS_GROUPS.map(group => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.types.map(t => <option key={t} value={t}>{t}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>🧘 Wellness Activities</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 14, lineHeight: 1.4 }}>
+                  Stack as many as you want. Sauna + cold plunge + meditation? Add all three.
                 </div>
-                {/* Fasting uses its own hours input instead of generic duration */}
-                {wellnessType !== 'Fasting' && (
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
-                    <input style={iStyle} placeholder="e.g. 20 min" value={wellnessDuration} onChange={e => setWellnessDuration(e.target.value)} />
-                  </div>
+
+                {/* List of activity rows. Each one is its own card with
+                    a type dropdown, duration input, and remove button. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+                  {wellnessActivities.map((act, idx) => {
+                    const isFasting = act.type === 'Fasting';
+                    return (
+                      <div key={act.id} style={{ background: '#0D0D0D', borderRadius: 14, padding: 12, border: '1px solid #2D1B69', position: 'relative' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isFasting ? '1fr auto' : '1.4fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity</label>
+                            <select
+                              style={iStyle}
+                              value={act.type}
+                              onChange={e => {
+                                const newType = e.target.value;
+                                setWellnessActivities(prev => prev.map((a, i) => i === idx ? { ...a, type: newType } : a));
+                              }}>
+                              {WELLNESS_GROUPS.map(group => (
+                                <optgroup key={group.label} label={group.label}>
+                                  {group.types.map(t => {
+                                    // Sleep / Fasting can each only appear once per save —
+                                    // hide them in OTHER rows' dropdowns if already chosen.
+                                    const alreadyUsedElsewhere = (t === 'Sleep' || t === 'Fasting')
+                                      && wellnessActivities.some((a, i) => i !== idx && a.type === t);
+                                    if (alreadyUsedElsewhere) return null;
+                                    return <option key={t} value={t}>{t}</option>;
+                                  })}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </div>
+                          {!isFasting && (
+                            <div>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
+                              <input
+                                style={iStyle}
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="e.g. 20"
+                                value={act.duration}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  setWellnessActivities(prev => prev.map((a, i) => i === idx ? { ...a, duration: v } : a));
+                                }}
+                              />
+                            </div>
+                          )}
+                          {wellnessActivities.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setWellnessActivities(prev => prev.filter((_, i) => i !== idx))}
+                              aria-label="Remove activity"
+                              style={{
+                                width: 38, height: 38, borderRadius: 10,
+                                border: `1.5px solid ${C.greenMid}`, background: 'transparent',
+                                color: '#EF4444', fontSize: 18, fontWeight: 800, cursor: 'pointer',
+                              }}>
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add another activity button. Disabled when 10+ entries
+                    to keep things manageable — a typical day shouldn't
+                    realistically have more than that. */}
+                {wellnessActivities.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setWellnessActivities(prev => [...prev, { id: `w-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, type: 'Meditation', duration: '' }])}
+                    style={{
+                      width: '100%', padding: '12px 14px', borderRadius: 12,
+                      border: `2px dashed ${C.greenMid}`, background: 'transparent',
+                      color: C.blue, fontWeight: 800, fontSize: 13, cursor: 'pointer',
+                      marginBottom: 12,
+                    }}>
+                    + Add another activity
+                  </button>
                 )}
 
-                {/* Fasting-specific block — minimum 12 hours enforced on save */}
-                {wellnessType === 'Fasting' && (
+                {/* Fasting-specific block — minimum 12 hours enforced on save.
+                    Only shown when Fasting is in the activities list. */}
+                {hasFasting && (
                   <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>⏳ Fasting</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>⏳ Fasting Details</div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Hours fasted</label>
                     <input
                       style={iStyle}
@@ -2636,8 +2731,8 @@ export default function PostPage() {
                   </div>
                 )}
 
-                {/* Sleep-specific fields */}
-                {wellnessType === 'Sleep' && (
+                {/* Sleep-specific fields. Only shown when Sleep is in the list. */}
+                {hasSleep && (
                   <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #2D1B69', marginBottom: 12 }}>
                     <div style={{ fontWeight: 800, fontSize: 13, color: '#A78BFA', marginBottom: 12 }}>😴 Sleep Details</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
@@ -2672,7 +2767,7 @@ export default function PostPage() {
                   </div>
                 )}
 
-                {/* Steps, HRV, Resting HR */}
+                {/* Steps, HRV, Resting HR — shared across all activities for the day */}
                 <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #2D1B69', marginBottom: 12 }}>
                   <div style={{ fontWeight: 800, fontSize: 13, color: '#A78BFA', marginBottom: 12 }}>📊 Body Stats (optional)</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
@@ -2692,26 +2787,9 @@ export default function PostPage() {
                   <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Wearable sync (Apple Health, WHOOP) coming in v2</div>
                 </div>
 
-                <div style={{ marginBottom: 14 }}>
+                <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</label>
                   <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How was it? How do you feel?" value={wellnessNotes} onChange={e => setWellnessNotes(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.8 }}>Mood</label>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    {MOOD_EMOJIS.map(em => (
-                      <button key={em} onClick={() => setMood(mood === em ? "" : em)} style={{
-                        width: 52, height: 52, borderRadius: 14,
-                        border: `2px solid ${mood === em ? C.blue : C.greenMid}`,
-                        background: mood === em ? C.blue : C.greenLight,
-                        fontSize: 26, cursor: "pointer",
-                        transform: mood === em ? "scale(1.15)" : "scale(1)",
-                        transition: "all 0.15s",
-                      }}>
-                        {em}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
