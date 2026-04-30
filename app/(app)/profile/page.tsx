@@ -163,7 +163,69 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
 type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[]};
 type CardioEntry = {type:string;duration:string;distance:string};
 type Meal        = {key:string;emoji:string;name:string;cal:number};
-type WellnessEntry = {emoji:string;activity:string;notes:string};
+// ── Wellness display: per-activity emoji + accent color ──────────────────
+// Maps wellness_type strings (Title Case) to a visual treatment for the
+// profile activity log cards. Lookup is case-insensitive — falls back to
+// the leaf emoji + neutral purple when an activity isn't in the table.
+// Adding a new activity later? Just add a row here.
+type WellnessStyle = { emoji: string; accent: string };
+const WELLNESS_STYLES: Record<string, WellnessStyle> = {
+  // Cold therapy — icy blues
+  "cold plunge":          { emoji: "❄️", accent: "#38BDF8" },
+  "ice bath":             { emoji: "❄️", accent: "#38BDF8" },
+  "cryotherapy":          { emoji: "🥶", accent: "#22D3EE" },
+  // Heat therapy — warm reds/oranges
+  "sauna":                { emoji: "🔥", accent: "#F97316" },
+  "infrared sauna":       { emoji: "🌅", accent: "#FB923C" },
+  "steam room":           { emoji: "♨️", accent: "#FBBF24" },
+  "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
+  // Mind / breath — purples & soft tones
+  "meditation":           { emoji: "🧘", accent: "#A78BFA" },
+  "breathwork":           { emoji: "💨", accent: "#818CF8" },
+  "yoga nidra":           { emoji: "🌙", accent: "#A78BFA" },
+  "journaling":           { emoji: "📓", accent: "#C4B5FD" },
+  "therapy":              { emoji: "💬", accent: "#A78BFA" },
+  "sound bath":           { emoji: "🎵", accent: "#C084FC" },
+  // Body / mobility — earthy greens
+  "stretching":           { emoji: "🤸", accent: "#34D399" },
+  "foam rolling":         { emoji: "🌀", accent: "#10B981" },
+  "mobility work":        { emoji: "🦵", accent: "#34D399" },
+  "massage":              { emoji: "💆", accent: "#6EE7B7" },
+  "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
+  "acupuncture":          { emoji: "📍", accent: "#34D399" },
+  "cupping":              { emoji: "🟣", accent: "#A78BFA" },
+  // Outdoor / light
+  "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
+  "grounding":            { emoji: "🌱", accent: "#84CC16" },
+  "nature walk":           { emoji: "🌲", accent: "#34D399" },
+  // Recovery / oxygen
+  "hyperbaric oxygen":    { emoji: "💎", accent: "#06B6D4" },
+  "compression therapy":  { emoji: "🦿", accent: "#0EA5E9" },
+  "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
+  // Sleep & fasting
+  "sleep":                { emoji: "😴", accent: "#6366F1" },
+  "fasting":              { emoji: "⏳", accent: "#A78BFA" },
+};
+function getWellnessStyle(activity: string): WellnessStyle {
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#A78BFA" };
+}
+
+// Format an ISO datetime as a friendly local time, e.g. "8:42 AM".
+// Falls back to empty string when the input is unparseable.
+function formatTimeOfDay(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch { return ""; }
+}
+
+type WellnessEntry = {
+  emoji: string;
+  activity: string;
+  notes: string;
+  duration?: number | null;     // minutes (from wellness_duration_min)
+  loggedAt?: string | null;     // ISO string (from logged_at) for time-of-day display
+};
 type Workout    = {type:string;duration:string;calories:number;exercises:Exercise[];cardio:CardioEntry[]};
 type Nutrition  = {calories:number;protein:number;carbs:number;fat:number;sugar:number;meals:Meal[]};
 type Wellness   = {entries:WellnessEntry[]};
@@ -990,20 +1052,57 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
             </button>
             {wellOpen && <div style={{background:"#1A1230",padding:14,display:"flex",flexDirection:"column",gap:8}}>
-              {wellness.entries.map((e,i)=>(
-                <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #3D2A6E"}}>
-                  <div style={{width:44,height:44,borderRadius:13,background:"#2D1F52",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</div>
-                    {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:2}}>{e.notes}</div>}
-                    {(e as any).photo_url && (
-                      <button onClick={()=>setLb((e as any).photo_url)} style={{ padding:0, border:`2px solid #2A3A2A`, borderRadius:10, overflow:"hidden", cursor:"pointer", background:"none", flexShrink:0, marginTop:6 }}>
-                        <img src={(e as any).photo_url} style={{ width:60, height:60, objectFit:"cover", display:"block" }} alt=""/>
-                      </button>
-                    )}
+              {wellness.entries.map((e,i)=>{
+                // Per-activity styling — pulls emoji + accent color from
+                // WELLNESS_STYLES lookup. Falls back gracefully if the activity
+                // isn't in the table (returns generic leaf + soft purple).
+                const style = getWellnessStyle(e.activity);
+                const time = formatTimeOfDay((e as any).loggedAt);
+                const dur = (e as any).duration as number | null | undefined;
+                return (
+                  <div key={i} style={{
+                    background:"#0D0D0D",borderRadius:14,padding:"12px 16px",
+                    display:"flex",alignItems:"center",gap:14,
+                    // Activity-color left border = subtle visual signature per type
+                    borderLeft:`4px solid ${style.accent}`,
+                    border:`1.5px solid #3D2A6E`,borderLeftWidth:4,borderLeftColor:style.accent,
+                  }}>
+                    <div style={{
+                      width:44,height:44,borderRadius:13,
+                      // Tinted background using the activity's accent at 20% opacity
+                      background:`${style.accent}33`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:22,flexShrink:0,
+                    }}>{style.emoji}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      {/* Top row: activity name + duration + time pills.
+                          Pills use the activity's accent color so each card
+                          has a coordinated palette. */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</span>
+                        {dur != null && dur > 0 && (
+                          <span style={{
+                            fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
+                            background:`${style.accent}22`,color:style.accent,
+                            letterSpacing:0.3,
+                          }}>{dur} min</span>
+                        )}
+                        {time && (
+                          <span style={{
+                            fontSize:11,fontWeight:600,color:C.sub,
+                          }}>{time}</span>
+                        )}
+                      </div>
+                      {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:4,lineHeight:1.4}}>{e.notes}</div>}
+                      {(e as any).photo_url && (
+                        <button onClick={()=>setLb((e as any).photo_url)} style={{ padding:0, border:`2px solid #2A3A2A`, borderRadius:10, overflow:"hidden", cursor:"pointer", background:"none", flexShrink:0, marginTop:8 }}>
+                          <img src={(e as any).photo_url} style={{ width:60, height:60, objectFit:"cover", display:"block" }} alt=""/>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>}
           </div>
         ) : (
@@ -1382,10 +1481,16 @@ export default function ProfilePage() {
 
           const wellness = wellnessLogs.length > 0 ? {
             entries: wellnessLogs.map((l: any) => ({
-              emoji: l.wellness_emoji || '🌿',
+              // Emoji is now derived from activity name via the WELLNESS_STYLES
+              // lookup — so users get the right icon (❄️ for cold plunge etc.)
+              // without us storing it on every row. The `wellness_emoji` column
+              // is a legacy fallback.
+              emoji: l.wellness_emoji || getWellnessStyle(l.wellness_type || '').emoji,
               activity: l.wellness_type || l.notes || 'Wellness',
               notes: l.notes || '',
               photo_url: l.photo_url || null,
+              duration: l.wellness_duration_min ?? null,
+              loggedAt: l.logged_at || l.created_at || null,
             })),
           } : null;
 
