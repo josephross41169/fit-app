@@ -226,15 +226,20 @@ export function getLevelProgress(d: CounterData): LevelProgressInfo {
 }
 
 // ── Visuals ──────────────────────────────────────────────────────────────────
+// Level color theme — ascending precious materials.
+// L1 Locked (grey) → L2 Bronze → L3 Silver → L4 Gold → L5 Emerald → L6 Diamond.
+// Each level has: border (ring color), glow (box-shadow halo), badge (pill bg),
+// badgeText (pill text), accent (primary level color), label (display name).
+// These colors are wired to LEVEL_REWARDS in profile/page.tsx for cosmetic effects.
 export const LEVEL_COLORS: Record<Level, {
   border: string; glow: string; badge: string; badgeText: string; accent: string; label: string;
 }> = {
-  1: { border: "#2D2D2D", glow: "transparent",          badge: "#1A1A1A", badgeText: "#6B7280", accent: "#6B7280", label: "Level 1" },
-  2: { border: "#7C3AED", glow: "rgba(124,58,237,0.3)", badge: "#2D1B69", badgeText: "#A78BFA", accent: "#7C3AED", label: "Level 2" },
-  3: { border: "#F59E0B", glow: "rgba(245,158,11,0.35)",badge: "#3D2200", badgeText: "#FCD34D", accent: "#F59E0B", label: "Level 3" },
-  4: { border: "#38BDF8", glow: "rgba(56,189,248,0.4)", badge: "#0A1628", badgeText: "#7DD3FC", accent: "#38BDF8", label: "Level 4" },
-  5: { border: "#E879F9", glow: "rgba(232,121,249,0.5)",badge: "#1A0035", badgeText: "#F0ABFC", accent: "#E879F9", label: "Level 5" },
-  6: { border: "#FF4444", glow: "rgba(255,68,68,0.55)", badge: "#3A0000", badgeText: "#FFB4B4", accent: "#FF4444", label: "Level 6 — MAX" },
+  1: { border: "#2D2D2D", glow: "transparent",            badge: "#1A1A1A", badgeText: "#6B7280", accent: "#6B7280", label: "Level 1"          },
+  2: { border: "#CD7F32", glow: "rgba(205,127,50,0.35)",  badge: "#3A2410", badgeText: "#E8A87C", accent: "#CD7F32", label: "Level 2 — Bronze" },
+  3: { border: "#C0C0C0", glow: "rgba(220,220,235,0.45)", badge: "#1F2128", badgeText: "#E8E8F0", accent: "#C0C0C0", label: "Level 3 — Silver" },
+  4: { border: "#FFD700", glow: "rgba(255,215,0,0.5)",    badge: "#3D2A00", badgeText: "#FCD34D", accent: "#FFD700", label: "Level 4 — Gold"   },
+  5: { border: "#10B981", glow: "rgba(16,185,129,0.55)",  badge: "#022C22", badgeText: "#6EE7B7", accent: "#10B981", label: "Level 5 — Emerald"},
+  6: { border: "#67E8F9", glow: "rgba(186,230,253,0.65)", badge: "#0A1628", badgeText: "#BAE6FD", accent: "#67E8F9", label: "Level 6 — Diamond"},
 };
 
 // ── Backwards compatibility shims ────────────────────────────────────────────
