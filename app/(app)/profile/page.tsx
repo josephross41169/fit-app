@@ -1345,6 +1345,10 @@ export default function ProfilePage() {
 
   // ── Real activity log state ──
   const [realDays, setRealDays] = useState<typeof DAYS>([]);
+  // Raw individual workout logs — one entry per actual logged workout
+  // (not aggregated by day). Used by WorkoutProgressGraphs so multi-workout
+  // days count correctly. Each entry is the full activity_logs row.
+  const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
   useEffect(() => {
@@ -1352,18 +1356,29 @@ export default function ProfilePage() {
     async function loadLogs() {
       setLoadingLogs(true);
       try {
+        // Pull a generous slice so the Workout Progress graphs can show
+        // older calendar months. 60 was too tight — even casual users hit
+        // that in 2 months. 500 covers ~1.5 years of daily activity for
+        // most users without paginating.
         const { data } = await supabase
           .from('activity_logs')
           .select('*')
           .eq('user_id', user!.id)
           .order('logged_at', { ascending: false })
-          .limit(60);
+          .limit(500);
 
         if (!data || data.length === 0) {
           setRealDays([]);
+          setRawWorkoutLogs([]);
           setLoadingLogs(false);
           return;
         }
+
+        // Cache the raw workout rows for the graphs component — this lets
+        // it count individual workouts (including multi-per-day) instead of
+        // days. The day-merged `realDays` view is still used elsewhere for
+        // the activity-log card list.
+        setRawWorkoutLogs(data.filter((l: any) => l.log_type === 'workout'));
 
         const byDate = new Map<string, any[]>();
         data.forEach((log: any) => {
@@ -3406,10 +3421,13 @@ export default function ProfilePage() {
               </div>
             ) : (
               <>
-                {/* Workout Progress Graphs */}
-                {realDays.length > 0 && (
+                {/* Workout Progress Graphs — uses rawWorkoutLogs so each
+                    individual workout counts (multi-per-day no longer
+                    collapses to 1). The component handles month filtering
+                    internally. */}
+                {rawWorkoutLogs.length > 0 && (
                   <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.purpleMid}`,marginBottom:20}}>
-                    <WorkoutProgressGraphs workouts={realDays.filter((d: any) => d.workout).map((d: any) => ({ ...d, created_at: d.id }))} />
+                    <WorkoutProgressGraphs workouts={rawWorkoutLogs} />
                   </div>
                 )}
                 {(()=>{
