@@ -489,16 +489,29 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     }
   }
 
+  // ── Apply tier-specific cosmetic effects to the card ────────────────────
+  // Each level layers visual treatment via CSS classes. Higher levels stack.
+  // L2 Bronze   → tier-bronze-card (bronze-tinted halo)
+  // L4 Gold     → tier-gold-card    (gold halo, replaces bronze)
+  // L5 Emerald  → tier-emerald-card (emerald pulsing halo)
+  // L6 Diamond  → diamond-shimmer-card (cyan sweep) + dark diamond bg gradient
+  // L1 + L3 Silver get default treatment (Silver effect is on the avatar, not cards)
+  const tierCardClass =
+    userLevel >= 6 ? "diamond-shimmer-card" :
+    userLevel >= 5 ? "tier-emerald-card"   :
+    userLevel >= 4 ? "tier-gold-card"      :
+    userLevel >= 2 ? "tier-bronze-card"    : "";
+
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div className={userLevel >= 4 ? "diamond-shimmer-card" : ""} style={
-      userLevel >= 4
+    <div className={tierCardClass} style={
+      userLevel >= 6
         ? {background:"linear-gradient(135deg, #0F172A 0%, #164E63 35%, #1E3A5F 50%, #164E63 65%, #0F172A 100%)",borderRadius:22,border:"1.5px solid #67E8F9",boxShadow:"0 0 16px rgba(34,211,238,0.35), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(186,230,253,0.2)",marginBottom:16,overflow:"hidden"}
         : {background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}
     }>
 
       {/* HEADER */}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?(userLevel>=4?"rgba(45,31,82,0.85)":"#2D1F52"):(userLevel>=4?"transparent":C.white),border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?(userLevel>=6?"rgba(45,31,82,0.85)":"#2D1F52"):(userLevel>=6?"transparent":C.white),border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,#4ADE80,#22C55E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(74,222,128,0.3)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
@@ -2197,9 +2210,134 @@ export default function ProfilePage() {
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
 
       <style jsx global>{`
+        /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
+           Activated by adding the tier class to elements based on user level.
+           Each tier's effects layer on top of the previous (Diamond gets
+           everything). Effects are deliberately subtle — they should feel
+           prestigious, not gaudy.
+        */
+
+        /* L2 BRONZE — warm copper border glow on activity cards.
+           Subtle stationary halo, not animated. Lowest-prestige tier. */
+        .tier-bronze-card {
+          border-color: rgba(205,127,50,0.45) !important;
+          box-shadow: 0 0 0 1px rgba(205,127,50,0.20), 0 2px 18px rgba(205,127,50,0.18);
+        }
+
+        /* L3 SILVER — rotating silver halo around profile avatar.
+           This is the "moving picture" effect. Two concentric conic-gradient
+           rings rotate at different speeds for depth. The avatar itself stays
+           still — only the ring around it moves. Animation is slow + smooth
+           (8s) so it never feels distracting. */
+        .tier-silver-avatar-wrap {
+          position: relative;
+          padding: 4px;
+          border-radius: 50%;
+          background: conic-gradient(
+            from 0deg,
+            #6B7280 0%,
+            #E8E8F0 25%,
+            #F5F5FA 50%,
+            #C0C0C0 75%,
+            #6B7280 100%
+          );
+          animation: tierSilverRingSpin 8s linear infinite;
+          box-shadow: 0 0 22px rgba(220,220,235,0.35);
+        }
+        .tier-silver-avatar-wrap::after {
+          /* Inner soft glow ring spinning the OTHER direction.
+             Creates a "shimmery" depth effect without being chaotic. */
+          content: '';
+          position: absolute;
+          inset: -3px;
+          border-radius: 50%;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0%,
+            rgba(255,255,255,0.4) 30%,
+            transparent 60%,
+            rgba(255,255,255,0.3) 90%,
+            transparent 100%
+          );
+          animation: tierSilverRingSpinReverse 12s linear infinite;
+          pointer-events: none;
+          z-index: -1;
+        }
+        @keyframes tierSilverRingSpin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes tierSilverRingSpinReverse {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(-360deg); }
+        }
+
+        /* L4 GOLD — gold shimmer that sweeps across the profile NAME.
+           Gold gradient text + a moving highlight band. */
+        .tier-gold-name {
+          background: linear-gradient(
+            90deg,
+            #B8860B 0%,
+            #FFD700 25%,
+            #FFF8DC 50%,
+            #FFD700 75%,
+            #B8860B 100%
+          );
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: tierGoldShimmer 4s ease-in-out infinite;
+          filter: drop-shadow(0 0 8px rgba(255,215,0,0.4));
+        }
+        @keyframes tierGoldShimmer {
+          0%,100% { background-position: 0% 50%; }
+          50%     { background-position: 100% 50%; }
+        }
+        /* L4 GOLD — gentle gold glow on activity cards (in addition to bronze) */
+        .tier-gold-card {
+          border-color: rgba(255,215,0,0.45) !important;
+          box-shadow: 0 0 0 1px rgba(255,215,0,0.22), 0 2px 22px rgba(255,215,0,0.22);
+        }
+
+        /* L5 EMERALD — pulsing green glow on activity cards.
+           Slow breathing pulse — gentle, not flashy. */
+        .tier-emerald-card {
+          border-color: rgba(16,185,129,0.55) !important;
+          animation: tierEmeraldPulse 4.5s ease-in-out infinite;
+        }
+        @keyframes tierEmeraldPulse {
+          0%,100% { box-shadow: 0 0 0 1px rgba(16,185,129,0.30), 0 2px 18px rgba(16,185,129,0.20); }
+          50%     { box-shadow: 0 0 0 1px rgba(16,185,129,0.55), 0 2px 32px rgba(16,185,129,0.45); }
+        }
+
+        /* L6 DIAMOND — holographic shifting name (like rainbow chrome).
+           Reserved for max level — most prestigious effect. */
+        .tier-diamond-name {
+          background: linear-gradient(
+            90deg,
+            #67E8F9 0%,
+            #E879F9 20%,
+            #FCD34D 40%,
+            #6EE7B7 60%,
+            #A78BFA 80%,
+            #67E8F9 100%
+          );
+          background-size: 250% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: tierDiamondHolo 6s linear infinite;
+          filter: drop-shadow(0 0 10px rgba(103,232,249,0.5));
+        }
+        @keyframes tierDiamondHolo {
+          0%   { background-position: 0% 50%; }
+          100% { background-position: 250% 50%; }
+        }
+
         /* Diamond shimmer effect for activity cards. Subtle cyan light streak
            that sweeps across without obscuring text.
-           Currently always-on for level 1+ for testing — gate on tier later. */
+           Activated by adding the diamond-shimmer-card class (gated to L6). */
         .diamond-shimmer-card { position: relative; }
         .diamond-shimmer-card::before {
           content: '';
@@ -2776,12 +2914,19 @@ export default function ProfilePage() {
       {/* Customizations Modal — shows unlocked rewards across all 6 levels */}
       {showCustomizations && (() => {
         const userLvl = progressInfo?.level ?? 1;
+        // ── Cosmetic Level Rewards ──────────────────────────────────────────
+        // Themed metal/gem progression — each tier unlocks a visual effect on
+        // the profile UI (avatar ring, name treatment, or activity cards).
+        // Effects are gated on `userLvl >= reward.level` and applied via
+        // conditional CSS classes throughout this component.
+        // The level 3 "animated avatar ring" is the closest the app gets to
+        // your "Harry Potter moving picture" idea — a slow rotating gradient.
         const REWARDS: Array<{ level: number; title: string; desc: string; emoji: string; preview: string; color: string }> = [
-          { level: 2, title: "Purple Borders",   desc: "Activity log cards get a subtle purple glow.",          emoji: "💜", preview: "purple",   color: "#A78BFA" },
-          { level: 3, title: "Gold Accents",     desc: "Add warm gold glow + sparkle to your profile name.",    emoji: "🏅", preview: "gold",     color: "#F59E0B" },
-          { level: 4, title: "Diamond Cards",    desc: "Activity log cards transform into shimmering diamond.", emoji: "💎", preview: "diamond",  color: "#67E8F9" },
-          { level: 5, title: "Holographic Name", desc: "Your name shifts through magenta holographic colors.",  emoji: "🌸", preview: "holo",     color: "#E879F9" },
-          { level: 6, title: "Crimson Aura",     desc: "MAX-level red flame aura around your avatar.",          emoji: "🔥", preview: "crimson",  color: "#FF4444" },
+          { level: 2, title: "Bronze Tier",    desc: "Bronze-tinted glow on activity log cards. Your first metal.",                                emoji: "🥉", preview: "bronze",  color: "#CD7F32" },
+          { level: 3, title: "Silver Halo",    desc: "Animated silver ring orbits your profile picture — a gentle motion that catches the eye.",  emoji: "🥈", preview: "silver",  color: "#C0C0C0" },
+          { level: 4, title: "Golden Glow",    desc: "Warm gold shimmer sweeps across your name and activity cards.",                              emoji: "🥇", preview: "gold",    color: "#FFD700" },
+          { level: 5, title: "Emerald Shine",  desc: "Emerald-green light pulses through your activity cards. Rare territory.",                    emoji: "💚", preview: "emerald", color: "#10B981" },
+          { level: 6, title: "Diamond Crown",  desc: "MAX. Diamond shimmer on cards + holographic name — the Livelee elite mark.",                emoji: "💎", preview: "diamond", color: "#67E8F9" },
         ];
         return (
           <div onClick={() => { setShowCustomizations(false); setCustomizationDetail(null); }}
@@ -3140,7 +3285,15 @@ export default function ProfilePage() {
               Children stack with alignItems: "center" so name/handle/city
               text sits centered under the round profile photo. */}
           <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:-60,marginTop:isMobile?0:96}}>
-            <div style={{position:"relative",display:"block",cursor:avatarRepositionMode?"ns-resize":"default",userSelect:"none"}}
+            {/* Silver halo wrap — slow rotating conic-gradient ring around the
+                avatar at Level 3+. Adds the "moving picture" magic without
+                requiring video uploads. Wrap is conditional so lower-level
+                users see a clean avatar with no extra padding. */}
+            <div className={(progressInfo?.level ?? 1) >= 3 ? "tier-silver-avatar-wrap" : ""} style={{
+              position:"relative",
+              cursor:avatarRepositionMode?"ns-resize":"default",
+              userSelect:"none",
+            }}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
@@ -3185,7 +3338,22 @@ export default function ProfilePage() {
               )}
             </div>
             <div style={{textAlign:"center",width:"100%"}}>
-              <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>{profile.name}</div>
+              {/* Profile name with tier treatments. L4 Gold gets a shimmering
+                  gold gradient. L6 Diamond gets a holographic chrome effect.
+                  L1-L3 + L5 use the plain white text. The CSS classes apply
+                  background-clip text fill — the actual text content stays
+                  the user's name. */}
+              {(() => {
+                const lvl = progressInfo?.level ?? 1;
+                const nameClass =
+                  lvl >= 6 ? "tier-diamond-name" :
+                  lvl >= 4 ? "tier-gold-name"   : "";
+                return (
+                  <div className={nameClass} style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>
+                    {profile.name}
+                  </div>
+                );
+              })()}
               {profile.username && (
                 <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
               )}
