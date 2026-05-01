@@ -780,6 +780,9 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
   const [currentPhoto, setCurrentPhoto] = useState(0);
+  // Swipe tracking via ref — survives React's event pooling and is more reliable
+  // than stashing properties on e.currentTarget across separate handler calls.
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   // Clamp currentPhoto if it falls out of bounds (e.g. user removes a photo, or
   // photos array shrinks for any reason). Without this the carousel tries to
   // render undefined and the dots/arrows misbehave.
@@ -792,6 +795,11 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
   const [likeLoading, setLikeLoading] = useState(false);
   const [commentLoading, setCommentLoading] = useState(false);
   const [brokenImage, setBrokenImage] = useState(false);
+  // Carousel video mute toggle. Default muted because browsers refuse to
+  // autoplay videos with audio (Chrome/Safari/Firefox all block this), and we
+  // want the video to start playing the moment it becomes the active slide.
+  // User taps the speaker icon to unmute.
+  const [videoMuted, setVideoMuted] = useState(true);
   const [replyTo, setReplyTo] = useState<{id:number|string;user:string}|null>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [m, d] = post.dateShort.split(".").map(Number);
@@ -972,23 +980,24 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
         {post.photos.length > 0 ? (
           <div
             style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
-            // Swipe support. We track the starting X on touchstart and on touchend
-            // calculate the delta — anything >40px counts as a swipe. Less than that
-            // is treated as a tap and falls through to the image's onClick (lightbox).
+            // Swipe support. We track the starting X on touchstart in a ref, then
+            // on touchend calculate the delta — anything >40px counts as a swipe.
+            // Vertical-dominant gestures are ignored so the user can still scroll
+            // the feed without flipping the carousel.
             onTouchStart={(e) => {
               if (post.photos.length <= 1) return;
-              (e.currentTarget as any).__startX = e.touches[0].clientX;
-              (e.currentTarget as any).__startY = e.touches[0].clientY;
+              swipeStartRef.current = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+              };
             }}
             onTouchEnd={(e) => {
               if (post.photos.length <= 1) return;
-              const startX = (e.currentTarget as any).__startX;
-              const startY = (e.currentTarget as any).__startY;
-              if (startX == null) return;
-              const dx = e.changedTouches[0].clientX - startX;
-              const dy = e.changedTouches[0].clientY - startY;
-              // Reject if the swipe was more vertical than horizontal — lets the
-              // user scroll the feed without accidentally flipping the carousel.
+              const start = swipeStartRef.current;
+              if (!start) return;
+              swipeStartRef.current = null;
+              const dx = e.changedTouches[0].clientX - start.x;
+              const dy = e.changedTouches[0].clientY - start.y;
               if (Math.abs(dy) > Math.abs(dx)) return;
               if (dx > 40 && currentPhoto > 0) setCurrentPhoto(c => c - 1);
               else if (dx < -40 && currentPhoto < post.photos.length - 1) setCurrentPhoto(c => c + 1);
@@ -999,15 +1008,34 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
               const currentType = (post as any).mediaTypes?.[currentPhoto] || 'image';
               if (currentType === 'video') {
                 return (
-                  <video
-                    key={currentUrl}
-                    src={currentUrl}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    style={{ width:"100%",height:"100%",objectFit:"cover",background:"#000" }}
-                    onError={() => { setBrokenImage(true); }}
-                  />
+                  <>
+                    {/* Carousel video — Instagram-style. autoPlay+loop+muted+playsInline
+                        is the only combination browsers will autoplay reliably. The
+                        `key` change on swipe-to forces a fresh mount which retriggers
+                        autoplay. pointerEvents:'none' is the magic bit — the native
+                        <video controls> UI eats touch events, so we drop controls AND
+                        block pointer events on the video itself, letting the wrapper
+                        div's swipe handlers see every touch. The mute button is a
+                        sibling so it gets normal pointer events. */}
+                    <video
+                      key={currentUrl}
+                      src={currentUrl}
+                      autoPlay
+                      loop
+                      muted={videoMuted}
+                      playsInline
+                      preload="metadata"
+                      style={{ width:"100%",height:"100%",objectFit:"cover",background:"#000",pointerEvents:"none" }}
+                      onError={() => { setBrokenImage(true); }}
+                    />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setVideoMuted(m => !m); }}
+                      aria-label={videoMuted ? "Unmute video" : "Mute video"}
+                      style={{ position:"absolute",bottom:12,right:12,width:36,height:36,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"none",color:"#fff",fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2 }}
+                    >
+                      {videoMuted ? "🔇" : "🔊"}
+                    </button>
+                  </>
                 );
               }
               return (
