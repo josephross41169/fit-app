@@ -174,7 +174,7 @@ type Post = {
   comments: Comment[];
   workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string}[]; photoUrls?: string[]; } | null;
   nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; photoUrls?: string[]; } | null;
-  wellness: { entries: { emoji: string; activity: string; notes: string; }[]; photoUrls?: string[]; } | null;
+  wellness: { entries: { emoji: string; activity: string; notes: string; duration?: number; loggedAt?: string; }[]; photoUrls?: string[]; } | null;
 };
 
 function normalizePhotoUrls(...sources: any[]): string[] {
@@ -506,6 +506,43 @@ function StoryViewer({
 }
 
 // ── DARK SIDEBAR: Workout Card ────────────────────────────────────────────────
+// ── Wellness style lookup ───────────────────────────────────────────────────
+// 26 activities → emoji + accent color. Mirrors the constant in /profile/page.tsx
+// and /profile/[username]/page.tsx so wellness cards look identical everywhere.
+const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
+  "cold plunge":          { emoji: "❄️", accent: "#38BDF8" },
+  "ice bath":             { emoji: "❄️", accent: "#38BDF8" },
+  "cryotherapy":          { emoji: "🥶", accent: "#22D3EE" },
+  "sauna":                { emoji: "🔥", accent: "#F97316" },
+  "infrared sauna":       { emoji: "🌅", accent: "#FB923C" },
+  "steam room":           { emoji: "♨️", accent: "#FBBF24" },
+  "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
+  "meditation":           { emoji: "🧘", accent: "#A78BFA" },
+  "breathwork":           { emoji: "💨", accent: "#818CF8" },
+  "yoga nidra":           { emoji: "🌙", accent: "#A78BFA" },
+  "journaling":           { emoji: "📓", accent: "#C4B5FD" },
+  "therapy":              { emoji: "💬", accent: "#A78BFA" },
+  "sound bath":           { emoji: "🎵", accent: "#C084FC" },
+  "stretching":           { emoji: "🤸", accent: "#34D399" },
+  "foam rolling":         { emoji: "🌀", accent: "#10B981" },
+  "mobility work":        { emoji: "🦵", accent: "#34D399" },
+  "massage":              { emoji: "💆", accent: "#6EE7B7" },
+  "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
+  "acupuncture":          { emoji: "📍", accent: "#34D399" },
+  "cupping":              { emoji: "🟣", accent: "#A78BFA" },
+  "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
+  "grounding":            { emoji: "🌱", accent: "#84CC16" },
+  "nature walk":          { emoji: "🌲", accent: "#34D399" },
+  "hyperbaric oxygen":    { emoji: "💎", accent: "#06B6D4" },
+  "compression therapy":  { emoji: "🦿", accent: "#0EA5E9" },
+  "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
+  "sleep":                { emoji: "😴", accent: "#6366F1" },
+  "fasting":              { emoji: "⏳", accent: "#A78BFA" },
+};
+function getWellnessStyle(activity: string): { emoji: string; accent: string } {
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#A78BFA" };
+}
+
 function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const [open, setOpen] = useState(false);
   const exercises = workout.exercises || [];
@@ -542,10 +579,28 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
           <img src={workout.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
         </div>
       )}
-      {/* Always-visible top-3 strip */}
-      {!open && exercises.length > 0 && (
-        <div style={{ background:"#1E2235", padding:"8px 14px", fontSize:11, color:C.darkSub, borderBottom:`1px solid ${C.darkBorder}` }}>
-          {exercises.slice(0,3).map(e=>e.name).filter(Boolean).join(' · ')}{exercises.length > 3 ? ` +${exercises.length-3}` : ''}
+      {/* Always-visible summary strip — shows top exercises AND cardio inline
+          so the collapsed card actually communicates what was done. Mobile users
+          rarely tap to expand, so this is the primary information surface. */}
+      {!open && (exercises.length > 0 || cardio.length > 0) && (
+        <div style={{ background:"#1E2235", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}` }}>
+          {exercises.length > 0 && (
+            <div style={{ fontSize:11, color:C.darkSub, marginBottom: cardio.length > 0 ? 6 : 0 }}>
+              <span style={{ fontWeight:800, color:"#E2E8F0" }}>Exercises:</span>{" "}
+              {exercises.slice(0,3).map(e=>e.name).filter(Boolean).join(' · ')}{exercises.length > 3 ? ` +${exercises.length-3}` : ''}
+            </div>
+          )}
+          {cardio.length > 0 && (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {cardio.map((c,i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, padding:"4px 9px", borderRadius:99, background:"rgba(124,58,237,0.18)", border:"1px solid rgba(124,58,237,0.35)" }}>
+                  <span style={{ fontWeight:800, color:"#E2E8F0" }}>{c.type}</span>
+                  {c.duration && <span style={{ color:C.blue, fontWeight:700 }}>· {c.duration}</span>}
+                  {c.distance && <span style={{ color:C.gold, fontWeight:700 }}>· {c.distance}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {open && (
@@ -672,17 +727,51 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
           <img src={wellness.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
         </div>
       )}
+      {/* Always-visible activity pills strip — even when collapsed, the user
+          sees a colored chip per activity. Matches the modern profile card
+          aesthetic where each activity has its own emoji + accent color. */}
+      {!open && (
+        <div style={{ background:"#1E2235", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}`, display:"flex", flexWrap:"wrap", gap:6 }}>
+          {wellness.entries.slice(0, 4).map((e, i) => {
+            const s = getWellnessStyle(e.activity || "");
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, padding:"4px 9px", borderRadius:99, background:`${s.accent}22`, border:`1px solid ${s.accent}55` }}>
+                <span style={{ fontSize:12 }}>{s.emoji}</span>
+                <span style={{ fontWeight:700, color:"#E2E8F0" }}>{e.activity}</span>
+                {e.duration ? <span style={{ color:s.accent, fontWeight:800 }}>· {e.duration}m</span> : null}
+              </div>
+            );
+          })}
+          {wellness.entries.length > 4 && (
+            <span style={{ fontSize:11, color:C.darkSub, alignSelf:"center" }}>+{wellness.entries.length - 4}</span>
+          )}
+        </div>
+      )}
       {open && (
         <div style={{ background:"#1E2235",padding:"10px 14px",display:"flex",flexDirection:"column",gap:7 }}>
-          {wellness.entries.map((e,i) => (
-            <div key={i} style={{ background:"#252A3D",borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",gap:10,border:"1px solid #2A2D3E" }}>
-              <div style={{ width:34,height:34,borderRadius:9,background:"#1E2235",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>{e.emoji}</div>
-              <div>
-                <div style={{ fontWeight:800,fontSize:12,color:"#E2E8F0" }}>{e.activity}</div>
-                {e.notes && <div style={{ fontSize:11,color:C.darkSub,marginTop:1 }}>{e.notes}</div>}
+          {wellness.entries.map((e, i) => {
+            const s = getWellnessStyle(e.activity || "");
+            const emoji = e.emoji || s.emoji;
+            const accent = s.accent;
+            // Time pill — formatted same as profile cards.
+            const timeStr = e.loggedAt ? (() => {
+              try { return new Date(e.loggedAt!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
+            })() : "";
+            const dur = e.duration ? `${e.duration} min` : null;
+            return (
+              <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
+                <div style={{ width:38, height:38, borderRadius:11, background:`${accent}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, border:`1.5px solid ${accent}55` }}>{emoji}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0" }}>{e.activity}</div>
+                  {e.notes && <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{e.notes}</div>}
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end", flexShrink:0 }}>
+                  {dur && <span style={{ fontSize:10, fontWeight:800, color:accent, background:`${accent}22`, padding:"2px 7px", borderRadius:99 }}>{dur}</span>}
+                  {timeStr && <span style={{ fontSize:10, fontWeight:600, color:C.darkSub, background:"#1A1D2E", padding:"2px 7px", borderRadius:99 }}>{timeStr}</span>}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1477,12 +1566,25 @@ export default function FeedPage() {
                   const cu = c.users || c.user || {};
                   const cname = cu.full_name || cu.username || 'User';
                   const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+                  // Format time as friendly relative ("5m ago") matching the
+                  // display the rest of the feed uses. Falls back to date string
+                  // for old comments. Use a defensive guard on created_at because
+                  // a missing field would yield "Invalid Date".
+                  const t = (() => {
+                    if (!c.created_at) return '';
+                    const d = new Date(c.created_at);
+                    if (isNaN(d.getTime())) return '';
+                    const diff = Date.now() - d.getTime();
+                    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+                    if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+                    return d.toLocaleDateString();
+                  })();
                   return {
                     id: c.id,
                     user: cname,
                     avatar: cu.avatar_url || cini,
                     text: c.content || '',
-                    time: c.created_at ? new Date(c.created_at).toLocaleDateString() : '',
+                    time: t,
                     user_id: c.user_id,
                   };
                 });
@@ -1899,14 +2001,24 @@ export default function FeedPage() {
         caption: p.caption || "",
         likes: p.likes_count || 0,
         liked: p._liked || false,
-        comments: (p.comments || []).map((c: any) => ({
-          id: c.id,
-          user_id: c.user_id,
-          user: c.users?.full_name || c.users?.username || "User",
-          avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
-          text: c.content || "",
-          time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-        })),
+        comments: (p.comments || []).map((c: any) => {
+          // The For You loader already maps DB comments to display shape at
+          // ~line 1480 ({user, text, time}). When this outer mapper runs, those
+          // comments come in already-mapped, so c.users is undefined and we'd
+          // fall through to "User" + new Date(undefined) = "Invalid Date".
+          // Detect already-mapped shape and pass it through unchanged.
+          if (typeof c.user === 'string' && typeof c.text === 'string') {
+            return { id: c.id, user_id: c.user_id, user: c.user, avatar: c.avatar || '?', text: c.text, time: c.time || '' };
+          }
+          return {
+            id: c.id,
+            user_id: c.user_id,
+            user: c.users?.full_name || c.users?.username || "User",
+            avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+            text: c.content || "",
+            time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+          };
+        }),
         workout: null,
         nutrition: null,
         wellness: null,
@@ -1991,7 +2103,16 @@ export default function FeedPage() {
       } : null;
 
       const wellness = wels.length > 0 ? {
-        entries: wels.map((l: any) => ({ activity: l.wellness_type || 'Wellness', emoji: '🌿', notes: l.notes || '' })),
+        // duration / loggedAt enable the modern card aesthetic (duration pill +
+        // time stamp pill) on mobile and desktop. Falls back to undefined if
+        // a row was logged before those fields existed.
+        entries: wels.map((l: any) => ({
+          activity: l.wellness_type || 'Wellness',
+          emoji: '🌿',
+          notes: l.notes || '',
+          duration: typeof l.wellness_duration_min === 'number' ? l.wellness_duration_min : undefined,
+          loggedAt: l.logged_at || l.created_at || undefined,
+        })),
         photoUrls: normalizePhotoUrls(...wels.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
       } : null;
 
@@ -2265,16 +2386,21 @@ export default function FeedPage() {
                   likes: p.likes_count || 0,
                   liked: p._liked || false,
                   // Map comments same shape PostCard expects (matching the
-                  // For You feed mapping). Without this they default to []
-                  // and never render.
-                  comments: (p.comments || []).map((c: any) => ({
-                    id: c.id,
-                    user_id: c.user_id,
-                    user: c.users?.full_name || c.users?.username || "User",
-                    avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
-                    text: c.content || "",
-                    time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-                  })),
+                  // For You feed mapping). Already-mapped shapes pass through
+                  // — see displayPosts mapper for context.
+                  comments: (p.comments || []).map((c: any) => {
+                    if (typeof c.user === 'string' && typeof c.text === 'string') {
+                      return { id: c.id, user_id: c.user_id, user: c.user, avatar: c.avatar || '?', text: c.text, time: c.time || '' };
+                    }
+                    return {
+                      id: c.id,
+                      user_id: c.user_id,
+                      user: c.users?.full_name || c.users?.username || "User",
+                      avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+                      text: c.content || "",
+                      time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                    };
+                  }),
                   workout: null,
                   nutrition: null,
                   wellness: null,
@@ -2452,14 +2578,19 @@ export default function FeedPage() {
                 caption: p.caption || "",
                 likes: p.likes_count || 0,
                 liked: p._liked || false,
-                comments: (p.comments || []).map((c: any) => ({
-                  id: c.id,
-                  user_id: c.user_id,
-                  user: c.users?.full_name || c.users?.username || "User",
-                  avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
-                  text: c.content || "",
-                  time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-                })),
+                comments: (p.comments || []).map((c: any) => {
+                  if (typeof c.user === 'string' && typeof c.text === 'string') {
+                    return { id: c.id, user_id: c.user_id, user: c.user, avatar: c.avatar || '?', text: c.text, time: c.time || '' };
+                  }
+                  return {
+                    id: c.id,
+                    user_id: c.user_id,
+                    user: c.users?.full_name || c.users?.username || "User",
+                    avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+                    text: c.content || "",
+                    time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                  };
+                }),
                 workout: null,
                 nutrition: null,
                 wellness: null,
