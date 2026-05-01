@@ -859,6 +859,117 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── Set member role (promote/demote) ───────────────────────────────────
+    // Owner OR moderator can change roles, with these constraints:
+    //   - Cannot set anyone to 'owner' (only one owner, set at create time)
+    //   - Cannot change the owner's role (the owner is untouchable)
+    //   - newRole must be 'moderator' or 'member'
+    // Moderators can promote/demote because the spec says they have most of the
+    // owner's powers except deleting the group and removing the owner.
+    if (action === 'set_member_role') {
+      const { actorId, groupId, targetUserId, newRole } = payload;
+      if (!actorId || !groupId || !targetUserId || !newRole) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      if (newRole !== 'moderator' && newRole !== 'member') {
+        return NextResponse.json({ error: 'Invalid role. Must be moderator or member.' }, { status: 400 });
+      }
+
+      // Look up actor's role in this group
+      const { data: actorMembership } = await admin
+        .from('group_members')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', actorId)
+        .maybeSingle();
+
+      if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'moderator')) {
+        return NextResponse.json({ error: 'Only owners and moderators can change roles.' }, { status: 403 });
+      }
+
+      // Look up target's current role — needed to enforce "owner is untouchable"
+      const { data: targetMembership } = await admin
+        .from('group_members')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+      if (!targetMembership) {
+        return NextResponse.json({ error: 'Target user is not a member of this group.' }, { status: 404 });
+      }
+      if (targetMembership.role === 'owner') {
+        return NextResponse.json({ error: "The group owner's role cannot be changed." }, { status: 403 });
+      }
+      if (targetMembership.role === newRole) {
+        // No-op — already this role. Return ok so the UI doesn't show an error.
+        return NextResponse.json({ ok: true, unchanged: true });
+      }
+
+      const { error } = await admin
+        .from('group_members')
+        .update({ role: newRole })
+        .eq('group_id', groupId)
+        .eq('user_id', targetUserId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Kick member from group ─────────────────────────────────────────────
+    // Owner OR moderator can kick. Constraints:
+    //   - Cannot kick the owner (owner is untouchable)
+    //   - Cannot kick yourself via this endpoint — use leave_group instead
+    if (action === 'kick_member') {
+      const { actorId, groupId, targetUserId } = payload;
+      if (!actorId || !groupId || !targetUserId) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      if (actorId === targetUserId) {
+        return NextResponse.json({ error: 'Use leave_group to remove yourself.' }, { status: 400 });
+      }
+
+      const { data: actorMembership } = await admin
+        .from('group_members')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', actorId)
+        .maybeSingle();
+
+      if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'moderator')) {
+        return NextResponse.json({ error: 'Only owners and moderators can remove members.' }, { status: 403 });
+      }
+
+      const { data: targetMembership } = await admin
+        .from('group_members')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+      if (!targetMembership) {
+        return NextResponse.json({ error: 'User is not a member of this group.' }, { status: 404 });
+      }
+      if (targetMembership.role === 'owner') {
+        return NextResponse.json({ error: 'The group owner cannot be removed.' }, { status: 403 });
+      }
+
+      const { error: delErr } = await admin
+        .from('group_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('user_id', targetUserId);
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+      // Decrement member_count to keep the displayed count honest.
+      const { data: g } = await admin.from('groups').select('member_count').eq('id', groupId).single();
+      if (g && g.member_count > 0) {
+        await admin.from('groups').update({ member_count: g.member_count - 1 }).eq('id', groupId);
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     // ── Create group post ──────────────────────────────────────────────────
     if (action === 'create_group_post') {
       const { userId, groupId, content, media_url, media_type } = payload;
