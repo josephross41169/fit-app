@@ -472,11 +472,19 @@ export default function GroupChallengesPage() {
                       <div style={{ fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase",
                         letterSpacing:1, marginBottom:8 }}>📸 Challenge Media</div>
                       <div style={{ display:"flex", gap:6, overflowX:"auto" }}>
-                        {chal.group_challenge_media.slice(0,8).map((m:any) => (
-                          <img key={m.id} src={m.media_url} alt={m.caption||""}
-                            style={{ width:72, height:72, borderRadius:10, objectFit:"cover", flexShrink:0,
-                              border:`1px solid ${C.border}` }}/>
-                        ))}
+                        {chal.group_challenge_media.slice(0,8).map((m:any) => {
+                          const isVid = m.media_type === 'video' || (typeof m.media_url === 'string' && /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i.test(m.media_url));
+                          return isVid ? (
+                            <video key={m.id} src={m.media_url} preload="metadata" muted playsInline
+                              onClick={(e) => { e.stopPropagation(); (e.currentTarget as HTMLVideoElement).paused ? (e.currentTarget as HTMLVideoElement).play() : (e.currentTarget as HTMLVideoElement).pause(); }}
+                              style={{ width:72, height:72, borderRadius:10, objectFit:"cover", flexShrink:0,
+                                border:`1px solid ${C.border}`, background:"#000", cursor:"pointer" }}/>
+                          ) : (
+                            <img key={m.id} src={m.media_url} alt={m.caption||""}
+                              style={{ width:72, height:72, borderRadius:10, objectFit:"cover", flexShrink:0,
+                                border:`1px solid ${C.border}` }}/>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
