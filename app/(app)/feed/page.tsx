@@ -783,6 +783,10 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
   // Swipe tracking via ref — survives React's event pooling and is more reliable
   // than stashing properties on e.currentTarget across separate handler calls.
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Set true on pointerup if the gesture was a real swipe (>40px horizontal).
+  // Cleared on the next pointerdown. This lets us suppress the image's onClick
+  // → lightbox handler when the user was actually swiping rather than tapping.
+  const justSwipedRef = useRef(false);
   // Clamp currentPhoto if it falls out of bounds (e.g. user removes a photo, or
   // photos array shrinks for any reason). Without this the carousel tries to
   // render undefined and the dots/arrows misbehave.
@@ -980,28 +984,39 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
         {post.photos.length > 0 ? (
           <div
             style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
-            // Swipe support. We track the starting X on touchstart in a ref, then
-            // on touchend calculate the delta — anything >40px counts as a swipe.
-            // Vertical-dominant gestures are ignored so the user can still scroll
-            // the feed without flipping the carousel.
-            onTouchStart={(e) => {
+            // Swipe support — uses Pointer Events instead of Touch Events for
+            // iOS reliability. iOS Safari has a quirk where touch-action: pan-y
+            // can absorb touch sequences if iOS detects any vertical component,
+            // killing touchend before our handler runs. Pointer Events with
+            // setPointerCapture sidestep this entirely. Mouse drags are filtered
+            // out so desktop users still get arrow-button + click behavior.
+            onPointerDown={(e) => {
               if (post.photos.length <= 1) return;
+              if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+              try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch {}
+              justSwipedRef.current = false;
               swipeStartRef.current = {
-                x: e.touches[0].clientX,
-                y: e.touches[0].clientY,
+                x: e.clientX,
+                y: e.clientY,
               };
             }}
-            onTouchEnd={(e) => {
+            onPointerUp={(e) => {
               if (post.photos.length <= 1) return;
               const start = swipeStartRef.current;
               if (!start) return;
               swipeStartRef.current = null;
-              const dx = e.changedTouches[0].clientX - start.x;
-              const dy = e.changedTouches[0].clientY - start.y;
+              const dx = e.clientX - start.x;
+              const dy = e.clientY - start.y;
               if (Math.abs(dy) > Math.abs(dx)) return;
-              if (dx > 40 && currentPhoto > 0) setCurrentPhoto(c => c - 1);
-              else if (dx < -40 && currentPhoto < post.photos.length - 1) setCurrentPhoto(c => c + 1);
+              if (dx > 40 && currentPhoto > 0) {
+                justSwipedRef.current = true;
+                setCurrentPhoto(c => c - 1);
+              } else if (dx < -40 && currentPhoto < post.photos.length - 1) {
+                justSwipedRef.current = true;
+                setCurrentPhoto(c => c + 1);
+              }
             }}
+            onPointerCancel={() => { swipeStartRef.current = null; }}
           >
             {!brokenImage && (() => {
               const currentUrl = post.photos[currentPhoto];
@@ -1039,7 +1054,7 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
                 );
               }
               return (
-                <img src={currentUrl} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(currentUrl)} onError={() => { setBrokenImage(true); }} />
+                <img src={currentUrl} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => { if (justSwipedRef.current) { justSwipedRef.current = false; return; } setLightbox(currentUrl); }} onError={() => { setBrokenImage(true); }} />
               );
             })()}
             {brokenImage && (
