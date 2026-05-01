@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -9,6 +9,8 @@ import { clearBlockCache } from "@/lib/blocks";
 import { BADGES } from "@/lib/badges";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import BusinessProfileView from "@/components/BusinessProfileView";
+import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
+import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 
 const C = {
   bg:"#0D0D0D", white:"#1A1A1A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -16,6 +18,51 @@ const C = {
   darkCard:"#1A1A1A", darkBorder:"#2A2A2A", darkSub:"#6B7280",
 };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// ── Wellness style lookup ─────────────────────────────────────────────────────
+// 26 activities → emoji + accent color. Mirrors the constant in /profile/page.tsx
+// so own-profile and other-profile renders use the same visual vocabulary.
+type WellnessStyle = { emoji: string; accent: string };
+const WELLNESS_STYLES: Record<string, WellnessStyle> = {
+  "cold plunge":          { emoji: "❄️", accent: "#38BDF8" },
+  "ice bath":             { emoji: "❄️", accent: "#38BDF8" },
+  "cryotherapy":          { emoji: "🥶", accent: "#22D3EE" },
+  "sauna":                { emoji: "🔥", accent: "#F97316" },
+  "infrared sauna":       { emoji: "🌅", accent: "#FB923C" },
+  "steam room":           { emoji: "♨️", accent: "#FBBF24" },
+  "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
+  "meditation":           { emoji: "🧘", accent: "#A78BFA" },
+  "breathwork":           { emoji: "💨", accent: "#818CF8" },
+  "yoga nidra":           { emoji: "🌙", accent: "#A78BFA" },
+  "journaling":           { emoji: "📓", accent: "#C4B5FD" },
+  "therapy":              { emoji: "💬", accent: "#A78BFA" },
+  "sound bath":           { emoji: "🎵", accent: "#C084FC" },
+  "stretching":           { emoji: "🤸", accent: "#34D399" },
+  "foam rolling":         { emoji: "🌀", accent: "#10B981" },
+  "mobility work":        { emoji: "🦵", accent: "#34D399" },
+  "massage":              { emoji: "💆", accent: "#6EE7B7" },
+  "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
+  "acupuncture":          { emoji: "📍", accent: "#34D399" },
+  "cupping":              { emoji: "🟣", accent: "#A78BFA" },
+  "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
+  "grounding":            { emoji: "🌱", accent: "#84CC16" },
+  "nature walk":          { emoji: "🌲", accent: "#34D399" },
+  "hyperbaric oxygen":    { emoji: "💎", accent: "#06B6D4" },
+  "compression therapy":  { emoji: "🦿", accent: "#0EA5E9" },
+  "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
+  "sleep":                { emoji: "😴", accent: "#6366F1" },
+  "fasting":              { emoji: "⏳", accent: "#A78BFA" },
+};
+function getWellnessStyle(activity: string): WellnessStyle {
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#A78BFA" };
+}
+function formatTimeOfDay(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  } catch { return ""; }
+}
 
 // ── Badge definitions ─────────────────────────────────────────────────────────
 // AllPhotosModal + Lightbox (matches /profile own page)
@@ -96,7 +143,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
 }
 
 // ── Read-only Day Card ────────────────────────────────────────────────────────
-function ReadOnlyDayCard({day}:{day:any}) {
+function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
   const [open,setOpen]   = useState(false);
   const [nutOpen,setNutOpen] = useState(false);
   const [lb,setLb]       = useState<string|null>(null);
@@ -129,9 +176,27 @@ function ReadOnlyDayCard({day}:{day:any}) {
     d = parseInt(parts[1]) || 1;
   }
 
+  // Tier-based card styling — Bronze L2 → Diamond L6. Mirrors the metal/gem
+  // theme from /profile/page.tsx so other-user cards match own-cards visually.
+  const tierCardClass =
+    userLevel >= 6 ? "tier-diamond-card" :
+    userLevel >= 5 ? "tier-emerald-card" :
+    userLevel >= 4 ? "tier-gold-card" :
+    userLevel >= 3 ? "tier-silver-card" :
+    userLevel >= 2 ? "tier-bronze-card" : "";
+  const lvlColors = LEVEL_COLORS[userLevel] || null;
+  const tierCardStyle: React.CSSProperties = userLevel >= 2 && lvlColors ? {
+    background: `linear-gradient(135deg, ${C.white} 0%, ${lvlColors.badge}88 50%, ${C.white} 100%)`,
+    border: `2px solid ${lvlColors.border}`,
+    boxShadow: `0 4px 18px ${lvlColors.glow}`,
+  } : {
+    background: C.white,
+    border: `2px solid ${C.greenMid}`,
+  };
+
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div style={{background:C.white,borderRadius:22,border:`2px solid ${C.greenMid}`,marginBottom:16,overflow:"hidden"}}>
+    <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
       {/* HEADER */}
       <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?C.greenLight:C.white,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,${C.gold},#FFD700)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(245,166,35,0.3)"}}>
@@ -286,16 +351,31 @@ function ReadOnlyDayCard({day}:{day:any}) {
                 <div style={{fontSize:13,color:"rgba(255,255,255,0.85)"}}>{wellness.entries.map((e:any)=>e.activity).join("  ·  ")}</div>
               </div>
             </div>
+            {/* Per-activity styled cards. Each entry gets its mapped emoji +
+                accent color from WELLNESS_STYLES, with a duration/time pill on
+                the right when those fields exist. Falls back to leaf 🌿 + soft
+                purple for unmapped activities. */}
             <div style={{background:"#0D1A0D",padding:14,display:"flex",flexDirection:"column",gap:8}}>
-              {wellness.entries.map((e:any,i:number)=>(
-                <div key={i} style={{background:C.white,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #2A3A2A"}}>
-                  <div style={{width:44,height:44,borderRadius:13,background:"#1A2A1A",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{e.emoji}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</div>
-                    {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:2}}>{e.notes}</div>}
+              {wellness.entries.map((e:any,i:number)=> {
+                const style = getWellnessStyle(e.activity || "");
+                const emoji = e.emoji || style.emoji;
+                const accent = style.accent;
+                const timeStr = formatTimeOfDay(e.loggedAt);
+                const dur = e.duration ? `${e.duration} min` : null;
+                return (
+                  <div key={i} style={{background:C.white,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,borderLeft:`4px solid ${accent}`,border:`1.5px solid #2A3A2A`,borderLeftWidth:4,borderLeftColor:accent}}>
+                    <div style={{width:44,height:44,borderRadius:13,background:`${accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`1.5px solid ${accent}55`}}>{emoji}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</div>
+                      {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:2}}>{e.notes}</div>}
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
+                      {dur && <span style={{fontSize:11,fontWeight:700,color:accent,background:`${accent}22`,padding:"3px 9px",borderRadius:99}}>{dur}</span>}
+                      {timeStr && <span style={{fontSize:11,fontWeight:600,color:C.sub,background:"#0D1A0D",padding:"3px 9px",borderRadius:99}}>{timeStr}</span>}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -313,7 +393,18 @@ export default function UserProfilePage() {
   const [profile, setProfile]       = useState<any>(null);
   const [loading, setLoading]       = useState(true);
   const [days, setDays]             = useState<any[]>([]);
+  // Raw workout logs (NOT merged-by-day) for WorkoutProgressGraphs. The graphs
+  // count multi-workout days correctly when given the raw rows.
+  const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
   const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
+
+  // Derive the viewed user's level from their cumulative_xp. Used to apply
+  // tier-based card backgrounds, avatar rings, and name shimmer effects.
+  const viewedUserLevel = useMemo(() => {
+    if (!profile) return 1;
+    const xp = profile.cumulative_xp ?? profile.total_xp ?? profile.xp ?? 0;
+    try { return getLevelProgress(xp).level; } catch { return 1; }
+  }, [profile]);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [brands, setBrands]         = useState<any[]>([]);
   const [highlightLb, setHighlightLb] = useState<string|null>(null);
@@ -415,13 +506,20 @@ export default function UserProfilePage() {
         }
       } catch { /* ignore — feedPhotos stays [] */ }
 
-      // Load activity logs
+      // Load activity logs. Limit raised from 30 → 500 so the WorkoutProgressGraphs
+      // has access to historical months when the user picks "All" or "6 Mo" range.
       const { data: activityLogs } = await supabase
         .from('activity_logs')
         .select('*')
         .eq('user_id', profileData.id)
         .order('logged_at', { ascending: false })
-        .limit(30);
+        .limit(500);
+
+      // Capture raw workout rows separately for the graph component. Don't
+      // merge by day — the graph counts each workout independently.
+      if (activityLogs) {
+        setRawWorkoutLogs(activityLogs.filter((l: any) => l.log_type === 'workout'));
+      }
 
       if (activityLogs && activityLogs.length > 0) {
         const byDate = new Map<string, any[]>();
@@ -559,7 +657,110 @@ export default function UserProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @media(max-width:767px){.up-layout{display:flex!important;flex-direction:column!important;} .up-layout>*{width:100%!important;min-width:unset!important;max-width:100%!important;}}`}</style>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @media(max-width:767px){.up-layout{display:flex!important;flex-direction:column!important;} .up-layout>*{width:100%!important;min-width:unset!important;max-width:100%!important;}}
+
+        /* ─── Tier rewards CSS — mirrors /profile/page.tsx so other-user
+           profiles show the same metal/gem progression visuals. Each tier
+           progressively layers more visible "shine" on the card / avatar /
+           name without making lower tiers look bland. */
+
+        /* L2 BRONZE — warm copper border glow on activity cards. */
+        .tier-bronze-card {
+          border-color: rgba(205,127,50,0.45) !important;
+          box-shadow: 0 0 0 1px rgba(205,127,50,0.20), 0 2px 18px rgba(205,127,50,0.18);
+        }
+
+        /* L3 SILVER — rotating silver halo around the profile avatar.
+           Two counter-rotating conic-gradient rings = "moving picture" effect. */
+        .tier-silver-avatar-wrap {
+          position: relative;
+          padding: 4px;
+          border-radius: 50%;
+          background: conic-gradient(from 0deg,#6B7280 0%,#E8E8F0 25%,#F5F5FA 50%,#C0C0C0 75%,#6B7280 100%);
+          animation: tierSilverRingSpin 8s linear infinite;
+          box-shadow: 0 0 22px rgba(220,220,235,0.35);
+        }
+        .tier-silver-avatar-wrap::after {
+          content: '';
+          position: absolute; inset: -3px;
+          border-radius: 50%;
+          background: conic-gradient(from 0deg,transparent 0%,rgba(255,255,255,0.4) 30%,transparent 60%,rgba(255,255,255,0.3) 90%,transparent 100%);
+          animation: tierSilverRingSpinReverse 12s linear infinite;
+          pointer-events: none; z-index: -1;
+        }
+        @keyframes tierSilverRingSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        @keyframes tierSilverRingSpinReverse { from{transform:rotate(0)} to{transform:rotate(-360deg)} }
+
+        /* L4 GOLD — shimmering gradient text on the profile name + gold card glow. */
+        .tier-gold-name {
+          background: linear-gradient(90deg,#B8860B 0%,#FFD700 25%,#FFF8DC 50%,#FFD700 75%,#B8860B 100%);
+          background-size: 200% 100%;
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: tierGoldShimmer 4s ease-in-out infinite;
+          filter: drop-shadow(0 0 8px rgba(255,215,0,0.4));
+        }
+        @keyframes tierGoldShimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+        .tier-gold-card {
+          border-color: rgba(255,215,0,0.45) !important;
+          box-shadow: 0 0 0 1px rgba(255,215,0,0.22), 0 2px 22px rgba(255,215,0,0.22);
+        }
+        /* L4 also wraps the avatar with a softer gold halo so the effect
+           cascades visually with lower tiers below it. */
+        .tier-gold-avatar-wrap {
+          position: relative; padding: 3px; border-radius: 50%;
+          background: linear-gradient(135deg,#B8860B,#FFD700,#FFF8DC,#FFD700,#B8860B);
+          box-shadow: 0 0 20px rgba(255,215,0,0.45);
+        }
+
+        /* L5 EMERALD — pulsing green glow on activity cards. */
+        .tier-emerald-card {
+          border-color: rgba(16,185,129,0.55) !important;
+          animation: tierEmeraldPulse 4.5s ease-in-out infinite;
+        }
+        @keyframes tierEmeraldPulse {
+          0%,100% { box-shadow: 0 0 0 1px rgba(16,185,129,0.30), 0 2px 18px rgba(16,185,129,0.20); }
+          50%     { box-shadow: 0 0 0 1px rgba(16,185,129,0.55), 0 2px 32px rgba(16,185,129,0.45); }
+        }
+        .tier-emerald-avatar-wrap {
+          position: relative; padding: 3px; border-radius: 50%;
+          background: linear-gradient(135deg,#065F46,#10B981,#6EE7B7,#10B981,#065F46);
+          box-shadow: 0 0 22px rgba(16,185,129,0.5);
+        }
+
+        /* L6 DIAMOND — holographic chrome name + cyan card sheen. */
+        .tier-diamond-name {
+          background: linear-gradient(90deg,#67E8F9 0%,#E879F9 20%,#FCD34D 40%,#6EE7B7 60%,#A78BFA 80%,#67E8F9 100%);
+          background-size: 250% 100%;
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: tierDiamondHolo 6s linear infinite;
+          filter: drop-shadow(0 0 10px rgba(103,232,249,0.5));
+        }
+        @keyframes tierDiamondHolo { 0%{background-position:0% 50%} 100%{background-position:250% 50%} }
+        .tier-diamond-card { position: relative; }
+        .tier-diamond-card::before {
+          content: ''; position: absolute; inset: 0;
+          background: linear-gradient(115deg,transparent 40%,rgba(103,232,249,0.20) 48%,rgba(186,230,253,0.45) 50%,rgba(103,232,249,0.20) 52%,transparent 60%);
+          transform: translateX(-120%);
+          animation: diamondShimmerSweep 4s ease-in-out infinite;
+          pointer-events: none; z-index: 1;
+        }
+        @keyframes diamondShimmerSweep {
+          0% { transform: translateX(-120%); }
+          55% { transform: translateX(120%); }
+          100% { transform: translateX(120%); }
+        }
+        .tier-diamond-avatar-wrap {
+          position: relative; padding: 3px; border-radius: 50%;
+          background: linear-gradient(135deg,#67E8F9,#E879F9,#FCD34D,#6EE7B7,#A78BFA,#67E8F9);
+          background-size: 250% 100%;
+          animation: tierDiamondHolo 6s linear infinite;
+          box-shadow: 0 0 24px rgba(103,232,249,0.55);
+        }
+      `}</style>
 
       {highlightLb && (
         <Lightbox
@@ -633,10 +834,19 @@ export default function UserProfilePage() {
       {/* ── Avatar + Action Buttons ── */}
       <div style={{background:C.white,borderBottom:`1px solid ${C.greenMid}`,paddingBottom:16}}>
         <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",paddingLeft:24,paddingRight:24,marginTop:-44}}>
-          <div style={{width:88,height:88,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`4px solid ${C.white}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0,zIndex:2}}>
-            {profile.avatar_url
-              ? <img src={profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-              : initials}
+          {/* Tier-aware avatar wrap. L3+ adds a counter-rotating silver/gold/etc
+              ring effect via CSS animations. Below L3 the wrap is a passive div. */}
+          <div className={
+            viewedUserLevel >= 6 ? "tier-diamond-avatar-wrap" :
+            viewedUserLevel >= 5 ? "tier-emerald-avatar-wrap" :
+            viewedUserLevel >= 4 ? "tier-gold-avatar-wrap" :
+            viewedUserLevel >= 3 ? "tier-silver-avatar-wrap" : ""
+          } style={{position:"relative",zIndex:2,flexShrink:0}}>
+            <div style={{width:88,height:88,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`4px solid ${C.white}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,fontWeight:900,color:"#fff",overflow:"hidden",position:"relative",zIndex:2}}>
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                : initials}
+            </div>
           </div>
           <div style={{display:"flex",gap:8,paddingBottom:4,position:"relative"}}>
             <FollowButton targetUserId={profile.id} />
@@ -715,7 +925,22 @@ export default function UserProfilePage() {
         </div>
 
         <div style={{padding:"12px 24px 0"}}>
-          <div style={{fontWeight:900,fontSize:20,color:C.text}}>{profile.full_name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div className={
+              viewedUserLevel >= 6 ? "tier-diamond-name" :
+              viewedUserLevel >= 4 ? "tier-gold-name" : ""
+            } style={{fontWeight:900,fontSize:20,color:C.text}}>{profile.full_name}</div>
+            {/* Level pill — only shown when the viewed user has earned past L1 */}
+            {viewedUserLevel >= 2 && LEVEL_COLORS[viewedUserLevel] && (
+              <span style={{
+                fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:99,
+                background: `linear-gradient(135deg, ${LEVEL_COLORS[viewedUserLevel].badge}, rgba(14,8,32,0.8))`,
+                color: LEVEL_COLORS[viewedUserLevel].accent,
+                border: `1px solid ${LEVEL_COLORS[viewedUserLevel].border}`,
+                boxShadow: `0 0 10px ${LEVEL_COLORS[viewedUserLevel].glow}`,
+              }}>Lv {viewedUserLevel}</span>
+            )}
+          </div>
           <div style={{fontSize:13,color:C.sub,marginTop:2}}>@{profile.username}</div>
           {profile.city && <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>}
           {profile.bio && <p style={{fontSize:14,color:C.sub,marginTop:6,lineHeight:1.55}}>{profile.bio}</p>}
@@ -792,13 +1017,22 @@ export default function UserProfilePage() {
           {/* CENTER — Activity Log */}
           <div>
             <div style={{fontWeight:900,fontSize:20,color:C.text,marginBottom:16}}>Activity Log</div>
+
+            {/* Workout progress graphs — current-month chart, restyled month-by-month.
+                Uses raw workout logs so multi-workout days count correctly. */}
+            {rawWorkoutLogs.length > 0 && (
+              <div style={{marginBottom:20}}>
+                <WorkoutProgressGraphs workouts={rawWorkoutLogs} />
+              </div>
+            )}
+
             {days.length === 0 ? (
               <div style={{textAlign:"center",padding:"48px 20px",background:C.white,borderRadius:22,border:`2px solid ${C.greenMid}`,color:C.sub}}>
                 <div style={{fontSize:48,marginBottom:8}}>💪</div>
                 <p style={{fontWeight:700,fontSize:15}}>No public activity yet</p>
               </div>
             ) : (
-              days.map(day => <ReadOnlyDayCard key={day.id} day={day}/>)
+              days.map(day => <ReadOnlyDayCard key={day.id} day={day} userLevel={viewedUserLevel}/>)
             )}
           </div>
 
