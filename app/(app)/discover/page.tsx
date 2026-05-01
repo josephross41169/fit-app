@@ -91,6 +91,9 @@ interface Post {
   id: string | number;
   caption?: string;
   media_url?: string;
+  media_urls?: string[];
+  media_type?: 'image' | 'video' | 'photo' | null;
+  media_types?: ('image' | 'video')[] | null;
   photo?: string;
   time?: string;
   user?: string | { full_name?: string; username?: string; avatar_url?: string };
@@ -271,6 +274,17 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
   const avatarUrl     = userObj?.avatar_url || (typeof post.avatar === 'string' && post.avatar.startsWith('http') ? post.avatar : null);
   const avatarIni     = displayName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
   const photoSrc      = post.photo || post.media_url || null;
+  // Determine if the lead media is a video. Priority: media_types array (post 2026
+  // schema) → media_type single column → URL extension sniff. 'photo' is the legacy
+  // group-post enum value and is treated as image.
+  const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
+  const leadType: 'image' | 'video' = (() => {
+    const arr = post.media_types;
+    if (Array.isArray(arr) && arr[0] === 'video') return 'video';
+    if (post.media_type === 'video') return 'video';
+    if (typeof photoSrc === 'string' && VIDEO_EXT_RE.test(photoSrc)) return 'video';
+    return 'image';
+  })();
   const tags: string[]= Array.isArray(post.tags) ? post.tags : [];
   const caption       = post.caption || "";
 
@@ -292,10 +306,13 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
         )}
       </div>
 
-      {/* Photo */}
+      {/* Photo or video */}
       <div onClick={() => router.push(`/post/${post.id}`)} style={{ width:"100%",aspectRatio:"4/3",background:"#111",overflow:"hidden",position:"relative",cursor:"pointer" }}>
         {photoSrc
-          ? <img src={photoSrc} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
+          ? (leadType === 'video'
+              ? <video src={photoSrc} controls preload="metadata" playsInline onClick={(e) => e.stopPropagation()} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }} />
+              : <img src={photoSrc} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
+            )
           : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📸</div>
         }
         {tags.length > 0 && (
