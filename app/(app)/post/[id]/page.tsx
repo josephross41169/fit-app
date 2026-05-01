@@ -45,6 +45,8 @@ interface Post {
   caption: string | null;
   media_url: string | null;
   media_urls: string[] | null;
+  media_type: 'image' | 'video' | 'photo' | null;
+  media_types: ('image' | 'video')[] | null;
   created_at: string;
   likes_count?: number;
   liked?: boolean;
@@ -73,7 +75,7 @@ export default function PostDetailPage() {
         // 1. Fetch the post itself
         const { data: postRow, error: postErr } = await supabase
           .from("posts")
-          .select("id, user_id, caption, media_url, media_urls, created_at, likes_count")
+          .select("id, user_id, caption, media_url, media_urls, media_type, media_types, created_at, likes_count")
           .eq("id", id)
           .single();
         if (postErr || !postRow) throw new Error(postErr?.message || "Post not found.");
@@ -229,6 +231,18 @@ export default function PostDetailPage() {
     ? post.media_urls
     : post.media_url ? [post.media_url] : [];
 
+  // Build per-index type list. Priority: media_types array → single media_type
+  // → URL extension sniff. Same fallback chain used by the feed page so old
+  // posts without the new column still render correctly.
+  const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
+  const photoTypes: ('image' | 'video')[] = photos.map((url, i) => {
+    const arr = post.media_types;
+    if (Array.isArray(arr) && (arr[i] === 'image' || arr[i] === 'video')) return arr[i];
+    if (photos.length === 1 && post.media_type === 'video') return 'video';
+    if (typeof url === 'string' && VIDEO_EXT_RE.test(url)) return 'video';
+    return 'image';
+  });
+
   const isMine = user?.id === post.user_id;
   const createdLabel = new Date(post.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -263,11 +277,22 @@ export default function PostDetailPage() {
           )}
         </div>
 
-        {/* Photos */}
+        {/* Photos / videos */}
         {photos.length > 0 && (
           <div style={{ borderRadius: 18, overflow: "hidden", marginBottom: 14, background: C.card }}>
             {photos.map((src, i) => (
-              <img key={i} src={src} style={{ width: "100%", display: "block", marginBottom: i < photos.length - 1 ? 2 : 0 }} alt="" />
+              photoTypes[i] === 'video' ? (
+                <video
+                  key={i}
+                  src={src}
+                  controls
+                  preload="metadata"
+                  playsInline
+                  style={{ width: "100%", display: "block", marginBottom: i < photos.length - 1 ? 2 : 0, background: "#000" }}
+                />
+              ) : (
+                <img key={i} src={src} style={{ width: "100%", display: "block", marginBottom: i < photos.length - 1 ? 2 : 0 }} alt="" />
+              )
             ))}
           </div>
         )}
