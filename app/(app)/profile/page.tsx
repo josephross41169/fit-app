@@ -491,27 +491,46 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   // ── Apply tier-specific cosmetic effects to the card ────────────────────
   // Each level layers visual treatment via CSS classes. Higher levels stack.
-  // L2 Bronze   → tier-bronze-card (bronze-tinted halo)
-  // L4 Gold     → tier-gold-card    (gold halo, replaces bronze)
-  // L5 Emerald  → tier-emerald-card (emerald pulsing halo)
-  // L6 Diamond  → diamond-shimmer-card (cyan sweep) + dark diamond bg gradient
-  // L1 + L3 Silver get default treatment (Silver effect is on the avatar, not cards)
+  // L2 Bronze   → bronze gradient bg + bronze border
+  // L3 Silver   → silver gradient bg + silver border (avatar gets the ring)
+  // L4 Gold     → gold gradient bg + gold border + gold shimmer name
+  // L5 Emerald  → emerald gradient bg + pulsing emerald border
+  // L6 Diamond  → diamond cyan/dark-teal bg + cyan shimmer sweep
+  // All gradients keep a dark base (#0E1118 / #0F172A range) with metal-tinted
+  // overlays so white text stays readable. We don't use light metallic
+  // backgrounds because they wash out copy.
+  const lvl = userLevel;
   const tierCardClass =
-    userLevel >= 6 ? "diamond-shimmer-card" :
-    userLevel >= 5 ? "tier-emerald-card"   :
-    userLevel >= 4 ? "tier-gold-card"      :
-    userLevel >= 2 ? "tier-bronze-card"    : "";
+    lvl >= 6 ? "diamond-shimmer-card tier-diamond-card" :
+    lvl >= 5 ? "tier-emerald-card" :
+    lvl >= 4 ? "tier-gold-card"    :
+    lvl >= 3 ? "tier-silver-card"  :
+    lvl >= 2 ? "tier-bronze-card"  : "";
+
+  // Level-specific card BACKGROUND + BORDER, applied as inline style.
+  // Each gradient is dark-base → metal-tinted-mid → dark-base, giving the
+  // card a subtle metal sheen across its body without sacrificing contrast.
+  const tierCardStyle: React.CSSProperties =
+    lvl >= 6 ? { background: "linear-gradient(135deg, #0F172A 0%, #164E63 35%, #1E3A5F 50%, #164E63 65%, #0F172A 100%)", border: "1.5px solid #67E8F9", boxShadow: "0 0 16px rgba(34,211,238,0.35), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(186,230,253,0.2)" } :
+    lvl >= 5 ? { background: "linear-gradient(135deg, #0A1F18 0%, #0F3D2E 40%, #134E3A 50%, #0F3D2E 60%, #0A1F18 100%)", border: "1.5px solid #10B981" } :
+    lvl >= 4 ? { background: "linear-gradient(135deg, #1F1A0A 0%, #3D2F00 40%, #4A3A00 50%, #3D2F00 60%, #1F1A0A 100%)", border: "1.5px solid #FFD700", boxShadow: "0 0 16px rgba(255,215,0,0.30), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(252,211,77,0.2)" } :
+    lvl >= 3 ? { background: "linear-gradient(135deg, #14161C 0%, #2A2D38 40%, #383B47 50%, #2A2D38 60%, #14161C 100%)", border: "1.5px solid #C0C0C0", boxShadow: "0 0 14px rgba(220,220,235,0.25), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" } :
+    lvl >= 2 ? { background: "linear-gradient(135deg, #1A0E05 0%, #3A2410 40%, #4A2D14 50%, #3A2410 60%, #1A0E05 100%)", border: "1.5px solid #CD7F32", boxShadow: "0 0 14px rgba(205,127,50,0.30), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(232,168,124,0.2)" } :
+    /* L1: default light card */
+    { background: C.white, border: `2px solid ${C.purpleMid}`, boxShadow: "0 4px 18px rgba(124,58,237,0.10)" };
+
+  // Header background — when card body is dark-themed (L2+), the open header
+  // needs a slightly brighter shade to differentiate it from the collapsed
+  // body color. White card (L1) keeps the original purple/white toggle.
+  const headerOpenBg   = lvl >= 2 ? "rgba(255,255,255,0.06)" : "#2D1F52";
+  const headerClosedBg = lvl >= 2 ? "transparent"            : C.white;
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div className={tierCardClass} style={
-      userLevel >= 6
-        ? {background:"linear-gradient(135deg, #0F172A 0%, #164E63 35%, #1E3A5F 50%, #164E63 65%, #0F172A 100%)",borderRadius:22,border:"1.5px solid #67E8F9",boxShadow:"0 0 16px rgba(34,211,238,0.35), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(186,230,253,0.2)",marginBottom:16,overflow:"hidden"}
-        : {background:C.white,borderRadius:22,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 18px rgba(124,58,237,0.10)",marginBottom:16,overflow:"hidden"}
-    }>
+    <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
 
       {/* HEADER */}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?(userLevel>=6?"rgba(45,31,82,0.85)":"#2D1F52"):(userLevel>=6?"transparent":C.white),border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?headerOpenBg:headerClosedBg,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,#4ADE80,#22C55E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(74,222,128,0.3)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
