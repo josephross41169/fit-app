@@ -398,6 +398,19 @@ export default function UserProfilePage() {
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
   const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
 
+  // Responsive layout. Matches the own-profile breakpoint (768px) so both pages
+  // collapse to vertical stack at the same width.
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  const avatarSize = isMobile ? 220 : 280;
+
   // Derive the viewed user's level from their cumulative_xp. Used to apply
   // tier-based card backgrounds, avatar rings, and name shimmer effects.
   const viewedUserLevel = useMemo(() => {
@@ -659,7 +672,17 @@ export default function UserProfilePage() {
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
-        @media(max-width:767px){.up-layout{display:flex!important;flex-direction:column!important;} .up-layout>*{width:100%!important;min-width:unset!important;max-width:100%!important;}}
+        /* Mobile collapse — both the header (avatar + banner) and the 3-column
+           grid stack vertically below 768px. Mirrors /profile/page.tsx. */
+        @media(max-width:767px){
+          .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
+          .profile-avatar-col { margin-left: 0 !important; margin-top: 0 !important; }
+          .profile-layout { display: flex !important; flex-direction: column !important; }
+          .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
+          .profile-outer { padding: 12px 16px 100px !important; max-width: 100% !important; margin: 0 !important; }
+          .up-layout { display: flex !important; flex-direction: column !important; }
+          .up-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
+        }
 
         /* ─── Tier rewards CSS — mirrors /profile/page.tsx so other-user
            profiles show the same metal/gem progression visuals. Each tier
@@ -824,149 +847,160 @@ export default function UserProfilePage() {
         </div>
       )}
 
-      {/* ── Banner ── */}
-      <div style={{height:220,background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#4ADE80)`,position:"relative",flexShrink:0}}>
-        {profile.banner_url && (
-          <img src={profile.banner_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.banner_position ?? 50}%`}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-        )}
-      </div>
+      {/* ── Profile header: avatar column on left + banner block on right ──
+          Mirrors /profile/page.tsx so the "view someone else's profile" surface
+          looks identical to your own. The avatar is large, sits on the left,
+          and is wrapped in a tier ring at L3+. The banner is on the right and
+          carries the bio + followers/following + Follow/Message action buttons. */}
+      <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
+        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:24,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
 
-      {/* ── Avatar + Action Buttons ── */}
-      <div style={{background:C.white,borderBottom:`1px solid ${C.greenMid}`,paddingBottom:16}}>
-        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",paddingLeft:24,paddingRight:24,marginTop:-44}}>
-          {/* Tier-aware avatar wrap. L3+ adds a counter-rotating silver/gold/etc
-              ring effect via CSS animations. Below L3 the wrap is a passive div. */}
-          <div className={
-            viewedUserLevel >= 6 ? "tier-diamond-avatar-wrap" :
-            viewedUserLevel >= 5 ? "tier-emerald-avatar-wrap" :
-            viewedUserLevel >= 4 ? "tier-gold-avatar-wrap" :
-            viewedUserLevel >= 3 ? "tier-silver-avatar-wrap" : ""
-          } style={{position:"relative",zIndex:2,flexShrink:0}}>
-            <div style={{width:88,height:88,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,border:`4px solid ${C.white}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,fontWeight:900,color:"#fff",overflow:"hidden",position:"relative",zIndex:2}}>
-              {profile.avatar_url
-                ? <img src={profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-                : initials}
+          {/* Avatar column on LEFT. Tier ring wrap at L3+. Name centered below. */}
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:-60,marginTop:isMobile?0:96}}>
+            <div className={
+              viewedUserLevel >= 6 ? "tier-diamond-avatar-wrap" :
+              viewedUserLevel >= 5 ? "tier-emerald-avatar-wrap" :
+              viewedUserLevel >= 4 ? "tier-gold-avatar-wrap" :
+              viewedUserLevel >= 3 ? "tier-silver-avatar-wrap" : ""
+            } style={{position:"relative",userSelect:"none"}}>
+              {/* The avatar circle. Borderless because the tier wrap provides
+                  the border halo. At L1 (no wrap class) we add a subtle
+                  border so the avatar still has shape. */}
+              <div style={{
+                width: avatarSize, height: avatarSize, borderRadius:"50%",
+                background:`linear-gradient(135deg,${C.blue},#4ADE80)`,
+                border: viewedUserLevel < 3 ? `4px solid ${C.greenMid}` : "none",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff",
+                overflow:"hidden",position:"relative",zIndex:2,
+              }}>
+                {profile.avatar_url
+                  ? <img src={profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                  : initials}
+              </div>
+            </div>
+            <div style={{textAlign:"center",width:"100%"}}>
+              {/* Name + tier shimmer. Same class logic as own-profile. */}
+              <div className={
+                viewedUserLevel >= 6 ? "tier-diamond-name" :
+                viewedUserLevel >= 4 ? "tier-gold-name" : ""
+              } style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>
+                {profile.full_name}
+              </div>
+              <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
+              {/* Level pill — only when past L1, identical styling to own-profile. */}
+              {viewedUserLevel >= 2 && LEVEL_COLORS[viewedUserLevel] && (
+                <div style={{display:"inline-block",fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:99,
+                  background: `linear-gradient(135deg, ${LEVEL_COLORS[viewedUserLevel].badge}, rgba(14,8,32,0.8))`,
+                  color: LEVEL_COLORS[viewedUserLevel].accent,
+                  border: `1px solid ${LEVEL_COLORS[viewedUserLevel].border}`,
+                  boxShadow: `0 0 10px ${LEVEL_COLORS[viewedUserLevel].glow}`,
+                  marginBottom:6,
+                }}>Lv {viewedUserLevel}</div>
+              )}
+              {profile.city && (
+                <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
+              )}
             </div>
           </div>
-          <div style={{display:"flex",gap:8,paddingBottom:4,position:"relative"}}>
-            <FollowButton targetUserId={profile.id} />
-            {currentUser && currentUser.id !== profile.id && (
-              <button
-                onClick={async () => {
-                  const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ action:'create_conversation', payload:{ userId: currentUser.id, otherUserId: profile.id }}) });
-                  const json = await res.json();
-                  if (json.conversationId) router.push(`/messages?conv=${json.conversationId}`);
-                }}
-                style={{padding:"8px 16px",borderRadius:12,border:`1.5px solid ${C.blue}`,background:C.white,color:C.blue,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
-              >
-                ✉️ Message
-              </button>
-            )}
 
-            {/* ⋯ menu — Report or Block. Only rendered when viewing someone
-                else's profile. Apple Guideline 1.2 requires this be easily
-                discoverable in the UI on any user-facing page. */}
-            {currentUser && currentUser.id !== profile.id && (
-              <div style={{position:"relative"}}>
-                <button
-                  onClick={() => setModerationMenuOpen(o => !o)}
-                  aria-label="More options"
-                  style={{padding:"8px 12px",borderRadius:12,border:`1.5px solid ${C.greenMid}`,background:C.white,color:C.text,fontWeight:900,fontSize:16,cursor:"pointer",lineHeight:1}}
-                >⋯</button>
-                {moderationMenuOpen && (
-                  <>
-                    {/* Click-away backdrop */}
-                    <div onClick={() => setModerationMenuOpen(false)}
-                      style={{position:"fixed",inset:0,zIndex:40}}/>
-                    {/* Floating menu */}
-                    <div style={{
-                      position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:41,
-                      background:"#1A1D2E", border:"1px solid #2A2D3E", borderRadius:12,
-                      padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)"
-                    }}>
-                      <button
-                        onClick={() => {
-                          setModerationMenuOpen(false);
-                          setReportTarget({ type: "user", id: profile.id });
-                        }}
-                        style={menuItemStyle}
-                      >🚩 Report user</button>
-                      <button
-                        disabled={blocking}
-                        onClick={async () => {
-                          if (!currentUser || blocking) return;
-                          const ok = window.confirm(`Block @${profile.username}? They won't be able to see your posts or message you, and you won't see theirs.`);
-                          if (!ok) return;
-                          setBlocking(true);
-                          setModerationMenuOpen(false);
-                          try {
-                            await fetch('/api/db', {
-                              method:'POST',
-                              headers:{'Content-Type':'application/json'},
-                              body: JSON.stringify({ action:'block_user', payload:{ blockerId: currentUser.id, blockedId: profile.id }}),
-                            });
-                            clearBlockCache();
-                            router.push('/feed');  // leave the blocked user's profile
-                          } catch {
-                            alert("Couldn't block. Try again.");
-                          } finally {
-                            setBlocking(false);
-                          }
-                        }}
-                        style={{...menuItemStyle, color:"#FCA5A5"}}
-                      >🚫 Block user</button>
-                    </div>
-                  </>
+          {/* Banner block on RIGHT — banner image + bio + followers/following + Follow/Message buttons */}
+          <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
+            <div style={{
+              width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,
+              background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#4ADE80)`,
+              border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center",
+            }}>
+              {profile.banner_url
+                ? <img src={profile.banner_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.banner_position ?? 50}%`}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>{profile.full_name}</span>}
+            </div>
+
+            <div className="profile-stats-bio">
+              {profile.bio && <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>}
+
+              {/* Wide followers/following pill bar — mirrors own-profile dimensions */}
+              <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:14,borderRadius:16,overflow:"hidden",border:`1px solid ${C.greenMid}`}}>
+                {[
+                  {l:"Followers",v:profile.followers_count??0,type:"followers" as const},
+                  {l:"Following",v:profile.following_count??0,type:"following" as const},
+                ].map((s,i)=>(
+                  <button key={s.l} onClick={()=>openSocialModal(s.type, profile.id)}
+                    style={{flex:1,textAlign:"center",cursor:"pointer",padding:"14px 10px",background:"#111811",position:"relative",borderLeft:i>0?`1px solid ${C.greenMid}`:"none",border:"none"}}
+                    onMouseEnter={e=>(e.currentTarget.style.background="#1A2A1A")}
+                    onMouseLeave={e=>(e.currentTarget.style.background="#111811")}>
+                    <div style={{fontSize:26,fontWeight:900,color:C.blue,lineHeight:1,letterSpacing:-1}}>{(s.v||0).toLocaleString()}</div>
+                    <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Action row replaces "Edit Profile" — Follow / Message / ⋯ */}
+              <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
+                <div style={{flex:1}}>
+                  <FollowButton targetUserId={profile.id} />
+                </div>
+                {currentUser && currentUser.id !== profile.id && (
+                  <button
+                    onClick={async () => {
+                      const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({ action:'create_conversation', payload:{ userId: currentUser.id, otherUserId: profile.id }}) });
+                      const json = await res.json();
+                      if (json.conversationId) router.push(`/messages?conv=${json.conversationId}`);
+                    }}
+                    style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.blue}`,background:"transparent",color:C.blue,fontWeight:800,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                  >
+                    ✉️ Message
+                  </button>
+                )}
+                {/* ⋯ moderation menu (Report/Block) — Apple Guideline 1.2 requirement */}
+                {currentUser && currentUser.id !== profile.id && (
+                  <div style={{position:"relative"}}>
+                    <button
+                      onClick={() => setModerationMenuOpen(o => !o)}
+                      aria-label="More options"
+                      style={{padding:"11px 14px",borderRadius:14,border:`1.5px solid ${C.greenMid}`,background:"transparent",color:C.text,fontWeight:900,fontSize:18,cursor:"pointer",lineHeight:1,height:"100%"}}
+                    >⋯</button>
+                    {moderationMenuOpen && (
+                      <>
+                        <div onClick={() => setModerationMenuOpen(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
+                        <div style={{position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:41, background:"#1A1D2E", border:"1px solid #2A2D3E", borderRadius:12, padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)"}}>
+                          <button
+                            onClick={() => { setModerationMenuOpen(false); setReportTarget({ type: "user", id: profile.id }); }}
+                            style={menuItemStyle}
+                          >🚩 Report user</button>
+                          <button
+                            disabled={blocking}
+                            onClick={async () => {
+                              if (!currentUser || blocking) return;
+                              const ok = window.confirm(`Block @${profile.username}? They won't be able to see your posts or message you, and you won't see theirs.`);
+                              if (!ok) return;
+                              setBlocking(true);
+                              setModerationMenuOpen(false);
+                              try {
+                                await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'block_user', payload:{ blockerId: currentUser.id, blockedId: profile.id }}) });
+                                clearBlockCache();
+                                router.push('/feed');
+                              } catch { alert("Couldn't block. Try again."); }
+                              finally { setBlocking(false); }
+                            }}
+                            style={{...menuItemStyle, color:"#FCA5A5"}}
+                          >🚫 Block user</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div style={{padding:"12px 24px 0"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <div className={
-              viewedUserLevel >= 6 ? "tier-diamond-name" :
-              viewedUserLevel >= 4 ? "tier-gold-name" : ""
-            } style={{fontWeight:900,fontSize:20,color:C.text}}>{profile.full_name}</div>
-            {/* Level pill — only shown when the viewed user has earned past L1 */}
-            {viewedUserLevel >= 2 && LEVEL_COLORS[viewedUserLevel] && (
-              <span style={{
-                fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:99,
-                background: `linear-gradient(135deg, ${LEVEL_COLORS[viewedUserLevel].badge}, rgba(14,8,32,0.8))`,
-                color: LEVEL_COLORS[viewedUserLevel].accent,
-                border: `1px solid ${LEVEL_COLORS[viewedUserLevel].border}`,
-                boxShadow: `0 0 10px ${LEVEL_COLORS[viewedUserLevel].glow}`,
-              }}>Lv {viewedUserLevel}</span>
-            )}
-          </div>
-          <div style={{fontSize:13,color:C.sub,marginTop:2}}>@{profile.username}</div>
-          {profile.city && <div style={{fontSize:12,color:C.sub,marginTop:3}}>📍 {profile.city}</div>}
-          {profile.bio && <p style={{fontSize:14,color:C.sub,marginTop:6,lineHeight:1.55}}>{profile.bio}</p>}
-
-          {/* Followers / Following pill bar — clickable */}
-          <div style={{display:"flex",alignItems:"stretch",gap:0,marginTop:12,borderRadius:16,overflow:"hidden",border:`1px solid ${C.greenMid}`,maxWidth:320}}>
-            {[
-              {l:"Followers",v:profile.followers_count??0,type:"followers" as const},
-              {l:"Following",v:profile.following_count??0,type:"following" as const},
-            ].map((s,i)=>(
-              <button key={s.l} onClick={()=>openSocialModal(s.type, profile.id)}
-                style={{flex:1,textAlign:"center",padding:"12px 10px",background:"#111811",borderLeft:i>0?`1px solid ${C.greenMid}`:"none",border:"none",cursor:"pointer",transition:"background 0.15s"}}
-                onMouseEnter={e=>(e.currentTarget.style.background="#1A2A1A")}
-                onMouseLeave={e=>(e.currentTarget.style.background="#111811")}
-              >
-                <div style={{fontSize:22,fontWeight:900,color:C.blue,lineHeight:1}}>{(s.v||0).toLocaleString()}</div>
-                <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── 3-Column Layout ── */}
-      <div style={{maxWidth:1400,margin:"0 auto",padding:"24px 24px 0"}}>
-        <div className="up-layout" style={{display:"grid",gridTemplateColumns:"220px 1fr 260px",gap:24,alignItems:"start"}}>
+        {/* ── 3-column grid below header ──
+            Same column widths as own-profile (minmax(200px,240px) 1fr minmax(200px,240px))
+            so the visual rhythm matches. Mobile collapses via .profile-layout
+            media query in the CSS block above. */}
+        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(200px,240px) 1fr minmax(200px,240px)",gap:16,alignItems:"start"}}>
 
           {/* LEFT — Highlights */}
           <div>
