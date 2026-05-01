@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 import { compressImage } from "@/lib/compressImage";
 import { track } from "@/components/PostHogProvider";
 import AIFoodScanner from "@/components/AIFoodScanner";
@@ -460,9 +461,11 @@ export default function PostPage() {
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
-  // Vercel request body cap is 4.5MB on Hobby. We hard-cap one notch under to leave headroom
-  // for FormData overhead. Until direct-to-Supabase upload lands, larger videos will silently fail.
-  const MAX_MEDIA_BYTES = 4 * 1024 * 1024;
+  // Vercel request body cap is 4.5MB on Hobby — but videos use direct-to-Supabase
+  // upload (uploadPhotoDirect), so the practical cap here is the Supabase Storage
+  // limit. Free tier defaults to 50MB per file. Tune higher if you raise it in the
+  // bucket settings.
+  const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
   // Reads a list of files into the carousel: builds data URL + tags type. Rejects oversize.
   function ingestMediaFiles(files: File[]) {
@@ -475,8 +478,8 @@ export default function PostPage() {
         return;
       }
       // Size check only enforced on videos — images get re-encoded smaller via compressImage.
-      if (isVid && f.size > MAX_MEDIA_BYTES) {
-        setMediaError(`Video too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 4MB until direct-to-storage uploads ship. Try a shorter clip.`);
+      if (isVid && f.size > MAX_VIDEO_BYTES) {
+        setMediaError(`Video too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 50MB. Trim it down or use a shorter clip.`);
         return;
       }
       const r = new FileReader();
@@ -1445,25 +1448,37 @@ export default function PostPage() {
     const uploadedUrls: string[] = [];
     const uploadedTypes: ('image' | 'video')[] = [];
     for (const item of itemsToUpload) {
-      let fileToUpload: File | string;
-      let ext: string;
+      let url: string | null = null;
       if (item.type === 'video') {
-        // Convert data URL → File without re-encoding. Preserve original MIME for storage.
+        // Direct-to-Supabase upload bypasses Vercel's body limit. RLS policy
+        // requires the path to start with the user's UUID — see
+        // lib/migration-posts-bucket-rls.sql.
         const mimeMatch = item.src.match(/^data:(video\/[^;]+)/);
         const mime = mimeMatch ? mimeMatch[1] : 'video/mp4';
+        const ext = mime.split('/')[1] || 'mp4';
         const base64 = item.src.split(',')[1] || '';
         const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        ext = mime.split('/')[1] || 'mp4';
-        fileToUpload = new File([bytes], `upload.${ext}`, { type: mime });
+        const file = new File([bytes], `upload.${ext}`, { type: mime });
+        const path = `${user.id}/posts/${Date.now()}-${uploadedUrls.length}.${ext}`;
+        url = await uploadPhotoDirect(file, 'posts', path);
       } else {
-        fileToUpload = await compressImage(item.src);
-        ext = 'jpg';
+        // Images: keep the existing /api/upload route. Compressed JPEGs are <1MB so
+        // Vercel's body limit isn't an issue and we don't need a new RLS path.
+        const compressed = await compressImage(item.src);
+        url = await uploadPhoto(compressed, 'posts', `${user.id}/${Date.now()}-${uploadedUrls.length}.jpg`);
       }
-      const url = await uploadPhoto(fileToUpload, 'posts', `${user.id}/${Date.now()}-${uploadedUrls.length}.${ext}`);
       if (url) {
         uploadedUrls.push(url);
         uploadedTypes.push(item.type);
       }
+    }
+    // If the user attached media but every upload failed, surface that instead of
+    // silently posting text-only.
+    if (itemsToUpload.length > 0 && uploadedUrls.length === 0) {
+      setLoading(false);
+      submittingRef.current = false;
+      setSaveError("Couldn't upload your media. Try again, or remove the attachment to post text-only.");
+      return;
     }
     const mediaUrl = uploadedUrls[0] || null;
     const firstType = uploadedTypes[0] || null;
