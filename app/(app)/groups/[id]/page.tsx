@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
 import { compressImage } from "@/lib/compressImage";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
@@ -1349,11 +1350,11 @@ export default function GroupPage() {
       let mediaUrl: string | null = null;
       let mediaType: 'photo' | 'video' | null = null;
       if (hasVideo && postVideoFile) {
-        // Videos: pass File directly (uploadPhoto accepts both data URLs and Files).
-        // Use a video extension so the backend stores it correctly.
+        // Videos: direct-to-Supabase upload. Path MUST start with the user's UUID
+        // for the RLS policy to allow the write. See lib/migration-posts-bucket-rls.sql.
         const ext = postVideoFile.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || 'mp4';
-        const path = `group-posts/${group._dbId || 'mock'}/${Date.now()}.${ext}`;
-        mediaUrl = await uploadPhoto(postVideoFile, 'posts', path);
+        const path = `${currentUser?.id}/group-posts/${group._dbId || 'mock'}/${Date.now()}.${ext}`;
+        mediaUrl = await uploadPhotoDirect(postVideoFile, 'posts', path);
         if (!mediaUrl) {
           alert("Video upload failed. Try again or remove the video.");
           setPostSubmitting(false);
@@ -1361,7 +1362,8 @@ export default function GroupPage() {
         }
         mediaType = 'video';
       } else if (hasPhoto && postPhotoDataUrl) {
-        const path = `group-posts/${group._dbId || 'mock'}/${Date.now()}.jpg`;
+        // Images: keep using /api/upload — compressed JPEGs are tiny.
+        const path = `${currentUser?.id}/group-posts/${group._dbId || 'mock'}/${Date.now()}.jpg`;
         mediaUrl = await uploadPhoto(postPhotoDataUrl, 'posts', path);
         if (!mediaUrl) {
           alert("Photo upload failed. Try again or remove the photo.");
@@ -1421,11 +1423,10 @@ export default function GroupPage() {
 
     // Branch: video files skip compression and go straight through. We use a
     // blob URL for the preview so the UI doesn't have to read the whole video
-    // into a base64 string. Limit at 100MB so users don't accidentally try to
-    // upload a 4K phone clip — Supabase + Vercel will reject anything larger.
+    // into a base64 string. Cap at 50MB — the Supabase free-tier per-file limit.
     if (f.type.startsWith("video/")) {
-      if (f.size > 100 * 1024 * 1024) {
-        alert("That video is too large (>100MB). Trim it down or use a shorter clip.");
+      if (f.size > 50 * 1024 * 1024) {
+        alert(`That video is too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 50MB. Trim it down or use a shorter clip.`);
         return;
       }
       // Clear any prior photo so the preview shows the new video instead
@@ -1551,8 +1552,8 @@ export default function GroupPage() {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.type.startsWith("video/")) {
-      if (f.size > 100 * 1024 * 1024) {
-        alert("That video is too large (>100MB). Trim it down or use a shorter clip.");
+      if (f.size > 50 * 1024 * 1024) {
+        alert(`That video is too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 50MB. Trim it down or use a shorter clip.`);
         return;
       }
       setNotePhotoDataUrl(null);
@@ -1625,12 +1626,14 @@ export default function GroupPage() {
       let mediaUrl: string | null = null;
       let mediaType: 'photo' | 'video' | null = null;
       if (videoToUpload) {
+        // Direct-to-Supabase. Path starts with the user UUID for RLS — see
+        // lib/migration-posts-bucket-rls.sql.
         const ext = videoToUpload.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || 'mp4';
-        const path = `group-notes/${group._dbId || 'mock'}/${Date.now()}.${ext}`;
-        mediaUrl = await uploadPhoto(videoToUpload, 'posts', path);
+        const path = `${currentUser?.id}/group-notes/${group._dbId || 'mock'}/${Date.now()}.${ext}`;
+        mediaUrl = await uploadPhotoDirect(videoToUpload, 'posts', path);
         mediaType = mediaUrl ? 'video' : null;
       } else if (photoToUpload) {
-        const path = `group-notes/${group._dbId || 'mock'}/${Date.now()}.jpg`;
+        const path = `${currentUser?.id}/group-notes/${group._dbId || 'mock'}/${Date.now()}.jpg`;
         mediaUrl = await uploadPhoto(photoToUpload, 'posts', path);
         mediaType = mediaUrl ? 'photo' : null;
       }
