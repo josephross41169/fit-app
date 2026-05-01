@@ -381,20 +381,33 @@ export default function UserProfilePage() {
       // Load feed photos for the "All Photos" modal. Pulls only from the
       // `posts` table (public feed posts) and excludes workout/story/
       // nutrition/wellness photos. Includes both single media_url and
-      // multi-photo media_urls arrays.
+      // multi-photo media_urls arrays. Videos are filtered out — this grid
+      // is photos only.
       try {
         const { data: postRows } = await supabase
           .from('posts')
-          .select('media_url, media_urls')
+          .select('media_url, media_urls, media_type, media_types')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false });
         if (postRows) {
+          const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
           const urls: string[] = [];
           for (const p of postRows as any[]) {
+            const mediaTypes = Array.isArray(p.media_types) ? p.media_types : null;
+            const singleType = p.media_type;
             if (Array.isArray(p.media_urls)) {
-              for (const u of p.media_urls) if (typeof u === 'string' && u) urls.push(u);
+              for (let i = 0; i < p.media_urls.length; i++) {
+                const u = p.media_urls[i];
+                if (typeof u !== 'string' || !u) continue;
+                const t = mediaTypes?.[i] || null;
+                if (t === 'video') continue;
+                if (!t && VIDEO_EXT_RE.test(u)) continue;
+                urls.push(u);
+              }
             } else if (p.media_url) {
+              if (singleType === 'video') continue;
+              if (!singleType && VIDEO_EXT_RE.test(p.media_url)) continue;
               urls.push(p.media_url);
             }
           }
