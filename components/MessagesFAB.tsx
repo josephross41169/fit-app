@@ -174,7 +174,10 @@ export default function MessagesFAB() {
         style={{
           position: "fixed",
           right: 0,
-          bottom: 200,
+          // Sat at bottom:200 originally, but on mobile this overlapped the
+          // right-arrow on multi-photo carousels (arrow sits at vertical center
+          // of the square media). Bumped 100px higher (~1 inch) to clear it.
+          bottom: 300,
           // Sit ABOVE the overlay so it's still clickable when overlay is open
           zIndex: 10000,
           width: 48,
