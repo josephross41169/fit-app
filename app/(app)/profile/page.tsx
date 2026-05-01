@@ -3490,7 +3490,22 @@ export default function ProfilePage() {
             </div>
 
             <div className="profile-stats-bio">
-            <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.55}}>{profile.bio}</p>
+            {profile.bio && (
+              <div style={{
+                position:"relative",
+                fontSize:16,
+                fontWeight:500,
+                color:C.text,
+                lineHeight:1.55,
+                marginBottom:18,
+                padding:"14px 16px 14px 20px",
+                background:"#1A1228",
+                borderRadius:14,
+                borderLeft:`3px solid ${C.purple}`,
+              }}>
+                {profile.bio}
+              </div>
+            )}
 
             <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:14,borderRadius:16,overflow:"hidden",border:"1px solid #2A3A2A"}}>
               {[
