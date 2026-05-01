@@ -511,6 +511,9 @@ export default function GroupPage() {
   const [dbLeaderboard, setDbLeaderboard] = useState<any[]>([]);
   const [isMemberDB, setIsMemberDB] = useState(false);
   const [isOwnerDB, setIsOwnerDB] = useState(false);
+  // True when the current user has role='moderator' in this group.
+  // Mirrors isOwnerDB pattern. Used everywhere isOwnerOrMod is checked.
+  const [isModDB, setIsModDB] = useState(false);
   const [joinedChallengeIdsDB, setJoinedChallengeIdsDB] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -578,6 +581,14 @@ export default function GroupPage() {
   const [showEventModal, setShowEventModal] = useState(false);
   const [eventForm, setEventForm] = useState({ name:'', description:'', date:'', time:'', location:'', price:'Free', emoji:'📅' });
   const [eventSubmitting, setEventSubmitting] = useState(false);
+
+  // ── Member management modal state ──
+  // Tracks which member's action menu is currently open (by user_id). Only one
+  // open at a time. Closed when null. Owner/mods see the menu; everyone else
+  // doesn't get the kebab button at all.
+  const [memberActionsFor, setMemberActionsFor] = useState<string | null>(null);
+  // Disables action buttons during the API call so users can't double-click.
+  const [memberActionBusy, setMemberActionBusy] = useState(false);
 
   // ── Create Challenge modal ──
   const [showChallengeModal, setShowChallengeModal] = useState(false);
@@ -683,6 +694,14 @@ export default function GroupPage() {
         setJoined(data.is_member || false);
         setJoinedChallengeIdsDB(data.joined_challenge_ids || []);
         if (data.group && user) setIsOwnerDB(data.group.created_by === user.id);
+        // Determine if current user is a moderator. The members list returned by
+        // get_group includes role for every member, so we just look ourselves up.
+        if (user && Array.isArray(data.members)) {
+          const myRow = data.members.find((m: any) => (m.user_id || m.user?.id) === user.id);
+          setIsModDB(myRow?.role === 'moderator');
+        } else {
+          setIsModDB(false);
+        }
 
         // Init challenge scores from joined challenges
         const scores: Record<string, number> = {};
@@ -865,11 +884,16 @@ export default function GroupPage() {
   }
 
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
-  // Owner-only check. Previously this was `_isOwner || isMemberDB` which
-  // meant any MEMBER counted as a moderator — wrong. Members shouldn't be
-  // able to create goals, wars, or perform admin actions on a group they
-  // don't own. Group goals + wars + (admin-only event approval) all gate on this.
-  const isOwnerOrMod = group._isOwner || isOwnerDB;
+  // Owner-or-moderator check. Both roles can:
+  //   - Create/edit/delete challenges and goals
+  //   - Approve pending events
+  //   - Kick members + promote/demote moderators
+  // Only the owner can:
+  //   - Delete the group itself
+  //   - Be untouchable (no one can kick/demote the owner)
+  // The previous version of this var ignored the actual moderator role from the
+  // DB and only checked owner — that's why mods couldn't perform admin actions.
+  const isOwnerOrMod = group._isOwner || isOwnerDB || isModDB;
 
   // Approve a pending event submission. Flips approved=true so it shows up
   // in the public events list. Pulls the approved row out of the pending
@@ -1235,6 +1259,13 @@ export default function GroupPage() {
         username: m.user?.username || null,
         userId: m.user_id || null,
         role: m.role === 'owner' ? 'Organizer' : m.role === 'moderator' ? 'Moderator' : 'Member',
+        // Raw role from DB ('owner' | 'moderator' | 'member'). Needed by the
+        // member-action menu to decide which buttons to show (e.g. you can't
+        // promote a moderator further; you can't demote a member).
+        roleRaw: (m.role as 'owner' | 'moderator' | 'member') || 'member',
+        // True when this row is the currently-logged-in user. The menu hides
+        // self-actions (use Leave Group instead, can't kick or demote yourself).
+        isYou: !!(currentUser && (m.user_id || m.user?.id) === currentUser.id),
         points: 0,
       }))
     : (mockGroup?.members_list || []);
@@ -1265,6 +1296,74 @@ export default function GroupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rsvp_event', payload: { userId: currentUser.id, eventId } }),
       });
+    }
+  }
+
+  // ── Member management (mod tools) ──────────────────────────────────────
+  // Promote a member to moderator OR demote a moderator back to member.
+  // Server enforces all the permission rules — this is just the client wrapper.
+  // After success we re-fetch group data so the members list reflects the new
+  // role and isModDB updates if you just changed your own role.
+  async function setMemberRole(targetUserId: string, newRole: 'moderator' | 'member') {
+    if (!currentUser || !group?._dbId || memberActionBusy) return;
+    setMemberActionBusy(true);
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set_member_role',
+          payload: { actorId: currentUser.id, groupId: group._dbId, targetUserId, newRole },
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      // Optimistic local update — patch the member row in dbMembers so the
+      // badge changes instantly without waiting for a refetch.
+      setDbMembers(prev => prev.map((m: any) => {
+        const mid = m.user_id || m.user?.id;
+        return mid === targetUserId ? { ...m, role: newRole } : m;
+      }));
+      // If the user changed their own role to/from moderator, sync isModDB
+      if (targetUserId === currentUser.id) setIsModDB(newRole === 'moderator');
+      setMemberActionsFor(null);
+    } catch (err: any) {
+      alert(`Couldn't update role: ${err?.message || 'unknown error'}`);
+    } finally {
+      setMemberActionBusy(false);
+    }
+  }
+
+  // Remove a member from the group. Server blocks attempts to kick the owner
+  // and attempts to self-kick (use leave_group for that).
+  async function kickMember(targetUserId: string, targetName: string) {
+    if (!currentUser || !group?._dbId || memberActionBusy) return;
+    if (!window.confirm(`Remove ${targetName} from the group? They'll lose access immediately.`)) return;
+    setMemberActionBusy(true);
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'kick_member',
+          payload: { actorId: currentUser.id, groupId: group._dbId, targetUserId },
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      // Drop the member from the local list and decrement member count
+      setDbMembers(prev => prev.filter((m: any) => (m.user_id || m.user?.id) !== targetUserId));
+      setMemberActionsFor(null);
+    } catch (err: any) {
+      alert(`Couldn't remove member: ${err?.message || 'unknown error'}`);
+    } finally {
+      setMemberActionBusy(false);
     }
   }
 
@@ -3075,18 +3174,60 @@ export default function GroupPage() {
                 <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>👥 Members</div>
                 <div style={{ fontSize:12, color:C.sub }}>{displayMembers.length} members</div>
               </div>
-              {displayMembers.map((m:any, i:number) => (
-                <div key={i} onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
-                  style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
-                  <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
-                    <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
+              {displayMembers.map((m:any, i:number) => {
+                // Show the action kebab only when the current user is owner/mod
+                // AND the target row isn't (a) themselves or (b) the group owner.
+                const canManageThis = isOwnerOrMod && !m.isYou && m.roleRaw !== 'owner';
+                const menuOpen = memberActionsFor === m.userId;
+                return (
+                  <div key={i} style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"relative" }}>
+                    {/* Tapping the body navigates to profile */}
+                    <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
+                      style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0, cursor:"pointer" }}>
+                      <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
+                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
+                        <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
+                      </div>
+                      {m.points > 0 && <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
+                    </div>
+                    {/* Owner/mod-only kebab button. Sits at the row's right edge. */}
+                    {canManageThis && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMemberActionsFor(menuOpen ? null : m.userId); }}
+                        aria-label="Member actions"
+                        style={{ width:32, height:32, borderRadius:8, border:`1px solid ${C.blueMid}`, background:"transparent", color:C.text, fontWeight:900, fontSize:16, cursor:"pointer", flexShrink:0, lineHeight:1 }}
+                      >⋯</button>
+                    )}
+                    {/* Floating action menu — promote/demote/kick. Renders to the
+                        right edge below the button. Click-away backdrop closes it. */}
+                    {menuOpen && (
+                      <>
+                        <div onClick={() => setMemberActionsFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
+                        <div style={{ position:"absolute", right:8, top:60, zIndex:41, background:"#1A1D2E", border:`1px solid #2A2D3E`, borderRadius:12, padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
+                          {m.roleRaw === 'member' && (
+                            <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'moderator'); }}
+                              style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                              ⬆️ Promote to moderator
+                            </button>
+                          )}
+                          {m.roleRaw === 'moderator' && (
+                            <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'member'); }}
+                              style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                              ⬇️ Demote to member
+                            </button>
+                          )}
+                          <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); kickMember(m.userId, m.name); }}
+                            style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#FCA5A5", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                            🚫 Remove from group
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  {m.points > 0 && <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -3751,26 +3892,62 @@ export default function GroupPage() {
           {/* Members sidebar */}
           <div>
             <div style={{ marginBottom:12, paddingBottom:10, borderBottom:`1px solid ${C.darkBorder}` }}>
-              <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👥 Top Members</div>
-              <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>Moderators & most active</div>
+              <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👥 All Members</div>
+              <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{displayMembers.length} total{isOwnerOrMod ? " · tap ⋯ to manage" : ""}</div>
             </div>
-            {displayMembers.map((m:any, i:number) => (
-              <div key={i} onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
-                style={{ background:C.darkCard, borderRadius:14, border:`1px solid ${C.darkBorder}`, marginBottom:9, padding:"12px 14px", display:"flex", alignItems:"center", gap:11, cursor:"pointer", transition:"border-color 0.15s" }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = catColor}
-                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
-              >
-                <div style={{ width:12, fontSize:10, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}
+            {displayMembers.map((m:any, i:number) => {
+              const canManageThis = isOwnerOrMod && !m.isYou && m.roleRaw !== 'owner';
+              const menuOpen = memberActionsFor === m.userId;
+              return (
+                <div key={i} style={{ background:C.darkCard, borderRadius:14, border:`1px solid ${C.darkBorder}`, marginBottom:9, padding:"12px 14px", display:"flex", alignItems:"center", gap:11, position:"relative", transition:"border-color 0.15s" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = catColor}
+                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
+                >
+                  <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
+                    style={{ display:"flex", alignItems:"center", gap:11, flex:1, minWidth:0, cursor:"pointer" }}>
+                    <div style={{ width:12, fontSize:10, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
+                    <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                      {m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
+                      <div style={{ fontSize:10, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.darkSub, marginTop:1, fontWeight:m.role==="Organizer"||m.role==="Moderator"?700:400 }}>{m.role}</div>
+                    </div>
+                    {m.points > 0 && <div style={{ fontSize:11, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
+                  </div>
+                  {canManageThis && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMemberActionsFor(menuOpen ? null : m.userId); }}
+                      aria-label="Member actions"
+                      style={{ width:28, height:28, borderRadius:6, border:`1px solid ${C.darkBorder}`, background:"transparent", color:"#E2E8F0", fontWeight:900, fontSize:14, cursor:"pointer", flexShrink:0, lineHeight:1 }}
+                    >⋯</button>
+                  )}
+                  {menuOpen && (
+                    <>
+                      <div onClick={() => setMemberActionsFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
+                      <div style={{ position:"absolute", right:8, top:50, zIndex:41, background:"#1A1D2E", border:`1px solid #2A2D3E`, borderRadius:12, padding:6, minWidth:200, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
+                        {m.roleRaw === 'member' && (
+                          <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'moderator'); }}
+                            style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                            ⬆️ Promote to moderator
+                          </button>
+                        )}
+                        {m.roleRaw === 'moderator' && (
+                          <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'member'); }}
+                            style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                            ⬇️ Demote to member
+                          </button>
+                        )}
+                        <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); kickMember(m.userId, m.name); }}
+                          style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#FCA5A5", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                          🚫 Remove from group
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
-                  <div style={{ fontSize:10, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.darkSub, marginTop:1, fontWeight:m.role==="Organizer"||m.role==="Moderator"?700:400 }}>{m.role}</div>
-                </div>
-                {m.points > 0 && <div style={{ fontSize:11, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
