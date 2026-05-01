@@ -523,6 +523,14 @@ export default function GroupPage() {
   const [likedPosts, setLikedPosts] = useState<Record<string,boolean>>({});
   const [noteText, setNoteText] = useState("");
   const [noteCategory, setNoteCategory] = useState("General");
+  // Note media — photo (data URL after compression) and/or video (File + blob URL).
+  // Same dual-state pattern as posts. Notes had no media support at all before
+  // this — just text. Now they accept either a photo or a video, not both.
+  const [notePhotoDataUrl, setNotePhotoDataUrl] = useState<string | null>(null);
+  const [noteVideoFile, setNoteVideoFile] = useState<File | null>(null);
+  const [noteVideoPreviewUrl, setNoteVideoPreviewUrl] = useState<string | null>(null);
+  const noteMediaInputRef = useRef<HTMLInputElement>(null);
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [eventComments, setEventComments] = useState<Record<string,{user:string;text:string;time:string}[]>>({});
 
@@ -542,7 +550,7 @@ export default function GroupPage() {
   const [challengeViewTab, setChallengeViewTab] = useState<"active"|"completed">("active");
   const [groupGoals, setGroupGoals] = useState<any[]>([]);
   const [showGoalModal, setShowGoalModal] = useState(false);
-  const [goalForm, setGoalForm] = useState({ title:"", metric:"miles_run", target:0, duration_days:7 });
+  const [goalForm, setGoalForm] = useState<{title:string;metric:string;target:number;duration_days:number;category:'fitness'|'wellness'}>({ title:"", metric:"miles_run", target:0, duration_days:7, category:"fitness" });
   const [goalSaving, setGoalSaving] = useState(false);
   const [commentInputs, setCommentInputs] = useState<Record<string,string>>({});
   const [joinedChallenges, setJoinedChallenges] = useState<Record<string,boolean>>({});
@@ -558,6 +566,12 @@ export default function GroupPage() {
   // Photo attached to a group post — base64 data URL preview before upload
   const [postPhotoDataUrl, setPostPhotoDataUrl] = useState<string | null>(null);
   const postPhotoInputRef = useRef<HTMLInputElement>(null);
+  // Video support: kept separate from photo so the preview path stays simple.
+  // Photos are stored as base64 data URLs (cheap, lets us reuse compressImage).
+  // Videos are kept as Files + blob URLs because base64-ing a video would
+  // pile MB into memory and JSON. The submit path branches on which is set.
+  const [postVideoFile, setPostVideoFile] = useState<File | null>(null);
+  const [postVideoPreviewUrl, setPostVideoPreviewUrl] = useState<string | null>(null);
 
   // ── Create Event modal ──
   const [showEventModal, setShowEventModal] = useState(false);
@@ -925,11 +939,24 @@ export default function GroupPage() {
     }
     if (!goalForm.title.trim()) return alert("Add a title");
     if (goalForm.target <= 0) return alert("Set a target number");
+
+    // Enforce 1-active-goal-per-category. Any active goal in the same
+    // category blocks creation — owner has to delete the old one first.
+    // Goals without a category set (legacy) are treated as fitness so the
+    // limit applies to them too.
+    const activeInCategory = groupGoals.filter((g: any) =>
+      g.status === 'active' && (g.goal_category || 'fitness') === goalForm.category
+    );
+    if (activeInCategory.length > 0) {
+      alert(`This group already has an active ${goalForm.category} goal. Delete it first to set a new one.`);
+      return;
+    }
+
     setGoalSaving(true);
     try {
       const end = new Date();
       end.setDate(end.getDate() + goalForm.duration_days);
-      const { data: goal, error } = await supabase.from("group_challenges").insert({
+      const insertRow: Record<string, any> = {
         creator_group_id: dbId,
         title: goalForm.title,
         metric: goalForm.metric,
@@ -939,19 +966,30 @@ export default function GroupPage() {
         status: "active",
         is_group_goal: true,
         member_count: dbMembers.length,
-      }).select().single();
+        goal_category: goalForm.category,
+      };
+      let { data: goal, error } = await supabase.from("group_challenges").insert(insertRow).select().single();
+
+      // Graceful retry if goal_category column doesn't exist yet — let the
+      // goal save anyway so the feature works before the migration is run.
+      if (error && /goal_category/i.test(error.message || '')) {
+        delete insertRow.goal_category;
+        const retry = await supabase.from("group_challenges").insert(insertRow).select().single();
+        goal = retry.data; error = retry.error;
+      }
+
       if (error) {
         if (error.message?.includes("schema cache") || error.message?.includes("column")) {
-          alert("Missing DB columns. Run in Supabase SQL Editor:\n\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS goal numeric DEFAULT 0;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS is_group_goal boolean DEFAULT false;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS description text;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS stakes text;");
+          alert("Missing DB columns. Run in Supabase SQL Editor:\n\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS goal numeric DEFAULT 0;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS is_group_goal boolean DEFAULT false;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS description text;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS stakes text;\nALTER TABLE group_challenges ADD COLUMN IF NOT EXISTS goal_category text DEFAULT 'fitness';");
           setGoalSaving(false); return;
         }
         throw error;
       }
       // Auto-enroll ALL group members
-      if (dbMembers.length > 0) {
+      if (goal && dbMembers.length > 0) {
         await supabase.from("group_challenge_members").insert(
           dbMembers.map((m:any) => ({
-            challenge_id: goal.id,
+            challenge_id: (goal as any).id,
             user_id: m.user_id || m.id,
             group_id: dbId,
           }))
@@ -959,7 +997,7 @@ export default function GroupPage() {
       }
       console.log("Group goal created:", goal);
       setShowGoalModal(false);
-      setGoalForm({ title:"", metric:"miles_run", target:0, duration_days:7 });
+      setGoalForm({ title:"", metric:"miles_run", target:0, duration_days:7, category:"fitness" });
       await loadGroupGoals();
       // Force switch to challenges tab and reload
       setTab("challenges");
@@ -1127,6 +1165,11 @@ export default function GroupPage() {
       avatar: (n.user?.full_name || n.user?.username || 'U').slice(0,2).toUpperCase(),
       avatarUrl: n.user?.avatar_url || null,
       time: new Date(n.created_at).toLocaleDateString(), category: n.category, content: n.content, likes: n.likes_count || 0,
+      // Carry media through. Detect type from URL extension when the column
+      // is missing (legacy notes won't have media_type set).
+      media_url: n.media_url || null,
+      media_type: (n.media_type as 'photo' | 'video' | null)
+        || (n.media_url && /\.(mp4|mov|webm|m4v)(\?|$)/i.test(n.media_url) ? 'video' : (n.media_url ? 'photo' : null)),
     })),
     ...localNotes,
   ];
@@ -1136,7 +1179,13 @@ export default function GroupPage() {
     id: p.id, user: p.user?.full_name || p.user?.username || 'Unknown',
     avatar: (p.user?.full_name || p.user?.username || 'U').slice(0,2).toUpperCase(),
     avatarUrl: p.user?.avatar_url || null,
-    time: new Date(p.created_at).toLocaleDateString(), content: p.content, likes: p.likes_count || 0, photo: p.media_url || null,
+    time: new Date(p.created_at).toLocaleDateString(), content: p.content, likes: p.likes_count || 0,
+    photo: p.media_url || null,
+    // mediaType drives whether the renderer uses <img> or <video>. Posts saved
+    // before media_type column existed will be null → fall back to detecting
+    // by URL extension so old posts still render correctly.
+    mediaType: (p.media_type as 'photo' | 'video' | null)
+      || (p.media_url && /\.(mp4|mov|webm|m4v)(\?|$)/i.test(p.media_url) ? 'video' : (p.media_url ? 'photo' : null)),
   }));
 
   // Use mock posts as fallback if no DB posts
@@ -1287,17 +1336,31 @@ export default function GroupPage() {
   }
 
   // ── Submit post ──
-  // Allow either text alone OR text + photo OR photo alone (text optional when photo attached).
+  // Allow either text alone OR text + media OR media alone (text optional when media attached).
   async function submitPost() {
     const hasContent = postContent.trim().length > 0;
     const hasPhoto = !!postPhotoDataUrl;
-    if ((!hasContent && !hasPhoto) || postSubmitting) return;
+    const hasVideo = !!postVideoFile;
+    if ((!hasContent && !hasPhoto && !hasVideo) || postSubmitting) return;
     setPostSubmitting(true);
     try {
-      // Upload photo first (if any). If upload fails, show alert and abort
-      // — we don't want to silently post text-only when the user attached a photo.
+      // Upload media first (if any). If upload fails, show alert and abort —
+      // we don't want to silently post text-only when the user attached media.
       let mediaUrl: string | null = null;
-      if (hasPhoto && postPhotoDataUrl) {
+      let mediaType: 'photo' | 'video' | null = null;
+      if (hasVideo && postVideoFile) {
+        // Videos: pass File directly (uploadPhoto accepts both data URLs and Files).
+        // Use a video extension so the backend stores it correctly.
+        const ext = postVideoFile.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || 'mp4';
+        const path = `group-posts/${group._dbId || 'mock'}/${Date.now()}.${ext}`;
+        mediaUrl = await uploadPhoto(postVideoFile, 'posts', path);
+        if (!mediaUrl) {
+          alert("Video upload failed. Try again or remove the video.");
+          setPostSubmitting(false);
+          return;
+        }
+        mediaType = 'video';
+      } else if (hasPhoto && postPhotoDataUrl) {
         const path = `group-posts/${group._dbId || 'mock'}/${Date.now()}.jpg`;
         mediaUrl = await uploadPhoto(postPhotoDataUrl, 'posts', path);
         if (!mediaUrl) {
@@ -1305,13 +1368,14 @@ export default function GroupPage() {
           setPostSubmitting(false);
           return;
         }
+        mediaType = 'photo';
       }
 
       if (currentUser && group._dbId) {
         const res = await fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create_group_post', payload: { userId: currentUser.id, groupId: group._dbId, content: postContent || '', media_url: mediaUrl } }),
+          body: JSON.stringify({ action: 'create_group_post', payload: { userId: currentUser.id, groupId: group._dbId, content: postContent || '', media_url: mediaUrl, media_type: mediaType } }),
         });
         const data = await res.json();
         if (data.post) {
@@ -1329,6 +1393,7 @@ export default function GroupPage() {
           content: postContent,
           likes_count: 0,
           media_url: mediaUrl,
+          media_type: mediaType,
           created_at: new Date().toISOString(),
           user: {
             id: currentUser?.id,
@@ -1340,6 +1405,9 @@ export default function GroupPage() {
       }
       setPostContent("");
       setPostPhotoDataUrl(null);
+      if (postVideoPreviewUrl) URL.revokeObjectURL(postVideoPreviewUrl);
+      setPostVideoFile(null);
+      setPostVideoPreviewUrl(null);
       if (postPhotoInputRef.current) postPhotoInputRef.current.value = "";
     } finally {
       setPostSubmitting(false);
@@ -1350,7 +1418,31 @@ export default function GroupPage() {
   async function onPickPostPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
+
+    // Branch: video files skip compression and go straight through. We use a
+    // blob URL for the preview so the UI doesn't have to read the whole video
+    // into a base64 string. Limit at 100MB so users don't accidentally try to
+    // upload a 4K phone clip — Supabase + Vercel will reject anything larger.
+    if (f.type.startsWith("video/")) {
+      if (f.size > 100 * 1024 * 1024) {
+        alert("That video is too large (>100MB). Trim it down or use a shorter clip.");
+        return;
+      }
+      // Clear any prior photo so the preview shows the new video instead
+      setPostPhotoDataUrl(null);
+      // Revoke any previous blob URL to avoid leaking
+      if (postVideoPreviewUrl) URL.revokeObjectURL(postVideoPreviewUrl);
+      const blobUrl = URL.createObjectURL(f);
+      setPostVideoFile(f);
+      setPostVideoPreviewUrl(blobUrl);
+      return;
+    }
+
     try {
+      // Clear video state if user is replacing with a photo
+      if (postVideoPreviewUrl) URL.revokeObjectURL(postVideoPreviewUrl);
+      setPostVideoFile(null);
+      setPostVideoPreviewUrl(null);
       // compressImage returns a File; convert to data URL for preview
       const compressed = await compressImage(f, 1600, 0.82);
       const reader = new FileReader();
@@ -1453,12 +1545,54 @@ export default function GroupPage() {
     }
   }
 
+  // Media picker for notes — branches the same way posts do (photo gets
+  // compressed to a data URL, video kept as File + blob URL for preview).
+  async function onPickNoteMedia(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.type.startsWith("video/")) {
+      if (f.size > 100 * 1024 * 1024) {
+        alert("That video is too large (>100MB). Trim it down or use a shorter clip.");
+        return;
+      }
+      setNotePhotoDataUrl(null);
+      if (noteVideoPreviewUrl) URL.revokeObjectURL(noteVideoPreviewUrl);
+      const blobUrl = URL.createObjectURL(f);
+      setNoteVideoFile(f);
+      setNoteVideoPreviewUrl(blobUrl);
+      return;
+    }
+    try {
+      if (noteVideoPreviewUrl) URL.revokeObjectURL(noteVideoPreviewUrl);
+      setNoteVideoFile(null);
+      setNoteVideoPreviewUrl(null);
+      const compressed = await compressImage(f, 1600, 0.82);
+      const reader = new FileReader();
+      reader.onload = () => setNotePhotoDataUrl(typeof reader.result === 'string' ? reader.result : null);
+      reader.readAsDataURL(compressed);
+    } catch (err) {
+      console.error("Note photo compress error:", err);
+      alert("Couldn't process that photo. Try a different one.");
+    }
+  }
+
   // ── Submit note ──
   async function submitNote() {
     const text = noteText.trim();
-    if (!text) return;
-    // ALWAYS add locally first for instant feedback
+    const hasPhoto = !!notePhotoDataUrl;
+    const hasVideo = !!noteVideoFile;
+    // Allow note with only media (no text) — useful for sharing a quick clip
+    // or photo without forcing a caption.
+    if (!text && !hasPhoto && !hasVideo) return;
+    if (noteSubmitting) return;
+    setNoteSubmitting(true);
+
+    // ALWAYS add locally first for instant feedback. Local note carries the
+    // preview URL so the user sees their media in the feed immediately even
+    // before the DB roundtrip finishes.
     const localId = String(Date.now());
+    const localMediaUrl = hasVideo ? noteVideoPreviewUrl : notePhotoDataUrl;
+    const localMediaType: 'photo' | 'video' | null = hasVideo ? 'video' : hasPhoto ? 'photo' : null;
     const newLocal = {
       id: localId,
       user: "You",
@@ -1466,33 +1600,69 @@ export default function GroupPage() {
       time: "Just now",
       category: noteCategory,
       content: text,
-      likes: 0
+      likes: 0,
+      media_url: localMediaUrl,
+      media_type: localMediaType,
     };
     setLocalNotes(prev => [...prev, newLocal]);
-    setNoteText(""); // Clear immediately
 
-    // Try to persist to DB in background
-    if (currentUser && group._dbId) {
-      try {
+    // Snapshot the media we need to upload, then clear inputs immediately so
+    // the form resets without making the user wait for the upload.
+    const photoToUpload = notePhotoDataUrl;
+    const videoToUpload = noteVideoFile;
+    setNoteText("");
+    setNotePhotoDataUrl(null);
+    setNoteVideoFile(null);
+    if (noteVideoPreviewUrl) {
+      URL.revokeObjectURL(noteVideoPreviewUrl);
+      setNoteVideoPreviewUrl(null);
+    }
+    if (noteMediaInputRef.current) noteMediaInputRef.current.value = "";
+
+    try {
+      // Upload media if present. If upload fails, the local note stays
+      // visible so the user isn't blocked, and we don't try to persist.
+      let mediaUrl: string | null = null;
+      let mediaType: 'photo' | 'video' | null = null;
+      if (videoToUpload) {
+        const ext = videoToUpload.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || 'mp4';
+        const path = `group-notes/${group._dbId || 'mock'}/${Date.now()}.${ext}`;
+        mediaUrl = await uploadPhoto(videoToUpload, 'posts', path);
+        mediaType = mediaUrl ? 'video' : null;
+      } else if (photoToUpload) {
+        const path = `group-notes/${group._dbId || 'mock'}/${Date.now()}.jpg`;
+        mediaUrl = await uploadPhoto(photoToUpload, 'posts', path);
+        mediaType = mediaUrl ? 'photo' : null;
+      }
+
+      // Try to persist to DB in background
+      if (currentUser && group._dbId) {
         const res = await fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: text, category: noteCategory } }),
+          body: JSON.stringify({ action: 'create_community_note', payload: { userId: currentUser.id, groupId: group._dbId, content: text, category: noteCategory, media_url: mediaUrl, media_type: mediaType } }),
         });
         const data = await res.json();
         if (data.note) {
-          // Replace local note with DB note
+          // Replace local note with DB note (now with persisted media URL)
           const n = data.note;
           setLocalNotes(prev => prev.filter(ln => ln.id !== localId));
           setDbNotes(prev => [{
             id: n.id,
-            user: { full_name: n.user?.full_name, username: n.user?.username },
-            created_at: n.created_at, category: n.category, content: n.content, likes_count: 0,
+            user: { full_name: n.user?.full_name, username: n.user?.username, avatar_url: n.user?.avatar_url },
+            created_at: n.created_at,
+            category: n.category,
+            content: n.content,
+            likes_count: 0,
+            media_url: n.media_url,
+            media_type: n.media_type,
           }, ...prev]);
         }
-      } catch {
-        // Keep the local note
       }
+    } catch {
+      // Keep the local note so the user's content isn't lost
+    } finally {
+      setNoteSubmitting(false);
     }
   }
 
@@ -1690,16 +1860,54 @@ export default function GroupPage() {
                 padding:"10px 12px",fontSize:14,color:"#F0F0F0",outline:"none",
                 boxSizing:"border-box" as const,marginBottom:14}}/>
 
+            {/* Category selector — Fitness vs Wellness. Switching swaps the
+                metric grid below. Default metric flips so the selected metric
+                is always valid for the chosen category. */}
+            <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase" as const}}>Category</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+              {([
+                {key:"fitness" as const,  icon:"💪",label:"Fitness"},
+                {key:"wellness" as const, icon:"🌿",label:"Wellness"},
+              ]).map(c=>(
+                <button key={c.key} onClick={()=>setGoalForm(f=>({
+                  ...f,
+                  category:c.key,
+                  // Reset to a sensible default metric for the new category
+                  metric: c.key === 'fitness' ? 'miles_run' : 'wellness_sessions',
+                  target: 0,
+                }))} style={{
+                  padding:"12px 8px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:800,
+                  border:`1.5px solid ${goalForm.category===c.key?"#7C3AED":"#2D1F52"}`,
+                  background:goalForm.category===c.key?"rgba(124,58,237,0.2)":"transparent",
+                  color:goalForm.category===c.key?"#fff":"#6B7280",
+                }}><span style={{fontSize:16,marginRight:6}}>{c.icon}</span>{c.label}</button>
+              ))}
+            </div>
+
             <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:8,textTransform:"uppercase" as const}}>What Are We Tracking?</label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
-              {([
-                {key:"miles_run",icon:"🏃",label:"Miles Run"},
-                {key:"miles_walked",icon:"🚶",label:"Miles Walked"},
-                {key:"miles_cycled",icon:"🚴",label:"Miles Cycled"},
-                {key:"total_workouts",icon:"💪",label:"Workouts"},
-                {key:"weight_lifted",icon:"🏋️",label:"Weight Lifted"},
-                {key:"weight_lost",icon:"⚖️",label:"Weight Lost"},
-              ] as const).map(m=>(
+              {/* Fitness metrics — keys match groupGoalSync.ts so auto-tracking
+                  from activity_logs actually works. We renamed `miles_cycled`
+                  → `miles_biked` and `total_workouts` → `workouts` to match
+                  the sync lib (the old keys silently never tracked). */}
+              {(goalForm.category === 'fitness' ? [
+                {key:"miles_run",     icon:"🏃",label:"Miles Run"},
+                {key:"miles_walked",  icon:"🚶",label:"Miles Walked"},
+                {key:"miles_biked",   icon:"🚴",label:"Miles Biked"},
+                {key:"miles_swum",    icon:"🏊",label:"Miles Swum"},
+                {key:"runs",          icon:"🏃‍♂️",label:"Runs"},
+                {key:"workouts",      icon:"💪",label:"Workouts"},
+                {key:"lift_sessions", icon:"🏋️",label:"Lifts"},
+                {key:"yoga_sessions", icon:"🧘‍♀️",label:"Yoga"},
+                {key:"total_minutes", icon:"⏱️",label:"Minutes"},
+              ] : [
+                {key:"meditation_sessions", icon:"🧘",label:"Meditations"},
+                {key:"cold_plunges",        icon:"❄️",label:"Cold Plunges"},
+                {key:"sauna_sessions",      icon:"🔥",label:"Sauna"},
+                {key:"wellness_sessions",   icon:"🌿",label:"Any Wellness"},
+                {key:"nutrition_logs",      icon:"🥗",label:"Meals Logged"},
+                {key:"total_minutes",       icon:"⏱️",label:"Minutes"},
+              ]).map(m=>(
                 <button key={m.key} onClick={()=>setGoalForm(f=>({...f,metric:m.key,target:0}))} style={{
                   padding:"10px 6px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
                   border:`1.5px solid ${goalForm.metric===m.key?"#7C3AED":"#2D1F52"}`,
@@ -1710,11 +1918,20 @@ export default function GroupPage() {
             </div>
 
             <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase" as const}}>
-              Team Target {goalForm.metric==="total_workouts"?"(workouts)":goalForm.metric.includes("weight")?"(lbs)":"(miles)"}
+              {/* Unit hint adapts to the picked metric. */}
+              Team Target {(()=>{
+                const m = goalForm.metric;
+                if (m.startsWith('miles_')) return '(miles)';
+                if (m === 'total_minutes') return '(minutes)';
+                if (m === 'workouts' || m === 'runs' || m === 'lift_sessions' || m === 'yoga_sessions') return '(sessions)';
+                if (m === 'meditation_sessions' || m === 'cold_plunges' || m === 'sauna_sessions' || m === 'wellness_sessions') return '(sessions)';
+                if (m === 'nutrition_logs') return '(meals)';
+                return '';
+              })()}
             </label>
             <input type="number" min="1" value={goalForm.target||""}
               onChange={e=>setGoalForm(f=>({...f,target:parseFloat(e.target.value)||0}))}
-              placeholder={goalForm.metric==="total_workouts"?"e.g. 50":goalForm.metric.includes("weight")?"e.g. 5000":"e.g. 100"}
+              placeholder="e.g. 100"
               style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
                 padding:"10px 12px",fontSize:14,color:"#F0F0F0",outline:"none",
                 boxSizing:"border-box" as const,marginBottom:14}}/>
@@ -2052,12 +2269,32 @@ export default function GroupPage() {
                       </button>
                     </div>
                   )}
+                  {/* Video preview — uses the blob URL set in onPickPostPhoto.
+                      We render with controls so the user can verify the right
+                      clip uploaded. */}
+                  {postVideoPreviewUrl && (
+                    <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}`, background:"#000" }}>
+                      <video src={postVideoPreviewUrl} controls style={{ width:"100%", maxHeight:320, display:"block" }} />
+                      <button
+                        onClick={() => {
+                          if (postVideoPreviewUrl) URL.revokeObjectURL(postVideoPreviewUrl);
+                          setPostVideoFile(null);
+                          setPostVideoPreviewUrl(null);
+                          if (postPhotoInputRef.current) postPhotoInputRef.current.value = "";
+                        }}
+                        style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
+                        ✕ Remove
+                      </button>
+                    </div>
+                  )}
 
-                  {/* Hidden file input — triggered by the 📷 button below */}
+                  {/* Hidden file input — triggered by the 📷 button below.
+                      Accepts both images and videos; onPickPostPhoto branches
+                      on file.type to handle each. */}
                   <input
                     ref={postPhotoInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     onChange={onPickPostPhoto}
                     style={{ display:"none" }}
                   />
@@ -2067,10 +2304,10 @@ export default function GroupPage() {
                       onClick={() => postPhotoInputRef.current?.click()}
                       disabled={postSubmitting}
                       style={{ padding:"9px 14px", borderRadius:12, border:`1.5px solid ${C.blueMid}`, background:C.blueLight, color:C.text, fontWeight:800, fontSize:13, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
-                      📷 {postPhotoDataUrl ? "Change" : "Add photo"}
+                      📷 {postPhotoDataUrl || postVideoPreviewUrl ? "Change" : "Add photo / video"}
                     </button>
-                    <button onClick={submitPost} disabled={(!postContent.trim() && !postPhotoDataUrl) || postSubmitting}
-                      style={{ marginLeft:"auto", padding:"9px 22px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:((!postContent.trim()&&!postPhotoDataUrl)||postSubmitting)?0.6:1 }}>
+                    <button onClick={submitPost} disabled={(!postContent.trim() && !postPhotoDataUrl && !postVideoFile) || postSubmitting}
+                      style={{ marginLeft:"auto", padding:"9px 22px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:((!postContent.trim()&&!postPhotoDataUrl&&!postVideoFile)||postSubmitting)?0.6:1 }}>
                       {postSubmitting ? "Posting..." : "Post"}
                     </button>
                   </div>
@@ -2087,11 +2324,16 @@ export default function GroupPage() {
                       <div style={{ fontSize:11, color:C.sub }}>{post.time}</div>
                     </div>
                   </div>
-                  {post.photo && (
+                  {post.photo && post.mediaType === 'video' ? (
+                    <div style={{ width:"100%", background:"#000", overflow:"hidden" }}>
+                      <video src={post.photo} controls preload="metadata" playsInline
+                        style={{ width:"100%", maxHeight:480, display:"block" }} />
+                    </div>
+                  ) : post.photo ? (
                     <div style={{ width:"100%", aspectRatio:"4/3", overflow:"hidden" }}>
                       <img src={post.photo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                     </div>
-                  )}
+                  ) : null}
                   <div style={{ padding:"10px 18px 14px" }}>
                     <p style={{ fontSize:14, color:C.text, lineHeight:1.65, margin:"0 0 10px" }}>{post.content}</p>
                     <div style={{ display:"flex", alignItems:"center", gap:14 }}>
@@ -2262,6 +2504,14 @@ export default function GroupPage() {
                       {groupGoals.filter(g=>g.status!=="active").map(goal=>{
                         const GMETRICS2: Record<string,{label:string;icon:string;unit:string}> = {
                           miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
+                          miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
+                          runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
+                          lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
+                          total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
+                          meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
+                          sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
+                          nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
+                          // Legacy keys preserved so old goals still display
                           miles_cycled:{label:"Miles Cycled",icon:"🚴",unit:"mi"},total_workouts:{label:"Total Workouts",icon:"💪",unit:"workouts"},
                           weight_lifted:{label:"Weight Lifted",icon:"🏋️",unit:"lbs"},weight_lost:{label:"Weight Lost",icon:"⚖️",unit:"lbs"},
                         };
@@ -2370,8 +2620,23 @@ export default function GroupPage() {
               {/* Active group goals */}
               {groupGoals.filter(g=>g.status==="active").map(goal=>{
                 const GMETRICS: Record<string,{label:string;icon:string;unit:string}> = {
+                  // Fitness — keys must match groupGoalSync.ts
                   miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},
                   miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
+                  miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},
+                  miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
+                  runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},
+                  workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
+                  lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},
+                  yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
+                  total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
+                  // Wellness
+                  meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},
+                  cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
+                  sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},
+                  wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
+                  nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
+                  // Legacy keys — keep so old goals still render readable
                   miles_cycled:{label:"Miles Cycled",icon:"🚴",unit:"mi"},
                   total_workouts:{label:"Total Workouts",icon:"💪",unit:"workouts"},
                   weight_lifted:{label:"Weight Lifted",icon:"🏋️",unit:"lbs"},
@@ -2616,7 +2881,58 @@ export default function GroupPage() {
                 </div>
                 <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Share a workout routine, recipe, mindset tip, or anything that might help the group..."
                   style={{ width:"100%", background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text, resize:"vertical", minHeight:90, fontFamily:"inherit", outline:"none" }} />
-                <button onClick={submitNote} style={{ marginTop:10, padding:"10px 24px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>Post Note</button>
+
+                {/* Photo preview */}
+                {notePhotoDataUrl && (
+                  <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}` }}>
+                    <img src={notePhotoDataUrl} alt="Note preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
+                    <button
+                      onClick={() => { setNotePhotoDataUrl(null); if (noteMediaInputRef.current) noteMediaInputRef.current.value = ""; }}
+                      style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
+                      ✕ Remove
+                    </button>
+                  </div>
+                )}
+                {/* Video preview */}
+                {noteVideoPreviewUrl && (
+                  <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}`, background:"#000" }}>
+                    <video src={noteVideoPreviewUrl} controls style={{ width:"100%", maxHeight:320, display:"block" }} />
+                    <button
+                      onClick={() => {
+                        if (noteVideoPreviewUrl) URL.revokeObjectURL(noteVideoPreviewUrl);
+                        setNoteVideoFile(null);
+                        setNoteVideoPreviewUrl(null);
+                        if (noteMediaInputRef.current) noteMediaInputRef.current.value = "";
+                      }}
+                      style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
+                      ✕ Remove
+                    </button>
+                  </div>
+                )}
+
+                {/* Hidden file input — accepts both images and videos */}
+                <input
+                  ref={noteMediaInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={onPickNoteMedia}
+                  style={{ display:"none" }}
+                />
+
+                <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10 }}>
+                  <button
+                    onClick={() => noteMediaInputRef.current?.click()}
+                    disabled={noteSubmitting}
+                    style={{ padding:"9px 14px", borderRadius:12, border:`1.5px solid ${C.blueMid}`, background:C.blueLight, color:C.text, fontWeight:800, fontSize:13, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+                    📷 {(notePhotoDataUrl || noteVideoPreviewUrl) ? "Change" : "Add photo / video"}
+                  </button>
+                  <button
+                    onClick={submitNote}
+                    disabled={(!noteText.trim() && !notePhotoDataUrl && !noteVideoFile) || noteSubmitting}
+                    style={{ marginLeft:"auto", padding:"10px 24px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:((!noteText.trim()&&!notePhotoDataUrl&&!noteVideoFile)||noteSubmitting)?0.6:1 }}>
+                    {noteSubmitting ? "Posting..." : "Post Note"}
+                  </button>
+                </div>
               </div>
 
               {allNotes.length === 0 && (
@@ -2640,6 +2956,18 @@ export default function GroupPage() {
                       {note.category==="Workout"?"💪":note.category==="Recipe"?"🥗":note.category==="Mindset"?"🧠":note.category==="Tip"?"💡":"💬"} {note.category}
                     </span>
                   </div>
+                  {/* Note media — photo or video. Same fallback detection as
+                      posts so legacy DB rows render too. */}
+                  {note.media_url && note.media_type === 'video' ? (
+                    <div style={{ marginBottom:10, borderRadius:12, overflow:"hidden", background:"#000" }}>
+                      <video src={note.media_url} controls preload="metadata" playsInline
+                        style={{ width:"100%", maxHeight:420, display:"block" }} />
+                    </div>
+                  ) : note.media_url ? (
+                    <div style={{ marginBottom:10, borderRadius:12, overflow:"hidden" }}>
+                      <img src={note.media_url} alt="" style={{ width:"100%", maxHeight:420, objectFit:"cover", display:"block" }} />
+                    </div>
+                  ) : null}
                   <p style={{ fontSize:14, color:C.text, lineHeight:1.7, margin:"0 0 10px" }}>{note.content}</p>
                   <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                     <button onClick={() => setNoteLikes(p=>({...p,[note.id]:(p[note.id]??note.likes)+1}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
