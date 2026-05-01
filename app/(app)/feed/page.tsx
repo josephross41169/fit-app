@@ -780,6 +780,12 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
   const [commentText, setCommentText] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
   const [currentPhoto, setCurrentPhoto] = useState(0);
+  // Clamp currentPhoto if it falls out of bounds (e.g. user removes a photo, or
+  // photos array shrinks for any reason). Without this the carousel tries to
+  // render undefined and the dots/arrows misbehave.
+  useEffect(() => {
+    if (currentPhoto > post.photos.length - 1) setCurrentPhoto(Math.max(0, post.photos.length - 1));
+  }, [post.photos.length, currentPhoto]);
   const [lightbox, setLightbox] = useState<string|null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -964,7 +970,30 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
 
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
-          <div style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <div
+            style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
+            // Swipe support. We track the starting X on touchstart and on touchend
+            // calculate the delta — anything >40px counts as a swipe. Less than that
+            // is treated as a tap and falls through to the image's onClick (lightbox).
+            onTouchStart={(e) => {
+              if (post.photos.length <= 1) return;
+              (e.currentTarget as any).__startX = e.touches[0].clientX;
+              (e.currentTarget as any).__startY = e.touches[0].clientY;
+            }}
+            onTouchEnd={(e) => {
+              if (post.photos.length <= 1) return;
+              const startX = (e.currentTarget as any).__startX;
+              const startY = (e.currentTarget as any).__startY;
+              if (startX == null) return;
+              const dx = e.changedTouches[0].clientX - startX;
+              const dy = e.changedTouches[0].clientY - startY;
+              // Reject if the swipe was more vertical than horizontal — lets the
+              // user scroll the feed without accidentally flipping the carousel.
+              if (Math.abs(dy) > Math.abs(dx)) return;
+              if (dx > 40 && currentPhoto > 0) setCurrentPhoto(c => c - 1);
+              else if (dx < -40 && currentPhoto < post.photos.length - 1) setCurrentPhoto(c => c + 1);
+            }}
+          >
             {!brokenImage && (() => {
               const currentUrl = post.photos[currentPhoto];
               const currentType = (post as any).mediaTypes?.[currentPhoto] || 'image';
@@ -992,13 +1021,29 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
               </div>
             )}
             {post.photos.length > 1 && (<>
-              <div style={{ position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6 }}>
+              {/* Counter pill — shows "2/4" so users know there's more */}
+              <div style={{ position:"absolute",top:12,right:12,padding:"4px 10px",borderRadius:99,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",color:"#fff",fontSize:12,fontWeight:700,pointerEvents:"none" }}>
+                {currentPhoto + 1}/{post.photos.length}
+              </div>
+              <div style={{ position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6,zIndex:2 }}>
                 {post.photos.map((_,i) => (
-                  <button key={i} onClick={() => setCurrentPhoto(i)} style={{ width:i===currentPhoto?20:8,height:8,borderRadius:4,border:"none",background:i===currentPhoto?"#fff":"rgba(255,255,255,0.45)",cursor:"pointer",transition:"width 0.2s",padding:0 }}/>
+                  <button key={i} onClick={(e) => { e.stopPropagation(); setCurrentPhoto(i); }} style={{ width:i===currentPhoto?20:8,height:8,borderRadius:4,border:"none",background:i===currentPhoto?"#fff":"rgba(255,255,255,0.45)",cursor:"pointer",transition:"width 0.2s",padding:0 }}/>
                 ))}
               </div>
-              {currentPhoto > 0 && <button onClick={() => setCurrentPhoto(c=>c-1)} style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:34,height:34,borderRadius:"50%",background:"rgba(0,0,0,0.45)",border:"none",color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>}
-              {currentPhoto < post.photos.length-1 && <button onClick={() => setCurrentPhoto(c=>c+1)} style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",width:34,height:34,borderRadius:"50%",background:"rgba(0,0,0,0.45)",border:"none",color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>}
+              {currentPhoto > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCurrentPhoto(c => c - 1); }}
+                  aria-label="Previous"
+                  style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"none",color:"#fff",fontSize:22,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,paddingBottom:3 }}
+                >‹</button>
+              )}
+              {currentPhoto < post.photos.length-1 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCurrentPhoto(c => c + 1); }}
+                  aria-label="Next"
+                  style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"none",color:"#fff",fontSize:22,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,paddingBottom:3 }}
+                >›</button>
+              )}
             </>)}
           </div>
         ) : (
