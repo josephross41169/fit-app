@@ -468,24 +468,44 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     const newWellness = wellBuf.entries.length ? {...wellBuf} : null;
     setWellness(newWellness);
     setEditWell(false);
-    if (wellnessLogIds && wellnessLogIds.length > 0 && wellBuf.entries.length > 0) {
-      // Update existing — save type, emoji, and notes
-      await supabase.from('activity_logs').update({
-        wellness_type: wellBuf.entries[0]?.activity || null,
-        wellness_emoji: wellBuf.entries[0]?.emoji || null,
-        notes: wellBuf.entries[0]?.notes || null,
-      }).eq('id', wellnessLogIds[0]).catch(() => {});
-    } else if (user && wellBuf.entries.length > 0) {
-      // No existing log — insert so it persists
-      await supabase.from('activity_logs').insert({
+    if (!user) return;
+
+    // Delete-and-replace strategy: we delete every existing wellness log
+    // for this day card, then insert one row per current wellBuf entry.
+    // This is the only sane way to handle add/remove/reorder of multiple
+    // wellness entries on a card — partial updates would have to diff
+    // against the original loaded state and that gets complicated fast.
+    //
+    // We preserve the original logged_at on each new row when possible by
+    // reading it off the wellBuf entry (added in fetchProfile mapping).
+    // Falls back to day._date midnight for entries with no timestamp,
+    // which is what the old INSERT branch did.
+    try {
+      const existingIds = wellnessLogIds || [];
+      if (existingIds.length > 0) {
+        await supabase.from('activity_logs').delete().in('id', existingIds);
+      }
+
+      if (wellBuf.entries.length === 0) return; // user cleared all entries
+
+      const fallbackIso = day._date ? new Date(day._date).toISOString() : new Date().toISOString();
+      const rows = wellBuf.entries.map((e: any) => ({
         user_id: user.id,
         log_type: 'wellness',
         is_public: true,
-        logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
-        wellness_type: wellBuf.entries[0]?.activity || null,
-        wellness_emoji: wellBuf.entries[0]?.emoji || null,
-        notes: wellBuf.entries[0]?.notes || null,
-      }).catch(() => {});
+        // Preserve original logged_at so the time pill on each card stays
+        // accurate. New rows the user just added won't have a loggedAt and
+        // fall back to day._date.
+        logged_at: e.loggedAt || fallbackIso,
+        wellness_type: e.activity || null,
+        wellness_emoji: e.emoji || null,
+        wellness_duration_min: typeof e.duration === 'number' ? e.duration : null,
+        notes: e.notes || null,
+        photo_url: e.photo_url || null,
+      }));
+      await supabase.from('activity_logs').insert(rows);
+    } catch (err) {
+      console.warn('[saveWellness] failed:', err);
     }
   }
 
@@ -3631,6 +3651,12 @@ export default function ProfilePage() {
                       day={day as any}
                       workoutLogId={(day as any)._workoutLogId}
                       nutritionLogIds={(day as any)._nutritionLogIds}
+                      // wellnessLogIds was previously missing here, which forced
+                      // saveWellness in DayCard to always fall into the INSERT
+                      // branch — creating phantom duplicate rows on every edit.
+                      // Wiring it through means edits actually update existing
+                      // rows.
+                      wellnessLogIds={(day as any)._wellnessLogIds}
                       earnedBadges={earnedBadges.map(b => b.badge_id)}
                       userLevel={progressInfo?.level ?? 1}
                       onDelete={isReal ? async () => {
