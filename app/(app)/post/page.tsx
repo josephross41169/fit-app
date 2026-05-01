@@ -455,8 +455,38 @@ export default function PostPage() {
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
-  const [feedPhotos, setFeedPhotos] = useState<string[]>([]); // carousel
+  const [feedPhotos, setFeedPhotos] = useState<string[]>([]); // carousel data URLs
+  const [feedPhotoTypes, setFeedPhotoTypes] = useState<('image' | 'video')[]>([]); // parallel to feedPhotos
   const [carouselIdx, setCarouselIdx] = useState(0);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+
+  // Vercel request body cap is 4.5MB on Hobby. We hard-cap one notch under to leave headroom
+  // for FormData overhead. Until direct-to-Supabase upload lands, larger videos will silently fail.
+  const MAX_MEDIA_BYTES = 4 * 1024 * 1024;
+
+  // Reads a list of files into the carousel: builds data URL + tags type. Rejects oversize.
+  function ingestMediaFiles(files: File[]) {
+    setMediaError(null);
+    files.forEach(f => {
+      const isVid = f.type.startsWith('video/');
+      const isImg = f.type.startsWith('image/');
+      if (!isVid && !isImg) {
+        setMediaError(`Unsupported file type: ${f.name}`);
+        return;
+      }
+      // Size check only enforced on videos — images get re-encoded smaller via compressImage.
+      if (isVid && f.size > MAX_MEDIA_BYTES) {
+        setMediaError(`Video too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 4MB until direct-to-storage uploads ship. Try a shorter clip.`);
+        return;
+      }
+      const r = new FileReader();
+      r.onload = ev => {
+        setFeedPhotos(p => [...p, ev.target!.result as string]);
+        setFeedPhotoTypes(t => [...t, isVid ? 'video' : 'image']);
+      };
+      r.readAsDataURL(f);
+    });
+  }
   const [caption, setCaption] = useState("");
   const [tagPeople, setTagPeople] = useState("");
   const [location, setLocation] = useState("");
@@ -1408,26 +1438,54 @@ export default function PostPage() {
       return;
     }
 
-    // Upload all carousel photos
-    const photosToUpload = feedPhotos.length > 0 ? feedPhotos : (feedPhoto ? [feedPhoto] : []);
+    // Upload all carousel media (mixed image+video supported)
+    const itemsToUpload = feedPhotos.length > 0
+      ? feedPhotos.map((src, i) => ({ src, type: feedPhotoTypes[i] || 'image' as const }))
+      : (feedPhoto ? [{ src: feedPhoto, type: 'image' as const }] : []);
     const uploadedUrls: string[] = [];
-    for (const photo of photosToUpload) {
-      const url = await uploadPhoto(await compressImage(photo), 'posts', `${user.id}/${Date.now()}-${uploadedUrls.length}.jpg`);
-      if (url) uploadedUrls.push(url);
+    const uploadedTypes: ('image' | 'video')[] = [];
+    for (const item of itemsToUpload) {
+      let fileToUpload: File | string;
+      let ext: string;
+      if (item.type === 'video') {
+        // Convert data URL → File without re-encoding. Preserve original MIME for storage.
+        const mimeMatch = item.src.match(/^data:(video\/[^;]+)/);
+        const mime = mimeMatch ? mimeMatch[1] : 'video/mp4';
+        const base64 = item.src.split(',')[1] || '';
+        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        ext = mime.split('/')[1] || 'mp4';
+        fileToUpload = new File([bytes], `upload.${ext}`, { type: mime });
+      } else {
+        fileToUpload = await compressImage(item.src);
+        ext = 'jpg';
+      }
+      const url = await uploadPhoto(fileToUpload, 'posts', `${user.id}/${Date.now()}-${uploadedUrls.length}.${ext}`);
+      if (url) {
+        uploadedUrls.push(url);
+        uploadedTypes.push(item.type);
+      }
     }
     const mediaUrl = uploadedUrls[0] || null;
+    const firstType = uploadedTypes[0] || null;
 
     try {
-      const { error } = await supabase.from('posts').insert({
+      const insertRow: any = {
         user_id: user.id,
         caption: caption || null,
         media_url: mediaUrl,
         media_urls: uploadedUrls.length > 1 ? uploadedUrls : null,
-        media_type: mediaUrl ? 'image' : null,
+        media_types: uploadedUrls.length > 0 ? uploadedTypes : null,
+        media_type: firstType, // legacy single-type column — first item's type
         post_type: 'general' as any,
         location: location || null,
         is_public: true,
-      });
+      };
+      let { error } = await supabase.from('posts').insert(insertRow);
+      // Graceful fallback if the migration hasn't been run yet — drop new column and retry.
+      if (error && /media_types/i.test(error.message || '')) {
+        delete insertRow.media_types;
+        ({ error } = await supabase.from('posts').insert(insertRow));
+      }
       setLoading(false);
       if (error) {
         submittingRef.current = false;
@@ -2860,7 +2918,16 @@ export default function PostPage() {
             {/* -- Carousel photo area -- */}
             {feedPhotos.length > 0 ? (
               <div style={{ position:"relative",borderRadius:22,overflow:"hidden",background:"#000",aspectRatio:"1/1" }}>
-                <img src={feedPhotos[carouselIdx]} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} alt="" />
+                {feedPhotoTypes[carouselIdx] === 'video' ? (
+                  <video
+                    src={feedPhotos[carouselIdx]}
+                    controls
+                    playsInline
+                    style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }}
+                  />
+                ) : (
+                  <img src={feedPhotos[carouselIdx]} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} alt="" />
+                )}
                 {/* Dots */}
                 {feedPhotos.length > 1 && (
                   <div style={{ position:"absolute",bottom:10,left:"50%",transform:"translateX(-50%)",display:"flex",gap:5 }}>
@@ -2873,7 +2940,11 @@ export default function PostPage() {
                 {carouselIdx > 0 && <button onClick={()=>setCarouselIdx(i=>i-1)} style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>·</button>}
                 {carouselIdx < feedPhotos.length-1 && <button onClick={()=>setCarouselIdx(i=>i+1)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>·</button>}
                 {/* Remove current */}
-                <button onClick={()=>{ setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); setCarouselIdx(Math.min(carouselIdx,n.length-1)); return n; }); }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>·</button>
+                <button onClick={()=>{
+                  setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); return n; });
+                  setFeedPhotoTypes(t=>{ const n=[...t]; n.splice(carouselIdx,1); return n; });
+                  setCarouselIdx(i => Math.max(0, Math.min(i, feedPhotos.length - 2)));
+                }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>·</button>
               </div>
             ) : (
               <label style={{ display:"block",cursor:"pointer" }}>
@@ -2883,21 +2954,26 @@ export default function PostPage() {
                   <div style={{ fontSize:13,color:C.sub }}>Tap to upload · Select multiple</div>
                 </div>
                 <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
-                  const files = Array.from(e.target.files||[]);
-                  files.forEach(f=>{ const r=new FileReader(); r.onload=ev=>setFeedPhotos(p=>[...p,ev.target!.result as string]); r.readAsDataURL(f); });
+                  ingestMediaFiles(Array.from(e.target.files || []));
                   e.target.value="";
                 }} />
               </label>
+            )}
+
+            {/* Inline error if a file was rejected (oversize / unsupported type) */}
+            {mediaError && (
+              <div style={{ padding:"10px 14px",borderRadius:12,background:"#3B1F1F",border:"1.5px solid #B91C1C",color:"#FCA5A5",fontSize:13,fontWeight:600 }}>
+                ⚠️ {mediaError}
+              </div>
             )}
 
             {/* Add more button when photos exist */}
             {feedPhotos.length > 0 && (
               <label style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:16,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,cursor:"pointer",justifyContent:"center" }}>
                 <span style={{ fontSize:16 }}>?</span>
-                <span style={{ fontWeight:700,fontSize:13,color:C.blue }}>Add more ({feedPhotos.length} photo{feedPhotos.length!==1?"s":""})</span>
+                <span style={{ fontWeight:700,fontSize:13,color:C.blue }}>Add more ({feedPhotos.length} item{feedPhotos.length!==1?"s":""})</span>
                 <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
-                  const files = Array.from(e.target.files||[]);
-                  files.forEach(f=>{ const r=new FileReader(); r.onload=ev=>setFeedPhotos(p=>[...p,ev.target!.result as string]); r.readAsDataURL(f); });
+                  ingestMediaFiles(Array.from(e.target.files || []));
                   e.target.value="";
                 }} />
               </label>
