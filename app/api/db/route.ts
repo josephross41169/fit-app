@@ -861,15 +861,34 @@ export async function POST(req: NextRequest) {
 
     // ── Create group post ──────────────────────────────────────────────────
     if (action === 'create_group_post') {
-      const { userId, groupId, content, media_url } = payload;
-      if (!userId || !groupId || !content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const { userId, groupId, content, media_url, media_type } = payload;
+      // Allow media-only posts: require either text OR media. Old check
+      // (`!content`) rejected empty-string content even when a photo was
+      // attached, which broke photo-only posts.
+      if (!userId || !groupId || (!content && !media_url)) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-      const { data, error } = await admin.from('group_posts').insert({
+      const insertRow: Record<string, any> = {
         group_id: groupId,
         user_id: userId,
-        content,
+        content: content || '',
         media_url: media_url || null,
-      }).select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
+      };
+      // Only set media_type if it's actually one of the allowed values. Older
+      // databases without this column will return a schema cache error — we
+      // catch that below and retry without the column.
+      if (media_type === 'photo' || media_type === 'video') insertRow.media_type = media_type;
+
+      let { data, error } = await admin.from('group_posts').insert(insertRow)
+        .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
+
+      // Graceful fallback: if `media_type` column doesn't exist yet, retry
+      // without it so deploys don't break before the SQL migration runs.
+      if (error && /media_type/i.test(error.message || '')) {
+        delete insertRow.media_type;
+        const retry = await admin.from('group_posts').insert(insertRow)
+          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
+        data = retry.data; error = retry.error;
+      }
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ post: data });
@@ -1026,16 +1045,32 @@ export async function POST(req: NextRequest) {
 
     // ── Create community note ──────────────────────────────────────────────
     if (action === 'create_community_note') {
-      const { userId, groupId, content, category } = payload;
-      if (!userId || !groupId || !content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const { userId, groupId, content, category, media_url, media_type } = payload;
+      // Allow notes with only media (no text). Either text OR media is required.
+      if (!userId || !groupId || (!content && !media_url)) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-      const { data, error } = await admin.from('community_notes').insert({
+      const insertRow: Record<string, any> = {
         group_id: groupId,
         user_id: userId,
-        content,
+        content: content || '',
         category: category || 'General',
         likes_count: 0,
-      }).select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
+      };
+      if (media_url) insertRow.media_url = media_url;
+      if (media_type === 'photo' || media_type === 'video') insertRow.media_type = media_type;
+
+      let { data, error } = await admin.from('community_notes').insert(insertRow)
+        .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
+
+      // Graceful fallback if media columns don't exist yet — strip them and retry.
+      // Lets deploys ship before the migration runs without 500ing every note save.
+      if (error && /(media_url|media_type)/i.test(error.message || '')) {
+        delete insertRow.media_url;
+        delete insertRow.media_type;
+        const retry = await admin.from('community_notes').insert(insertRow)
+          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
+        data = retry.data; error = retry.error;
+      }
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ note: data });
