@@ -1291,8 +1291,31 @@ export default function ProfilePage() {
   const [showHighlightPicker,setShowHighlightPicker] = useState(false);
   useEffect(()=>{
     if(!user) return;
-    supabase.from('posts').select('media_url').eq('user_id',user.id).eq('is_public',true).not('media_url','is',null).order('created_at',{ascending:false})
-      .then(({data})=>{ if(data) setFeedPhotos(data.map((p:any)=>p.media_url).filter(Boolean)); });
+    // Highlights are photos only — Instagram-style. We exclude videos from this
+    // list so the picker grid doesn't show broken thumbnails. Posts with mixed
+    // carousels still surface (we just take the first image URL).
+    supabase.from('posts')
+      .select('media_url, media_type, media_types')
+      .eq('user_id', user.id)
+      .eq('is_public', true)
+      .not('media_url','is',null)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
+        const photoOnly = data
+          .map((p: any) => p.media_url as string)
+          .filter((url): url is string => Boolean(url))
+          .filter((url, i) => {
+            const row = data[i];
+            // Skip if explicitly marked as a video, or sniffed as one from the URL.
+            if (row.media_type === 'video') return false;
+            if (Array.isArray(row.media_types) && row.media_types[0] === 'video') return false;
+            if (VIDEO_EXT_RE.test(url)) return false;
+            return true;
+          });
+        setFeedPhotos(photoOnly);
+      });
   },[user?.id]);
 
   // ── Highlights state ──
