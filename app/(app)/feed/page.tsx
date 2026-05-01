@@ -751,7 +751,12 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
         <div style={{ background:"#1E2235",padding:"10px 14px",display:"flex",flexDirection:"column",gap:7 }}>
           {wellness.entries.map((e, i) => {
             const s = getWellnessStyle(e.activity || "");
-            const emoji = e.emoji || s.emoji;
+            // Lookup wins. The feed loader hardcodes e.emoji='🌿' for every row,
+            // so respecting e.emoji first would force every activity to render
+            // as a leaf even when WELLNESS_STYLES has the right per-activity icon.
+            // Only fall back to e.emoji if the activity name isn't in our table.
+            const isMappedActivity = WELLNESS_STYLES[(e.activity || "").toLowerCase().trim()] !== undefined;
+            const emoji = isMappedActivity ? s.emoji : (e.emoji || s.emoji);
             const accent = s.accent;
             // Time pill — formatted same as profile cards.
             const timeStr = e.loggedAt ? (() => {
