@@ -167,6 +167,7 @@ type Post = {
   dateShort: string;
   dayLabel: string;
   photos: string[];
+  mediaTypes?: ('image' | 'video')[];
   caption: string;
   likes: number;
   liked: boolean;
@@ -208,6 +209,31 @@ function normalizePhotoUrls(...sources: any[]): string[] {
   };
   sources.forEach(add);
   return Array.from(new Set(out));
+}
+
+// Returns a per-index 'image'|'video' array aligned with the URLs returned by normalizePhotoUrls.
+// Priority: media_types array (new column) → media_type single string → URL extension sniff → 'image'.
+function mediaTypesFor(urls: string[], mediaTypesRaw: any, mediaTypeSingle: any): ('image' | 'video')[] {
+  const VIDEO_EXT = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
+
+  // Parse the raw media_types value (jsonb may arrive as array OR JSON string)
+  let parsed: any[] | null = null;
+  if (Array.isArray(mediaTypesRaw)) parsed = mediaTypesRaw;
+  else if (typeof mediaTypesRaw === 'string') {
+    try {
+      const j = JSON.parse(mediaTypesRaw);
+      if (Array.isArray(j)) parsed = j;
+    } catch {}
+  }
+
+  return urls.map((url, i) => {
+    if (parsed && (parsed[i] === 'image' || parsed[i] === 'video')) return parsed[i];
+    // Single-item legacy fallback
+    if (urls.length === 1 && (mediaTypeSingle === 'image' || mediaTypeSingle === 'video')) return mediaTypeSingle;
+    // Last resort: sniff URL
+    if (typeof url === 'string' && VIDEO_EXT.test(url)) return 'video';
+    return 'image';
+  });
 }
 
 // ── Suggested Users (shown when following feed runs out) ─────────────────────
@@ -939,13 +965,30 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
           <div style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center" }}>
-            {!brokenImage && (
-              <img src={post.photos[currentPhoto]} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(post.photos[currentPhoto])} onError={() => { setBrokenImage(true); }} />
-            )}
+            {!brokenImage && (() => {
+              const currentUrl = post.photos[currentPhoto];
+              const currentType = (post as any).mediaTypes?.[currentPhoto] || 'image';
+              if (currentType === 'video') {
+                return (
+                  <video
+                    key={currentUrl}
+                    src={currentUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    style={{ width:"100%",height:"100%",objectFit:"cover",background:"#000" }}
+                    onError={() => { setBrokenImage(true); }}
+                  />
+                );
+              }
+              return (
+                <img src={currentUrl} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => setLightbox(currentUrl)} onError={() => { setBrokenImage(true); }} />
+              );
+            })()}
             {brokenImage && (
               <div style={{ display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12 }}>
                 <div style={{ fontSize:60 }}>📸</div>
-                <div style={{ fontSize:14,color:"rgba(255,255,255,0.8)",fontWeight:700 }}>Photo unavailable</div>
+                <div style={{ fontSize:14,color:"rgba(255,255,255,0.8)",fontWeight:700 }}>Media unavailable</div>
               </div>
             )}
             {post.photos.length > 1 && (<>
@@ -1260,7 +1303,7 @@ export default function FeedPage() {
       const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
       const { data: posts, error: queryErr } = await supabase
         .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)')
+        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
@@ -1764,6 +1807,7 @@ export default function FeedPage() {
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
         photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
+        mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         caption: p.caption || "",
         likes: p.likes_count || 0,
         liked: p._liked || false,
@@ -2128,6 +2172,7 @@ export default function FeedPage() {
                   dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                   photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
+                  mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
                   caption: p.caption || "",
                   likes: p.likes_count || 0,
                   liked: p._liked || false,
@@ -2315,6 +2360,7 @@ export default function FeedPage() {
                 dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                 photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
+                mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
                 caption: p.caption || "",
                 likes: p.likes_count || 0,
                 liked: p._liked || false,
