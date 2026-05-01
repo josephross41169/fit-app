@@ -427,8 +427,12 @@ export default function PostPage() {
   // are handled as special-case dedicated activities (see below) since they
   // have richer data (hours+quality+bedtime / fasting hours).
   type WellnessEntry = { id: string; type: string; duration: string };
+  // Start blank instead of defaulting to "Meditation" — forces user to pick
+  // an activity instead of accidentally saving the default. The empty string
+  // renders the placeholder option in the select; save handler validates
+  // that every row has a real type before submitting.
   const [wellnessActivities, setWellnessActivities] = useState<WellnessEntry[]>([
-    { id: `w-${Date.now()}`, type: "Meditation", duration: "" }
+    { id: `w-${Date.now()}`, type: "", duration: "" }
   ]);
   const [wellnessNotes, setWellnessNotes] = useState("");
   const [wellnessPhotoUrl, setWellnessPhotoUrl] = useState<string | null>(null);
@@ -1000,9 +1004,20 @@ export default function PostPage() {
         // ── Multi-activity wellness save ─────────────────────────────────
         // Each entry in `wellnessActivities` becomes its own activity_logs
         // row. They all share the same logged_at, is_public, notes, and
-        // photo so they group naturally on the profile timeline. Empty
-        // entries (no type) are silently dropped.
-        const validActivities = wellnessActivities.filter(a => a.type && a.type.trim());
+        // photo so they group naturally on the profile timeline.
+        //
+        // Validation: every row must have a real activity type picked. We
+        // used to silently drop empty rows, but that masked a UX bug where
+        // the form defaulted to "Meditation" and users saved it by accident.
+        // Now empty rows block save with a clear error.
+        const blankRow = wellnessActivities.find(a => !a.type || !a.type.trim());
+        if (blankRow) {
+          setSaveError("Pick an activity for every row before saving (or remove the blank row).");
+          setLoading(false);
+          submittingRef.current = false;
+          return;
+        }
+        const validActivities = wellnessActivities;
         if (validActivities.length === 0) {
           setSaveError("Add at least one wellness activity before saving.");
           setLoading(false);
@@ -2645,6 +2660,9 @@ export default function PostPage() {
                                 const newType = e.target.value;
                                 setWellnessActivities(prev => prev.map((a, i) => i === idx ? { ...a, type: newType } : a));
                               }}>
+                              {/* Placeholder — disabled so user must pick a real activity.
+                                  Without this, empty strings would render as a confusing blank row. */}
+                              <option value="" disabled>Pick an activity…</option>
                               {WELLNESS_GROUPS.map(group => (
                                 <optgroup key={group.label} label={group.label}>
                                   {group.types.map(t => {
@@ -2700,7 +2718,7 @@ export default function PostPage() {
                 {wellnessActivities.length < 10 && (
                   <button
                     type="button"
-                    onClick={() => setWellnessActivities(prev => [...prev, { id: `w-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, type: 'Meditation', duration: '' }])}
+                    onClick={() => setWellnessActivities(prev => [...prev, { id: `w-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, type: '', duration: '' }])}
                     style={{
                       width: '100%', padding: '12px 14px', borderRadius: 12,
                       border: `2px dashed ${C.greenMid}`, background: 'transparent',
