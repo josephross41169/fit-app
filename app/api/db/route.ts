@@ -819,6 +819,122 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ group });
     }
 
+    // ── Get challenge by invite token (public, no auth required) ──────────
+    // Powers the /challenge/[token] landing page. Returns the challenge
+    // along with the host group's display info so the page can show
+    // "Joey's Crew · Run 50 miles · Started 3 days ago." Returns 404 if
+    // the token doesn't exist or has expired.
+    if (action === 'get_challenge_by_token') {
+      const { token } = payload;
+      if (!token || typeof token !== 'string') {
+        return NextResponse.json({ error: 'Missing token' }, { status: 400 });
+      }
+      const { data: chal, error } = await admin
+        .from('group_challenges')
+        .select(`
+          id, title, description, metric, lift_type, target_value, goal,
+          duration_days, status, is_group_goal, goal_category, stakes,
+          start_date, end_date, created_at, member_count,
+          invite_token_expires_at,
+          creator_group:creator_group_id(id, name, emoji, member_count, avatar_url),
+          group:group_id(id, name, emoji, member_count, avatar_url)
+        `)
+        .eq('invite_token', token)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (!chal) return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+      if (chal.invite_token_expires_at) {
+        const exp = new Date(chal.invite_token_expires_at).getTime();
+        if (exp < Date.now()) {
+          return NextResponse.json({ error: 'Challenge invite has expired' }, { status: 404 });
+        }
+      }
+      const { count: participantCount } = await admin
+        .from('group_challenge_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('challenge_id', chal.id);
+      return NextResponse.json({
+        challenge: {
+          ...chal,
+          participant_count: participantCount || 0,
+        },
+      });
+    }
+
+    // ── Join group + challenge via invite token (auth required) ───────────
+    // Two-step join: first add the user to the host group (if not already
+    // a member), then enroll them in the challenge. Idempotent — calling
+    // twice has no effect beyond the first time.
+    if (action === 'join_via_challenge_token') {
+      const { token, userId } = payload;
+      if (!token || !userId) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      const { data: chal, error: chalErr } = await admin
+        .from('group_challenges')
+        .select('id, group_id, creator_group_id, invite_token_expires_at')
+        .eq('invite_token', token)
+        .maybeSingle();
+      if (chalErr) return NextResponse.json({ error: chalErr.message }, { status: 500 });
+      if (!chal) return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+      if (chal.invite_token_expires_at && new Date(chal.invite_token_expires_at).getTime() < Date.now()) {
+        return NextResponse.json({ error: 'Invite has expired' }, { status: 404 });
+      }
+
+      const hostGroupId = chal.group_id || chal.creator_group_id;
+      if (!hostGroupId) {
+        return NextResponse.json({ error: 'Challenge has no host group' }, { status: 500 });
+      }
+
+      const { data: existingMember } = await admin
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', hostGroupId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      let joinedGroup = false;
+      if (!existingMember) {
+        const { error: memErr } = await admin.from('group_members').insert({
+          group_id: hostGroupId,
+          user_id: userId,
+          role: 'member',
+        });
+        if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 });
+        joinedGroup = true;
+        await admin.rpc('increment_group_member_count', { gid: hostGroupId }).catch(() => {
+          admin.from('groups').select('member_count').eq('id', hostGroupId).single()
+            .then(({ data }) => {
+              if (data) admin.from('groups').update({ member_count: (data.member_count || 0) + 1 }).eq('id', hostGroupId);
+            });
+        });
+      }
+
+      const { data: existingEnroll } = await admin
+        .from('group_challenge_members')
+        .select('user_id')
+        .eq('challenge_id', chal.id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      let joinedChallenge = false;
+      if (!existingEnroll) {
+        const { error: enrollErr } = await admin.from('group_challenge_members').insert({
+          challenge_id: chal.id,
+          user_id: userId,
+          group_id: hostGroupId,
+        });
+        if (enrollErr) return NextResponse.json({ error: enrollErr.message }, { status: 500 });
+        joinedChallenge = true;
+      }
+
+      return NextResponse.json({
+        ok: true,
+        joinedGroup,
+        joinedChallenge,
+        groupId: hostGroupId,
+        challengeId: chal.id,
+      });
+    }
+
     // ── Join group ─────────────────────────────────────────────────────────
     if (action === 'join_group') {
       const { userId, groupId } = payload;
