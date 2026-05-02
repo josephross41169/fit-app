@@ -437,6 +437,36 @@ export default function UserProfilePage() {
   const [blocking, setBlocking] = useState(false);
   const [socialList, setSocialList]   = useState<any[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
+  // Profile share button state — shows "✓ Copied" toast for 2.5s after copy.
+  const [profileShareCopied, setProfileShareCopied] = useState(false);
+
+  /** Copy or share a link to this profile. Native share sheet on mobile,
+   *  clipboard fallback on desktop. URL uses the username path which is
+   *  the same route this page lives on. */
+  async function shareProfile() {
+    if (typeof window === "undefined" || !profile?.username) return;
+    const url = `${window.location.origin}/profile/${profile.username}`;
+    const shareData = {
+      title: `${profile.full_name || "@" + profile.username} on Livelee`,
+      text: `Check out @${profile.username} on Livelee`,
+      url,
+    };
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setProfileShareCopied(true);
+      setTimeout(() => setProfileShareCopied(false), 2500);
+    } catch {
+      window.prompt("Copy this profile link:", url);
+    }
+  }
 
   const openSocialModal = useCallback(async (type: "followers"|"following", profileId: string) => {
     setSocialModal(type);
@@ -981,6 +1011,23 @@ export default function UserProfilePage() {
                     ✉️ Message
                   </button>
                 )}
+                {/* Share button — public profile permalink. Always shown
+                    (not gated on whether you're viewing someone else's
+                    profile) since sharing your own profile from the public
+                    page also makes sense if you ended up there via a link. */}
+                <button
+                  onClick={shareProfile}
+                  aria-label={profileShareCopied ? "Link copied" : "Share profile"}
+                  style={{
+                    padding:"11px 14px", borderRadius:14,
+                    border:`1.5px solid ${C.gold}`,
+                    background: profileShareCopied ? `${C.gold}22` : "transparent",
+                    color:C.gold, fontWeight:800, fontSize:14, cursor:"pointer",
+                    display:"flex", alignItems:"center", gap:6, transition:"all 0.15s",
+                  }}
+                >
+                  {profileShareCopied ? "✓ Copied" : "🔗 Share"}
+                </button>
                 {/* ⋯ moderation menu (Report/Block) — Apple Guideline 1.2 requirement */}
                 {currentUser && currentUser.id !== profile.id && (
                   <div style={{position:"relative"}}>
