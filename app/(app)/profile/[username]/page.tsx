@@ -9,6 +9,7 @@ import { clearBlockCache } from "@/lib/blocks";
 import { BADGES } from "@/lib/badges";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { ImagePresets } from "@/lib/imageUrls";
+import { cachedQuery, getCached, setCached } from "@/lib/queryCache";
 import BusinessProfileView from "@/components/BusinessProfileView";
 import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
@@ -496,7 +497,22 @@ export default function UserProfilePage() {
 
   useEffect(() => {
     async function load() {
-      // Load profile
+      // PERF: hydrate from in-memory cache instantly if we have a recent
+      // entry for this username. The user navigated to this profile in
+      // the last ~60s — show what we had immediately, then refresh in
+      // the background. Removes the spinner-then-content flash on
+      // back/forward navigation.
+      if (username) {
+        const cached = getCached<any>(`profile:${username}`, 60_000);
+        if (cached) {
+          setProfile(cached);
+          setLoading(false);
+          // We still continue the function below to fetch fresh data —
+          // SWR pattern: stale-while-revalidate.
+        }
+      }
+
+      // Load profile (fresh — even if cached, we revalidate in background)
       const { data: profileData } = await supabase
         .from('users')
         .select('*')
@@ -505,6 +521,10 @@ export default function UserProfilePage() {
 
       if (!profileData) { setLoading(false); return; }
       setProfile(profileData);
+      // Cache for next navigation — the user often clicks back and forth
+      // between profile and feed. Stale-while-revalidate gives them
+      // instant content on return.
+      if (username) setCached(`profile:${username}`, profileData);
 
       // Load highlights
       if (profileData.highlights && Array.isArray(profileData.highlights)) {
@@ -517,18 +537,28 @@ export default function UserProfilePage() {
         setBrands(profileData.favorite_brands);
       }
 
-      // Load feed photos for the "All Photos" modal. Pulls only from the
-      // `posts` table (public feed posts) and excludes workout/story/
-      // nutrition/wellness photos. Includes both single media_url and
-      // multi-photo media_urls arrays. Videos are filtered out — this grid
-      // is photos only.
-      try {
-        const { data: postRows } = await supabase
+      // PERF: posts (for photo grid) and activity_logs both depend on
+      // profileData.id but NOT on each other. Run them in parallel.
+      // Previously these ran sequentially, costing ~300-500ms of needless
+      // wait time on every profile open.
+      const [postsResult, activityResult] = await Promise.all([
+        supabase
           .from('posts')
           .select('media_url, media_urls, media_type, media_types, media_positions')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('activity_logs')
+          .select('*')
+          .eq('user_id', profileData.id)
+          .order('logged_at', { ascending: false })
+          .limit(500),
+      ]);
+
+      // Process posts → feedPhotos
+      const postRows = postsResult.data;
+      try {
         if (postRows) {
           const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
           const urls: string[] = [];
@@ -554,14 +584,8 @@ export default function UserProfilePage() {
         }
       } catch { /* ignore — feedPhotos stays [] */ }
 
-      // Load activity logs. Limit raised from 30 → 500 so the WorkoutProgressGraphs
-      // has access to historical months when the user picks "All" or "6 Mo" range.
-      const { data: activityLogs } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .eq('user_id', profileData.id)
-        .order('logged_at', { ascending: false })
-        .limit(500);
+      // activity logs — already fetched above, just unpack
+      const activityLogs = activityResult.data;
 
       // Capture raw workout rows separately for the graph component. Don't
       // merge by day — the graph counts each workout independently.
