@@ -1073,6 +1073,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ location: data });
     }
 
+    // ── Get posts where a user is tagged ──────────────────────────────────
+    // Returns posts whose tagged_user_ids array contains the given userId.
+    // Used by the "Tagged in" tab on profile pages. We use Postgres array
+    // contains operator (cs) to find rows where the array contains the uuid.
+    if (action === 'get_tagged_posts') {
+      const userId = payload?.userId || searchParams.get('userId');
+      const limit = Math.min(parseInt(payload?.limit || searchParams.get('limit') || '30', 10) || 30, 60);
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      // PostgREST contains-array filter syntax: column=cs.{value}
+      // For uuid[] columns we wrap the uuid in braces to denote a literal array.
+      const { data, error } = await admin
+        .from('posts')
+        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, created_at, likes_count, tagged_user_ids, users:user_id(id, username, full_name, avatar_url, city)')
+        .contains('tagged_user_ids', [userId])
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ posts: data || [] });
+    }
+
     // ── Create group post ──────────────────────────────────────────────────
     if (action === 'create_group_post') {
       const { userId, groupId, content, media_url, media_type } = payload;
