@@ -13,6 +13,29 @@ export type Location = {
   business_user_id?: string | null;
 };
 
+// Suggestion from the Mapbox geocoding API. Not yet a real pin in our DB —
+// rendered with a ✨ icon as "tap to pin." On tap, we call find-or-create
+// which converts it to a real Location row.
+type MapboxSuggestion = {
+  name: string;       // Short name e.g. "Red Rock Canyon"
+  fullAddress: string; // "Red Rock Canyon, Las Vegas, NV"
+  lat: number;
+  lng: number;
+  city: string;       // Best-guess city extracted from Mapbox context
+};
+
+/** Haversine distance in miles. Used to dedup Mapbox suggestions against
+ *  existing pins so the dropdown doesn't show "tap to pin" for a place
+ *  someone already pinned 50ft away. */
+function distanceMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 type Props = {
   /** Currently selected location, or null if none. Controlled by parent. */
   value: Location | null;
@@ -80,11 +103,19 @@ export default function LocationPicker({
 }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Location[]>([]);
+  // Real-world places matched via Mapbox forward geocoding. Rendered with
+  // a ✨ "tap to pin" affordance — distinct from existing pins (📍/🏢).
+  const [mapboxSuggestions, setMapboxSuggestions] = useState<MapboxSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Anchor coords for proximity search ranking
+  // Mapbox token — same env var used for the map display. We use it here
+  // for forward geocoding (place-name → coordinates), which is what powers
+  // the "✨ tap to add" suggestions for places nobody has pinned yet.
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
+
   const [anchorLat, anchorLng] = (() => {
     if (typeof defaultLat === "number" && typeof defaultLng === "number") {
       return [defaultLat, defaultLng];
@@ -92,36 +123,120 @@ export default function LocationPicker({
     return getCityCenter(defaultCity);
   })();
 
-  // Debounced search whenever query stabilizes
+  // Search runs both sources in parallel:
+  //   1. Our DB (existing pins — businesses + previously-created user pins)
+  //   2. Mapbox geocoding (real-world places not yet in our DB)
+  // Results merge with existing pins first (since they have community context),
+  // then Mapbox suggestions for one-tap pinning.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim();
     if (!q || q.length < 2) {
       setResults([]);
+      setMapboxSuggestions([]);
       setSearching(false);
       return;
     }
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch("/api/db", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "search_locations",
-            payload: { query: q, nearLat: anchorLat, nearLng: anchorLng },
-          }),
-        });
-        const data = await res.json();
-        setResults(Array.isArray(data.locations) ? data.locations : []);
+        // Fire both queries in parallel — neither blocks the other.
+        const [dbRes, mapboxRes] = await Promise.allSettled([
+          fetch("/api/db", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "search_locations",
+              payload: { query: q, nearLat: anchorLat, nearLng: anchorLng },
+            }),
+          }).then(r => r.json()),
+          // Mapbox forward-geocoding. `proximity` biases results toward our
+          // anchor coords (profile city center). `types` narrows to relevant
+          // POIs + addresses; we skip countries/regions which are too broad.
+          // `limit=5` keeps the dropdown manageable.
+          mapboxToken
+            ? fetch(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?` +
+                `access_token=${mapboxToken}` +
+                `&proximity=${anchorLng},${anchorLat}` +
+                `&types=poi,address,place,neighborhood,locality` +
+                `&limit=5`
+              ).then(r => r.json())
+            : Promise.resolve(null),
+        ]);
+
+        // DB results
+        const dbList: Location[] = dbRes.status === "fulfilled" && Array.isArray(dbRes.value?.locations)
+          ? dbRes.value.locations : [];
+        setResults(dbList);
+
+        // Mapbox results — filter out any that are within 1mi of an existing
+        // pin we already returned (avoids "tap to add the same place twice").
+        const mapboxList: MapboxSuggestion[] = (() => {
+          if (mapboxRes.status !== "fulfilled" || !mapboxRes.value?.features) return [];
+          return mapboxRes.value.features
+            .map((f: any) => {
+              const [lng, lat] = f.center || [0, 0];
+              const place = f.place_name || f.text || "";
+              // Pull the city out of context. Mapbox returns context as an
+              // array of {id, text} where the place-type 'place' is the city.
+              const cityCtx = (f.context || []).find((c: any) => c.id?.startsWith("place"));
+              const city = cityCtx?.text || "";
+              return {
+                name: f.text || place,
+                fullAddress: place,
+                lat,
+                lng,
+                city,
+              } as MapboxSuggestion;
+            })
+            .filter((s: MapboxSuggestion) => {
+              // Drop suggestions that overlap an existing DB pin within 1mi
+              return !dbList.some(d => distanceMi(d.lat, d.lng, s.lat, s.lng) < 1.0);
+            });
+        })();
+        setMapboxSuggestions(mapboxList);
       } catch {
         setResults([]);
+        setMapboxSuggestions([]);
       } finally {
         setSearching(false);
       }
     }, 280);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, anchorLat, anchorLng]);
+  }, [query, anchorLat, anchorLng, mapboxToken]);
+
+  // When user taps a Mapbox suggestion, we send those coords through the
+  // server's find-or-create endpoint. Server still does its own dedup check
+  // so we get correct community-pin-reuse behavior automatically.
+  async function pinFromMapbox(suggestion: MapboxSuggestion) {
+    const cityToUse = suggestion.city || defaultCity;
+    try {
+      const res = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "find_or_create_location",
+          payload: {
+            name: suggestion.name,
+            lat: suggestion.lat,
+            lng: suggestion.lng,
+            city: cityToUse,
+            userId,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.location) {
+        onChange(data.location as Location);
+        setQuery("");
+        setResults([]);
+        setMapboxSuggestions([]);
+      }
+    } catch {
+      // Silent fail — picker stays open, user can try again or drop a pin.
+    }
+  }
 
   if (value) {
     // Already selected — show chip with × to remove
@@ -166,10 +281,11 @@ export default function LocationPicker({
         }}>
           {searching ? (
             <div style={{ padding: 14, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>Searching…</div>
-          ) : results.length > 0 ? (
+          ) : (results.length > 0 || mapboxSuggestions.length > 0) ? (
             <>
+              {/* Existing pins — businesses + previously-pinned community spots */}
               {results.map(loc => (
-                <button key={loc.id} onMouseDown={() => { onChange(loc); setQuery(""); }}
+                <button key={loc.id} onMouseDown={() => { onChange(loc); setQuery(""); setResults([]); setMapboxSuggestions([]); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 10,
                     width: "100%", padding: "12px 14px",
@@ -190,6 +306,33 @@ export default function LocationPicker({
                   </div>
                 </button>
               ))}
+              {/* Mapbox geocoding suggestions — places not yet pinned. Tap
+                  one to create a new pin instantly using the geocoded coords.
+                  Visually distinct (✨ accent color) so users know these are
+                  fresh suggestions vs. community-pinned places. */}
+              {mapboxSuggestions.map((s, idx) => (
+                <button key={`mb-${idx}-${s.lat}-${s.lng}`} onMouseDown={() => pinFromMapbox(s)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    width: "100%", padding: "12px 14px",
+                    background: "transparent", border: "none",
+                    borderBottom: "1px solid #2D1F52",
+                    cursor: "pointer", textAlign: "left",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#1F1A2E")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.fullAddress.replace(s.name + ", ", "") || s.city}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "#A78BFA", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.6 }}>Tap to pin</span>
+                </button>
+              ))}
             </>
           ) : (
             <div style={{ padding: 14, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
@@ -199,15 +342,18 @@ export default function LocationPicker({
         </div>
       )}
 
-      {/* Drop-a-pin entry point — always visible below the search */}
+      {/* Drop-a-pin entry point — fallback for edge cases (unmarked outdoor
+          spots, etc.). Most users will use search-by-name above which now
+          surfaces both existing pins AND Mapbox geocoding suggestions, so
+          this button gets de-emphasized but stays available. */}
       <button onClick={() => setMapOpen(true)}
         style={{
-          marginTop: 8, padding: "8px 14px",
-          background: "transparent", border: "1.5px dashed #2D1F52",
-          borderRadius: 12, color: "#A78BFA", fontWeight: 700, fontSize: 13,
-          cursor: "pointer", width: "100%",
+          marginTop: 8, padding: "6px 14px",
+          background: "transparent", border: "none",
+          color: "#9CA3AF", fontWeight: 600, fontSize: 12,
+          cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3,
         }}>
-        🗺️ Drop a pin on the map instead
+        Can't find it? Drop a pin on the map manually →
       </button>
 
       {mapOpen && (
