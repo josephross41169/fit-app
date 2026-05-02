@@ -8,6 +8,7 @@ import ReportModal, { ReportTarget } from "@/components/ReportModal";
 import { clearBlockCache } from "@/lib/blocks";
 import { BADGES } from "@/lib/badges";
 import { isBusinessAccount } from "@/lib/businessTypes";
+import { ImagePresets } from "@/lib/imageUrls";
 import BusinessProfileView from "@/components/BusinessProfileView";
 import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
@@ -96,7 +97,7 @@ function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; 
           <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
             {photos.map((src, idx) => (
               <button key={idx} onClick={() => onSelectPhoto(src)} style={{ padding: 0, border: 'none', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', background: '#1A1228', aspectRatio: '1', display: 'block' }}>
-                <img src={src} loading='lazy' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt='' />
+                <img src={ImagePresets.thumb(src)} loading='lazy' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt='' />
               </button>
             ))}
           </div>
@@ -136,7 +137,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
       {hasNext && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
       )}
-      <img src={src} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
@@ -215,7 +216,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
         </div>
         {photos.length > 0 && (
           <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.greenMid}`}}>
-            <img src={photos[0]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+            <img src={ImagePresets.thumb(photos[0])} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
           </div>
         )}
       </button>
@@ -874,7 +875,7 @@ export default function UserProfilePage() {
                     >
                       <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
                         {u.avatar_url
-                          ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                          ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                           : ini}
                       </div>
                       <div>
@@ -918,7 +919,7 @@ export default function UserProfilePage() {
                 overflow:"hidden",position:"relative",zIndex:2,
               }}>
                 {profile.avatar_url
-                  ? <img src={profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                  ? <img src={ImagePresets.avatarSm(profile.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : initials}
               </div>
             </div>
