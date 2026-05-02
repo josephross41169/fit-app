@@ -273,18 +273,54 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
   const displayAvatar = (typeof post.avatar === 'string' && !post.avatar.startsWith('http')) ? post.avatar : null;
   const avatarUrl     = userObj?.avatar_url || (typeof post.avatar === 'string' && post.avatar.startsWith('http') ? post.avatar : null);
   const avatarIni     = displayName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
-  const photoSrc      = post.photo || post.media_url || null;
-  // Determine if the lead media is a video. Priority: media_types array (post 2026
-  // schema) → media_type single column → URL extension sniff. 'photo' is the legacy
-  // group-post enum value and is treated as image.
+
+  // ── Multi-photo carousel data ────────────────────────────────────────
+  // Discover used to render only post.media_url (single lead photo). Now
+  // we mirror the Feed page: read media_urls[] when present and let users
+  // swipe between photos, with dot indicators + arrow buttons.
+  // Falls back gracefully to the single-photo case if a post only has one.
   const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
-  const leadType: 'image' | 'video' = (() => {
-    const arr = post.media_types;
-    if (Array.isArray(arr) && arr[0] === 'video') return 'video';
-    if (post.media_type === 'video') return 'video';
-    if (typeof photoSrc === 'string' && VIDEO_EXT_RE.test(photoSrc)) return 'video';
-    return 'image';
+  const mediaUrls: string[] = (() => {
+    // Prefer the array form. If it's empty/null, synthesize from media_url
+    // / photo so the rest of the rendering code only deals with arrays.
+    if (Array.isArray(post.media_urls) && post.media_urls.length > 0) return post.media_urls;
+    const single = post.media_url || post.photo;
+    return single ? [single] : [];
   })();
+  const mediaTypes: ('image' | 'video')[] = mediaUrls.map((url, i) => {
+    const arrType = Array.isArray(post.media_types) ? post.media_types[i] : null;
+    if (arrType === 'video' || arrType === 'image') return arrType;
+    if (i === 0 && post.media_type === 'video') return 'video';
+    return VIDEO_EXT_RE.test(url) ? 'video' : 'image';
+  });
+  const mediaPositions: number[] = Array.isArray((post as any).media_positions) ? (post as any).media_positions : [];
+
+  const [photoIndex, setPhotoIndex] = useState(0);
+  // Bound the index in case media_urls shrinks for any reason
+  useEffect(() => {
+    if (photoIndex >= mediaUrls.length) setPhotoIndex(Math.max(0, mediaUrls.length - 1));
+  }, [mediaUrls.length, photoIndex]);
+
+  // Touch tracking for swipe between photos. We track Y too so a vertical
+  // scroll on the photo doesn't accidentally trigger a horizontal swipe.
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  function onMediaTouchStart(e: React.TouchEvent) {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  }
+  function onMediaTouchEnd(e: React.TouchEvent) {
+    if (touchStartXRef.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartXRef.current;
+    const dy = e.changedTouches[0].clientY - (touchStartYRef.current || 0);
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    // 40px horizontal threshold + must be more horizontal than vertical
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx > 0) setPhotoIndex(i => Math.max(0, i - 1));
+    else setPhotoIndex(i => Math.min(mediaUrls.length - 1, i + 1));
+  }
+
   const tags: string[]= Array.isArray(post.tags) ? post.tags : [];
   const caption       = post.caption || "";
 
@@ -306,26 +342,125 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
         )}
       </div>
 
-      {/* Photo or video */}
-      <div onClick={() => router.push(`/post/${post.id}`)} style={{ width:"100%",aspectRatio:"4/3",background:"#111",overflow:"hidden",position:"relative",cursor:"pointer" }}>
-        {photoSrc
-          ? (leadType === 'video'
-              ? <video src={photoSrc} controls autoPlay muted loop preload="metadata" playsInline onClick={(e) => e.stopPropagation()} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }} />
-              : <img src={photoSrc} alt="" style={{
-                  width:"100%",height:"100%",objectFit:"cover",display:"block",
-                  // Discover shows the lead photo (index 0) so we apply the
-                  // first entry from media_positions. Falls back to centered.
-                  objectPosition: `center ${(post as any).media_positions?.[0] ?? 50}%`,
-                }} />
-            )
-          : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📸</div>
-        }
+      {/* Photo / video carousel */}
+      <div
+        onClick={() => router.push(`/post/${post.id}`)}
+        onTouchStart={onMediaTouchStart}
+        onTouchEnd={onMediaTouchEnd}
+        style={{ width:"100%",aspectRatio:"4/3",background:"#111",overflow:"hidden",position:"relative",cursor:"pointer" }}
+      >
+        {mediaUrls.length > 0 ? (
+          <>
+            {/* Slide track. Each slide is positioned absolutely; we move the
+                track via translateX. Cheaper to render than mounting every
+                slide as a flex child. */}
+            <div
+              style={{
+                position: "absolute", inset: 0,
+                display: "flex",
+                transform: `translateX(-${photoIndex * 100}%)`,
+                transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
+                willChange: "transform",
+              }}
+            >
+              {mediaUrls.map((url, i) => (
+                <div key={i} style={{ flexShrink: 0, width: "100%", height: "100%", position: "relative" }}>
+                  {mediaTypes[i] === 'video' ? (
+                    <video
+                      src={url}
+                      controls={i === photoIndex}
+                      autoPlay={i === photoIndex}
+                      muted
+                      loop
+                      preload={i === photoIndex ? "metadata" : "none"}
+                      playsInline
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }}
+                    />
+                  ) : (
+                    <img
+                      src={url}
+                      alt=""
+                      style={{
+                        width:"100%",height:"100%",objectFit:"cover",display:"block",
+                        objectPosition: `center ${mediaPositions[i] ?? 50}%`,
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Prev / next arrows — only render when there's >1 photo. */}
+            {mediaUrls.length > 1 && photoIndex > 0 && (
+              <button
+                aria-label="Previous photo"
+                onClick={(e) => { e.stopPropagation(); setPhotoIndex(i => Math.max(0, i - 1)); }}
+                style={{
+                  position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: "rgba(0,0,0,0.55)", color: "#fff", border: "none",
+                  fontSize: 18, lineHeight: 1, cursor: "pointer", zIndex: 3,
+                }}
+              >
+                ‹
+              </button>
+            )}
+            {mediaUrls.length > 1 && photoIndex < mediaUrls.length - 1 && (
+              <button
+                aria-label="Next photo"
+                onClick={(e) => { e.stopPropagation(); setPhotoIndex(i => Math.min(mediaUrls.length - 1, i + 1)); }}
+                style={{
+                  position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: "rgba(0,0,0,0.55)", color: "#fff", border: "none",
+                  fontSize: 18, lineHeight: 1, cursor: "pointer", zIndex: 3,
+                }}
+              >
+                ›
+              </button>
+            )}
+
+            {/* Counter badge top-right ("2 / 5") — only when >1 photo */}
+            {mediaUrls.length > 1 && (
+              <div style={{
+                position: "absolute", top: 10, right: 10,
+                background: "rgba(0,0,0,0.55)", color: "#fff",
+                fontSize: 11, fontWeight: 800, padding: "4px 10px",
+                borderRadius: 99, zIndex: 3, letterSpacing: "0.04em",
+              }}>
+                {photoIndex + 1} / {mediaUrls.length}
+              </div>
+            )}
+
+            {/* Dot indicators bottom-center — only when >1 photo */}
+            {mediaUrls.length > 1 && (
+              <div style={{
+                position: "absolute", bottom: 10, left: 0, right: 0,
+                display: "flex", justifyContent: "center", gap: 6, zIndex: 3,
+                pointerEvents: "none",
+              }}>
+                {mediaUrls.map((_, i) => (
+                  <div key={i} style={{
+                    width: i === photoIndex ? 18 : 6,
+                    height: 6, borderRadius: 3,
+                    background: i === photoIndex ? "#fff" : "rgba(255,255,255,0.5)",
+                    transition: "width 0.2s",
+                  }} />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📸</div>
+        )}
+
         {tags.length > 0 && (
-        <div style={{ position:"absolute",bottom:14,left:18,display:"flex",gap:8,flexWrap:"wrap" }}>
-          {tags.map(t => (
-            <span key={t} style={{ background:"rgba(0,0,0,0.52)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,backdropFilter:"blur(6px)" }}>{t}</span>
-          ))}
-        </div>
+          <div style={{ position:"absolute",bottom:14,left:18,display:"flex",gap:8,flexWrap:"wrap",zIndex:2 }}>
+            {tags.map(t => (
+              <span key={t} style={{ background:"rgba(0,0,0,0.52)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,backdropFilter:"blur(6px)" }}>{t}</span>
+            ))}
+          </div>
         )}
       </div>
 
