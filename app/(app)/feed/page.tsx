@@ -2542,6 +2542,10 @@ export default function FeedPage() {
         })) : [],
         notes: wl.notes,
         photoUrls: normalizePhotoUrls(wl.photo_url, wl.media_url, wl.media_urls),
+        // PR badge — set by /api/db detect_prs_from_log when this workout
+        // beat the user's prior all-time max for any exercise. Drives the
+        // "🏆 PR" pill on the feed card header.
+        isPR: !!wl.is_pr,
       } : null;
 
       const nutrition = nls.length > 0 ? {
