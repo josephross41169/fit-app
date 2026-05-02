@@ -17,6 +17,7 @@ import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location } from "@/components/LocationPicker";
+import RepositionableImage from "@/components/RepositionableImage";
 
 const C = {
   blue: "#7C3AED",
@@ -460,6 +461,10 @@ export default function PostPage() {
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
   const [feedPhotos, setFeedPhotos] = useState<string[]>([]); // carousel data URLs
   const [feedPhotoTypes, setFeedPhotoTypes] = useState<('image' | 'video')[]>([]); // parallel to feedPhotos
+  // Per-photo vertical crop offset (0..100% from top). Parallel to feedPhotos.
+  // 50 = centered (default). User drags inside the carousel preview to adjust.
+  // Videos are excluded from reposition (they have their own playback frame).
+  const [feedPhotoPositions, setFeedPhotoPositions] = useState<number[]>([]);
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
@@ -488,6 +493,9 @@ export default function PostPage() {
       r.onload = ev => {
         setFeedPhotos(p => [...p, ev.target!.result as string]);
         setFeedPhotoTypes(t => [...t, isVid ? 'video' : 'image']);
+        // New photo gets default position 50 (centered). User can drag to
+        // adjust inside the carousel preview before posting.
+        setFeedPhotoPositions(pos => [...pos, 50]);
       };
       r.readAsDataURL(f);
     });
@@ -1548,6 +1556,16 @@ export default function PostPage() {
     const mediaUrl = uploadedUrls[0] || null;
     const firstType = uploadedTypes[0] || null;
 
+    // Build media_positions parallel array. We have to reorder the user-side
+    // positions to match the order the items were actually uploaded — the
+    // upload loop iterates feedPhotos in order, so feedPhotoPositions[i]
+    // corresponds 1:1 with uploadedUrls[i]. Videos get position 50 too even
+    // though it's ignored at render time (video element doesn't crop).
+    const uploadedPositions: number[] = uploadedUrls.map((_url, i) => {
+      const p = feedPhotoPositions[i];
+      return typeof p === 'number' && p >= 0 && p <= 100 ? Math.round(p) : 50;
+    });
+
     try {
       const insertRow: any = {
         user_id: user.id,
@@ -1555,6 +1573,7 @@ export default function PostPage() {
         media_url: mediaUrl,
         media_urls: uploadedUrls.length > 1 ? uploadedUrls : null,
         media_types: uploadedUrls.length > 0 ? uploadedTypes : null,
+        media_positions: uploadedUrls.length > 0 ? uploadedPositions : null,
         media_type: firstType, // legacy single-type column — first item's type
         post_type: 'general' as any,
         // Legacy free-text location only carries old posts. New tagged
@@ -1571,6 +1590,11 @@ export default function PostPage() {
       // Graceful fallback if the migration hasn't been run yet — drop new column and retry.
       if (error && /media_types/i.test(error.message || '')) {
         delete insertRow.media_types;
+        ({ error } = await supabase.from('posts').insert(insertRow));
+      }
+      // Fallback for media_positions — back-compat with un-migrated DBs.
+      if (error && /media_positions/i.test(error.message || '')) {
+        delete insertRow.media_positions;
         ({ error } = await supabase.from('posts').insert(insertRow));
       }
       // Same fallback for tagged_user_ids — back-compat with un-migrated DBs.
@@ -3065,7 +3089,28 @@ export default function PostPage() {
                     style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }}
                   />
                 ) : (
-                  <img src={feedPhotos[carouselIdx]} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} alt="" />
+                  // Photo with drag-to-reposition. The user can tap "Reposition"
+                  // to vertically adjust which slice of the photo shows in the
+                  // square crop. Position saves to local state, then to DB on
+                  // post submit (via media_positions array).
+                  <RepositionableImage
+                    src={feedPhotos[carouselIdx]}
+                    width="100%"
+                    height="100%"
+                    position={feedPhotoPositions[carouselIdx] ?? 50}
+                    editable
+                    onSave={async (newPos) => {
+                      setFeedPhotoPositions(pos => {
+                        const n = [...pos];
+                        // Pad with 50s if state is missing entries (shouldn't
+                        // happen, but defensive against future bugs where
+                        // photos get added without positions).
+                        while (n.length < feedPhotos.length) n.push(50);
+                        n[carouselIdx] = Math.round(newPos);
+                        return n;
+                      });
+                    }}
+                  />
                 )}
                 {/* Dots */}
                 {feedPhotos.length > 1 && (
@@ -3082,6 +3127,7 @@ export default function PostPage() {
                 <button onClick={()=>{
                   setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); return n; });
                   setFeedPhotoTypes(t=>{ const n=[...t]; n.splice(carouselIdx,1); return n; });
+                  setFeedPhotoPositions(pos=>{ const n=[...pos]; n.splice(carouselIdx,1); return n; });
                   setCarouselIdx(i => Math.max(0, Math.min(i, feedPhotos.length - 2)));
                 }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>·</button>
               </div>
