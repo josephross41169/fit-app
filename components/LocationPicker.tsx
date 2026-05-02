@@ -261,8 +261,9 @@ function MapPickerModal({
       }
       try {
         // Dynamic imports — these are big and we only want to pay when
-        // the user actually opens the map.
-        const reactMapGl = await import("react-map-gl/mapbox");
+        // the user actually opens the map. react-map-gl exports Map as
+        // default + Marker as named; we destructure both.
+        const reactMapGl = await import("react-map-gl");
         await import("mapbox-gl/dist/mapbox-gl.css");
         if (!cancelled) setMapModule(reactMapGl);
       } catch (e: any) {
