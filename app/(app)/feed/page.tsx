@@ -1443,6 +1443,14 @@ export default function FeedPage() {
   // Report state — when non-null, ReportModal is shown for that target.
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [loadingFeed, setLoadingFeed] = useState(true);
+  // Pull-to-refresh state. Tracked at the page level (not PostCard) because
+  // the gesture lives on the feed scroll container. The pull distance is
+  // capped at 80px which roughly matches iOS's native PTR. The threshold for
+  // commit is 65px — past that, releasing fires the refresh and we show the
+  // spinner state until fetchPosts(0) resolves.
+  const [ptrPullPx, setPtrPullPx] = useState(0);
+  const [ptrRefreshing, setPtrRefreshing] = useState(false);
+  const ptrStartYRef = useRef<number | null>(null);
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
@@ -1485,7 +1493,7 @@ export default function FeedPage() {
       const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
       const { data: posts, error: queryErr } = await supabase
         .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, post_type, location, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city)')
+        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city), locationData:locations(id, name, city, kind)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
@@ -2531,8 +2539,64 @@ export default function FeedPage() {
         </div>
       </div>
 
-      {/* ── Mobile: interleaved single-column feed ── */}
-      <div className="feed-mobile-only" style={{ padding:"0 12px" }}>
+      {/* ── Mobile: interleaved single-column feed ──
+          Pull-to-refresh: native iOS gesture. We listen on touch events instead
+          of pointer events because PTR specifically wants to consume vertical
+          scroll at the top of the page — pointer events would fight the
+          carousel swipe handlers in the PostCards below. The detection is
+          gated on `window.scrollY === 0` so mid-feed pulls don't trigger. */}
+      <div
+        className="feed-mobile-only"
+        style={{ padding:"0 12px", touchAction:"pan-y" }}
+        onTouchStart={(e) => {
+          if (window.scrollY > 0) return;
+          ptrStartYRef.current = e.touches[0].clientY;
+        }}
+        onTouchMove={(e) => {
+          if (ptrStartYRef.current == null || ptrRefreshing) return;
+          const dy = e.touches[0].clientY - ptrStartYRef.current;
+          if (dy <= 0) { setPtrPullPx(0); return; }
+          // Damping curve — pull feels resistive past ~50px so it doesn't
+          // shoot down the page.
+          const damped = Math.min(80, dy * 0.55);
+          setPtrPullPx(damped);
+        }}
+        onTouchEnd={async () => {
+          const pull = ptrPullPx;
+          ptrStartYRef.current = null;
+          setPtrPullPx(0);
+          if (pull < 65 || ptrRefreshing) return;
+          // Commit the refresh. Refresh state is shown until fetchPosts resolves.
+          setPtrRefreshing(true);
+          try {
+            await fetchPosts(0, false);
+            // Also reload activity logs so the feed actually feels fresh end-to-end
+            try { await fetchActivityLogs(0, false, activityFilter); } catch {}
+          } finally {
+            setPtrRefreshing(false);
+          }
+        }}
+      >
+        {/* PTR indicator — only renders during pull or refresh. The transform
+            on the feed content below pushes it down to expose this. */}
+        {(ptrPullPx > 0 || ptrRefreshing) && (
+          <div style={{
+            position:"absolute", top:0, left:0, right:0,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            height: ptrRefreshing ? 60 : ptrPullPx,
+            color: "#A78BFA", fontSize: 13, fontWeight: 700,
+            transition: ptrRefreshing ? "height 0.18s" : undefined,
+            pointerEvents:"none",
+          }}>
+            {ptrRefreshing
+              ? <div style={{ width:22, height:22, borderRadius:"50%", border:"3px solid #2D1F52", borderTopColor:"#7C3AED", animation:"spin 0.8s linear infinite" }}/>
+              : (ptrPullPx >= 65 ? "↑ Release to refresh" : "↓ Pull to refresh")}
+          </div>
+        )}
+        <div style={{
+          transform: `translateY(${ptrRefreshing ? 60 : ptrPullPx}px)`,
+          transition: ptrPullPx === 0 ? "transform 0.2s ease-out" : undefined,
+        }}>
         <div style={{ height:1,background:"#2D1F52",margin:"12px 0 16px" }}/>
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
@@ -2664,6 +2728,7 @@ export default function FeedPage() {
         })}
         </>
         )}
+        </div>{/* close PTR transform wrapper */}
       </div>
 
       {/* ReportModal — activated when ⋯ → Report is clicked on a post */}
