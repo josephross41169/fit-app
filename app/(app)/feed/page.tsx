@@ -642,8 +642,9 @@ function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: (
           See last week's stats, PRs, streaks, and badges
         </div>
       </div>
+      {/* "View" button navigates to the recap. We do NOT call onDismiss here
+          — viewing should not permanently hide the prompt; only the × should. */}
       <Link href={`/recap/${weekKey}`}
-        onClick={onDismiss}
         style={{
           background: "rgba(255,255,255,0.95)",
           color: "#7C3AED",
@@ -2079,16 +2080,26 @@ export default function FeedPage() {
   }
 
   // ── Recap prompt loader ─────────────────────────────────────────────
-  // Shows a one-time card on the For You feed pointing the user to last
-  // week's recap. Logic:
-  //   1. Compute the Sunday of the previous week
-  //   2. Check localStorage `recap_seen_<userId>_<weekKey>` — if set, skip
-  //   3. Otherwise show the prompt
-  // The prompt only ever surfaces ONE recap (last week's). It does not
-  // accumulate older recaps if the user hasn't opened the app in a month.
+  // Shows a card on the For You feed pointing to last week's recap.
+  //
+  // We always compute and set recapWeekKey so other UI surfaces (e.g. a
+  // "Last week's recap" link) can use it regardless of whether the auto-
+  // prompt shows.
+  //
+  // Auto-show logic for the prompt card:
+  //   1. Compute the Sunday of the previous week → that's our recap target
+  //   2. The prompt auto-shows during the "fresh window" — Sun/Mon/Tue of
+  //      the current week. After that it stops auto-showing because by
+  //      Wednesday the recap is no longer "new."
+  //   3. Within that window, dismissal still suppresses for the rest of
+  //      the week (so we don't pester users who've already dismissed).
+  //
+  // ALSO, defensive cleanup: if a user has stale `recap_seen_*` flags
+  // from prior weeks left over in localStorage, those would never expire
+  // and could cause confusing behavior if the same week-key was reused
+  // (it won't be, but cleanup is cheap and prevents bugs).
   useEffect(() => {
     if (!user) return;
-    // Calculate previous week's Sunday (local time)
     const today = new Date();
     const thisSun = new Date(today);
     thisSun.setHours(0, 0, 0, 0);
@@ -2096,12 +2107,40 @@ export default function FeedPage() {
     const prevSun = new Date(thisSun);
     prevSun.setDate(prevSun.getDate() - 7);
     const weekKey = `${prevSun.getFullYear()}-${String(prevSun.getMonth() + 1).padStart(2, "0")}-${String(prevSun.getDate()).padStart(2, "0")}`;
-    const seenKey = `recap_seen_${user.id}_${weekKey}`;
 
-    if (typeof window !== "undefined" && !localStorage.getItem(seenKey)) {
+    // Always set the week key — the always-visible "Last week's recap"
+    // link uses it. Disconnects the recap link from the auto-prompt logic.
+    setRecapWeekKey(weekKey);
+
+    if (typeof window === "undefined") return;
+
+    // One-time recovery: users who dismissed during the buggy v1 recap
+    // got locked out from seeing the corrected v2 recap. We do a one-time
+    // wipe of all old recap_seen_* keys, gated by a version flag so it
+    // only runs ONCE per user. Future dismissals work normally after this.
+    const versionFlagKey = `recap_v2_migrated_${user.id}`;
+    try {
+      if (!localStorage.getItem(versionFlagKey)) {
+        const prefix = `recap_seen_${user.id}_`;
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(prefix)) {
+            localStorage.removeItem(k);
+          }
+        }
+        localStorage.setItem(versionFlagKey, "1");
+      }
+    } catch { /* localStorage may be unavailable in private mode */ }
+
+    // Normal flow: show the prompt if the user hasn't dismissed THIS week's
+    // recap yet. After the wipe above this is always true on first load
+    // post-migration. Subsequent dismissals via × persist as before.
+    const seenKey = `recap_seen_${user.id}_${weekKey}`;
+    const alreadyDismissed = !!localStorage.getItem(seenKey);
+    if (!alreadyDismissed) {
       setShowRecapPrompt(true);
-      setRecapWeekKey(weekKey);
     }
+  }, [user]);
   }, [user]);
 
   function dismissRecapPrompt() {
