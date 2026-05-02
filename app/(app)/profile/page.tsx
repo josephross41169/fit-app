@@ -19,6 +19,8 @@ import { getLevelProgress, LEVEL_CHALLENGES, XP_FOR_NEXT, LEVEL_COLORS, XP_CATEG
 import { tryLevelUp } from "@/lib/xp";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import BusinessProfileView from "@/components/BusinessProfileView";
+import TaggedPostsModal from "@/components/TaggedPostsModal";
+import StreakSection from "@/components/StreakSection";
 
 const C = {
   purple:"#7C3AED", purpleLight:"#2D1F52", purpleMid:"#3D2A6E",
@@ -1409,6 +1411,10 @@ export default function ProfilePage() {
     }
   }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
   const [showAllPhotos,setShowAllPhotos] = useState(false);
+  // Tagged-in modal state — opens when user taps the 🏷️ Tagged In button.
+  // Modal lazily fetches its own data from /api/db get_tagged_posts so the
+  // profile page render isn't blocked by an extra query.
+  const [showTaggedPosts, setShowTaggedPosts] = useState(false);
   const [photoFilter,setPhotoFilter] = useState<"all"|"workout"|"nutrition"|"wellness">("all");
 
   // Helper: derive photo type based on index (mock data assignment)
@@ -3356,6 +3362,15 @@ export default function ProfilePage() {
         />
       )}
 
+      {showTaggedPosts && user && (
+        <TaggedPostsModal
+          userId={user.id}
+          displayName={profile.name || user.email || "You"}
+          isOwnProfile={true}
+          onClose={() => setShowTaggedPosts(false)}
+        />
+      )}
+
       <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
 
         {/* Profile header */}
@@ -3632,13 +3647,14 @@ export default function ProfilePage() {
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
-                <div style={{display:"flex",gap:8}}>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {highlights.length > 0 && (
                     <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
                       {editingHighlights ? "✓ Done" : "✏️ Edit"}
                     </button>
                   )}
                   <button onClick={()=>setShowAllPhotos(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}>📷 All Photos</button>
+                  <button onClick={()=>setShowTaggedPosts(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}>🏷️ Tagged In</button>
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
@@ -3777,6 +3793,12 @@ export default function ProfilePage() {
 
           {/* RIGHT */}
           <div style={{paddingTop:44}}>
+            {/* Streak section — three strict-math streaks. Sits above
+                Badges since streaks reflect current behavior and badges
+                reflect lifetime achievements; current state should be more
+                prominent. */}
+            {user && <StreakSection userId={user.id} theme="purple" />}
+
             {/* Badges & Awards */}
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
