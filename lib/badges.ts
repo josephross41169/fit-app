@@ -391,9 +391,16 @@ export const BADGES: Badge[] = [
   { id:"birthday-workout",  emoji:"🎂", label:"Birthday Grind",      desc:"Worked out on your birthday",                   category:"special" },
   { id:"new-years",         emoji:"🎆", label:"New Year, New Me",    desc:"Logged a workout on January 1st",               category:"special" },
   { id:"holiday-hustle",    emoji:"🎄", label:"Holiday Hustle",      desc:"Worked out on a major holiday",                 category:"special" },
-  { id:"collab",            emoji:"🤜", label:"Workout Partner",     desc:"Logged a workout with a friend",                category:"special" },
   { id:"outdoor-adventurer",emoji:"🧗", label:"Outdoor Adventurer",  desc:"Completed a hike, climb, or outdoor adventure", category:"special" },
   { id:"sport-competitor",  emoji:"🏆", label:"Competitor",          desc:"Competed in any athletic event",                category:"special" },
+
+  // Workout Partner — 8-tier ladder. Tagging at least one workout partner on
+  // a logged workout counts toward this. Old single "collab" badge id is kept
+  // as a graceful no-op (still in DB on existing accounts) but no longer
+  // appears in the catalog. Engine awards based on count of workouts where
+  // tagged_user_ids has length >= 1.
+  ...easyLadder({ prefix: "partner", emoji: "🤜", noun: "partner workout", nounPlural: "partner workouts", category: "social",
+    tierNames: ["Lift Buddy", "Squad Up", "Ride or Die", "In Sync", "Inseparable", "Iron Brotherhood", "Two Hearts One Goal", "Forever Twos"] }),
 
   // Social one-offs
   { id:"group-member", emoji:"🤝",  label:"Group Member", desc:"Joined your first group", category:"social" },
