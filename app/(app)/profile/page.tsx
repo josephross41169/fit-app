@@ -1272,6 +1272,42 @@ export default function ProfilePage() {
   const [profileImg,setAvatar]= useState<string|null>(null);
   const [editProfile,setEditProfile] = useState(false);
   const [showLevelModal,setShowLevelModal] = useState(false);
+  // Profile share button state. Shows "✓ Copied" for 2.5s after copy.
+  const [profileShareCopied, setProfileShareCopied] = useState(false);
+
+  /** Share or copy a link to the current user's profile. Native share
+   *  sheet on mobile, clipboard fallback on desktop. The URL uses the
+   *  username path which is the public-facing profile route. */
+  async function shareProfile() {
+    if (typeof window === "undefined") return;
+    const username = profile?.username || (user as any)?.profile?.username;
+    if (!username) {
+      alert("Set a username first to share your profile.");
+      return;
+    }
+    const url = `${window.location.origin}/profile/${username}`;
+    const shareData = {
+      title: `${profile?.full_name || "@" + username} on Livelee`,
+      text: `Check out my Livelee profile`,
+      url,
+    };
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setProfileShareCopied(true);
+      setTimeout(() => setProfileShareCopied(false), 2500);
+    } catch {
+      window.prompt("Copy this profile link:", url);
+    }
+  }
+
   const [showCustomizations, setShowCustomizations] = useState(false);
   const [customizationDetail, setCustomizationDetail] = useState<number | null>(null);
   const [repositionMode, setRepositionMode] = useState(false);
@@ -3556,11 +3592,21 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",width:"100%",transition:"all 0.15s"}}
-              onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
-              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
-              ✏️ Edit Profile
-            </button>
+            <div style={{display:"flex", gap:8, width:"100%"}}>
+              <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
+                onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
+                onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
+                ✏️ Edit Profile
+              </button>
+              <button onClick={shareProfile} aria-label="Share profile" style={{
+                padding:"11px 14px", borderRadius:14, border:`1.5px solid ${C.purple}`,
+                background: "transparent", color: C.purple,
+                fontWeight: 800, fontSize: 14, cursor: "pointer",
+                flexShrink: 0, transition: "all 0.15s",
+              }}>
+                {profileShareCopied ? "✓ Copied" : "🔗 Share"}
+              </button>
+            </div>
             </div>{/* end profile-stats-bio */}
           </div>
         </div>
