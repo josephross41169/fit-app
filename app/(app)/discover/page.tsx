@@ -311,7 +311,12 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
         {photoSrc
           ? (leadType === 'video'
               ? <video src={photoSrc} controls autoPlay muted loop preload="metadata" playsInline onClick={(e) => e.stopPropagation()} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }} />
-              : <img src={photoSrc} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
+              : <img src={photoSrc} alt="" style={{
+                  width:"100%",height:"100%",objectFit:"cover",display:"block",
+                  // Discover shows the lead photo (index 0) so we apply the
+                  // first entry from media_positions. Falls back to centered.
+                  objectPosition: `center ${(post as any).media_positions?.[0] ?? 50}%`,
+                }} />
             )
           : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📸</div>
         }
