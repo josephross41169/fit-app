@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
@@ -592,6 +593,72 @@ function StreakCard({ days, onDismiss, onLog }: { days: number; onDismiss: () =>
         }}>
         Log now →
       </button>
+      <button onClick={onDismiss} aria-label="Dismiss"
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 8,
+          background: "transparent",
+          border: "none",
+          color: "rgba(255,255,255,0.7)",
+          fontSize: 18,
+          lineHeight: 1,
+          cursor: "pointer",
+          padding: 4,
+        }}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ── RecapPromptCard ───────────────────────────────────────────────────────
+// Shows once per week pointing the user to last week's recap. Same visual
+// language as StreakCard (gradient + dismiss × + CTA button) but in the
+// purple-pink palette to differentiate from the orange streak card.
+//
+// onView links to /recap/<weekKey> for deep-linking. We don't auto-navigate
+// — the user has to tap "View Recap" so they're never surprised by a
+// page change.
+function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: () => void }) {
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #7C3AED 0%, #DB2777 100%)",
+      borderRadius: 16,
+      padding: "14px 16px 14px 18px",
+      marginBottom: 14,
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      position: "relative",
+      boxShadow: "0 4px 16px rgba(124, 58, 237, 0.25)",
+    }}>
+      <div style={{ fontSize: 32, lineHeight: 1, flexShrink: 0 }}>📊</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>
+          Your weekly recap is ready
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginTop: 3, lineHeight: 1.35 }}>
+          See last week's stats, PRs, streaks, and badges
+        </div>
+      </div>
+      <Link href={`/recap/${weekKey}`}
+        onClick={onDismiss}
+        style={{
+          background: "rgba(255,255,255,0.95)",
+          color: "#7C3AED",
+          border: "none",
+          borderRadius: 99,
+          padding: "8px 16px",
+          fontWeight: 800,
+          fontSize: 13,
+          cursor: "pointer",
+          flexShrink: 0,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          textDecoration: "none",
+        }}>
+        View →
+      </Link>
       <button onClick={onDismiss} aria-label="Dismiss"
         style={{
           position: "absolute",
@@ -1545,6 +1612,13 @@ export default function FeedPage() {
     loggedToday: boolean;
   } | null>(null);
   const [streakDismissed, setStreakDismissed] = useState(false);
+  // Recap prompt — appears once per week on first feed load showing a CTA
+  // to view last week's recap. Persists dismissal in localStorage by week
+  // start date so users see exactly one recap prompt per week.
+  const [showRecapPrompt, setShowRecapPrompt] = useState(false);
+  // The Sunday-ISO of the week we're prompting about. Stored separately
+  // so the URL the prompt links to is correct.
+  const [recapWeekKey, setRecapWeekKey] = useState<string>("");
   // Stories — real data from /api/db
   const [stories, setStories] = useState<Story[]>([]);
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
@@ -2002,6 +2076,39 @@ export default function FeedPage() {
     const todayKey = new Date().toISOString().slice(0, 10);
     try { localStorage.setItem(`streak_dismissed_${user.id}_${todayKey}`, '1'); } catch {}
     setStreakDismissed(true);
+  }
+
+  // ── Recap prompt loader ─────────────────────────────────────────────
+  // Shows a one-time card on the For You feed pointing the user to last
+  // week's recap. Logic:
+  //   1. Compute the Sunday of the previous week
+  //   2. Check localStorage `recap_seen_<userId>_<weekKey>` — if set, skip
+  //   3. Otherwise show the prompt
+  // The prompt only ever surfaces ONE recap (last week's). It does not
+  // accumulate older recaps if the user hasn't opened the app in a month.
+  useEffect(() => {
+    if (!user) return;
+    // Calculate previous week's Sunday (local time)
+    const today = new Date();
+    const thisSun = new Date(today);
+    thisSun.setHours(0, 0, 0, 0);
+    thisSun.setDate(thisSun.getDate() - thisSun.getDay());
+    const prevSun = new Date(thisSun);
+    prevSun.setDate(prevSun.getDate() - 7);
+    const weekKey = `${prevSun.getFullYear()}-${String(prevSun.getMonth() + 1).padStart(2, "0")}-${String(prevSun.getDate()).padStart(2, "0")}`;
+    const seenKey = `recap_seen_${user.id}_${weekKey}`;
+
+    if (typeof window !== "undefined" && !localStorage.getItem(seenKey)) {
+      setShowRecapPrompt(true);
+      setRecapWeekKey(weekKey);
+    }
+  }, [user]);
+
+  function dismissRecapPrompt() {
+    if (!user || !recapWeekKey) return;
+    const seenKey = `recap_seen_${user.id}_${recapWeekKey}`;
+    try { localStorage.setItem(seenKey, '1'); } catch {}
+    setShowRecapPrompt(false);
   }
 
   async function fetchActivityLogs(page: number, append = false, filter: ActivityFilter = activityFilter) {
@@ -2616,6 +2723,12 @@ export default function FeedPage() {
                 </div>
               ) : (
                 <>
+                  {/* Recap prompt — once-per-week link to last week's recap.
+                      Goes ABOVE streak card since it's a richer "look what
+                      you did" moment vs the streak's nudge. */}
+                  {feedTab === "foryou" && showRecapPrompt && recapWeekKey && (
+                    <RecapPromptCard weekKey={recapWeekKey} onDismiss={dismissRecapPrompt} />
+                  )}
                   {/* Streak reminder card — only on For You feed, only when
                       an active streak exists and the user hasn't logged today.
                       Tapping "Log now" goes to /post. */}
@@ -2861,6 +2974,12 @@ export default function FeedPage() {
           )
         ) : (
         <>
+        {/* Recap prompt — shows once per week, points to last week's recap.
+            Lives above the streak card because it's a richer, more rewarding
+            CTA (here's what you DID) versus the streak nudge (don't break it). */}
+        {feedTab === "foryou" && showRecapPrompt && recapWeekKey && (
+          <RecapPromptCard weekKey={recapWeekKey} onDismiss={dismissRecapPrompt} />
+        )}
         {/* Streak reminder card — only on For You feed when an active streak
             exists AND the user hasn't logged today AND they haven't dismissed
             it. Dismissed state lives in localStorage for the current day so
