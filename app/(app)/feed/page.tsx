@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, memo } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +13,7 @@ import { computeTier, TIER_COLORS } from "@/lib/tiers";
 import type { Tier } from "@/lib/tiers";
 import { loadBlockedUsers } from "@/lib/blocks";
 import ReportModal, { ReportTarget } from "@/components/ReportModal";
+import { ImagePresets } from "@/lib/imageUrls";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
@@ -442,14 +443,14 @@ function StoryViewer({
           <video src={story.media_url} autoPlay muted playsInline
             style={{ width:"100%",height:"100%",objectFit:"cover" }} />
         ) : (
-          <img src={story.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+          <img src={ImagePresets.thumb(story.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
         )}
 
         {/* Header */}
         <div style={{ position:"absolute",top:18,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:2 }}>
           <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
             {story.avatar_url
-              ? <img src={story.avatar_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+              ? <img src={ImagePresets.avatarSm(story.avatar_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
               : (story.username[0] || "?").toUpperCase()}
           </div>
           <div style={{ flex:1 }}>
@@ -712,7 +713,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
       </button>
       {workout.photoUrls && workout.photoUrls.length > 0 && (
         <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          <img src={workout.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+          <img src={ImagePresets.feed(workout.photoUrls[0])} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
         </div>
       )}
       {/* Always-visible summary strip — shows top exercises AND cardio inline
@@ -798,7 +799,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
       </button>
       {nutrition.photoUrls && nutrition.photoUrls.length > 0 && (
         <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          <img src={nutrition.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+          <img src={ImagePresets.feed(nutrition.photoUrls[0])} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
         </div>
       )}
       {/* Macro pills always visible */}
@@ -860,7 +861,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
       </button>
       {wellness.photoUrls && wellness.photoUrls.length > 0 && (
         <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          <img src={wellness.photoUrls[0]} alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+          <img src={ImagePresets.feed(wellness.photoUrls[0])} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
         </div>
       )}
       {/* Always-visible activity pills strip — even when collapsed, the user
@@ -1000,7 +1001,17 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
 }
 
 // ── Post Card (left column — media + social only) ─────────────────────────────
-function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
+// PERF: PostCard is memoized so it only re-renders when its specific
+// post or callbacks change. Without this, every parent state change
+// (which happens often — likes, comments, story progress) re-renders
+// every visible card on the feed. With ~10-20 cards visible at once
+// and 50+ state values on the parent, that's a lot of wasted work.
+//
+// Custom equality function: re-render only if the post's data changed
+// or the user changed. We deliberately ignore callback identity since
+// the parent recreates them on every render — comparing by reference
+// would defeat the memo entirely.
+const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
   // Determine ownership. Prefer comparing user IDs (reliable) over username
   // (which can be stale or fall back to "User" if profile data didn't load).
   const isOwner = !!currentUser && (
@@ -1177,7 +1188,7 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
     <>
       {lightbox && (
         <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center" }} onClick={() => setLightbox(null)}>
-          <img src={lightbox} style={{ maxWidth:"95vw",maxHeight:"90vh",borderRadius:16,objectFit:"contain" }} alt="" onClick={e => e.stopPropagation()} />
+          <img src={ImagePresets.full(lightbox)} loading="eager" style={{ maxWidth:"95vw",maxHeight:"90vh",borderRadius:16,objectFit:"contain" }} alt="" onClick={e => e.stopPropagation()} />
           <button onClick={() => setLightbox(null)} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer" }}>×</button>
         </div>
       )}
@@ -1196,7 +1207,7 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
             <TierFrame tier={post.tier || "default"} size={46}>
               <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
                 {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-                  ? <img src={post.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                  ? <img src={ImagePresets.avatarSm(post.avatar)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : post.avatar}
               </div>
             </TierFrame>
@@ -1325,7 +1336,12 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
               }
               return (
                 <img
-                  src={currentUrl}
+                  // PERF: serve a feed-sized variant (~800px wide) instead
+                  // of the original 2-3MB iPhone photo. Supabase resizes
+                  // on the fly. Lightbox click opens the full-resolution.
+                  src={ImagePresets.feed(currentUrl)}
+                  loading="lazy"
+                  decoding="async"
                   style={{
                     width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",
                     // Apply per-photo crop position. Falls back to centered (50)
@@ -1442,7 +1458,7 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
               <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
                 <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
                   {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
-                    ? <img src={c.avatar} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                    ? <img src={ImagePresets.avatarSm(c.avatar)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                     : c.avatar}
                 </div>
                 <div style={{ flex:1,background:"#1A1228",borderRadius:14,padding:"9px 13px",border:"1px solid #2D1F52" }}>
@@ -1504,7 +1520,7 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
         <div style={{ padding:"0 18px 16px",display:"flex",gap:10,alignItems:"center" }}>
           <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
             {currentUser?.profile?.avatar_url
-              ? <img src={currentUser.profile.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+              ? <img src={ImagePresets.avatarSm(currentUser.profile.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
           <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#1A1228",borderRadius:24,padding:"8px 16px",border:"1.5px solid #2D1F52" }}>
@@ -1515,7 +1531,22 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
       </div>
     </>
   );
-}
+}, (prev, next) => {
+  // Custom equality: re-render only when meaningful post data changes.
+  // We compare specific fields rather than the whole post object because
+  // the parent often passes a fresh object on every render (the same data
+  // but a new identity), which would defeat memo.
+  const a = prev.post;
+  const b = next.post;
+  return (
+    a.id === b.id &&
+    a.likes === b.likes &&
+    a.liked === b.liked &&
+    a.comments?.length === b.comments?.length &&
+    a.caption === b.caption &&
+    prev.currentUser?.id === next.currentUser?.id
+  );
+});
 
 // ── New Members Panel ─────────────────────────────────────────────────────────
 interface Member {
@@ -1564,7 +1595,7 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
               <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
                 {member.avatar_url
-                  ? <img src={member.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  ? <img src={ImagePresets.avatarSm(member.avatar_url)} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   : ini}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
@@ -2559,7 +2590,7 @@ export default function FeedPage() {
                     style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #2D1F52"}}
                     onMouseEnter={e=>(e.currentTarget.style.background="#2D1F52")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
                     <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
-                      {u.avatar_url?<img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(u.full_name||u.username||"?")[0].toUpperCase()}
+                      {u.avatar_url?<img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
                     <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{u.full_name}</div><div style={{fontSize:11,color:C.sub}}>@{u.username}</div></div>
                   </div>
@@ -2670,7 +2701,7 @@ export default function FeedPage() {
                 <TierFrame tier={tier} size={60}>
                   {myStory ? (
                     <div style={{ width:"100%",height:"100%",position:"relative" }}>
-                      <img src={myStory.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                      <img src={ImagePresets.thumb(myStory.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
                     </div>
                   ) : (
                     <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff" }}>
@@ -2696,7 +2727,7 @@ export default function FeedPage() {
               >
                 <TierFrame tier={tier} size={60}>
                   <div style={{ width:"100%",height:"100%",position:"relative",overflow:"hidden" }}>
-                    <img src={story.media_url} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                    <img src={ImagePresets.thumb(story.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
                   </div>
                 </TierFrame>
                 <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -2733,7 +2764,7 @@ export default function FeedPage() {
               ) : notifications.map(n => (
                 <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                    {n.from_user?.avatar_url ? <img src={ImagePresets.avatarSm(n.from_user.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
@@ -2996,7 +3027,7 @@ export default function FeedPage() {
             ) : notifications.map(n => (
               <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                 <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                  {n.from_user?.avatar_url ? <img src={ImagePresets.avatarSm(n.from_user.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
