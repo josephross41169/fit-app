@@ -547,6 +547,70 @@ function getWellnessStyle(activity: string): { emoji: string; accent: string } {
   return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#A78BFA" };
 }
 
+// ── StreakCard ────────────────────────────────────────────────────────────
+// In-app reminder card shown at the top of the For You feed when the user
+// has an active streak (>= 2 days) but hasn't logged today. Renders a
+// flame, the day count, a "Log now" CTA, and a dismiss button.
+//
+// Behavior is intentionally non-intrusive: the card is small, doesn't block
+// content, and stays dismissed for the rest of the day once tapped away.
+// It re-appears the next day if the streak is still alive.
+function StreakCard({ days, onDismiss, onLog }: { days: number; onDismiss: () => void; onLog: () => void }) {
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #F97316 0%, #DC2626 100%)",
+      borderRadius: 16,
+      padding: "14px 16px 14px 18px",
+      marginBottom: 14,
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      position: "relative",
+      boxShadow: "0 4px 16px rgba(249, 115, 22, 0.25)",
+    }}>
+      <div style={{ fontSize: 32, lineHeight: 1, flexShrink: 0 }}>🔥</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>
+          {days}-day streak
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginTop: 3, lineHeight: 1.35 }}>
+          Log a workout or wellness session today to keep it alive
+        </div>
+      </div>
+      <button onClick={onLog}
+        style={{
+          background: "rgba(255,255,255,0.95)",
+          color: "#DC2626",
+          border: "none",
+          borderRadius: 99,
+          padding: "8px 16px",
+          fontWeight: 800,
+          fontSize: 13,
+          cursor: "pointer",
+          flexShrink: 0,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+        }}>
+        Log now →
+      </button>
+      <button onClick={onDismiss} aria-label="Dismiss"
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 8,
+          background: "transparent",
+          border: "none",
+          color: "rgba(255,255,255,0.7)",
+          fontSize: 18,
+          lineHeight: 1,
+          cursor: "pointer",
+          padding: 4,
+        }}>
+        ×
+      </button>
+    </div>
+  );
+}
+
 function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const [open, setOpen] = useState(false);
   const exercises = workout.exercises || [];
@@ -1471,6 +1535,16 @@ export default function FeedPage() {
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  // Streak reminder card — shows at top of For You when user has an active
+  // streak AND hasn't logged anything today. The streak is computed from
+  // activity_logs (workouts + wellness) over the last 30 days. Set to 0 means
+  // "don't show the card." A user who dismisses the card today gets
+  // localStorage'd so they don't see it again until tomorrow.
+  const [streakInfo, setStreakInfo] = useState<{
+    days: number;
+    loggedToday: boolean;
+  } | null>(null);
+  const [streakDismissed, setStreakDismissed] = useState(false);
   // Stories — real data from /api/db
   const [stories, setStories] = useState<Story[]>([]);
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
@@ -1839,6 +1913,96 @@ export default function FeedPage() {
     }
     loadFollowingFeed();
   }, [feedTab, user]);
+
+  // ── Streak loader ─────────────────────────────────────────────────────
+  // Computes the user's CURRENT consecutive-day activity streak (workouts
+  // OR wellness logs). Runs once when the user resolves; if there's an
+  // active streak (>=2 days) and they haven't logged TODAY yet, the
+  // reminder card shows on the For You feed.
+  //
+  // We special-case "started yesterday and haven't logged today yet" — the
+  // streak is still alive (today isn't over) but we want to nudge them.
+  // If they last logged 2+ days ago the streak is broken; we don't show
+  // a card for broken streaks because that's just sad.
+  //
+  // Dismissal: the user can tap × on the card. We set a localStorage flag
+  // keyed by today's date; tomorrow the flag is stale and the card returns
+  // (assuming streak is still alive, which it won't be if they kept ignoring).
+  useEffect(() => {
+    if (!user) return;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const dismissedKey = `streak_dismissed_${user.id}_${todayKey}`;
+    if (typeof window !== "undefined" && localStorage.getItem(dismissedKey)) {
+      setStreakDismissed(true);
+      return;
+    }
+
+    (async () => {
+      // Pull the last 30 days of activity logs — enough to compute any
+      // reasonable streak without bloating the query.
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('logged_at, created_at')
+        .eq('user_id', user.id)
+        .or('log_type.eq.workout,log_type.eq.wellness')
+        .gte('logged_at', thirtyDaysAgo)
+        .order('logged_at', { ascending: false });
+      if (!data || data.length === 0) {
+        setStreakInfo({ days: 0, loggedToday: false });
+        return;
+      }
+
+      // Bucket logs by local-date string so multiple workouts on the same
+      // day count as one "active day" toward the streak.
+      const dayKey = (iso: string) => {
+        const d = new Date(iso);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      };
+      const activeDays = new Set<string>();
+      data.forEach((row: any) => {
+        const ts = row.logged_at || row.created_at;
+        if (ts) activeDays.add(dayKey(ts));
+      });
+
+      // Walk backward from today counting consecutive days. We allow today
+      // to be missing (streak alive even if they haven't logged yet today)
+      // but stop at the first gap before yesterday.
+      const today = new Date();
+      const todayK = dayKey(today.toISOString());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayK = dayKey(yesterday.toISOString());
+
+      const loggedToday = activeDays.has(todayK);
+      // Streak base: did they log yesterday? Otherwise the streak is broken
+      // unless today is the first ever log.
+      if (!loggedToday && !activeDays.has(yesterdayK)) {
+        setStreakInfo({ days: 0, loggedToday: false });
+        return;
+      }
+      let count = 0;
+      const cursor = new Date(today);
+      // If they haven't logged today, start counting from yesterday.
+      if (!loggedToday) cursor.setDate(cursor.getDate() - 1);
+      while (true) {
+        if (activeDays.has(dayKey(cursor.toISOString()))) {
+          count++;
+          cursor.setDate(cursor.getDate() - 1);
+        } else break;
+        // Safety bound — 30 days back is the most we ever loaded
+        if (count >= 30) break;
+      }
+      setStreakInfo({ days: count, loggedToday });
+    })();
+  }, [user]);
+
+  function dismissStreakCard() {
+    if (!user) return;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    try { localStorage.setItem(`streak_dismissed_${user.id}_${todayKey}`, '1'); } catch {}
+    setStreakDismissed(true);
+  }
 
   async function fetchActivityLogs(page: number, append = false, filter: ActivityFilter = activityFilter) {
     if (page > 0) setLoadingMoreActivity(true);
@@ -2452,6 +2616,12 @@ export default function FeedPage() {
                 </div>
               ) : (
                 <>
+                  {/* Streak reminder card — only on For You feed, only when
+                      an active streak exists and the user hasn't logged today.
+                      Tapping "Log now" goes to /post. */}
+                  {feedTab === "foryou" && streakInfo && streakInfo.days >= 2 && !streakInfo.loggedToday && !streakDismissed && (
+                    <StreakCard days={streakInfo.days} onDismiss={dismissStreakCard} onLog={() => router.push('/post')} />
+                  )}
                   {/* Empty state only when there's truly nothing — no feed
                       posts AND no activity. Previously this said "no posts"
                       even when the user had logged plenty of activity. */}
@@ -2691,6 +2861,13 @@ export default function FeedPage() {
           )
         ) : (
         <>
+        {/* Streak reminder card — only on For You feed when an active streak
+            exists AND the user hasn't logged today AND they haven't dismissed
+            it. Dismissed state lives in localStorage for the current day so
+            it doesn't keep re-appearing every load. */}
+        {feedTab === "foryou" && streakInfo && streakInfo.days >= 2 && !streakInfo.loggedToday && !streakDismissed && (
+          <StreakCard days={streakInfo.days} onDismiss={dismissStreakCard} onLog={() => router.push('/post')} />
+        )}
         {mobileItems.length === 0 && !loadingFeed && (
           <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
             👋 No posts yet. Log a workout or share to feed to see content here!
