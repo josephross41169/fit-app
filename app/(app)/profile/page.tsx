@@ -3645,18 +3645,26 @@ export default function ProfilePage() {
             </button>
 
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              {/* Title row — just the heading + Edit toggle. The three
+                  navigation buttons (All Photos / Tagged In / Recaps) used
+                  to live here too, but with three of them the row wrapped
+                  awkwardly in the narrow profile column. They moved to a
+                  dedicated row below (see next div). */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  {highlights.length > 0 && (
-                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
-                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
-                    </button>
-                  )}
-                  <button onClick={()=>setShowAllPhotos(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}>📷 All Photos</button>
-                  <button onClick={()=>setShowTaggedPosts(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}>🏷️ Tagged In</button>
-                  <a href="/recap" style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",display:"inline-block"}}>📊 Recaps</a>
-                </div>
+                {highlights.length > 0 && (
+                  <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
+                    {editingHighlights ? "✓ Done" : "✏️ Edit"}
+                  </button>
+                )}
+              </div>
+              {/* Nav buttons row — three equal-width buttons. flex with
+                  flex:1 so each takes equal share. Wraps to 2-row layout
+                  on very narrow viewports via flex-wrap. */}
+              <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+                <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
+                <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
+                <a href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</a>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
                 {Array.from({length:HIGHLIGHT_SLOTS}).map((_,i) => {
