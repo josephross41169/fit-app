@@ -11,6 +11,7 @@ import { isBusinessAccount } from "@/lib/businessTypes";
 import BusinessProfileView from "@/components/BusinessProfileView";
 import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
+import TaggedPostsModal from "@/components/TaggedPostsModal";
 
 const C = {
   bg:"#0D0D0D", white:"#1A1A1A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -424,6 +425,8 @@ export default function UserProfilePage() {
   // All Photos: every public feed-post photo by this user, fetched from posts table
   const [feedPhotos, setFeedPhotos] = useState<string[]>([]);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+  // Tagged-in modal state. Lazy-loaded on first open.
+  const [showTaggedPosts, setShowTaggedPosts] = useState(false);
 
   // ── Followers / Following modal ──────────────────────────────────────────
   const [socialModal, setSocialModal] = useState<"followers"|"following"|null>(null);
@@ -802,6 +805,15 @@ export default function UserProfilePage() {
         />
       )}
 
+      {showTaggedPosts && profile && (
+        <TaggedPostsModal
+          userId={profile.id}
+          displayName={profile.full_name || profile.username || "User"}
+          isOwnProfile={!!(currentUser && currentUser.id === profile.id)}
+          onClose={() => setShowTaggedPosts(false)}
+        />
+      )}
+
       {/* ── Followers / Following Modal ── */}
       {socialModal && (
         <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setSocialModal(null)}>
@@ -1020,21 +1032,35 @@ export default function UserProfilePage() {
           {/* LEFT — Highlights */}
           <div>
             <div style={{background:C.white,borderRadius:22,padding:20,border:`2px solid ${C.greenMid}`,marginBottom:20}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,gap:6,flexWrap:"wrap"}}>
                 <div style={{fontWeight:900,fontSize:16,color:C.text}}>📸 Highlights</div>
-                {feedPhotos.length > 0 && (
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {feedPhotos.length > 0 && (
+                    <button
+                      onClick={() => setShowAllPhotos(true)}
+                      style={{
+                        background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                        border: "none", color: "#fff",
+                        fontSize: 11, fontWeight: 800,
+                        padding: "5px 11px", borderRadius: 99,
+                        cursor: "pointer",
+                      }}>
+                      All Photos ({feedPhotos.length})
+                    </button>
+                  )}
                   <button
-                    onClick={() => setShowAllPhotos(true)}
+                    onClick={() => setShowTaggedPosts(true)}
                     style={{
-                      background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
-                      border: "none", color: "#fff",
+                      background: "transparent",
+                      border: `1.5px solid ${C.greenMid}`,
+                      color: C.text,
                       fontSize: 11, fontWeight: 800,
                       padding: "5px 11px", borderRadius: 99,
                       cursor: "pointer",
                     }}>
-                    All Photos ({feedPhotos.length})
+                    🏷️ Tagged In
                   </button>
-                )}
+                </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5}}>
                 {Array.from({length:HIGHLIGHT_SLOTS}).map((_,i) => {
