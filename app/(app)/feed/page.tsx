@@ -14,6 +14,7 @@ import type { Tier } from "@/lib/tiers";
 import { loadBlockedUsers } from "@/lib/blocks";
 import ReportModal, { ReportTarget } from "@/components/ReportModal";
 import { ImagePresets } from "@/lib/imageUrls";
+import { getCached, setCached } from "@/lib/queryCache";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
@@ -1734,31 +1735,41 @@ export default function FeedPage() {
 
     try {
       const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
-      const { data: posts, error: queryErr } = await supabase
+
+      // PERF: fire posts + follows + viewer-city in PARALLEL. None of them
+      // depend on each other; previously we waited for posts to finish
+      // before starting the others, costing ~200-400ms of needless serial
+      // wait time. Promise.all + .catch fallbacks let any slow query fail
+      // independently without blocking the others.
+      const postsPromise = supabase
         .from('posts')
         .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city), locationData:locations(id, name, city, kind)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
 
+      const followsPromise = user
+        ? supabase.from('follows').select('following_id').eq('follower_id', user.id)
+        : Promise.resolve({ data: [] as any[] });
+
+      const viewerPromise = user
+        ? supabase.from('users').select('city').eq('id', user.id).maybeSingle()
+        : Promise.resolve({ data: null });
+
+      const [postsResult, followsRes, viewerRes] = await Promise.all([
+        postsPromise,
+        followsPromise,
+        viewerPromise,
+      ]);
+
+      const { data: posts, error: queryErr } = postsResult;
+
       if (queryErr) {
         console.error('[feed] posts query failed:', queryErr.message, queryErr);
       } else if (Array.isArray(posts)) {
         // Score for ranking. Tier 0 = own posts, 1 = follows, 2 = same city, 3 = rest
-        let followingIds: string[] = [];
-        let viewerCity = '';
-        if (user) {
-          try {
-            const [followsRes, viewerRes] = await Promise.all([
-              supabase.from('follows').select('following_id').eq('follower_id', user.id),
-              supabase.from('users').select('city').eq('id', user.id).maybeSingle(),
-            ]);
-            followingIds = (followsRes.data || []).map((f: any) => f.following_id);
-            viewerCity = (viewerRes.data?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
-          } catch (followErr) {
-            console.warn('[feed] couldnt fetch follows/city for ranking:', followErr);
-          }
-        }
+        const followingIds: string[] = (followsRes.data || []).map((f: any) => f.following_id);
+        const viewerCity = ((viewerRes.data as any)?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
         const followingSet = new Set(followingIds);
 
         // Find the user's single most recent post id (if any). Only THAT id
@@ -1802,51 +1813,60 @@ export default function FeedPage() {
           }
         }
 
-        // Batch-load comments for the visible posts so the first-comment
-        // preview renders on initial paint instead of waiting for the user
-        // to click. One /api/db call per post — done in parallel. We map
-        // DB shape (content, users) → display shape (text, user) here so
-        // PostCard's existing render code Just Works.
+        // PERF: Batch-load comments for ALL visible posts in ONE query
+        // instead of N separate /api/db calls. The previous version fired
+        // 10 parallel HTTP requests (browser → Vercel → Supabase → back) —
+        // even in parallel, the slowest one bottlenecks page load. Direct
+        // Supabase query with .in() does the same work in 1 request.
+        //
+        // We then group results by post_id client-side and only show the
+        // most-recent comment per post in the feed preview (PostCard limits
+        // display, but having all of them in state means tapping "show more"
+        // is instant).
         const postCommentsMap: Record<string, any[]> = {};
         if (pageRows.length > 0) {
-          await Promise.all(pageRows.map(async (p: any) => {
-            try {
-              const res = await fetch('/api/db', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'get_post_comments', payload: { postId: p.id } }),
-              });
-              const cdata = await res.json();
-              if (Array.isArray(cdata.comments)) {
-                postCommentsMap[p.id] = cdata.comments.map((c: any) => {
-                  const cu = c.users || c.user || {};
-                  const cname = cu.full_name || cu.username || 'User';
-                  const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-                  // Format time as friendly relative ("5m ago") matching the
-                  // display the rest of the feed uses. Falls back to date string
-                  // for old comments. Use a defensive guard on created_at because
-                  // a missing field would yield "Invalid Date".
-                  const t = (() => {
-                    if (!c.created_at) return '';
-                    const d = new Date(c.created_at);
-                    if (isNaN(d.getTime())) return '';
-                    const diff = Date.now() - d.getTime();
-                    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-                    if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-                    return d.toLocaleDateString();
-                  })();
-                  return {
-                    id: c.id,
-                    user: cname,
-                    avatar: cu.avatar_url || cini,
-                    text: c.content || '',
-                    time: t,
-                    user_id: c.user_id,
-                  };
-                });
-              }
-            } catch { /* leave empty on failure */ }
-          }));
+          try {
+            const postIds = pageRows.map((p: any) => p.id);
+            const { data: allComments } = await supabase
+              .from('comments')
+              .select('id, content, created_at, user_id, post_id, users:user_id(id, username, full_name, avatar_url)')
+              .in('post_id', postIds)
+              .order('created_at', { ascending: false });
+
+            (allComments || []).forEach((c: any) => {
+              const pid = c.post_id;
+              if (!pid) return;
+              const cu = c.users || {};
+              const cname = cu.full_name || cu.username || 'User';
+              const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+              const t = (() => {
+                if (!c.created_at) return '';
+                const d = new Date(c.created_at);
+                if (isNaN(d.getTime())) return '';
+                const diff = Date.now() - d.getTime();
+                if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+                if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+                return d.toLocaleDateString();
+              })();
+              const display = {
+                id: c.id,
+                user: cname,
+                avatar: cu.avatar_url || cini,
+                text: c.content || '',
+                time: t,
+                user_id: c.user_id,
+              };
+              if (!postCommentsMap[pid]) postCommentsMap[pid] = [];
+              postCommentsMap[pid].push(display);
+            });
+            // Comments came in DESC for the .in() — reverse per-post so
+            // they display oldest-first like the previous code did.
+            Object.keys(postCommentsMap).forEach(pid => {
+              postCommentsMap[pid].reverse();
+            });
+          } catch (cmtErr) {
+            console.warn('[feed] batch comments fetch failed:', cmtErr);
+          }
         }
 
         data = pageRows.map((p: any) => ({
@@ -1879,6 +1899,13 @@ export default function FeedPage() {
       else setDbPosts(filtered);
       setDbPostsHasMore(data.length === PAGE_SIZE);
       setDbPostsPage(page);
+      // PERF: cache page 0 of the feed for back/forward navigation. We
+      // only cache page 0 — paginated extra pages don't survive the
+      // round trip and that's fine. 30s TTL is enough for the user to
+      // hop to a profile and back without seeing a stale feed.
+      if (page === 0 && user?.id) {
+        setCached(`feed:${user.id}`, filtered);
+      }
     } else {
       console.warn('[feed] fetchPosts ended with no data');
     }
@@ -1891,7 +1918,20 @@ export default function FeedPage() {
   // get personalized ranking. The first fetch on mount runs with user=null
   // (auth context still resolving) and gives an unranked fallback; the
   // refetch when user.id appears gives the proper bucketed ranking.
-  useEffect(() => { fetchPosts(0); }, [user?.id]);
+  //
+  // PERF: hydrate from in-memory cache instantly if we have a recent
+  // version. The user navigated away and came back — show what we had,
+  // then refresh in the background.
+  useEffect(() => {
+    if (user?.id) {
+      const cached = getCached<any[]>(`feed:${user.id}`, 30_000);
+      if (cached && cached.length > 0) {
+        setDbPosts(cached);
+        setLoadingFeed(false);
+      }
+    }
+    fetchPosts(0);
+  }, [user?.id]);
 
   // ── Stories: load active stories (last 24h) ────────────────────────────
   async function loadStories() {
