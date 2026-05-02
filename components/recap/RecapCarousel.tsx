@@ -343,7 +343,12 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
         ×
       </button>
 
-      {/* Card area — only the active card is mounted to keep DOM light */}
+      {/* Card area — only the active card is mounted to keep DOM light.
+          Each card slot constrains its child to a portrait aspect ratio
+          (max ~430px wide, scales to 9:16 height) so on wide desktops
+          the card doesn't stretch into a banner. CSS vars set here drive
+          the font sizes inside cards so everything scales relative to
+          the CARD width, not the viewport width. */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <div
           style={{
@@ -359,9 +364,44 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
               key={card.key}
               data-card-index={i}
               data-card-key={card.key}
-              style={{ flexShrink: 0, width: "100%", height: "100%" }}
+              style={{
+                flexShrink: 0,
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 8px",
+              }}
             >
-              {card.render(recap, streaks, theme, username)}
+              <div
+                className="recap-card-slot"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  maxWidth: 460,
+                  // Portrait card: try to maintain a 9:16 ratio. We cap by
+                  // both dimension. On a tall desktop window the card hits
+                  // its width cap; on a short window it hits the height cap.
+                  aspectRatio: "9 / 16",
+                  maxHeight: "100%",
+                  borderRadius: 18,
+                  overflow: "hidden",
+                  boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+                  // CSS vars for child font sizing — driven by container width
+                  // so a 380px-wide card on mobile and a 460px-wide on desktop
+                  // both look proportionally correct.
+                  // Using cqw (container query units) where supported with
+                  // a fallback to a fixed scale.
+                  ["--card-num-size" as any]: "clamp(64px, 22cqw, 110px)",
+                  ["--card-hero-size" as any]: "clamp(48px, 14cqw, 76px)",
+                  ["--card-title-size" as any]: "clamp(22px, 7cqw, 36px)",
+                  ["--card-emoji-size" as any]: "clamp(64px, 22cqw, 110px)",
+                  containerType: "inline-size",
+                } as React.CSSProperties}
+              >
+                {card.render(recap, streaks, theme, username)}
+              </div>
             </div>
           ))}
         </div>
@@ -437,7 +477,13 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
           getCurrentCardElement={() => {
             const wrapper = containerRef.current;
             if (!wrapper) return null;
-            return wrapper.querySelector(`[data-card-index="${currentIndex}"]`) as HTMLElement | null;
+            // Find the slot for the current card. The slot is the
+            // inner constrained portrait box inside the carousel item;
+            // that's what we want to rasterize, not the outer item with
+            // its letterbox padding.
+            const item = wrapper.querySelector(`[data-card-index="${currentIndex}"]`);
+            const slot = item?.querySelector(".recap-card-slot");
+            return (slot || item) as HTMLElement | null;
           }}
         />
       </div>
