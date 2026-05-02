@@ -84,7 +84,7 @@ export default function RecapView({ weekStart: weekStartProp }: Props) {
         const [weekLogsRes, historyLogsRes, badgesRes] = await Promise.all([
           supabase
             .from("activity_logs")
-            .select("id, log_type, workout_category, exercises, cardio, wellness_type, duration, logged_at, created_at")
+            .select("id, log_type, workout_category, workout_type, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, logged_at, created_at")
             .eq("user_id", user.id)
             .gte("logged_at", startIso)
             .lte("logged_at", endIso),
