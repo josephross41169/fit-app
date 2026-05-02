@@ -116,13 +116,13 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
     <div style={{
       background: themeTokens.bg,
       borderRadius: 22,
-      padding: "20px 18px",
+      padding: "16px 14px",
       border: `2px solid ${themeTokens.border}`,
       marginBottom: 20,
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ fontWeight: 900, fontSize: 16, color: themeTokens.text }}>🔥 Streaks</div>
-        <div style={{ fontSize: 11, color: themeTokens.sub, fontWeight: 600 }}>Strict · miss a day to reset</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 900, fontSize: 15, color: themeTokens.text }}>🔥 Streaks</div>
+        <div style={{ fontSize: 10, color: themeTokens.sub, fontWeight: 600 }}>Strict · miss a day to reset</div>
       </div>
 
       {loading ? (
@@ -132,8 +132,11 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
       ) : (
         <div className="streak-grid" style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 10,
+          // Single column by default — works in narrow sidebar contexts
+          // (~220-260px). Goes to 3-across only when there's enough room
+          // (handled by the @media rule below).
+          gridTemplateColumns: "1fr",
+          gap: 8,
         }}>
           {SPECS.map(spec => {
             const s = streaks?.[spec.key];
@@ -148,35 +151,51 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
                   background: isActive ? spec.bgTint : themeTokens.subBg,
                   border: `1.5px solid ${isActive ? spec.accent + "55" : themeTokens.border}`,
                   borderRadius: 14,
-                  padding: "14px 10px 12px",
+                  padding: "12px 14px",
                   cursor: "pointer",
-                  textAlign: "center",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
                   transition: "transform 0.1s, border-color 0.15s",
+                  width: "100%",
                 }}
                 onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1px)")}
                 onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
               >
-                <div style={{ fontSize: 24, lineHeight: 1, marginBottom: 6 }}>
+                {/* Icon block */}
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  background: isActive ? spec.accent + "22" : "transparent",
+                  border: `1px solid ${isActive ? spec.accent + "55" : themeTokens.border}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22, lineHeight: 1, flexShrink: 0,
+                }}>
                   {isActive ? "🔥" : <span style={{ filter: "grayscale(1) opacity(0.5)" }}>{spec.emoji}</span>}
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: themeTokens.sub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
-                  {spec.label}
+                {/* Label + count */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: themeTokens.sub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+                    {spec.label}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <div style={{
+                      fontSize: 22, fontWeight: 900,
+                      color: isActive ? spec.accent : themeTokens.sub,
+                      lineHeight: 1,
+                    }}>
+                      {cur}
+                    </div>
+                    <div style={{ fontSize: 11, color: themeTokens.sub, fontWeight: 600 }}>
+                      {cur === 0 ? "no streak" : cur === 1 ? "day" : "days"}
+                    </div>
+                  </div>
                 </div>
-                <div style={{
-                  fontSize: 24,
-                  fontWeight: 900,
-                  color: isActive ? spec.accent : themeTokens.sub,
-                  lineHeight: 1,
-                  marginBottom: 4,
-                }}>
-                  {cur}
-                </div>
-                <div style={{ fontSize: 10, color: themeTokens.sub, fontWeight: 600 }}>
-                  {cur === 0 ? "no streak" : cur === 1 ? "1 day" : `${cur} days`}
-                </div>
+                {/* Best ever — small, right-aligned */}
                 {best > 0 && (
-                  <div style={{ fontSize: 10, color: themeTokens.sub, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${themeTokens.border}` }}>
-                    Best: <span style={{ color: themeTokens.text, fontWeight: 700 }}>{best}</span>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 9, color: themeTokens.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Best</div>
+                    <div style={{ fontSize: 13, color: themeTokens.text, fontWeight: 800 }}>{best}</div>
                   </div>
                 )}
               </button>
@@ -193,13 +212,10 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
         />
       )}
 
-      {/* Mobile: stack the cards vertically below 480px. 3-across at 380px
-          would make the numbers too small. */}
-      <style>{`
-        @media (max-width: 479px) {
-          .streak-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+      {/* No media query needed — the horizontal layout works at every width
+          from 220px sidebar up to full mobile viewport. Removed the previous
+          3-column grid because it was overflowing in the narrow profile
+          right-column sidebar context. */}
     </div>
   );
 }
