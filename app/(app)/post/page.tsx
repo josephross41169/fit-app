@@ -15,6 +15,7 @@ import { awardXp } from "@/lib/xp";
 
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
+import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 
 const C = {
   blue: "#7C3AED",
@@ -492,6 +493,11 @@ export default function PostPage() {
   }
   const [caption, setCaption] = useState("");
   const [tagPeople, setTagPeople] = useState("");
+  // Structured tag arrays — TagPicker writes here, save flow reads from here.
+  // Two separate lists because Share-to-Feed and Log-Activity are different
+  // surfaces and a user might tag different friends in each.
+  const [feedTaggedUsers, setFeedTaggedUsers] = useState<TaggedUser[]>([]);
+  const [workoutTaggedUsers, setWorkoutTaggedUsers] = useState<TaggedUser[]>([]);
   const [location, setLocation] = useState("");
   const [postType, setPostType] = useState<PostType>("Workout");
 
@@ -990,7 +996,16 @@ export default function PostPage() {
         // Always insert a new row — users can log multiple workouts per day.
         // Group goals, rivalries, challenges, and wars all aggregate by COUNT/SUM
         // across the date window, so each insert is tracked independently.
-        const res = await supabase.from('activity_logs').insert({ ...base, log_type: 'workout', ...workoutPayload });
+        // tagged_user_ids drives the Workout Partner badge ladder.
+        const taggedIds = workoutTaggedUsers.map(u => u.id);
+        const insertWorkoutRow: any = { ...base, log_type: 'workout', ...workoutPayload };
+        if (taggedIds.length > 0) insertWorkoutRow.tagged_user_ids = taggedIds;
+        let res = await supabase.from('activity_logs').insert(insertWorkoutRow);
+        // Graceful fallback if the migration hasn't been run yet
+        if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
+          delete insertWorkoutRow.tagged_user_ids;
+          res = await supabase.from('activity_logs').insert(insertWorkoutRow);
+        }
         error = res.error;
       } else if (logTab === 'nutrition') {
         // Upload per-meal photos
@@ -1157,6 +1172,33 @@ export default function PostPage() {
       // Scans the user's active group goals and updates their contribution
       // based on what's actually in activity_logs right now. Best-effort.
       try { await syncGroupChallengeProgressFor(user.id); } catch {}
+
+      // -- Notify tagged workout partners ----------------------------------
+      // Workout tags only fire when this is a workout log AND there are tagged
+      // users. Each tagged user gets a notification. Best-effort: failures
+      // here don't block the save flow.
+      if (logTab === 'workout' && workoutTaggedUsers.length > 0 && user) {
+        const senderName = (user as any)?.profile?.full_name
+          || (user as any)?.profile?.username
+          || (user as any)?.email
+          || "Someone";
+        for (const tagged of workoutTaggedUsers) {
+          fetch('/api/db', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'create_notification',
+              payload: {
+                userId: tagged.id,
+                fromUserId: user.id,
+                type: 'tag',
+                referenceId: null,
+                body: `${senderName} tagged you in a workout`,
+              },
+            }),
+          }).catch(() => { /* best-effort; UI doesn't block on this */ });
+        }
+      }
       // -- PR Detection (workout only) ---------------------------------------
       if (logTab === 'workout' && exercises.length > 0) {
         try {
@@ -1296,6 +1338,24 @@ export default function PostPage() {
       // Postgres function call would be cleaner but we keep it client-side
       // by fetching recent rows and filtering. For now a simple heuristic:
       // skip this check — Early Bird stays manual until we add a counter.
+
+      // ── Workout Partner ladder ───────────────────────────────────────────
+      // Counts workouts where tagged_user_ids has at least one entry. The
+      // engine is idempotent — re-running on every save is safe because
+      // award() short-circuits on already-earned badge ids. Only runs on
+      // workout saves; tagging on a Share-to-Feed post does NOT count.
+      try {
+        const { data: partnerRows } = await supabase
+          .from('activity_logs')
+          .select('tagged_user_ids')
+          .eq('user_id', userId)
+          .eq('log_type', 'workout')
+          .not('tagged_user_ids', 'is', null);
+        const partnerCount = ((partnerRows || []) as any[]).filter(
+          (r) => Array.isArray(r.tagged_user_ids) && r.tagged_user_ids.length > 0
+        ).length;
+        if (partnerCount > 0) await awardLadder('partner', partnerCount);
+      } catch { /* non-fatal — table may not have tagged_user_ids yet */ }
     }
 
     // ── Wellness ladders ──────────────────────────────────────────────────
@@ -1494,11 +1554,19 @@ export default function PostPage() {
         post_type: 'general' as any,
         location: location || null,
         is_public: true,
+        // Tagged users — drives @mention notifications and the future
+        // "tagged in" tab on profiles. Empty array = no tags.
+        tagged_user_ids: feedTaggedUsers.map(u => u.id),
       };
       let { error } = await supabase.from('posts').insert(insertRow);
       // Graceful fallback if the migration hasn't been run yet — drop new column and retry.
       if (error && /media_types/i.test(error.message || '')) {
         delete insertRow.media_types;
+        ({ error } = await supabase.from('posts').insert(insertRow));
+      }
+      // Same fallback for tagged_user_ids — back-compat with un-migrated DBs.
+      if (error && /tagged_user_ids/i.test(error.message || '')) {
+        delete insertRow.tagged_user_ids;
         ({ error } = await supabase.from('posts').insert(insertRow));
       }
       setLoading(false);
@@ -1513,7 +1581,33 @@ export default function PostPage() {
           photo_count: uploadedUrls.length,
           has_caption: !!caption,
           has_location: !!location,
+          tag_count: feedTaggedUsers.length,
         });
+        // Send a notification to each tagged user. Fire-and-forget — failures
+        // here shouldn't block the user's flow. Each notification carries the
+        // post id so the recipient can tap through to view it.
+        if (feedTaggedUsers.length > 0 && user) {
+          const senderName = (user as any)?.profile?.full_name
+            || (user as any)?.profile?.username
+            || (user as any)?.email
+            || "Someone";
+          for (const tagged of feedTaggedUsers) {
+            fetch('/api/db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'create_notification',
+                payload: {
+                  userId: tagged.id,
+                  fromUserId: user.id,
+                  type: 'tag',
+                  referenceId: null, // post id not returned from insert; tap goes to feed
+                  body: `${senderName} tagged you in a post`,
+                },
+              }),
+            }).catch(() => { /* best-effort; UI doesn't block on this */ });
+          }
+        }
         // -- Auto-award post badges ------------------------------------------
         try {
           const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
@@ -2349,6 +2443,21 @@ export default function PostPage() {
               </div>
               )}
 
+              {/* Tag Workout Partners — separate from Notes & Photo so it
+                  reads as its own section. Tagged users get notified, and
+                  workouts with at least one tagged user count toward the
+                  Workout Partner badge ladder (8-tier easyLadder). */}
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🤜 Tag Workout Partners</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>Logging with friends? Tag them to count toward the Workout Partner badge.</div>
+                <TagPicker
+                  value={workoutTaggedUsers}
+                  onChange={setWorkoutTaggedUsers}
+                  excludeSelfId={user?.id}
+                  placeholder="Search by name or @username…"
+                />
+              </div>
+
               {/* Notes & Photo */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes & Photo</div>
@@ -3002,7 +3111,12 @@ export default function PostPage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Tag People</label>
-                <input style={iStyle} placeholder="@mention someone" value={tagPeople} onChange={e => setTagPeople(e.target.value)} />
+                <TagPicker
+                  value={feedTaggedUsers}
+                  onChange={setFeedTaggedUsers}
+                  excludeSelfId={user?.id}
+                  placeholder="Search by name or @username…"
+                />
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Location</label>
