@@ -14,6 +14,7 @@ import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { computeTier, getTierInfo } from "@/lib/tiers";
+import { ImagePresets } from "@/lib/imageUrls";
 import type { Tier, Level, CounterData, LevelProgressInfo } from "@/lib/tiers";
 import { getLevelProgress, LEVEL_CHALLENGES, XP_FOR_NEXT, LEVEL_COLORS, XP_CATEGORIES } from "@/lib/tiers";
 import { tryLevelUp } from "@/lib/xp";
@@ -114,7 +115,7 @@ function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; 
           <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
             {photos.map((src, idx) => (
               <button key={idx} onClick={() => onSelectPhoto(src)} style={{ padding: 0, border: 'none', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', background: '#1A1228', aspectRatio: '1', display: 'block' }}>
-                <img src={src} loading='lazy' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt='' />
+                <img src={ImagePresets.thumb(src)} loading='lazy' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt='' />
               </button>
             ))}
           </div>
@@ -154,7 +155,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
       {hasNext && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
       )}
-      <img src={src} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
@@ -590,7 +591,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         </div>
         {photos.length > 0 && (
           <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.purpleMid}`}}>
-            <img src={photos[0]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+            <img src={ImagePresets.thumb(photos[0])} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
           </div>
         )}
         {onDelete && (
@@ -620,7 +621,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
             {photos.map((src,i)=>(
               <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
-                <img onClick={()=>setLb(src)} src={src} style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
+                <img onClick={()=>setLb(src)} src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
                 <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>
               </div>
             ))}
@@ -1020,7 +1021,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           {Object.entries(parsedMealPhotos).map(([meal, src])=>(
                             <div key={meal} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                               <button onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
-                                <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt={meal}/>
+                                <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:90,height:90,objectFit:"cover",display:"block"}} alt={meal}/>
                               </button>
                               <span style={{fontSize:10,fontWeight:700,color:C.sub}}>{MEAL_LABELS[meal]||meal}</span>
                             </div>
@@ -1031,7 +1032,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {plainPhotos.map((src, i)=>(
                             <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
-                              <img src={src} style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
+                              <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
                             </button>
                           ))}
                         </div>
@@ -1150,7 +1151,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                       {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:4,lineHeight:1.4}}>{e.notes}</div>}
                       {(e as any).photo_url && (
                         <button onClick={()=>setLb((e as any).photo_url)} style={{ padding:0, border:`2px solid #2A3A2A`, borderRadius:10, overflow:"hidden", cursor:"pointer", background:"none", flexShrink:0, marginTop:8 }}>
-                          <img src={(e as any).photo_url} style={{ width:60, height:60, objectFit:"cover", display:"block" }} alt=""/>
+                          <img src={ImagePresets.thumb((e as any).photo_url)} loading="lazy" decoding="async" style={{ width:60, height:60, objectFit:"cover", display:"block" }} alt=""/>
                         </button>
                       )}
                     </div>
@@ -2555,7 +2556,7 @@ export default function ProfilePage() {
                         alert("Couldn't add that highlight. Try again.");
                       }
                     }} style={{padding:0,border:`3px solid ${alreadyAdded?C.purple:C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"none",aspectRatio:"1",position:"relative"}}>
-                      <img src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
                       {alreadyAdded && (
                         <div style={{position:"absolute",inset:0,background:"rgba(22,163,74,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
                           <span style={{fontSize:28}}>✓</span>
@@ -2629,7 +2630,7 @@ export default function ProfilePage() {
                     onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
                     onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
                     <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
-                      {u.avatar_url ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                      {u.avatar_url ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:800,fontSize:14,color:C.text}}>{u.full_name}</div>
@@ -3433,7 +3434,7 @@ export default function ProfilePage() {
             >
               <TierFrame tier={userTier} size={avatarSize}>
               {profileImg
-                ? <img src={profileImg} style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                ? <img src={ImagePresets.avatarMd(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
                 : <div style={{width:avatarSize-32,height:avatarSize-32,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
@@ -3525,7 +3526,7 @@ export default function ProfilePage() {
               onTouchEnd={()=>setDragState(null)}
             >
               {bannerImg
-                ? <img src={bannerImg} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transition:dragState?"none":"object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
+                ? <img src={ImagePresets.feed(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transition:dragState?"none":"object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
               {/* Reposition button — show on hover or when in reposition mode.
                   Hidden on mobile via .hide-on-mobile (touch UX later). */}
