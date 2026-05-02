@@ -560,6 +560,11 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 // -----------------------------------------------------------------------------
 function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: Post[]; onChangeCity: () => void; dbEvents: DbEvent[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
   const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
+  // True when we're showing nationwide trending posts as a fallback for an
+  // empty city. The discover loader tags these with `_isTrending` so we can
+  // detect them here and show the appropriate banner copy.
+  const showingTrending = localPosts.length > 0 && (localPosts[0] as any)._isTrending === true;
+  const showingMock = localPosts.length === 0; // true LAST-RESORT (no real posts at all)
 
   // Real events from the database, already filtered by city in the parent
   const allEvents = dbEvents;
@@ -571,12 +576,21 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
 
       {/* LEFT: Local posts feed */}
       <div style={{ flex:1, minWidth:0 }}>
-        {/* City banner */}
+        {/* City banner — copy changes based on whether we have local content
+            or are showing trending nationwide content as a fallback. */}
         <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
-          <div style={{ fontSize:36 }}>📍</div>
+          <div style={{ fontSize:36 }}>{showingTrending ? "🔥" : "📍"}</div>
           <div>
-            <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>{userCity}</div>
-            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Showing fitness content near you · {postsToShow.length} posts this week</div>
+            <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>
+              {showingTrending ? "Trending Nationwide" : userCity}
+            </div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>
+              {showingTrending
+                ? `No posts in ${userCity} yet — be the first! Showing top posts from across the app.`
+                : showingMock
+                  ? `Sample content shown · Tag your city in posts to surface here`
+                  : `Showing fitness content near you · ${postsToShow.length} posts this week`}
+            </div>
           </div>
           <button onClick={onChangeCity} style={{ marginLeft:"auto",background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.4)",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,padding:"7px 14px",cursor:"pointer",flexShrink:0 }}>
             Change City
@@ -778,7 +792,35 @@ export default function DiscoverPage() {
       }
 
       const { data } = await query;
-      if (data && data.length > 0) setLocalPosts(data);
+
+      if (data && data.length > 0) {
+        setLocalPosts(data);
+        return;
+      }
+
+      // ── Empty-state fallback: show nationwide trending posts ─────────
+      // City has no posts yet. Instead of showing mock LOCAL_POSTS data
+      // (which lies to new users), pull the most-liked recent posts from
+      // anywhere. This gives new users in small cities real content to
+      // engage with on day one and surfaces the app's actual community
+      // rather than fake placeholder content.
+      const { data: trending } = await supabase
+        .from('posts')
+        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+        .eq('is_public', true)
+        .gte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
+        .order('likes_count', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (trending && trending.length > 0) {
+        // Mark these as "trending nationwide" so the UI can label them.
+        // We tag onto each post object since the type is `Post[]` and
+        // adding a flag is cheaper than a wrapping struct.
+        setLocalPosts(trending.map((p: any) => ({ ...p, _isTrending: true })));
+      }
+      // If even trending is empty (brand-new app, almost no posts at all),
+      // fall through with localPosts empty — LocalTab uses LOCAL_POSTS mock
+      // as the last-resort fallback so the page is never blank.
     }
     loadLocalPosts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
