@@ -310,7 +310,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
       <div onClick={() => router.push(`/post/${post.id}`)} style={{ width:"100%",aspectRatio:"4/3",background:"#111",overflow:"hidden",position:"relative",cursor:"pointer" }}>
         {photoSrc
           ? (leadType === 'video'
-              ? <video src={photoSrc} controls preload="metadata" playsInline onClick={(e) => e.stopPropagation()} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }} />
+              ? <video src={photoSrc} controls autoPlay muted loop preload="metadata" playsInline onClick={(e) => e.stopPropagation()} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#000" }} />
               : <img src={photoSrc} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
             )
           : <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.greenLight},${C.greenMid})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:80 }}>📸</div>
@@ -744,12 +744,40 @@ export default function DiscoverPage() {
         const { data: profile } = await supabase.from('users').select('city').eq('id', user.id).single();
         if ((profile as any)?.city) { city = (profile as any).city; setUserCity((profile as any).city); }
       }
-      const { data } = await supabase
+      const cityKey = city.split(',')[0].trim();
+
+      // ── New location-tag-based Discover routing ────────────────────────
+      // Step 1: find every location whose city matches. Then pull posts
+      // whose location_id is in that set. This is the new behavior — a
+      // post only appears in Discover if it has a tagged location and that
+      // location's city matches.
+      const locResult = await supabase
+        .from('locations')
+        .select('id')
+        .ilike('city', `%${cityKey}%`)
+        .limit(500);
+      const locationIds = (locResult.data || []).map((l: any) => l.id);
+
+      // Step 2: query posts. Old posts with the legacy free-text `location`
+      // ILIKE keep showing as before so we don't break existing content.
+      // New posts surface via location_id IN (...). Postgrest `or` syntax
+      // joins both clauses with a logical OR.
+      let query = supabase
         .from('posts')
         .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
-        .ilike('location', `%${city.split(',')[0]}%`)
         .order('created_at', { ascending: false })
         .limit(30);
+
+      if (locationIds.length > 0) {
+        // Postgrest `in` syntax: in.(uuid1,uuid2,...). We escape just in case.
+        const inList = locationIds.map((id: string) => `"${id}"`).join(',');
+        query = query.or(`location.ilike.%${cityKey}%,location_id.in.(${inList})`);
+      } else {
+        // No new-style locations in this city yet — fall back to legacy match.
+        query = query.ilike('location', `%${cityKey}%`);
+      }
+
+      const { data } = await query;
       if (data && data.length > 0) setLocalPosts(data);
     }
     loadLocalPosts();
