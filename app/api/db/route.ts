@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { detectStrictPRs, buildHistoricalMaxes, recomputeAllPRs, type ActivityLogRow } from '@/lib/prs';
 
 // Mark as dynamic to avoid static collection at build time
 export const dynamic = 'force-dynamic';
@@ -932,6 +933,134 @@ export async function POST(req: NextRequest) {
         joinedChallenge,
         groupId: hostGroupId,
         challengeId: chal.id,
+      });
+    }
+
+    // ── Recompute all PRs for a user (admin / backfill) ────────────────────
+    // Walks the user's complete workout history and rebuilds personal_records
+    // from scratch using strict-PR logic. Used by:
+    //   1. Backfill migration when this feature first ships
+    //   2. Admin tooling if PRs ever get out of sync
+    //   3. After a user deletes a workout (TODO — not yet wired in)
+    //
+    // Idempotent: safe to call multiple times. Replaces all existing PRs.
+    if (action === 'recompute_user_prs') {
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      // Pull the user's complete workout history. We only need exercises +
+      // logged_at since strict PR logic doesn't care about other fields.
+      const { data: logs, error: logsErr } = await admin
+        .from('activity_logs')
+        .select('id, log_type, logged_at, created_at, workout_category, exercises')
+        .eq('user_id', userId)
+        .eq('log_type', 'workout');
+      if (logsErr) return NextResponse.json({ error: logsErr.message }, { status: 500 });
+
+      const records = recomputeAllPRs((logs || []) as ActivityLogRow[]);
+
+      // Wipe existing PRs and replace. Single atomic-ish swap — there's a
+      // brief window where the user has zero PRs visible, but that's fine
+      // since this only runs from admin tooling or backfill.
+      const { error: delErr } = await admin
+        .from('personal_records')
+        .delete()
+        .eq('user_id', userId);
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+      if (records.length > 0) {
+        const rowsToInsert = records.map(r => ({
+          user_id: userId,
+          exercise_name: r.exercise_name,
+          weight: r.weight,
+          reps: r.reps,
+          volume: r.volume,
+          logged_at: r.logged_at,
+        }));
+        const { error: insErr } = await admin
+          .from('personal_records')
+          .insert(rowsToInsert);
+        if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        prsRecorded: records.length,
+        message: records.length === 0 ? 'No PRs found in history' : `Recorded ${records.length} PRs`,
+      });
+    }
+
+    // ── Detect + record PRs from a single new workout log ──────────────────
+    // Called after the client submits a new workout. We re-fetch the user's
+    // history (since the client doesn't have it) and run strict detection.
+    // Returns the list of PRs detected so the client can show a "🏆 New PR!"
+    // celebration.
+    if (action === 'detect_prs_from_log') {
+      const { userId, logId } = payload || {};
+      if (!userId || !logId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      // Fetch the new log we're checking
+      const { data: newLog, error: newErr } = await admin
+        .from('activity_logs')
+        .select('id, log_type, logged_at, created_at, workout_category, exercises')
+        .eq('id', logId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (newErr) return NextResponse.json({ error: newErr.message }, { status: 500 });
+      if (!newLog) return NextResponse.json({ error: 'Log not found' }, { status: 404 });
+
+      // Fetch all OTHER workout logs (everything before this one). We'd
+      // ideally filter by logged_at < newLog.logged_at but that's fragile
+      // when timestamps tie — exclude by id instead.
+      const { data: history, error: histErr } = await admin
+        .from('activity_logs')
+        .select('id, log_type, logged_at, created_at, workout_category, exercises')
+        .eq('user_id', userId)
+        .eq('log_type', 'workout')
+        .neq('id', logId);
+      if (histErr) return NextResponse.json({ error: histErr.message }, { status: 500 });
+
+      const historicalMaxes = buildHistoricalMaxes((history || []) as ActivityLogRow[]);
+      const detected = detectStrictPRs(newLog as ActivityLogRow, historicalMaxes);
+
+      // Persist any new PRs to personal_records. We also need to delete
+      // any prior record for the same exercise — there should only be ONE
+      // current PR per (user, exercise). Older PR rows are kept as history
+      // by /prs page if needed.
+      //
+      // Actually — the /prs page reads the FULL history table and groups
+      // by exercise client-side, so multiple rows per exercise are fine
+      // and represent the user's progression. Just append.
+      if (detected.length > 0) {
+        const rowsToInsert = detected.map(d => ({
+          user_id: userId,
+          exercise_name: d.exercise_name,
+          weight: d.weight,
+          reps: d.reps,
+          volume: d.volume,
+          logged_at: d.logged_at,
+        }));
+        const { error: insErr } = await admin
+          .from('personal_records')
+          .insert(rowsToInsert);
+        if (insErr) {
+          console.error('[prs] insert failed', insErr);
+          // Don't fail the request — PRs are a nice-to-have, the workout
+          // log itself was already saved before we got here.
+        }
+        // Also flag the originating log so the feed/profile badge it. We
+        // ignore errors here too — worst case the log doesn't get badged
+        // but the PR record itself is in place.
+        await admin
+          .from('activity_logs')
+          .update({ is_pr: true })
+          .eq('id', logId)
+          .catch((e: any) => { console.error('[prs] mark log failed', e); });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        prs: detected,
       });
     }
 
