@@ -1773,13 +1773,34 @@ export default function GroupPage() {
     setPostLikes(p => ({ ...p, [postId]: likedPosts[postId] ? baseLikes : baseLikes + 1 }));
   }
 
-  function shareGroup() {
-    const url = typeof window !== 'undefined' ? window.location.href : '';
+  /** Share or copy a link to this group. Native share sheet on mobile,
+   *  clipboard fallback on desktop. Was previously clipboard-only.
+   *  Builds URL from window.location.origin so it works on prod and
+   *  preview deployments without baking the domain in. */
+  async function shareGroup() {
+    if (typeof window === 'undefined') return;
+    const url = window.location.href;
+    const shareData = {
+      title: `${group?.name || "Group"} on Livelee`,
+      text: `Check out ${group?.name || "this group"} on Livelee`,
+      url,
+    };
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+    }
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
+      try {
+        await navigator.clipboard.writeText(url);
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 2500);
-      });
+      } catch {
+        window.prompt("Copy this group link:", url);
+      }
     }
   }
 
