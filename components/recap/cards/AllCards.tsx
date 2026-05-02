@@ -25,7 +25,7 @@ function BigNumber({ children, theme, italic }: { children: ReactNode; theme: Th
   return (
     <div
       style={{
-        fontSize: "clamp(80px, 22vw, 220px)",
+        fontSize: "var(--card-num-size)",
         fontWeight: theme.numberWeight,
         color: theme.accent,
         lineHeight: 0.9,
@@ -42,12 +42,12 @@ function CardLabel({ children, theme }: { children: ReactNode; theme: Theme }) {
   return (
     <div
       style={{
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: 800,
         color: theme.textSub,
         letterSpacing: "0.2em",
         textTransform: "uppercase",
-        marginBottom: 16,
+        marginBottom: 12,
       }}
     >
       {children}
@@ -59,7 +59,7 @@ function CardTitle({ children, theme }: { children: ReactNode; theme: Theme }) {
   return (
     <div
       style={{
-        fontSize: "clamp(28px, 6vw, 44px)",
+        fontSize: "var(--card-title-size)",
         fontWeight: 900,
         color: theme.text,
         lineHeight: 1.05,
@@ -112,7 +112,7 @@ export function TitleCard({ theme, recap }: { theme: Theme; recap: Recap }) {
       {/* Center hero */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center" }}>
         <div style={{
-          fontSize: "clamp(60px, 14vw, 110px)",
+          fontSize: "var(--card-hero-size)",
           fontWeight: 900,
           color: theme.text,
           lineHeight: 0.95,
@@ -296,7 +296,7 @@ export function WellnessCard({ theme, recap }: { theme: Theme; recap: Recap }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         {top ? (
           <>
-            <div style={{ fontSize: "clamp(80px, 24vw, 180px)", lineHeight: 1, marginBottom: 8 }}>
+            <div style={{ fontSize: "var(--card-emoji-size)", lineHeight: 1, marginBottom: 8 }}>
               {wellnessEmoji(top.type)}
             </div>
             <BigNumber theme={theme}>
@@ -605,7 +605,7 @@ export function OutroCard({ theme, recap, username }: { theme: Theme; recap: Rec
           Week Complete
         </div>
         <div style={{
-          fontSize: "clamp(48px, 12vw, 96px)",
+          fontSize: "var(--card-num-size)",
           fontWeight: 900,
           color: theme.text,
           lineHeight: 1,
