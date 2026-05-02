@@ -113,6 +113,24 @@ export type Recap = {
   /** Badges newly earned during this week. */
   badgesEarned: BadgeRow[];
 
+  /** Photos from posts the user shared this week. Used by the Photos card
+   *  to render a mosaic grid of the week's content. Newest first. */
+  photos: Array<{
+    url: string;
+    caption: string | null;
+    likes: number;
+    /** Vertical crop offset (0-100) if the user repositioned the photo
+     *  when posting. Used so the mosaic shows the framed portion. */
+    position?: number;
+  }>;
+
+  /** Unique locations tagged in this week's posts. Used by the
+   *  Achievements card to show "places visited." Limited to ~5 unique. */
+  placesTagged: Array<{
+    name: string;
+    city: string | null;
+  }>;
+
   /** True if user has any activity at all this week. False = "rest week". */
   hasActivity: boolean;
 
@@ -160,6 +178,24 @@ function formatRange(start: Date, end: Date): string {
   return `${monthShort(start)} ${start.getDate()} – ${monthShort(end)} ${end.getDate()}, ${end.getFullYear()}`;
 }
 
+/** Shape of a post row pulled for the photos card / places tagged. */
+export type PostRow = {
+  id?: string;
+  user_id?: string;
+  caption?: string | null;
+  media_url?: string | null;
+  media_urls?: string[] | null;
+  media_types?: ('image' | 'video')[] | null;
+  media_positions?: number[] | null;
+  likes_count?: number | null;
+  created_at?: string | null;
+  /** Joined location row (from posts.location_id → locations) */
+  locationData?: {
+    name?: string | null;
+    city?: string | null;
+  } | null;
+};
+
 // ─── Core builder ─────────────────────────────────────────────────────────
 
 /**
@@ -174,12 +210,15 @@ function formatRange(start: Date, end: Date): string {
  *                      Used for strict-PR detection (must beat all prior max
  *                      weights for an exercise to count as a PR).
  * @param badgesThisWeek — All badges rows whose created_at falls within the week.
+ * @param weekPosts — All public posts the user made this week. Used for the
+ *                    Photos card and Places Tagged section.
  */
 export function buildRecap(
   weekStart: Date,
   weekLogs: LogRow[],
   historyLogs: LogRow[],
-  badgesThisWeek: BadgeRow[]
+  badgesThisWeek: BadgeRow[],
+  weekPosts: PostRow[] = []
 ): Recap {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
@@ -386,6 +425,51 @@ export function buildRecap(
     if (ts) activeDaysSet.add(isoDateLocal(new Date(ts)));
   });
 
+  // ─── Photos & places from posts ──────────────────────────────────────
+  // Filter to posts within the week range — defensive in case caller
+  // passed a wider window. Then pull the photo info for the Photos card
+  // and dedupe location names for the Places Tagged section.
+  const postsInRange = weekPosts.filter(p => {
+    const ts = p.created_at;
+    if (!ts) return false;
+    const ms = new Date(ts).getTime();
+    return ms >= startMs && ms <= endMs;
+  });
+
+  // Photos: each post can have multiple images. We only take the FIRST
+  // image per post (lead photo) — showing every image from a 5-photo
+  // carousel would crowd the mosaic and make one post look like many.
+  // Skip videos in the photo card; they don't grid well as static images.
+  const photos: Recap["photos"] = [];
+  postsInRange.forEach(p => {
+    const urls = (p.media_urls && p.media_urls.length > 0) ? p.media_urls : (p.media_url ? [p.media_url] : []);
+    if (urls.length === 0) return;
+    const types = p.media_types || [];
+    const firstType = types[0] || (urls[0].match(/\.(mp4|mov|webm|m4v)(\?|$)/i) ? 'video' : 'image');
+    if (firstType === 'video') return; // skip videos in mosaic
+    const positions = p.media_positions;
+    photos.push({
+      url: urls[0],
+      caption: p.caption || null,
+      likes: p.likes_count || 0,
+      position: typeof positions?.[0] === 'number' ? positions[0] : undefined,
+    });
+  });
+
+  // Places: dedupe by location name. Lots of users tag the same gym
+  // multiple times — we want the Places card to show variety, not
+  // duplicates. Cap at 5 to keep the card legible.
+  const placeMap = new Map<string, { name: string; city: string | null }>();
+  postsInRange.forEach(p => {
+    const loc = p.locationData;
+    const name = loc?.name?.trim();
+    if (!name) return;
+    if (!placeMap.has(name)) {
+      placeMap.set(name, { name, city: loc?.city || null });
+    }
+  });
+  const placesTagged = Array.from(placeMap.values()).slice(0, 5);
+
   const hasActivity =
     liftingLogs.length > 0 || cardioEntries.length > 0 || wellnessLogs.length > 0;
 
@@ -412,6 +496,8 @@ export function buildRecap(
     },
     daily,
     badgesEarned: badgesThisWeek,
+    photos,
+    placesTagged,
     hasActivity,
     activeDays: activeDaysSet.size,
   };
