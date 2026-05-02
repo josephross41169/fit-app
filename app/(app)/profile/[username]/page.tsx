@@ -10,6 +10,8 @@ import { BADGES } from "@/lib/badges";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { ImagePresets } from "@/lib/imageUrls";
 import { cachedQuery, getCached, setCached } from "@/lib/queryCache";
+import { shareWithToast, appUrl } from "@/lib/share";
+import { ProfileHeaderSkeleton, DayCardSkeleton, SkeletonStyles } from "@/components/Skeleton";
 import BusinessProfileView from "@/components/BusinessProfileView";
 import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
@@ -442,32 +444,18 @@ export default function UserProfilePage() {
   // Profile share button state — shows "✓ Copied" toast for 2.5s after copy.
   const [profileShareCopied, setProfileShareCopied] = useState(false);
 
-  /** Copy or share a link to this profile. Native share sheet on mobile,
-   *  clipboard fallback on desktop. URL uses the username path which is
-   *  the same route this page lives on. */
+  /** Copy or share a link to this profile. Delegates to the universal
+   *  share helper so behavior matches feed/groups/challenges. */
   async function shareProfile() {
-    if (typeof window === "undefined" || !profile?.username) return;
-    const url = `${window.location.origin}/profile/${profile.username}`;
-    const shareData = {
-      title: `${profile.full_name || "@" + profile.username} on Livelee`,
-      text: `Check out @${profile.username} on Livelee`,
-      url,
-    };
-    try {
-      if ((navigator as any).share) {
-        await (navigator as any).share(shareData);
-        return;
-      }
-    } catch (e: any) {
-      if (e?.name === "AbortError") return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setProfileShareCopied(true);
-      setTimeout(() => setProfileShareCopied(false), 2500);
-    } catch {
-      window.prompt("Copy this profile link:", url);
-    }
+    if (!profile?.username) return;
+    await shareWithToast(
+      {
+        url: appUrl(`/profile/${profile.username}`),
+        title: `${profile.full_name || "@" + profile.username} on Livelee`,
+        text: `Check out @${profile.username} on Livelee`,
+      },
+      setProfileShareCopied
+    );
   }
 
   const openSocialModal = useCallback(async (type: "followers"|"following", profileId: string) => {
@@ -690,9 +678,10 @@ export default function UserProfilePage() {
   }, [username]);
 
   if (loading) return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.greenMid}`,borderTopColor:C.blue,animation:"spin 0.8s linear infinite"}}/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div style={{ minHeight: "100vh", background: C.bg, padding: "20px 16px 80px", maxWidth: 760, margin: "0 auto" }}>
+      <SkeletonStyles />
+      <ProfileHeaderSkeleton />
+      <DayCardSkeleton count={3} />
     </div>
   );
 
