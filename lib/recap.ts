@@ -98,9 +98,16 @@ export type Recap = {
     label: string;
     /** ISO date string (YYYY-MM-DD). */
     date: string;
+    /** Total minutes by category — kept for any place that wants raw time. */
     liftingMinutes: number;
     cardioMinutes: number;
     wellnessMinutes: number;
+    /** Session counts by category — used by the bar chart since minutes
+     *  let a single sleep log dwarf an entire week of workouts. Counting
+     *  sessions makes the chart honest about consistency, not duration. */
+    liftingSessions: number;
+    cardioSessions: number;
+    wellnessSessions: number;
   }>;
 
   /** Badges newly earned during this week. */
@@ -200,12 +207,16 @@ export function buildRecap(
     r => r.log_type === "workout" && Array.isArray(r.exercises) && r.exercises.length > 0
   );
   const liftingMinutesByDay: Record<string, number> = {};
+  // Session counts per day for the bar chart. We can't reuse the minutes
+  // record because a 0-minute log still counts as 1 session.
+  const liftingSessionsByDay: Record<string, number> = {};
   liftingLogs.forEach(l => {
     const k = isoDateLocal(new Date(l.logged_at || l.created_at!));
     // Real column is workout_duration_min (integer minutes). Fall back to
     // legacy `duration` field for any rows that might still have it.
     const dur = parseDurationToMinutes(l.workout_duration_min ?? l.duration);
     liftingMinutesByDay[k] = (liftingMinutesByDay[k] || 0) + dur;
+    liftingSessionsByDay[k] = (liftingSessionsByDay[k] || 0) + 1;
   });
 
   // Best max-weight per exercise THIS WEEK
@@ -301,8 +312,10 @@ export function buildRecap(
   });
 
   const cardioMinutesByDay: Record<string, number> = {};
+  const cardioSessionsByDay: Record<string, number> = {};
   cardioEntries.forEach(c => {
     cardioMinutesByDay[c.date] = (cardioMinutesByDay[c.date] || 0) + c.minutes;
+    cardioSessionsByDay[c.date] = (cardioSessionsByDay[c.date] || 0) + 1;
   });
 
   // Aggregate cardio per type — used for the "Running: 4x · 3.2mi avg · 2h 30m" rollup
@@ -329,6 +342,7 @@ export function buildRecap(
   // ─── Wellness ─────────────────────────────────────────────────────────
   const wellnessLogs = inRange.filter(r => r.log_type === "wellness");
   const wellnessMinutesByDay: Record<string, number> = {};
+  const wellnessSessionsByDay: Record<string, number> = {};
   const wellnessByType: Record<string, number> = {};
   wellnessLogs.forEach(l => {
     const k = isoDateLocal(new Date(l.logged_at || l.created_at!));
@@ -336,6 +350,7 @@ export function buildRecap(
     // a defensive fallback for any old data that might exist.
     const minutes = parseDurationToMinutes(l.wellness_duration_min ?? l.duration);
     wellnessMinutesByDay[k] = (wellnessMinutesByDay[k] || 0) + minutes;
+    wellnessSessionsByDay[k] = (wellnessSessionsByDay[k] || 0) + 1;
     const type = (l.wellness_type || "Wellness").trim();
     wellnessByType[type] = (wellnessByType[type] || 0) + 1;
   });
@@ -357,6 +372,9 @@ export function buildRecap(
       liftingMinutes: liftingMinutesByDay[k] || 0,
       cardioMinutes: cardioMinutesByDay[k] || 0,
       wellnessMinutes: wellnessMinutesByDay[k] || 0,
+      liftingSessions: liftingSessionsByDay[k] || 0,
+      cardioSessions: cardioSessionsByDay[k] || 0,
+      wellnessSessions: wellnessSessionsByDay[k] || 0,
     });
   }
 
