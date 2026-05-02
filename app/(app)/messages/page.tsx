@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { loadBlockedUsers } from "@/lib/blocks";
 import { track } from "@/components/PostHogProvider";
+import { ListItemSkeleton, SkeletonStyles } from "@/components/Skeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -474,8 +475,9 @@ function MessagesPageInner() {
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-12" style={{ color: "#8892A4" }}>
-              Loading…
+            <div>
+              <SkeletonStyles />
+              <ListItemSkeleton count={6} />
             </div>
           ) : conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center" style={{ color: "#8892A4" }}>
