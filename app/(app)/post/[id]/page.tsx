@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { ImagePresets } from "@/lib/imageUrls";
 
 const C = {
   bg: "#0D0D0D",
@@ -258,7 +259,7 @@ export default function PostDetailPage() {
         {/* Author */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
           {post.user?.avatar_url ? (
-            <img src={post.user.avatar_url} style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} alt="" />
+            <img src={ImagePresets.avatarSm(post.user.avatar_url)} loading="lazy" decoding="async" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} alt="" />
           ) : (
             <div style={{ width: 44, height: 44, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.purpleMid})`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff" }}>
               {(post.user?.full_name || "?")[0]}
@@ -335,7 +336,7 @@ export default function PostDetailPage() {
                 return (
                   <div key={c.id} style={{ display: "flex", gap: 10 }}>
                     {c.users?.avatar_url ? (
-                      <img src={c.users?.avatar_url} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" />
+                      <img src={ImagePresets.avatarSm(c.users?.avatar_url)} loading="lazy" decoding="async" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" />
                     ) : (
                       <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.purple, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
                         {(c.users?.full_name || "?")[0]}
