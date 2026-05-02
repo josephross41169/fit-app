@@ -9,9 +9,12 @@
 // /recap/2026-04-29 expecting the week containing Apr 29). We don't block
 // future weeks — the recap will just show "no activity" if you query
 // ahead in time.
+//
+// As of v2 (Spotify-Wrapped redesign), renders the fullscreen swipeable
+// carousel rather than a scrolling dashboard.
 
 import { useParams } from "next/navigation";
-import RecapView from "@/components/RecapView";
+import RecapCarousel from "@/components/recap/RecapCarousel";
 import { parseIsoDateLocal, getSundayOfWeek } from "@/lib/recap";
 
 export default function RecapWeekPage() {
@@ -34,9 +37,5 @@ export default function RecapWeekPage() {
     );
   }
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#0D0D0D" }}>
-      <RecapView weekStart={weekStart} />
-    </div>
-  );
+  return <RecapCarousel weekStart={weekStart} />;
 }
