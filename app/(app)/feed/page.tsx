@@ -168,6 +168,10 @@ type Post = {
   dayLabel: string;
   photos: string[];
   mediaTypes?: ('image' | 'video')[];
+  // Per-photo vertical crop offset (0..100% from top). Parallel to photos[].
+  // Defaults to 50 (centered) for any missing entries. Used by feed/discover/
+  // post-detail/profile renders to show the right slice of each photo.
+  mediaPositions?: number[];
   caption: string;
   likes: number;
   liked: boolean;
@@ -1148,7 +1152,20 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
                 );
               }
               return (
-                <img src={currentUrl} style={{ width:"100%",height:"100%",objectFit:"cover",cursor:"pointer" }} alt="" onClick={() => { if (justSwipedRef.current) { justSwipedRef.current = false; return; } setLightbox(currentUrl); }} onError={() => { setBrokenImage(true); }} />
+                <img
+                  src={currentUrl}
+                  style={{
+                    width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",
+                    // Apply per-photo crop position. Falls back to centered (50)
+                    // if the post predates this column or the array is shorter
+                    // than expected. Old posts with no media_positions render
+                    // exactly as before.
+                    objectPosition: `center ${(post as any).mediaPositions?.[currentPhoto] ?? 50}%`,
+                  }}
+                  alt=""
+                  onClick={() => { if (justSwipedRef.current) { justSwipedRef.current = false; return; } setLightbox(currentUrl); }}
+                  onError={() => { setBrokenImage(true); }}
+                />
               );
             })()}
             {brokenImage && (
@@ -1493,7 +1510,7 @@ export default function FeedPage() {
       const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
       const { data: posts, error: queryErr } = await supabase
         .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city), locationData:locations(id, name, city, kind)')
+        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city), locationData:locations(id, name, city, kind)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
@@ -2011,6 +2028,7 @@ export default function FeedPage() {
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
         photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
         mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
+        mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
         caption: p.caption || "",
         likes: p.likes_count || 0,
         liked: p._liked || false,
@@ -2395,6 +2413,7 @@ export default function FeedPage() {
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                   photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
                   mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
+        mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
                   caption: p.caption || "",
                   likes: p.likes_count || 0,
                   liked: p._liked || false,
@@ -2644,6 +2663,7 @@ export default function FeedPage() {
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                 photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
                 mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
+        mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
                 caption: p.caption || "",
                 likes: p.likes_count || 0,
                 liked: p._liked || false,
