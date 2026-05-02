@@ -27,12 +27,14 @@
     "@supabase/supabase-js": "^2.100.1",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "mapbox-gl": "^3.7.0",
     "next": "14.2.35",
     "openai": "^6.34.0",
     "pg": "^8.20.0",
     "posthog-js": "^1.205.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-map-gl": "^7.1.7",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
