@@ -17,6 +17,7 @@ import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
+import MentionInput from "@/components/MentionInput";
 
 const C = {
   blue: "#7C3AED",
@@ -1626,6 +1627,51 @@ export default function PostPage() {
             }).catch(() => { /* best-effort; UI doesn't block on this */ });
           }
         }
+        // @mention notifications — parse the caption for any @usernames
+        // not already in the explicit tag list and notify them. We do
+        // this on top of TagPicker tags because users can mention people
+        // they haven't formally tagged. Skips users already in the tag
+        // list to avoid double-notifying.
+        if (caption && user) {
+          try {
+            const re = /(?:^|\s)@([a-zA-Z0-9_]{2,32})/g;
+            const mentioned = new Set<string>();
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(caption)) !== null) {
+              mentioned.add(m[1].toLowerCase());
+            }
+            if (mentioned.size > 0) {
+              const taggedUsernames = new Set(feedTaggedUsers.map(t => t.username?.toLowerCase()).filter(Boolean));
+              const toNotify = Array.from(mentioned).filter(u => !taggedUsernames.has(u));
+              if (toNotify.length > 0) {
+                const { data: foundUsers } = await supabase
+                  .from('users')
+                  .select('id, username')
+                  .in('username', toNotify);
+                const senderName = (user as any)?.profile?.full_name
+                  || (user as any)?.profile?.username
+                  || "Someone";
+                for (const fu of (foundUsers || []) as any[]) {
+                  if (fu.id === user.id) continue; // don't notify self
+                  fetch('/api/db', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'create_notification',
+                      payload: {
+                        userId: fu.id,
+                        fromUserId: user.id,
+                        type: 'mention',
+                        referenceId: null,
+                        body: `${senderName} mentioned you in a post`,
+                      },
+                    }),
+                  }).catch(() => {});
+                }
+              }
+            }
+          } catch { /* best-effort */ }
+        }
         // -- Auto-award post badges ------------------------------------------
         try {
           const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
@@ -3125,7 +3171,14 @@ export default function PostPage() {
             <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}`, display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Caption</label>
-                <textarea rows={4} style={{ ...iStyle, resize: "none" }} placeholder="Share what you crushed today... 💪" value={caption} onChange={e => setCaption(e.target.value)} />
+                <MentionInput
+                  multiline
+                  rows={4}
+                  style={{ ...iStyle, resize: "none" } as React.CSSProperties}
+                  placeholder="Share what you crushed today... 💪"
+                  value={caption}
+                  onChange={setCaption}
+                />
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Tag People</label>
