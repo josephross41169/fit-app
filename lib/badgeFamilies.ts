@@ -273,7 +273,8 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "group-leader",    name: "Group Leader",       category: "social",      members: ["group-leader"] },
   { key: "new-years",       name: "New Year",           category: "special",     members: ["new-years"] },
   { key: "holiday-hustle",  name: "Holiday Hustle",     category: "special",     members: ["holiday-hustle"] },
-  { key: "collab",          name: "Workout Partner",    category: "special",     members: ["collab"] },
+  // Workout Partner — 8-tier easyLadder driven by partnerWorkouts counter.
+  { key: "partner",         name: "Workout Partner",    category: "social",      members: ["partner-1","partner-5","partner-20","partner-50","partner-100","partner-200","partner-500","partner-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "partnerWorkouts" },
   { key: "outdoor",         name: "Outdoor Adventurer", category: "special",     members: ["outdoor-adventurer"] },
   { key: "competitor",      name: "Competitor",         category: "special",     members: ["sport-competitor"] },
 ];
@@ -353,6 +354,8 @@ const PROGRESS_LABEL_BY_COUNTER: Record<string, string> = {
   commentsMade: "comments",
   earlyBirdCount: "pre-7am",
   fiveKCount: "5Ks",
+  // Workout Partner ladder — counts workouts where tagged_user_ids has length>=1
+  partnerWorkouts: "partner workouts",
   // Strength weight-based (uses different units)
   benchMax: "lbs",
   squatMax: "lbs",
