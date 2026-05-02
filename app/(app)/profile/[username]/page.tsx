@@ -12,6 +12,7 @@ import BusinessProfileView from "@/components/BusinessProfileView";
 import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import TaggedPostsModal from "@/components/TaggedPostsModal";
+import StreakSection from "@/components/StreakSection";
 
 const C = {
   bg:"#0D0D0D", white:"#1A1A1A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -1111,8 +1112,13 @@ export default function UserProfilePage() {
             )}
           </div>
 
-          {/* RIGHT — Badges + Brands */}
+          {/* RIGHT — Streaks + Badges + Brands */}
           <div>
+            {/* Streak section — three strict-math streaks for the viewed
+                user. Lets visitors size up someone's current habits before
+                seeing their lifetime badges. */}
+            {profile && <StreakSection userId={profile.id} theme="green" />}
+
             {/* Badges */}
             <div style={{background:C.white,borderRadius:22,padding:20,border:`2px solid ${C.greenMid}`,marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:16,color:C.text,marginBottom:14}}>🏆 Badges & Awards</div>
