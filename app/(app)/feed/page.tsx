@@ -16,6 +16,7 @@ import ReportModal, { ReportTarget } from "@/components/ReportModal";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast, appUrl } from "@/lib/share";
 import { FeedPostSkeleton, SkeletonStyles } from "@/components/Skeleton";
+import MentionInput, { parseMentions } from "@/components/MentionInput";
 import { getCached, setCached } from "@/lib/queryCache";
 
 const C = {
@@ -1014,6 +1015,82 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
 // or the user changed. We deliberately ignore callback identity since
 // the parent recreates them on every render — comparing by reference
 // would defeat the memo entirely.
+
+/** Render text with @mentions as tappable links to /profile/[username]. */
+function renderMentions(text: string): React.ReactNode {
+  if (!text) return text;
+  // Match either start-of-string or whitespace, then @username. We capture
+  // the leading char so we can preserve it in the output.
+  const re = /(^|\s)@([a-zA-Z0-9_]{2,32})/g;
+  const out: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const matchStart = m.index;
+    const lead = m[1];
+    const uname = m[2];
+    // Push text before the mention
+    if (matchStart > lastIdx) out.push(text.slice(lastIdx, matchStart));
+    if (lead) out.push(lead);
+    out.push(
+      <a
+        key={`${matchStart}-${uname}`}
+        href={`/profile/${uname}`}
+        style={{ color: '#A78BFA', fontWeight: 700, textDecoration: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        @{uname}
+      </a>
+    );
+    lastIdx = matchStart + lead.length + 1 + uname.length;
+  }
+  if (lastIdx < text.length) out.push(text.slice(lastIdx));
+  return out;
+}
+
+/** Fire @mention notifications for a comment or post. Resolves usernames
+ *  → user ids in one query, then fires create_notification for each.
+ *  Errors are swallowed — mention notifs are a nice-to-have, not critical. */
+async function fireMentionNotifications(
+  usernames: string[],
+  fromUserId: string,
+  fromDisplayName: string,
+  referenceId: string | number,
+  kind: 'comment' | 'caption'
+) {
+  if (!usernames.length) return;
+  try {
+    // Lowercase for case-insensitive match
+    const lowered = usernames.map(u => u.toLowerCase());
+    const { data } = await supabase
+      .from('users')
+      .select('id, username')
+      .in('username', lowered);
+    if (!data || data.length === 0) return;
+    const body = kind === 'comment'
+      ? `${fromDisplayName} mentioned you in a comment`
+      : `${fromDisplayName} mentioned you in a post`;
+    await Promise.all(data.map((u: any) => {
+      // Don't notify yourself
+      if (u.id === fromUserId) return Promise.resolve();
+      return fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_notification',
+          payload: {
+            userId: u.id,
+            fromUserId,
+            type: 'mention',
+            referenceId: String(referenceId),
+            body,
+          },
+        }),
+      }).catch(() => {});
+    }));
+  } catch { /* best-effort */ }
+}
+
 const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
   // Determine ownership. Prefer comparing user IDs (reliable) over username
   // (which can be stale or fall back to "User" if profile data didn't load).
@@ -1142,11 +1219,21 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         if (onCommentsRefresh && data.comments) {
           onCommentsRefresh(post.id, data.comments);
         }
+        // @mention notifications — parse @usernames from the comment and
+        // fire one notification per mentioned user. We do this client-
+        // side so the user gets immediate feedback; the server doesn't
+        // re-validate the mention parse (low-stakes — worst case is a
+        // user gets a stray notif).
+        const mentions = parseMentions(fullText);
+        if (mentions.length > 0 && currentUser) {
+          fireMentionNotifications(mentions, currentUser.id, displayName, post.id, 'comment').catch(() => {});
+        }
         // Analytics: comments are a strong engagement signal — track per
         // post so we can compute "% of users commenting" funnels.
         track("comment_created", {
           post_id: post.id,
           comment_length: fullText.length,
+          mention_count: mentions.length,
         });
         setCommentText("");
         setCommentLoading(false);
@@ -1249,7 +1336,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
 
         {/* Caption */}
         {post.caption && (
-          <div style={{ padding:"0 18px 12px",fontSize:14,color:C.text,lineHeight:1.6 }}>{post.caption}</div>
+          <div style={{ padding:"0 18px 12px",fontSize:14,color:C.text,lineHeight:1.6 }}>{renderMentions(post.caption)}</div>
         )}
 
         {/* ── MEDIA — square, full width ── */}
@@ -1457,7 +1544,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                     <span style={{ fontWeight:800,fontSize:12,color:C.text }}>{c.user}</span>
                     <span style={{ fontSize:10,color:C.sub }}>{c.time}</span>
                   </div>
-                  <p style={{ fontSize:13,color:C.text,margin:0,lineHeight:1.5 }}>{c.text}</p>
+                  <p style={{ fontSize:13,color:C.text,margin:0,lineHeight:1.5 }}>{renderMentions(c.text)}</p>
                   <div style={{ display:"flex", gap:14, marginTop:2 }}>
                     <button onClick={()=>{ setReplyTo({id:c.id,user:c.user}); setCommentText(`@${c.user.split(' ')[0]} `); setTimeout(()=>commentInputRef.current?.focus(),50); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.sub,padding:"4px 0 0" }}>Reply</button>
                     {currentUser && (c as any).user_id === currentUser.id && (
@@ -1515,7 +1602,17 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
           <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#1A1228",borderRadius:24,padding:"8px 16px",border:"1.5px solid #2D1F52" }}>
-            <input ref={commentInputRef} id={`ci-${post.id}`} value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submitComment()} placeholder={replyTo?`Reply to ${replyTo.user.split(' ')[0]}...`:"Add a comment..."} style={{ flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:C.text }} />
+            <div style={{ flex:1 }}>
+              <MentionInput
+                inputRef={commentInputRef as any}
+                id={`ci-${post.id}`}
+                value={commentText}
+                onChange={setCommentText}
+                onSubmit={submitComment}
+                placeholder={replyTo?`Reply to ${replyTo.user.split(' ')[0]}...`:"Add a comment..."}
+                style={{ width:"100%",background:"none",border:"none",outline:"none",fontSize:13,color:C.text }}
+              />
+            </div>
             {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
           </div>
         </div>
