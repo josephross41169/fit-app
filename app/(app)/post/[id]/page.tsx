@@ -75,7 +75,7 @@ export default function PostDetailPage() {
         // 1. Fetch the post itself
         const { data: postRow, error: postErr } = await supabase
           .from("posts")
-          .select("id, user_id, caption, media_url, media_urls, media_type, media_types, created_at, likes_count")
+          .select("id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, created_at, likes_count")
           .eq("id", id)
           .single();
         if (postErr || !postRow) throw new Error(postErr?.message || "Post not found.");
@@ -286,6 +286,9 @@ export default function PostDetailPage() {
                   key={i}
                   src={src}
                   controls
+                  autoPlay
+                  muted
+                  loop
                   preload="metadata"
                   playsInline
                   style={{ width: "100%", display: "block", marginBottom: i < photos.length - 1 ? 2 : 0, background: "#000" }}
