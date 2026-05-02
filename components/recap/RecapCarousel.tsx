@@ -199,17 +199,9 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
           postsData = fallback.data;
         }
 
-        const built = buildRecap(
-          weekStart,
-          (weekLogsRes.data || []) as any[],
-          (historyLogsRes.data || []) as any[],
-          (badgesRes.data || []) as any[],
-          (postsData || []) as any[]
-        );
-        setRecap(built);
-        setUsername((profileRes.data as any)?.username || undefined);
-
-        // Streaks are CURRENT (live), not week-bounded
+        // Fetch the 90-day streak data BEFORE building the recap. The
+        // prior-week slice of this data feeds buildRecap's vsLastWeek
+        // comparison without needing an extra query — single source of truth.
         const streakSince = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
         const { data: streakLogs } = await supabase
           .from("activity_logs")
@@ -218,6 +210,28 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
           .in("log_type", ["workout", "wellness", "nutrition"])
           .gte("logged_at", streakSince);
         if (cancelled) return;
+
+        // Slice prior week from streak data: Sun (weekStart - 7 days) → Sat (weekStart - 1ms).
+        const priorWeekStart = new Date(weekStart);
+        priorWeekStart.setDate(priorWeekStart.getDate() - 7);
+        const priorStartIso = priorWeekStart.toISOString();
+        const priorEndIso = new Date(weekStart.getTime() - 1).toISOString();
+        const priorWeekLogs = (streakLogs || []).filter((l: any) => {
+          const ts = l.logged_at || l.created_at;
+          if (!ts) return false;
+          return ts >= priorStartIso && ts <= priorEndIso;
+        });
+
+        const built = buildRecap(
+          weekStart,
+          (weekLogsRes.data || []) as any[],
+          (historyLogsRes.data || []) as any[],
+          (badgesRes.data || []) as any[],
+          (postsData || []) as any[],
+          priorWeekLogs as any[]
+        );
+        setRecap(built);
+        setUsername((profileRes.data as any)?.username || undefined);
         setStreaks(computeAllStreaks((streakLogs || []) as any[]));
       } catch (e: any) {
         if (!cancelled) setError(e?.message || "Couldn't load recap");
