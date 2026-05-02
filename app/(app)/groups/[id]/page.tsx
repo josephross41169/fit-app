@@ -7,6 +7,7 @@ import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
 import { compressImage } from "@/lib/compressImage";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
+import { ImagePresets } from "@/lib/imageUrls";
 
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
@@ -2248,7 +2249,7 @@ export default function GroupPage() {
           this prevents the banner image from being upscaled past its native
           resolution on desktop (which was making it look pixelated). */}
       <div className="group-hero-banner" style={{ width:"100%", maxWidth:1200, margin:"0 auto", height:340, position:"relative", overflow:"hidden" }}>
-        <img src={group.recentPhoto} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+        <img src={ImagePresets.feed(group.recentPhoto)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.78) 100%)" }} />
         {bannerUploading && (
           <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:10 }}>
@@ -2384,7 +2385,7 @@ export default function GroupPage() {
                   {/* Photo preview — shown only when one is attached. Tap "Remove" to clear. */}
                   {postPhotoDataUrl && (
                     <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}` }}>
-                      <img src={postPhotoDataUrl} alt="Post preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
+                      <img src={ImagePresets.feed(postPhotoDataUrl)} loading="lazy" decoding="async" alt="Post preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
                       <button
                         onClick={() => { setPostPhotoDataUrl(null); if (postPhotoInputRef.current) postPhotoInputRef.current.value = ""; }}
                         style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
@@ -2440,7 +2441,7 @@ export default function GroupPage() {
                 <div key={post.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:18, overflow:"hidden" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px 10px" }}>
                     <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {post.avatarUrl ? <img src={post.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : post.avatar}
+                      {post.avatarUrl ? <img src={ImagePresets.avatarSm(post.avatarUrl)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : post.avatar}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{post.user}</div>
@@ -2454,7 +2455,7 @@ export default function GroupPage() {
                     </div>
                   ) : post.photo ? (
                     <div style={{ width:"100%", aspectRatio:"4/3", overflow:"hidden" }}>
-                      <img src={post.photo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                      <img src={ImagePresets.feed(post.photo)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                     </div>
                   ) : null}
                   <div style={{ padding:"10px 18px 14px" }}>
@@ -2533,7 +2534,7 @@ export default function GroupPage() {
                           {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                         </div>
                         <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                          {(entry as any).avatarUrl ? <img src={(entry as any).avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
+                          {(entry as any).avatarUrl ? <img src={ImagePresets.avatarSm((entry as any).avatarUrl)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
                         </div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
@@ -2562,7 +2563,7 @@ export default function GroupPage() {
                             {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                           </div>
                           <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                            {(entry as any).avatarUrl ? <img src={(entry as any).avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
+                            {(entry as any).avatarUrl ? <img src={ImagePresets.avatarSm((entry as any).avatarUrl)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
                           </div>
                           <div style={{ flex:1 }}>
                             <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
@@ -2708,7 +2709,7 @@ export default function GroupPage() {
                                       <span style={{fontSize:14}}>{["🥇","🥈","🥉"][idx]||"🎖️"}</span>
                                       <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#F5A623,#FFD700)",
                                         display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
-                                        {p.users?.avatar_url?<img src={p.users.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(p.users?.full_name||p.users?.username||"?")[0]}
+                                        {p.users?.avatar_url?<img src={ImagePresets.avatarSm(p.users.avatar_url)} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(p.users?.full_name||p.users?.username||"?")[0]}
                                       </div>
                                       <span style={{fontSize:13,fontWeight:700,color:"#92400E",flex:1}}>{p.users?.full_name||p.users?.username||"Member"}</span>
                                       <span style={{fontSize:12,fontWeight:800,color:"#F5A623"}}>{p.score} {ch.metric_unit||"pts"}</span>
@@ -2836,7 +2837,7 @@ export default function GroupPage() {
                               background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
                               display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#fff"}}>
                               {u?.avatar_url
-                                ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                                ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
                                 : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
                             </div>
                             <div style={{flex:1,minWidth:0}}>
@@ -2925,7 +2926,7 @@ export default function GroupPage() {
                               <div key={p.user_id || idx} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                                 <span style={{ fontSize:14 }}>{["🥇","🥈","🥉"][idx]||"🎖️"}</span>
                                 <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,#F5A623,#FFD700)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900, color:"#fff", overflow:"hidden", flexShrink:0 }}>
-                                  {p.users?.avatar_url ? <img src={p.users.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (p.users?.full_name||p.users?.username||'?')[0]}
+                                  {p.users?.avatar_url ? <img src={ImagePresets.avatarSm(p.users.avatar_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (p.users?.full_name||p.users?.username||'?')[0]}
                                 </div>
                                 <span style={{ fontSize:13, fontWeight:700, color:C.text, flex:1 }}>{p.users?.full_name || p.users?.username || 'Member'}</span>
                                 <span style={{ fontSize:12, fontWeight:800, color:"#F5A623" }}>{p.score} {ch.metric_unit||'pts'}</span>
@@ -3008,7 +3009,7 @@ export default function GroupPage() {
                 {/* Photo preview */}
                 {notePhotoDataUrl && (
                   <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}` }}>
-                    <img src={notePhotoDataUrl} alt="Note preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
+                    <img src={ImagePresets.feed(notePhotoDataUrl)} loading="lazy" decoding="async" alt="Note preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
                     <button
                       onClick={() => { setNotePhotoDataUrl(null); if (noteMediaInputRef.current) noteMediaInputRef.current.value = ""; }}
                       style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
@@ -3069,7 +3070,7 @@ export default function GroupPage() {
                 <div key={note.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                     <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {note.avatarUrl ? <img src={note.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : note.avatar}
+                      {note.avatarUrl ? <img src={ImagePresets.avatarSm(note.avatarUrl)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : note.avatar}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:13, color:C.text }}>{note.user}</div>
@@ -3088,7 +3089,7 @@ export default function GroupPage() {
                     </div>
                   ) : note.media_url ? (
                     <div style={{ marginBottom:10, borderRadius:12, overflow:"hidden" }}>
-                      <img src={note.media_url} alt="" style={{ width:"100%", maxHeight:420, objectFit:"cover", display:"block" }} />
+                      <img src={ImagePresets.feed(note.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:420, objectFit:"cover", display:"block" }} />
                     </div>
                   ) : null}
                   <p style={{ fontSize:14, color:C.text, lineHeight:1.7, margin:"0 0 10px" }}>{note.content}</p>
@@ -3206,7 +3207,7 @@ export default function GroupPage() {
                     <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
                       style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0, cursor:"pointer" }}>
                       <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
+                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={ImagePresets.avatarSm(m.avatarUrl)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
                         <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
@@ -3485,7 +3486,7 @@ export default function GroupPage() {
                                     display:"flex",alignItems:"center",justifyContent:"center",
                                     fontSize:12,fontWeight:900,color:"#fff"}}>
                                     {u?.avatar_url
-                                      ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                                      ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
                                       : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
                                   </div>
                                   <div style={{flex:1,minWidth:0}}>
@@ -3580,7 +3581,7 @@ export default function GroupPage() {
                                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
                                       {media.map((m:any)=>(
                                         <div key={m.id} style={{position:"relative",aspectRatio:"1",borderRadius:10,overflow:"hidden"}}>
-                                          <img src={m.media_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                                          <img src={ImagePresets.feed(m.media_url)} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                                         </div>
                                       ))}
                                     </div>
@@ -3829,7 +3830,7 @@ export default function GroupPage() {
                                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",
                                 flexShrink:0,overflow:"hidden",border:`2px solid ${sel?"#7C3AED":"transparent"}`}}>
                                 {m.avatarUrl
-                                  ? <img src={m.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={name}/>
+                                  ? <img src={ImagePresets.avatarSm(m.avatarUrl)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt={name}/>
                                   : name[0]?.toUpperCase()}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
@@ -3928,7 +3929,7 @@ export default function GroupPage() {
                     style={{ display:"flex", alignItems:"center", gap:11, flex:1, minWidth:0, cursor:"pointer" }}>
                     <div style={{ width:12, fontSize:10, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
                     <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {m.avatarUrl ? <img src={m.avatarUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}
+                      {m.avatarUrl ? <img src={ImagePresets.avatarSm(m.avatarUrl)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
