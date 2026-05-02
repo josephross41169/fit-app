@@ -490,7 +490,7 @@ export default function UserProfilePage() {
       try {
         const { data: postRows } = await supabase
           .from('posts')
-          .select('media_url, media_urls, media_type, media_types')
+          .select('media_url, media_urls, media_type, media_types, media_positions')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false });
