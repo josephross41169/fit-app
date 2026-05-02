@@ -16,6 +16,7 @@ import { awardXp } from "@/lib/xp";
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
+import LocationPicker, { type Location } from "@/components/LocationPicker";
 
 const C = {
   blue: "#7C3AED",
@@ -499,6 +500,10 @@ export default function PostPage() {
   const [feedTaggedUsers, setFeedTaggedUsers] = useState<TaggedUser[]>([]);
   const [workoutTaggedUsers, setWorkoutTaggedUsers] = useState<TaggedUser[]>([]);
   const [location, setLocation] = useState("");
+  // Structured location selected from the LocationPicker. New posts use this;
+  // the legacy free-text `location` field stays for backward-compat with
+  // pre-migration posts but is no longer user-facing.
+  const [feedLocation, setFeedLocation] = useState<Location | null>(null);
   const [postType, setPostType] = useState<PostType>("Workout");
 
   function loadPhoto(e: React.ChangeEvent<HTMLInputElement>, set: (s: string) => void) {
@@ -1552,7 +1557,11 @@ export default function PostPage() {
         media_types: uploadedUrls.length > 0 ? uploadedTypes : null,
         media_type: firstType, // legacy single-type column — first item's type
         post_type: 'general' as any,
-        location: location || null,
+        // Legacy free-text location only carries old posts. New tagged
+        // location goes through location_id below. We keep the column blank
+        // for new posts so Discover queries don't double-count.
+        location: null,
+        location_id: feedLocation?.id || null,
         is_public: true,
         // Tagged users — drives @mention notifications and the future
         // "tagged in" tab on profiles. Empty array = no tags.
@@ -1569,6 +1578,11 @@ export default function PostPage() {
         delete insertRow.tagged_user_ids;
         ({ error } = await supabase.from('posts').insert(insertRow));
       }
+      // Same fallback for location_id — back-compat with un-migrated DBs.
+      if (error && /location_id/i.test(error.message || '')) {
+        delete insertRow.location_id;
+        ({ error } = await supabase.from('posts').insert(insertRow));
+      }
       setLoading(false);
       if (error) {
         submittingRef.current = false;
@@ -1580,7 +1594,8 @@ export default function PostPage() {
           has_photo: !!mediaUrl,
           photo_count: uploadedUrls.length,
           has_caption: !!caption,
-          has_location: !!location,
+          has_location: !!feedLocation,
+          location_kind: feedLocation?.kind || null,
           tag_count: feedTaggedUsers.length,
         });
         // Send a notification to each tagged user. Fire-and-forget — failures
@@ -3120,7 +3135,12 @@ export default function PostPage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Location</label>
-                <input style={iStyle} placeholder="📍 Add location (e.g. Las Vegas, NV)" value={location} onChange={e => setLocation(e.target.value)} />
+                <LocationPicker
+                  value={feedLocation}
+                  onChange={setFeedLocation}
+                  userId={user?.id || ""}
+                  defaultCity={(user as any)?.profile?.city || "Las Vegas"}
+                />
               </div>
             </div>
 
