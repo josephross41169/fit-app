@@ -628,6 +628,9 @@ export default function UserProfilePage() {
                 }))
               : [],
             cardio: Array.isArray(workoutLog.cardio) ? workoutLog.cardio : [],
+            // PR badge — set by /api/db detect_prs_from_log when this
+            // workout beat the user's prior all-time max for any exercise.
+            isPR: !!workoutLog.is_pr,
           } : null;
 
           const totalCalories = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
