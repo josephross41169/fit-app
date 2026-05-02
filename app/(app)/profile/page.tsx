@@ -15,6 +15,7 @@ import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { computeTier, getTierInfo } from "@/lib/tiers";
 import { ImagePresets } from "@/lib/imageUrls";
+import { shareWithToast, appUrl } from "@/lib/share";
 import type { Tier, Level, CounterData, LevelProgressInfo } from "@/lib/tiers";
 import { getLevelProgress, LEVEL_CHALLENGES, XP_FOR_NEXT, LEVEL_COLORS, XP_CATEGORIES } from "@/lib/tiers";
 import { tryLevelUp } from "@/lib/xp";
@@ -1278,35 +1279,24 @@ export default function ProfilePage() {
 
   /** Share or copy a link to the current user's profile. Native share
    *  sheet on mobile, clipboard fallback on desktop. The URL uses the
-   *  username path which is the public-facing profile route. */
+   *  username path which is the public-facing profile route. Delegates
+   *  to the universal share helper. */
   async function shareProfile() {
-    if (typeof window === "undefined") return;
     const username = profile?.username || (user as any)?.profile?.username;
     if (!username) {
       alert("Set a username first to share your profile.");
       return;
     }
-    const url = `${window.location.origin}/profile/${username}`;
-    const shareData = {
-      title: `${profile?.full_name || "@" + username} on Livelee`,
-      text: `Check out my Livelee profile`,
-      url,
-    };
-    try {
-      if ((navigator as any).share) {
-        await (navigator as any).share(shareData);
-        return;
-      }
-    } catch (e: any) {
-      if (e?.name === "AbortError") return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setProfileShareCopied(true);
-      setTimeout(() => setProfileShareCopied(false), 2500);
-    } catch {
-      window.prompt("Copy this profile link:", url);
-    }
+    await shareWithToast(
+      {
+        url: appUrl(`/profile/${username}`),
+        // The own-profile state uses `name` (not full_name) — old code
+        // used profile?.full_name which always fell through to @username.
+        title: `${profile?.name || "@" + username} on Livelee`,
+        text: `Check out my Livelee profile`,
+      },
+      setProfileShareCopied
+    );
   }
 
   const [showCustomizations, setShowCustomizations] = useState(false);
