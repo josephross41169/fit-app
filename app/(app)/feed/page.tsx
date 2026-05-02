@@ -2141,7 +2141,6 @@ export default function FeedPage() {
       setShowRecapPrompt(true);
     }
   }, [user]);
-  }, [user]);
 
   function dismissRecapPrompt() {
     if (!user || !recapWeekKey) return;
