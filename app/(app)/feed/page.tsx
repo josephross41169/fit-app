@@ -14,6 +14,8 @@ import type { Tier } from "@/lib/tiers";
 import { loadBlockedUsers } from "@/lib/blocks";
 import ReportModal, { ReportTarget } from "@/components/ReportModal";
 import { ImagePresets } from "@/lib/imageUrls";
+import { shareWithToast, appUrl } from "@/lib/share";
+import { FeedPostSkeleton, SkeletonStyles } from "@/components/Skeleton";
 import { getCached, setCached } from "@/lib/queryCache";
 
 const C = {
@@ -1052,34 +1054,22 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
    *  Builds the URL from the current origin so it works both on
    *  liveleeapp.com and on Vercel preview deployments without baking
    *  the domain in. Mock posts (numeric ids without dashes) skip share
-   *  since they don't have public permalinks. */
+   *  since they don't have public permalinks.
+   *
+   *  As of the universal-share refactor, this just delegates to
+   *  shareWithToast — keeping the function as a thin wrapper preserves
+   *  the existing onClick={sharePost} bindings without churn. */
   async function sharePost() {
     const isRealPost = typeof post.id === "string" && post.id.includes("-");
     if (!isRealPost) return;
-    const url = typeof window !== "undefined"
-      ? `${window.location.origin}/post/${post.id}`
-      : `https://liveleeapp.com/post/${post.id}`;
-    const shareData = {
-      title: "Check out this post on Livelee",
-      text: post.caption ? post.caption.slice(0, 120) : "Check out this post on Livelee",
-      url,
-    };
-    try {
-      if (typeof navigator !== "undefined" && (navigator as any).share) {
-        await (navigator as any).share(shareData);
-        return;
-      }
-    } catch (e: any) {
-      if (e?.name === "AbortError") return;
-      // Other errors → fall through to clipboard
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2500);
-    } catch {
-      window.prompt("Copy this post link:", url);
-    }
+    await shareWithToast(
+      {
+        url: appUrl(`/post/${post.id}`),
+        title: "Check out this post on Livelee",
+        text: post.caption ? post.caption.slice(0, 120) : "Check out this post on Livelee",
+      },
+      setShareCopied
+    );
   }
   // Carousel video mute toggle. Default muted because browsers refuse to
   // autoplay videos with audio (Chrome/Safari/Firefox all block this), and we
@@ -2875,10 +2865,9 @@ export default function FeedPage() {
           ) : (
             <>
               {loadingFeed ? (
-                <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                  <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
-                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-                  <p style={{ fontWeight:600 }}>Loading feed…</p>
+                <div style={{ padding: "8px 0" }}>
+                  <SkeletonStyles />
+                  <FeedPostSkeleton count={3} />
                 </div>
               ) : (
                 <>
