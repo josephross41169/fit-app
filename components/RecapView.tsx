@@ -223,7 +223,7 @@ function RecapBody({
 
       {/* Daily activity bar chart */}
       {recap.hasActivity && (
-        <ChartCard title="Your Week at a Glance" subtitle="Minutes by day · stacked by activity type">
+        <ChartCard title="Your Week at a Glance" subtitle="Sessions per day · stacked by activity type">
           <DailyBarChart recap={recap} />
           <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 12, fontSize: 11, fontWeight: 700, color: COLORS.sub }}>
             <LegendDot color={COLORS.lifting} label="Lifting" />
@@ -471,22 +471,27 @@ function StreakMini({ label, current, accent }: { label: string; current: number
 }
 
 function DailyBarChart({ recap }: { recap: Recap }) {
+  // Chart shows SESSION COUNTS, not minutes. Reasoning: a single 8-hour
+  // sleep log dwarfs everything else and made the bar chart visually
+  // dishonest about week-to-week consistency. Counting sessions normalizes
+  // a cold plunge and a workout to "1 thing did" each, which is the right
+  // unit for "how active was I this day?".
   const data = recap.daily.map(d => ({
     day: d.label,
-    Lifting: Math.round(d.liftingMinutes),
-    Cardio: Math.round(d.cardioMinutes),
-    Wellness: Math.round(d.wellnessMinutes),
+    Lifting: d.liftingSessions,
+    Cardio: d.cardioSessions,
+    Wellness: d.wellnessSessions,
   }));
 
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: -24, bottom: 4 }}>
         <XAxis dataKey="day" tick={{ fontSize: 11, fill: COLORS.sub }} stroke={COLORS.border} />
-        <YAxis tick={{ fontSize: 10, fill: COLORS.sub }} stroke={COLORS.border} />
+        <YAxis tick={{ fontSize: 10, fill: COLORS.sub }} stroke={COLORS.border} allowDecimals={false} />
         <Tooltip
           contentStyle={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: COLORS.text, fontWeight: 700 }}
-          formatter={(value: any, name: any) => [`${value} min`, name]}
+          formatter={(value: any, name: any) => [`${value} ${value === 1 ? "session" : "sessions"}`, name]}
         />
         <Bar dataKey="Lifting" stackId="a" fill={COLORS.lifting} radius={[0, 0, 0, 0]} />
         <Bar dataKey="Cardio" stackId="a" fill={COLORS.cardio} radius={[0, 0, 0, 0]} />
@@ -704,84 +709,112 @@ async function generateShareImage(recap: Recap, dims: { width: number; height: n
     const ctx = canvas.getContext("2d");
     if (!ctx) { resolve(null); return; }
 
-    // Background
+    // ─── Background ──────────────────────────────────────────────────────
     const grad = ctx.createLinearGradient(0, 0, 0, dims.height);
     grad.addColorStop(0, "#1A0F2E");
-    grad.addColorStop(1, "#0D0D0D");
+    grad.addColorStop(0.4, "#150B22");
+    grad.addColorStop(1, "#0A0612");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, dims.width, dims.height);
+    // Subtle radial accent in top-right for visual interest
+    const accent = ctx.createRadialGradient(dims.width * 0.85, dims.height * 0.15, 0, dims.width * 0.85, dims.height * 0.15, dims.width * 0.7);
+    accent.addColorStop(0, "rgba(124, 58, 237, 0.18)");
+    accent.addColorStop(1, "rgba(124, 58, 237, 0)");
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, dims.width, dims.height);
 
-    // Padding & font helpers
+    // ─── Layout planning ─────────────────────────────────────────────────
+    // We compute every section's height first, then evenly distribute any
+    // leftover space as padding. This ensures the image fills its full
+    // height regardless of aspect ratio (1:1, 9:16, 4:5).
     const pad = Math.round(dims.width * 0.06);
-    let y = pad * 2;
+    const usableW = dims.width - pad * 2;
+    const totalSessions = recap.lifts.sessions + recap.cardio.sessions + recap.wellness.sessions;
 
-    // Brand
+    // Section height estimates — relative to image height
+    const headerH = Math.round(dims.height * 0.13);
+    const statsH = Math.round(dims.height * 0.11);
+    const chartH = Math.round(dims.height * 0.20);
+    const breakdownsH = Math.round(dims.height * 0.36);
+    const footerH = Math.round(dims.height * 0.04);
+
+    // Total used vertical space — anything left becomes inter-section padding
+    const totalSectionsH = headerH + statsH + chartH + breakdownsH + footerH;
+    const extraSpace = dims.height - totalSectionsH - pad * 2;
+    // Distribute leftover into 4 gaps between sections (header→stats, stats→
+    // chart, chart→breakdowns, breakdowns→footer)
+    const interGap = Math.max(pad * 0.6, extraSpace / 4);
+
+    let y = pad;
+
+    // ─── HEADER ──────────────────────────────────────────────────────────
+    // Brand label
     ctx.fillStyle = "#A78BFA";
-    ctx.font = `800 ${Math.round(dims.width * 0.024)}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("LIVELEE · WEEKLY RECAP", pad, y);
-    y += pad * 1.2;
+    ctx.font = `900 ${Math.round(dims.width * 0.026)}px -apple-system, system-ui, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillText("LIVELEE · WEEKLY RECAP", pad, y + Math.round(dims.width * 0.03));
+    y += Math.round(dims.width * 0.045);
 
-    // Date range
+    // Date range — biggest text on the image
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = `900 ${Math.round(dims.width * 0.05)}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(recap.rangeLabel, pad, y);
-    y += pad * 0.5;
+    ctx.font = `900 ${Math.round(dims.width * 0.058)}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText(recap.rangeLabel, pad, y + Math.round(dims.width * 0.05));
+    y += Math.round(dims.width * 0.07);
 
     // Subtitle
     ctx.fillStyle = "#9CA3AF";
-    ctx.font = `600 ${Math.round(dims.width * 0.022)}px -apple-system, system-ui, sans-serif`;
-    const totalSessions = recap.lifts.sessions + recap.cardio.sessions + recap.wellness.sessions;
-    ctx.fillText(`${recap.activeDays} active days · ${totalSessions} total sessions`, pad, y);
-    y += pad * 1.4;
+    ctx.font = `600 ${Math.round(dims.width * 0.024)}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText(`${recap.activeDays} active ${recap.activeDays === 1 ? "day" : "days"} · ${totalSessions} total sessions`, pad, y + Math.round(dims.width * 0.025));
+    y = pad + headerH + interGap;
 
-    // Stat cards — three columns
-    const cardW = (dims.width - pad * 4) / 3;
-    const cardH = Math.round(dims.height * 0.11);
+    // ─── STAT CARDS ──────────────────────────────────────────────────────
+    const cardW = (usableW - pad / 2 * 2) / 3;
     const stats = [
-      { color: "#F97316", icon: "💪", label: "LIFTS", value: recap.lifts.sessions },
-      { color: "#3B82F6", icon: "🏃", label: "CARDIO", value: recap.cardio.sessions },
-      { color: "#10B981", icon: "🌿", label: "WELLNESS", value: recap.wellness.sessions },
+      { color: "#F97316", label: "LIFTS", value: recap.lifts.sessions },
+      { color: "#3B82F6", label: "CARDIO", value: recap.cardio.sessions },
+      { color: "#10B981", label: "WELLNESS", value: recap.wellness.sessions },
     ];
     stats.forEach((s, i) => {
       const x = pad + i * (cardW + pad / 2);
-      // Card bg
-      ctx.fillStyle = "#15131D";
-      roundRect(ctx, x, y, cardW, cardH, 16);
+      // Card body
+      ctx.fillStyle = "rgba(21, 19, 29, 0.85)";
+      roundRect(ctx, x, y, cardW, statsH, 18);
       ctx.fill();
       // Border
-      ctx.strokeStyle = s.color + "55";
+      ctx.strokeStyle = s.color + "60";
       ctx.lineWidth = 2;
       ctx.stroke();
-      // Icon
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = `${Math.round(cardH * 0.3)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.fillText(s.icon, x + cardW / 2, y + cardH * 0.4);
-      // Value
+      // Big value number
       ctx.fillStyle = s.color;
-      ctx.font = `900 ${Math.round(cardH * 0.32)}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(String(s.value), x + cardW / 2, y + cardH * 0.78);
+      ctx.font = `900 ${Math.round(statsH * 0.45)}px -apple-system, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(String(s.value), x + cardW / 2, y + statsH * 0.62);
       // Label
       ctx.fillStyle = "#9CA3AF";
-      ctx.font = `700 ${Math.round(cardH * 0.13)}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(s.label, x + cardW / 2, y + cardH * 0.95);
-      ctx.textAlign = "left";
+      ctx.font = `800 ${Math.round(statsH * 0.13)}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(s.label, x + cardW / 2, y + statsH * 0.88);
     });
-    y += cardH + pad;
+    ctx.textAlign = "left";
+    y += statsH + interGap;
 
-    // Daily bar chart
-    const chartH = Math.round(dims.height * 0.22);
-    drawDailyChart(ctx, recap, pad, y, dims.width - pad * 2, chartH);
-    y += chartH + pad * 0.8;
+    // ─── DAILY BAR CHART ─────────────────────────────────────────────────
+    // Shows session counts per day. Keeps the chart honest — sleep logs
+    // (which can be 8h+) don't dominate the visual.
+    drawDailyChart(ctx, recap, pad, y, usableW, chartH);
+    y += chartH + interGap;
 
-    // Highlights area — PRs / wellness types / streaks
-    drawHighlights(ctx, recap, pad, y, dims.width - pad * 2, dims.height - y - pad * 1.5);
+    // ─── BREAKDOWNS ──────────────────────────────────────────────────────
+    // Multi-section panel: PRs, cardio per type, wellness per type.
+    // Designed to fill the entire breakdownsH height — internal layout
+    // adapts based on what data exists.
+    drawBreakdowns(ctx, recap, pad, y, usableW, breakdownsH);
+    y += breakdownsH + interGap;
 
-    // Footer
+    // ─── FOOTER ──────────────────────────────────────────────────────────
     ctx.fillStyle = "#A78BFA";
-    ctx.font = `800 ${Math.round(dims.width * 0.022)}px -apple-system, system-ui, sans-serif`;
+    ctx.font = `800 ${Math.round(dims.width * 0.026)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText("liveleeapp.com", dims.width / 2, dims.height - pad * 0.6);
+    ctx.fillText("liveleeapp.com", dims.width / 2, dims.height - pad * 0.8);
     ctx.textAlign = "left";
 
     canvas.toBlob(b => resolve(b), "image/png", 0.95);
@@ -804,112 +837,227 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 function drawDailyChart(ctx: CanvasRenderingContext2D, recap: Recap, x: number, y: number, w: number, h: number) {
   // Background card
-  ctx.fillStyle = "#15131D";
-  roundRect(ctx, x, y, w, h, 14);
+  ctx.fillStyle = "rgba(21, 19, 29, 0.85)";
+  roundRect(ctx, x, y, w, h, 18);
   ctx.fill();
-  ctx.strokeStyle = "#2D1F52";
+  ctx.strokeStyle = "rgba(45, 31, 82, 0.6)";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
+  const innerPad = Math.round(w * 0.04);
+
   // Title
   ctx.fillStyle = "#FFFFFF";
-  ctx.font = `800 ${Math.round(h * 0.08)}px -apple-system, system-ui, sans-serif`;
-  ctx.fillText("Your Week at a Glance", x + 16, y + 24);
+  ctx.font = `800 ${Math.round(h * 0.10)}px -apple-system, system-ui, sans-serif`;
+  ctx.textAlign = "left";
+  ctx.fillText("Your Week at a Glance", x + innerPad, y + Math.round(h * 0.13));
 
-  // Find max minutes for scaling
-  const maxMin = Math.max(
+  // Subtitle
+  ctx.fillStyle = "#9CA3AF";
+  ctx.font = `600 ${Math.round(h * 0.06)}px -apple-system, system-ui, sans-serif`;
+  ctx.fillText("Sessions per day", x + innerPad, y + Math.round(h * 0.21));
+
+  // Find max sessions per day for scaling. Sessions, not minutes — keeps
+  // the chart honest when one big sleep log would otherwise dominate.
+  const maxSessions = Math.max(
     1,
-    ...recap.daily.map(d => d.liftingMinutes + d.cardioMinutes + d.wellnessMinutes)
+    ...recap.daily.map(d => d.liftingSessions + d.cardioSessions + d.wellnessSessions)
   );
-  const chartTop = y + 40;
-  const chartBottom = y + h - 28;
+
+  // Chart area sits below the title — leave room for day labels at bottom
+  const chartTop = y + Math.round(h * 0.30);
+  const chartBottom = y + h - Math.round(h * 0.13);
   const chartH = chartBottom - chartTop;
-  const barAreaW = w - 32;
-  const barW = barAreaW / 7 * 0.65;
-  const gap = (barAreaW / 7 - barW);
+  const barAreaW = w - innerPad * 2;
+  const barW = (barAreaW / 7) * 0.65;
+  const gap = (barAreaW / 7) - barW;
 
   recap.daily.forEach((d, i) => {
-    const baseX = x + 16 + i * (barW + gap);
-    const total = d.liftingMinutes + d.cardioMinutes + d.wellnessMinutes;
-    const totalH = (total / maxMin) * chartH;
+    const baseX = x + innerPad + i * (barW + gap) + gap / 2;
     let curY = chartBottom;
 
-    // Wellness (bottom)
-    if (d.wellnessMinutes > 0) {
-      const segH = (d.wellnessMinutes / maxMin) * chartH;
+    // Wellness (bottom segment)
+    if (d.wellnessSessions > 0) {
+      const segH = (d.wellnessSessions / maxSessions) * chartH;
       ctx.fillStyle = "#10B981";
       ctx.fillRect(baseX, curY - segH, barW, segH);
       curY -= segH;
     }
-    if (d.cardioMinutes > 0) {
-      const segH = (d.cardioMinutes / maxMin) * chartH;
+    // Cardio (middle)
+    if (d.cardioSessions > 0) {
+      const segH = (d.cardioSessions / maxSessions) * chartH;
       ctx.fillStyle = "#3B82F6";
       ctx.fillRect(baseX, curY - segH, barW, segH);
       curY -= segH;
     }
-    if (d.liftingMinutes > 0) {
-      const segH = (d.liftingMinutes / maxMin) * chartH;
+    // Lifting (top — rounded corners)
+    if (d.liftingSessions > 0) {
+      const segH = (d.liftingSessions / maxSessions) * chartH;
       ctx.fillStyle = "#F97316";
       ctx.fillRect(baseX, curY - segH, barW, segH);
       curY -= segH;
     }
 
-    // Day label
+    // Day label below the chart
     ctx.fillStyle = "#9CA3AF";
-    ctx.font = `700 ${Math.round(h * 0.07)}px -apple-system, system-ui, sans-serif`;
+    ctx.font = `700 ${Math.round(h * 0.06)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(d.label, baseX + barW / 2, chartBottom + 16);
+    ctx.fillText(d.label, baseX + barW / 2, chartBottom + Math.round(h * 0.10));
   });
   ctx.textAlign = "left";
 }
 
-function drawHighlights(ctx: CanvasRenderingContext2D, recap: Recap, x: number, y: number, w: number, h: number) {
-  let curY = y;
-  const lineH = Math.round(h * 0.06);
+/**
+ * Draws the breakdown panel — the bottom half of the share image. Contains
+ * up to 4 sub-sections (PRs / Best lifts, Cardio, Wellness, Streaks). Each
+ * sub-section gets adaptive height so the panel always fills the height
+ * we were given.
+ *
+ * The previous version (drawHighlights) just rendered top-to-bottom and
+ * left empty space at the bottom. This version pre-counts which sections
+ * have data, then divides the available space evenly among them.
+ */
+function drawBreakdowns(
+  ctx: CanvasRenderingContext2D,
+  recap: Recap,
+  x: number, y: number, w: number, h: number
+) {
+  // Background panel
+  ctx.fillStyle = "rgba(21, 19, 29, 0.85)";
+  roundRect(ctx, x, y, w, h, 18);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(45, 31, 82, 0.6)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 
-  // PRs
+  const innerPad = Math.round(w * 0.04);
+
+  // Determine which sections have data
+  const sections: Array<{
+    label: string;
+    accent: string;
+    lines: string[];
+  }> = [];
+
+  // Lifts: PRs preferred, else best lifts, else "no lifts this week"
   if (recap.lifts.prs.length > 0) {
-    ctx.fillStyle = "#A78BFA";
-    ctx.font = `800 ${Math.round(lineH * 0.6)}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("🎯 NEW PRs", x, curY + lineH);
-    curY += lineH * 1.3;
-    recap.lifts.prs.slice(0, 3).forEach(pr => {
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = `700 ${Math.round(lineH * 0.55)}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(`${pr.exercise}: ${pr.weight} lbs × ${pr.reps}`, x, curY + lineH);
-      curY += lineH;
+    sections.push({
+      label: "🎯 NEW PRs",
+      accent: "#F97316",
+      lines: recap.lifts.prs.slice(0, 3).map(pr => `${pr.exercise}: ${pr.weight} lbs × ${pr.reps}`),
     });
-    curY += lineH * 0.4;
+  } else if (recap.lifts.bestLifts.length > 0) {
+    sections.push({
+      label: "💪 BEST LIFTS",
+      accent: "#F97316",
+      lines: recap.lifts.bestLifts.slice(0, 3).map(l => `${l.exercise}: ${l.weight} lbs × ${l.reps}`),
+    });
   }
 
-  // Cardio rollup
-  if (recap.cardio.byType.length > 0 && curY < y + h - lineH * 3) {
-    ctx.fillStyle = "#A78BFA";
-    ctx.font = `800 ${Math.round(lineH * 0.6)}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("🏃 CARDIO", x, curY + lineH);
-    curY += lineH * 1.3;
-    recap.cardio.byType.slice(0, 2).forEach(c => {
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = `700 ${Math.round(lineH * 0.55)}px -apple-system, system-ui, sans-serif`;
-      const txt = `${capitalize(c.type)} · ${c.sessions}× · ${formatMinutes(c.totalMinutes)}${c.avgMiles > 0 ? ` · ${c.avgMiles.toFixed(1)}mi avg` : ""}`;
-      ctx.fillText(txt, x, curY + lineH);
-      curY += lineH;
+  // Cardio breakdown
+  if (recap.cardio.byType.length > 0) {
+    sections.push({
+      label: "🏃 CARDIO",
+      accent: "#3B82F6",
+      lines: recap.cardio.byType.slice(0, 3).map(c => {
+        const distPart = c.avgMiles > 0 ? ` · ${c.avgMiles.toFixed(1)}mi avg` : "";
+        return `${capitalize(c.type)} · ${c.sessions}× · ${formatMinutes(c.totalMinutes)}${distPart}`;
+      }),
     });
-    curY += lineH * 0.4;
   }
 
-  // Wellness rollup
-  if (recap.wellness.byType.length > 0 && curY < y + h - lineH * 2) {
-    ctx.fillStyle = "#A78BFA";
-    ctx.font = `800 ${Math.round(lineH * 0.6)}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("🌿 WELLNESS", x, curY + lineH);
-    curY += lineH * 1.3;
-    const summary = recap.wellness.byType.slice(0, 3).map(w => `${w.sessions}× ${w.type}`).join(" · ");
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = `700 ${Math.round(lineH * 0.55)}px -apple-system, system-ui, sans-serif`;
-    // Wrap if too long
-    wrapText(ctx, summary, x, curY + lineH, w, lineH);
+  // Wellness breakdown — flatten into a comma list since each entry is short
+  if (recap.wellness.byType.length > 0) {
+    const summary = recap.wellness.byType
+      .slice(0, 5)
+      .map(wt => `${wt.sessions}× ${wt.type}`)
+      .join(", ");
+    sections.push({
+      label: "🌿 WELLNESS",
+      accent: "#10B981",
+      lines: [summary],
+    });
   }
+
+  // Badges
+  if (recap.badgesEarned.length > 0) {
+    const badgeNames = recap.badgesEarned
+      .slice(0, 8)
+      .map(b => prettyBadgeId(b.badge_id))
+      .join(", ");
+    sections.push({
+      label: "🏆 BADGES EARNED",
+      accent: "#A78BFA",
+      lines: [badgeNames],
+    });
+  }
+
+  // Empty fallback — at least say SOMETHING so the panel isn't blank
+  if (sections.length === 0) {
+    sections.push({
+      label: "💤 REST WEEK",
+      accent: "#9CA3AF",
+      lines: ["No activity logged this week.", "Rest weeks count too — get back at it next week!"],
+    });
+  }
+
+  // Layout: divide vertical space evenly across sections.
+  // Reserve top padding for title, then split remaining height.
+  const totalLines = sections.reduce((s, sec) => s + 1 + sec.lines.length, 0); // 1 for label
+  const lineH = Math.round((h - innerPad * 2) / Math.max(totalLines, 1));
+  // Cap line height — too-tall lines look empty
+  const cappedLineH = Math.min(lineH, Math.round(w * 0.05));
+  const labelFontPx = Math.round(cappedLineH * 0.65);
+  const lineFontPx = Math.round(cappedLineH * 0.62);
+
+  let curY = y + innerPad + cappedLineH * 0.2;
+
+  sections.forEach((sec, idx) => {
+    // Section label
+    ctx.fillStyle = sec.accent;
+    ctx.font = `900 ${labelFontPx}px -apple-system, system-ui, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillText(sec.label, x + innerPad, curY + cappedLineH * 0.7);
+    curY += cappedLineH;
+
+    // Section lines
+    sec.lines.forEach(line => {
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = `700 ${lineFontPx}px -apple-system, system-ui, sans-serif`;
+      // Wrap long lines so they don't overflow the panel width
+      curY = wrapTextLine(ctx, line, x + innerPad, curY, w - innerPad * 2, cappedLineH);
+    });
+
+    // Spacer between sections (skip after last)
+    if (idx < sections.length - 1) curY += cappedLineH * 0.3;
+  });
+}
+
+/** Like wrapText but tracks vertical position and returns the new y. */
+function wrapTextLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number, y: number,
+  maxWidth: number, lineH: number
+): number {
+  const words = text.split(" ");
+  let line = "";
+  let curY = y;
+  for (let i = 0; i < words.length; i++) {
+    const test = line + (line ? " " : "") + words[i];
+    if (ctx.measureText(test).width > maxWidth && line.length > 0) {
+      ctx.fillText(line, x, curY + lineH * 0.7);
+      curY += lineH;
+      line = words[i];
+    } else {
+      line = test;
+    }
+  }
+  if (line) {
+    ctx.fillText(line, x, curY + lineH * 0.7);
+    curY += lineH;
+  }
+  return curY;
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineH: number) {
