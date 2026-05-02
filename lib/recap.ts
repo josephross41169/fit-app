@@ -21,10 +21,23 @@
 export type LogRow = {
   id?: string;
   log_type: string | null;
+  // Workout categorization. Schema has both `workout_category` and
+  // `workout_type` columns — both exist, populated by different code paths.
+  // We check workout_category first (post-page writes here) and fall back
+  // to workout_type for older entries.
   workout_category?: string | null;
+  workout_type?: string | null;
   exercises?: Array<{ name?: string; sets?: string; reps?: string; weight?: string; weights?: string[] }> | null;
   cardio?: Array<{ type?: string; duration?: string | number; distance?: string; miles?: number; mph?: number }> | null;
   wellness_type?: string | null;
+  // Real duration columns from the schema. Workouts and wellness sessions
+  // have separate per-type duration fields (in minutes). The previous
+  // `duration` field referenced a column that doesn't exist — that bug
+  // caused every recap to show 0 minutes for everything.
+  workout_duration_min?: number | string | null;
+  wellness_duration_min?: number | string | null;
+  /** Legacy / unused — kept for backwards compatibility with old code paths
+   *  that may have read this. Real reads should use the *_min columns. */
   duration?: number | string | null;
   logged_at?: string | null;
   created_at?: string | null;
@@ -189,7 +202,9 @@ export function buildRecap(
   const liftingMinutesByDay: Record<string, number> = {};
   liftingLogs.forEach(l => {
     const k = isoDateLocal(new Date(l.logged_at || l.created_at!));
-    const dur = parseDurationToMinutes(l.duration);
+    // Real column is workout_duration_min (integer minutes). Fall back to
+    // legacy `duration` field for any rows that might still have it.
+    const dur = parseDurationToMinutes(l.workout_duration_min ?? l.duration);
     liftingMinutesByDay[k] = (liftingMinutesByDay[k] || 0) + dur;
   });
 
@@ -256,24 +271,28 @@ export function buildRecap(
   inRange.forEach(l => {
     if (l.log_type !== "workout") return;
     const date = isoDateLocal(new Date(l.logged_at || l.created_at!));
+    // Workout categorization can live in either column. Read both, prefer
+    // workout_category since it's what the post-page uses for new entries.
+    const category = (l.workout_category || l.workout_type || "").toLowerCase();
 
     // Inline cardio[] entries (the explicit array)
     if (Array.isArray(l.cardio) && l.cardio.length > 0) {
       l.cardio.forEach(c => {
         const minutes = parseDurationToMinutes(c.duration);
         const miles = typeof c.miles === "number" ? c.miles : parseFloat(c.distance || "0") || 0;
-        const type = (c.type || l.workout_category || "cardio").toLowerCase();
+        const type = (c.type || category || "cardio").toLowerCase();
         if (minutes > 0 || miles > 0) {
           cardioEntries.push({ type, minutes, miles, date });
         }
       });
     } else if (
-      // Cardio category but no explicit entries — synthesize from top-level duration
-      ["running", "walking", "biking", "swimming", "rowing"].includes((l.workout_category || "").toLowerCase())
+      // Cardio category but no explicit entries — synthesize from top-level
+      // workout_duration_min. Old rows might use the legacy `duration` field.
+      ["running", "walking", "biking", "swimming", "rowing"].includes(category)
     ) {
-      const minutes = parseDurationToMinutes(l.duration);
+      const minutes = parseDurationToMinutes(l.workout_duration_min ?? l.duration);
       cardioEntries.push({
-        type: (l.workout_category || "cardio").toLowerCase(),
+        type: category || "cardio",
         minutes,
         miles: 0,
         date,
@@ -313,7 +332,9 @@ export function buildRecap(
   const wellnessByType: Record<string, number> = {};
   wellnessLogs.forEach(l => {
     const k = isoDateLocal(new Date(l.logged_at || l.created_at!));
-    const minutes = parseDurationToMinutes(l.duration);
+    // Real column is wellness_duration_min. Legacy `duration` checked as
+    // a defensive fallback for any old data that might exist.
+    const minutes = parseDurationToMinutes(l.wellness_duration_min ?? l.duration);
     wellnessMinutesByDay[k] = (wellnessMinutesByDay[k] || 0) + minutes;
     const type = (l.wellness_type || "Wellness").trim();
     wellnessByType[type] = (wellnessByType[type] || 0) + 1;
