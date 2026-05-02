@@ -91,6 +91,46 @@ export default function GroupChallengesPage() {
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
+  // Track which challenge's invite token was just copied so we can show
+  // a "✓ Copied" toast on the right button. Cleared after 2.5s.
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  /** Copy a challenge's public invite link to the clipboard. Tries the
+   *  Web Share API first on mobile (better UX than copying); falls back
+   *  to clipboard.writeText with a visual confirm. */
+  async function shareInvite(token: string) {
+    if (!token) return;
+    const url = typeof window !== "undefined"
+      ? `${window.location.origin}/challenge/${token}`
+      : `https://liveleeapp.com/challenge/${token}`;
+    // Try native share sheet first (mobile)
+    try {
+      if (typeof navigator !== "undefined" && (navigator as any).share) {
+        await (navigator as any).share({
+          title: "Join my Livelee challenge",
+          text: "I started a fitness challenge — come compete with me!",
+          url,
+        });
+        return;
+      }
+    } catch (e: any) {
+      // AbortError = user cancelled the native sheet — fall through to copy
+      if (e?.name && e.name !== "AbortError") {
+        // Some other share error; fall through to clipboard
+      } else if (e?.name === "AbortError") {
+        return;
+      }
+    }
+    // Clipboard fallback (desktop, or mobile without share API)
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(prev => prev === token ? null : prev), 2500);
+    } catch {
+      // Last resort: prompt with the URL so the user can copy manually
+      window.prompt("Copy this challenge link:", url);
+    }
+  }
 
   // Create form state
   const [form, setForm] = useState({
@@ -355,6 +395,17 @@ export default function GroupChallengesPage() {
                             padding:"6px 12px", borderRadius:10, border:`1px solid ${C.border}`,
                             background:"transparent", color:C.sub, fontSize:12, fontWeight:700, cursor:"pointer",
                           }}>📊 Board</button>
+                        )}
+                        {/* Share invite link — available for any challenge that has a token (all
+                            new ones do, post-migration). Copies a public link to the landing
+                            page where non-members can preview + join. */}
+                        {chal.invite_token && (chal.status === "open" || chal.status === "active") && (
+                          <button onClick={() => shareInvite(chal.invite_token)} style={{
+                            padding:"6px 12px", borderRadius:10, border:`1px solid ${C.purpleBorder}`,
+                            background:`${C.purple}1F`, color:C.purple, fontSize:12, fontWeight:800, cursor:"pointer",
+                          }}>
+                            {copiedToken === chal.invite_token ? "✓ Copied" : "🔗 Share"}
+                          </button>
                         )}
                         {/* Accept button for open challenges if we're a different group */}
                         {chal.status === "open" && !isCreator && !isOpponent && isAdmin && (
