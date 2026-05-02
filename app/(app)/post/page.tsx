@@ -356,6 +356,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [nutBuf,setNutBuf] = useState<Nutrition>(nutrition ?? {calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});
   const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
   const [showAllBadges, setShowAllBadges] = useState(false);
+  // PR celebration toast — shown briefly after saveWorkout if a new strict
+  // PR was detected. Local to DayCard so we don't have to plumb a prop
+  // through from the parent.
+  const [prToast, setPrToast] = useState<string | null>(null);
   const parts = day.id.split("/");
   const m = parseInt(parts[0]) || 1;
   const d = parseInt(parts[1]) || 1;
@@ -410,6 +414,9 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
     }));
     const cardioData = (woBuf.cardio || []).length > 0 ? woBuf.cardio : null;
+    // We need the saved log id for PR detection. Capture it from either
+    // path (update reuses workoutLogId; insert returns the new id).
+    let savedLogId: string | null = workoutLogId || null;
     if (workoutLogId) {
       // Update existing log — save ALL fields including cardio
       await supabase.from('activity_logs').update({
@@ -421,7 +428,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       }).eq('id', workoutLogId);
     } else if (user) {
       // No existing log for this day — insert a new one so it persists after refresh
-      await supabase.from('activity_logs').insert({
+      const { data: insertedRow } = await supabase.from('activity_logs').insert({
         user_id: user.id,
         log_type: 'workout',
         is_public: true,
@@ -431,7 +438,43 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         workout_calories: woBuf.calories || null,
         exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
         cardio: cardioData,
-      }).catch(() => {});
+      }).select('id').single().catch(() => ({ data: null }));
+      if (insertedRow && (insertedRow as any).id) {
+        savedLogId = (insertedRow as any).id;
+      }
+    }
+
+    // PERF NOTE: PR detection runs server-side via /api/db (admin client)
+    // because RLS blocks the client from reading other users' data, but
+    // this query only reads the current user's history so we could move
+    // it client-side later if /api/db hop becomes a bottleneck.
+    //
+    // We fire-and-forget — PRs are a nice-to-have notification, not
+    // critical. If the API call fails, the workout is still saved.
+    if (savedLogId && user && normalizedExercises.length > 0) {
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'detect_prs_from_log',
+            payload: { userId: user.id, logId: savedLogId },
+          }),
+        });
+        const data = await res.json();
+        if (data?.prs && Array.isArray(data.prs) && data.prs.length > 0) {
+          // Show celebration toast for the first PR. Multiple PRs in one
+          // session are rare; we mention how many extras quietly.
+          const first = data.prs[0];
+          const extra = data.prs.length > 1 ? ` (+${data.prs.length - 1} more)` : '';
+          const priorTxt = first.priorWeight != null && first.priorWeight > 0
+            ? ` (was ${first.priorWeight} lbs)`
+            : '';
+          setPrToast(`🏆 New PR! ${first.exercise_name}: ${first.weight} lbs${priorTxt}${extra}`);
+          // Auto-dismiss after 5 seconds
+          setTimeout(() => setPrToast(null), 5000);
+        }
+      } catch { /* PRs detection is best-effort */ }
     }
   }
 
@@ -548,6 +591,24 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
+    {/* PR celebration toast — shown briefly after a workout save that
+        triggered a strict PR. Auto-dismisses after 5s; tap dismisses early. */}
+    {prToast && (
+      <div
+        onClick={() => setPrToast(null)}
+        style={{
+          position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)",
+          background: "linear-gradient(135deg, #F5A623, #F97316)",
+          color: "#000", padding: "12px 20px", borderRadius: 14,
+          fontWeight: 900, fontSize: 14, zIndex: 9999,
+          boxShadow: "0 8px 24px rgba(245,166,35,0.4)",
+          maxWidth: "calc(100vw - 32px)", textAlign: "center",
+          cursor: "pointer", letterSpacing: "0.01em",
+        }}
+      >
+        {prToast}
+      </div>
+    )}
     <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
 
       {/* HEADER */}
