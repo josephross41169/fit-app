@@ -8,6 +8,7 @@ import { compressImage } from "@/lib/compressImage";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 import { ImagePresets } from "@/lib/imageUrls";
+import { shareWithToast } from "@/lib/share";
 
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
@@ -1777,32 +1778,18 @@ export default function GroupPage() {
   /** Share or copy a link to this group. Native share sheet on mobile,
    *  clipboard fallback on desktop. Was previously clipboard-only.
    *  Builds URL from window.location.origin so it works on prod and
-   *  preview deployments without baking the domain in. */
+   *  preview deployments without baking the domain in. Delegates to
+   *  the universal share helper. */
   async function shareGroup() {
     if (typeof window === 'undefined') return;
-    const url = window.location.href;
-    const shareData = {
-      title: `${group?.name || "Group"} on Livelee`,
-      text: `Check out ${group?.name || "this group"} on Livelee`,
-      url,
-    };
-    try {
-      if ((navigator as any).share) {
-        await (navigator as any).share(shareData);
-        return;
-      }
-    } catch (e: any) {
-      if (e?.name === "AbortError") return;
-    }
-    if (navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 2500);
-      } catch {
-        window.prompt("Copy this group link:", url);
-      }
-    }
+    await shareWithToast(
+      {
+        url: window.location.href,
+        title: `${group?.name || "Group"} on Livelee`,
+        text: `Check out ${group?.name || "this group"} on Livelee`,
+      },
+      setShareCopied
+    );
   }
 
   function submitPostComment(postId: string) {
