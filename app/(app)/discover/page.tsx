@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { getEventCategory } from "@/lib/eventCategories";
 import FollowButton from "@/components/FollowButton";
+import { ImagePresets } from "@/lib/imageUrls";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -129,7 +130,9 @@ interface LocalPost extends Post {
 // COMPONENTS
 // -----------------------------------------------------------------------------
 
-function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }) {
+// PERF: memoized so post cards in the Discover feed don't re-render on
+// every parent state change. See feed/PostCard for the full reasoning.
+const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }) {
   const { user } = useAuth();
   const [liked, setLiked] = useState(initLiked);
   // Support both mock (post.likes) and real DB (post.likes_count)
@@ -379,7 +382,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
                     />
                   ) : (
                     <img
-                      src={url}
+                      src={ImagePresets.feed(url)} loading="lazy" decoding="async"
                       alt=""
                       style={{
                         width:"100%",height:"100%",objectFit:"cover",display:"block",
@@ -536,7 +539,7 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
                   <div key={c.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                     <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#A78BFA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                       {cu.avatar_url
-                        ? <img src={cu.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                        ? <img src={ImagePresets.avatarSm(cu.avatar_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                         : cini}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
@@ -568,7 +571,14 @@ function DiscoverPost({ post, liked: initLiked }: { post: Post; liked: boolean }
       )}
     </div>
   );
-}
+}, (prev, next) => {
+  // Re-render only when post identity, like state, or current user changed.
+  return (
+    prev.post.id === next.post.id &&
+    prev.liked === next.liked &&
+    prev.post.likes === next.post.likes
+  );
+});
 
 // -- Local Event Card · renders a real event row from public.events_with_counts --
 interface DiscoverEvent {
@@ -1031,7 +1041,7 @@ export default function DiscoverPage() {
                       onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
                       onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
                       <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-                        {u.avatar_url ? <img src={u.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                        {u.avatar_url ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                       </div>
                       <div style={{ flex:1,minWidth:0 }}>
                         <div style={{ fontWeight:800,fontSize:14,color:C.text }}>{u.full_name}</div>
