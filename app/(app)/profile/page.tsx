@@ -1732,6 +1732,11 @@ export default function ProfilePage() {
           strengthLogs,
           // Newly added — 5K detection from running cardio entries
           fiveKLogs,
+          // Workout Partner — counts workout rows where tagged_user_ids has at
+          // least one entry. We use NOT IS NULL plus a Postgres array length
+          // check expressed as filter (`tagged_user_ids.cs.{}` doesn't work for
+          // "non-empty" — we use a server-side filter instead.)
+          partnerWorkoutsResult,
         ] = await Promise.all([
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
@@ -1776,6 +1781,11 @@ export default function ProfilePage() {
           // Easier than parsing JSON in Postgres. Distance lives inside the
           // cardio jsonb array as `[{ type, duration, distance }]`.
           supabase.from('activity_logs').select('cardio').eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
+          // Partner Workouts — count workout rows where tagged_user_ids is not
+          // null and has at least one element. The PostgREST filter `not.is.null`
+          // alone doesn't reject empty arrays, so we fetch the column and count
+          // client-side. Cheap because tagged_user_ids is small.
+          supabase.from('activity_logs').select('tagged_user_ids').eq('user_id', uid).eq('log_type', 'workout').not('tagged_user_ids', 'is', null),
         ]);
 
         // Compute strength PRs from exercises array. Each `weights` array entry
@@ -1819,6 +1829,14 @@ export default function ProfilePage() {
           (s: number, p: any) => s + (p.likes_count || 0), 0
         );
 
+        // Partner workouts — count rows where tagged_user_ids is a non-empty
+        // array. PostgREST returns the column raw; we filter empty arrays
+        // here so old rows without tags don't accidentally count.
+        const partnerRows = ((partnerWorkoutsResult as any).data || []) as any[];
+        const partnerWorkouts = partnerRows.filter(
+          (r: any) => Array.isArray(r.tagged_user_ids) && r.tagged_user_ids.length > 0
+        ).length;
+
         setBadgeCounters({
           runs: runs.count ?? 0,
           liftSessions: liftSessions.count ?? 0,
@@ -1856,6 +1874,7 @@ export default function ProfilePage() {
           deadliftMax,
           totalLiftMax,
           fiveKCount,
+          partnerWorkouts,
         });
       } catch (e) {
         console.error('Failed to fetch badge counters:', e);
