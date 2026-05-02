@@ -89,6 +89,8 @@ function notifText(n: Notif): string {
     case "comment_post": return "commented on your post";
     case "comment_activity": return "commented on your activity";
     case "badge": return `earned a badge: ${n.target_preview || "🏅"}`;
+    case "mention": return "mentioned you";
+    case "tag": return "tagged you in a post";
     default: return "interacted with you";
   }
 }
