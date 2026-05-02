@@ -10,6 +10,21 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key-for-build';
 const admin = createClient(supabaseUrl, serviceKey);
 
+/** Haversine distance in miles between two lat/lng points. Used by location
+ *  search ranking and the find-or-create dedup guard. Approximation is
+ *  accurate within a few feet over ~10mi distances which is plenty for our
+ *  1-mile dedup radius. */
+function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8; // Earth radius in miles
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 // Helper for the For You + Following feeds: takes raw post rows from
 // supabase, sorts each post's nested comments chronologically, and hydrates
 // the "_liked" boolean per viewer. Used by both the ranked For You feed
@@ -968,6 +983,94 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ ok: true });
+    }
+
+    // ── Search locations by name (for the picker) ──────────────────────────
+    // Returns a small ranked list. Order: business locations first (verified),
+    // then user-pinned spots. Optional `nearLat`/`nearLng` boosts ranking for
+    // geographically nearby pins. Limited to 12 results.
+    if (action === 'search_locations') {
+      const q = (payload?.query || '').trim();
+      const nearLat = typeof payload?.nearLat === 'number' ? payload.nearLat : null;
+      const nearLng = typeof payload?.nearLng === 'number' ? payload.nearLng : null;
+      if (!q) return NextResponse.json({ locations: [] });
+
+      const { data, error } = await admin
+        .from('locations')
+        .select('id, name, lat, lng, city, kind, business_user_id')
+        .ilike('name', `%${q}%`)
+        .limit(40);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Client-side ranking: business kind beats user_pin, then by proximity
+      // if user's coords were passed. We compute a rough km distance from
+      // (lat,lng) — Haversine isn't necessary at this scale.
+      let ranked = (data || []) as any[];
+      if (nearLat !== null && nearLng !== null) {
+        ranked = ranked.map(loc => ({
+          ...loc,
+          _dist: distanceMiles(loc.lat, loc.lng, nearLat, nearLng),
+        }));
+        ranked.sort((a, b) => {
+          if (a.kind === 'business' && b.kind !== 'business') return -1;
+          if (b.kind === 'business' && a.kind !== 'business') return 1;
+          return (a._dist ?? 999) - (b._dist ?? 999);
+        });
+      } else {
+        ranked.sort((a, b) => (a.kind === 'business' && b.kind !== 'business') ? -1 : 0);
+      }
+
+      return NextResponse.json({ locations: ranked.slice(0, 12) });
+    }
+
+    // ── Find or create a user-pinned location ──────────────────────────────
+    // Server-side dedup guard. The client also dedups but a race condition
+    // between two simultaneous "create" taps could create two pins within
+    // the same 1-mile radius — server checks once more before insert.
+    if (action === 'find_or_create_location') {
+      const { name, lat, lng, city, userId } = payload || {};
+      if (!name || typeof lat !== 'number' || typeof lng !== 'number' || !city || !userId) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+      const cleanName = String(name).trim().slice(0, 200);
+      if (!cleanName) return NextResponse.json({ error: 'Name required' }, { status: 400 });
+
+      // Bounding-box pre-filter: ~1mi at most latitudes is ~0.0145 degrees.
+      // We use 0.02 to be safe on diagonal corners, then exact-check in app.
+      const DEG_BOX = 0.02;
+      const { data: candidates } = await admin
+        .from('locations')
+        .select('id, name, lat, lng, city, kind, business_user_id')
+        .gte('lat', lat - DEG_BOX)
+        .lte('lat', lat + DEG_BOX)
+        .gte('lng', lng - DEG_BOX)
+        .lte('lng', lng + DEG_BOX);
+
+      const existing = (candidates || []).find((c: any) => distanceMiles(c.lat, c.lng, lat, lng) <= 1.0);
+      if (existing) {
+        return NextResponse.json({ location: existing, reused: true });
+      }
+
+      const { data: created, error } = await admin
+        .from('locations')
+        .insert({ name: cleanName, lat, lng, city: String(city).trim(), kind: 'user_pin', created_by: userId })
+        .select('id, name, lat, lng, city, kind, business_user_id')
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ location: created, reused: false });
+    }
+
+    // ── Get a single location by id (for rendering chips on feed cards) ────
+    if (action === 'get_location') {
+      const id = payload?.id || searchParams.get('id');
+      if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+      const { data, error } = await admin
+        .from('locations')
+        .select('id, name, lat, lng, city, kind')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ location: data });
     }
 
     // ── Create group post ──────────────────────────────────────────────────
