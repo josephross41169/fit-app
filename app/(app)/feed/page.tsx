@@ -1029,6 +1029,46 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
   const [likeLoading, setLikeLoading] = useState(false);
   const [commentLoading, setCommentLoading] = useState(false);
   const [brokenImage, setBrokenImage] = useState(false);
+  // Share button state — shows a "✓ Copied" confirmation for 2.5s after
+  // the user copies a post link to their clipboard.
+  const [shareCopied, setShareCopied] = useState(false);
+
+  /** Share or copy a permalink to this post. Tries native share sheet
+   *  on mobile, falls back to clipboard.writeText with a visible toast.
+   *  Used by the previously-broken Share button on each feed post.
+   *
+   *  Builds the URL from the current origin so it works both on
+   *  liveleeapp.com and on Vercel preview deployments without baking
+   *  the domain in. Mock posts (numeric ids without dashes) skip share
+   *  since they don't have public permalinks. */
+  async function sharePost() {
+    const isRealPost = typeof post.id === "string" && post.id.includes("-");
+    if (!isRealPost) return;
+    const url = typeof window !== "undefined"
+      ? `${window.location.origin}/post/${post.id}`
+      : `https://liveleeapp.com/post/${post.id}`;
+    const shareData = {
+      title: "Check out this post on Livelee",
+      text: post.caption ? post.caption.slice(0, 120) : "Check out this post on Livelee",
+      url,
+    };
+    try {
+      if (typeof navigator !== "undefined" && (navigator as any).share) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      // Other errors → fall through to clipboard
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
+    } catch {
+      window.prompt("Copy this post link:", url);
+    }
+  }
   // Carousel video mute toggle. Default muted because browsers refuse to
   // autoplay videos with audio (Chrome/Safari/Firefox all block this), and we
   // want the video to start playing the moment it becomes the active slide.
@@ -1379,12 +1419,18 @@ function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsR
               </svg>
               <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>{post.comments.length > 0 ? post.comments.length : ""} {post.comments.length === 1 ? "comment" : post.comments.length > 1 ? "comments" : "Comment"}</span>
             </button>
-            <button style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
+            <button
+              onClick={sharePost}
+              aria-label={shareCopied ? "Link copied" : "Share post"}
+              style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke={shareCopied ? C.green : C.sub} strokeWidth="2" style={{ width:20,height:20, transition: "stroke 0.2s" }}>
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
               </svg>
-              <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>Share</span>
+              <span style={{ fontSize:13,fontWeight:700,color: shareCopied ? C.green : C.sub, transition:"color 0.2s" }}>
+                {shareCopied ? "Copied" : "Share"}
+              </span>
             </button>
           </div>
         </div>
