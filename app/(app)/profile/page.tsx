@@ -3500,7 +3500,6 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
-            </div>
             <div style={{textAlign:"center",width:"100%"}}>
               {/* Profile name with tier treatments. L4 Gold gets a shimmering
                   gold gradient. L6 Diamond gets a holographic chrome effect.
