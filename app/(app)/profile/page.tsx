@@ -1303,10 +1303,15 @@ export default function ProfilePage() {
   const [customizationDetail, setCustomizationDetail] = useState<number | null>(null);
   const [repositionMode, setRepositionMode] = useState(false);
   const [bannerPosition, setBannerPosition] = useState(50); // 0-100, default center
+  // Banner zoom — 100 = fit to frame, 200 = 2x zoomed in. Lets the user
+  // scale their banner up to focus on a detail. Clamped 100-300.
+  const [bannerScale, setBannerScale] = useState(100);
   const [bannerHovered, setBannerHovered] = useState(false);
   const [dragState, setDragState] = useState<{ startY: number; startPos: number } | null>(null);
   const [avatarRepositionMode, setAvatarRepositionMode] = useState(false);
   const [avatarPosition, setAvatarPosition] = useState(50);
+  // Avatar zoom — same scheme as banner. 100 = fit, 200 = 2x.
+  const [avatarScale, setAvatarScale] = useState(100);
   const [avatarDragState, setAvatarDragState] = useState<{startY:number;startPos:number}|null>(null);
   const [brands,setBrands] = useState([{emoji:"👟",name:"New Balance"},{emoji:"👕",name:"Gym Shark"},{emoji:"🎧",name:"AirPods"}]);
 
@@ -1427,6 +1432,14 @@ export default function ProfilePage() {
       if ((user as any)?.profile?.banner_position !== undefined && (user as any)?.profile?.banner_position !== null) {
         setBannerPosition((user as any).profile.banner_position);
       }
+      // Banner zoom — local first, then Supabase
+      try {
+        const savedScale = localStorage.getItem(`banner_scale_${user.id}`);
+        if (savedScale !== null) setBannerScale(Math.max(100, Math.min(300, parseFloat(savedScale))));
+      } catch {}
+      if ((user as any)?.profile?.banner_scale !== undefined && (user as any)?.profile?.banner_scale !== null) {
+        setBannerScale((user as any).profile.banner_scale);
+      }
       // Load saved avatar position
       try {
         const savedAvatarPos = localStorage.getItem(`avatar_position_${user.id}`);
@@ -1434,6 +1447,14 @@ export default function ProfilePage() {
       } catch {}
       if ((user as any)?.profile?.avatar_position !== undefined && (user as any)?.profile?.avatar_position !== null) {
         setAvatarPosition((user as any).profile.avatar_position);
+      }
+      // Avatar zoom
+      try {
+        const savedAvatarScale = localStorage.getItem(`avatar_scale_${user.id}`);
+        if (savedAvatarScale !== null) setAvatarScale(Math.max(100, Math.min(300, parseFloat(savedAvatarScale))));
+      } catch {}
+      if ((user as any)?.profile?.avatar_scale !== undefined && (user as any)?.profile?.avatar_scale !== null) {
+        setAvatarScale((user as any).profile.avatar_scale);
       }
     }
   }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
@@ -2093,8 +2114,10 @@ export default function ProfilePage() {
   async function saveBannerPosition() {
     if (!user) return;
     try { localStorage.setItem(`banner_position_${user.id}`, String(bannerPosition)); } catch {}
-    // Try to save to Supabase (banner_position column may or may not exist)
-    supabase.from('users').update({ banner_position: bannerPosition } as any).eq('id', user.id).then(() => {});
+    try { localStorage.setItem(`banner_scale_${user.id}`, String(bannerScale)); } catch {}
+    // Try to save to Supabase (banner_position / banner_scale columns may
+    // or may not exist on older deployments — failures here are silent).
+    supabase.from('users').update({ banner_position: bannerPosition, banner_scale: bannerScale } as any).eq('id', user.id).then(() => {});
     setRepositionMode(false);
   }
 
@@ -2138,7 +2161,8 @@ export default function ProfilePage() {
   async function saveAvatarPosition() {
     if (!user) return;
     try { localStorage.setItem(`avatar_position_${user.id}`, String(avatarPosition)); } catch {}
-    supabase.from('users').update({ avatar_position: avatarPosition } as any).eq('id', user!.id).then(() => {});
+    try { localStorage.setItem(`avatar_scale_${user.id}`, String(avatarScale)); } catch {}
+    supabase.from('users').update({ avatar_position: avatarPosition, avatar_scale: avatarScale } as any).eq('id', user!.id).then(() => {});
     setAvatarRepositionMode(false);
   }
 
@@ -3424,7 +3448,7 @@ export default function ProfilePage() {
             >
               <TierFrame tier={userTier} size={avatarSize}>
               {profileImg
-                ? <img src={ImagePresets.avatarMd(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,display:"block",pointerEvents:"none"}} alt="Profile"/>
+                ? <img src={ImagePresets.full(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,transform:`scale(${avatarScale/100})`,transformOrigin:"center center",display:"block",pointerEvents:"none",transition:avatarDragState?"none":"transform 0.1s, object-position 0.1s"}} alt="Profile"/>
                 : <div style={{width:avatarSize-32,height:avatarSize-32,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label */}
@@ -3450,15 +3474,32 @@ export default function ProfilePage() {
                   <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
                 </button>
               )}
-              {/* Reposition mode controls */}
+              {/* Reposition mode controls — bottom of avatar circle. Slider
+                  lives BELOW the avatar (in the column wrapper) so it
+                  doesn't overlay the image. */}
               {avatarRepositionMode && (
-                <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,borderRadius:"50%",background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",padding:"8px",zIndex:10,pointerEvents:"none"}}>
-                  <div style={{display:"flex",gap:6,pointerEvents:"all"}}>
-                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
-                    <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(false);setAvatarDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Cancel</button>
-                  </div>
+                <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,borderRadius:"50%",background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px",zIndex:10,pointerEvents:"none"}}>
+                  <div style={{background:"rgba(0,0,0,0.7)",borderRadius:20,padding:"4px 12px",color:"#fff",fontSize:10,fontWeight:700}}>↕ Drag to move</div>
                 </div>
               )}
+            </div>
+            {/* Avatar zoom + save controls — outside the circle so the
+                slider has room. Only shown in reposition mode. */}
+            {avatarRepositionMode && (
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%",maxWidth:300}}>
+                <div style={{background:"rgba(0,0,0,0.85)",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:8,width:"100%"}}>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarScale(s=>Math.max(100,s-10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 4px",lineHeight:1}}>−</button>
+                  <input type="range" min={100} max={300} step={1} value={avatarScale} onChange={e=>setAvatarScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#7C3AED"}}/>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarScale(s=>Math.min(300,s+10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 4px",lineHeight:1}}>+</button>
+                  <span style={{color:"#fff",fontSize:10,fontWeight:700,minWidth:32,textAlign:"right"}}>{Math.round(avatarScale)}%</span>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarPosition(50);setAvatarScale(100);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 10px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Reset</button>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(false);setAvatarDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Cancel</button>
+                </div>
+              </div>
+            )}
             </div>
             <div style={{textAlign:"center",width:"100%"}}>
               {/* Profile name with tier treatments. L4 Gold gets a shimmering
@@ -3516,7 +3557,7 @@ export default function ProfilePage() {
               onTouchEnd={()=>setDragState(null)}
             >
               {bannerImg
-                ? <img src={ImagePresets.feed(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transition:dragState?"none":"object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
+                ? <img src={ImagePresets.full(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transform:`scale(${bannerScale/100})`,transformOrigin:"center center",transition:dragState?"none":"transform 0.1s, object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
               {/* Reposition button — show on hover or when in reposition mode.
                   Hidden on mobile via .hide-on-mobile (touch UX later). */}
@@ -3534,9 +3575,20 @@ export default function ProfilePage() {
               {repositionMode && (
                 <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",zIndex:10,pointerEvents:"none"}}>
                   <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"4px 14px",color:"#fff",fontSize:11,fontWeight:700}}>↕ Drag to reposition</div>
-                  <div style={{display:"flex",gap:8,pointerEvents:"all"}}>
-                    <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
-                    <button onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(false);setDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Done</button>
+                  <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"all",width:"100%",maxWidth:360}}>
+                    {/* Zoom slider — 100% to 300%. Click increments via the
+                        − / + buttons for precise control. */}
+                    <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,width:"100%"}}>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerScale(s=>Math.max(100,s-10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 6px",lineHeight:1}}>−</button>
+                      <input type="range" min={100} max={300} step={1} value={bannerScale} onChange={e=>setBannerScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#7C3AED"}}/>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerScale(s=>Math.min(300,s+10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 6px",lineHeight:1}}>+</button>
+                      <span style={{color:"#fff",fontSize:11,fontWeight:700,minWidth:36,textAlign:"right"}}>{Math.round(bannerScale)}%</span>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerPosition(50);setBannerScale(100);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Reset</button>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(false);setDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Done</button>
+                    </div>
                   </div>
                 </div>
               )}
