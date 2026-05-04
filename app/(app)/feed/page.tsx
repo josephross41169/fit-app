@@ -2980,6 +2980,12 @@ export default function FeedPage() {
                   {feedTab === "foryou" && streakInfo && streakInfo.days >= 2 && !streakInfo.loggedToday && !streakDismissed && (
                     <StreakCard days={streakInfo.days} onDismiss={dismissStreakCard} onLog={() => router.push('/post')} />
                   )}
+                  {/* New Members panel — recently joined users, your city first.
+                      Only shows on For You. Lives in the center column near the
+                      top so people can browse who's just joined the community. */}
+                  {feedTab === "foryou" && newMembers.length > 0 && user && (
+                    <NewMembersPanel members={newMembers} currentUser={user as any} />
+                  )}
                   {/* Empty state only when there's truly nothing — no feed
                       posts AND no activity. Previously this said "no posts"
                       even when the user had logged plenty of activity. */}
@@ -3049,11 +3055,6 @@ export default function FeedPage() {
                 >
                   {loadingMoreActivity ? "Loading…" : "Load More ↓"}
                 </button>
-              </div>
-            )}
-            {newMembers.length > 0 && user && (
-              <div style={{ padding:"0 4px", marginTop:8 }}>
-                <NewMembersPanel members={newMembers} currentUser={user as any} />
               </div>
             )}
             <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
@@ -3150,11 +3151,6 @@ export default function FeedPage() {
           transition: ptrPullPx === 0 ? "transform 0.2s ease-out" : undefined,
         }}>
         <div style={{ height:1,background:"#2D1F52",margin:"12px 0 16px" }}/>
-        {newMembers.length > 0 && user && feedTab !== "notifications" && (
-          <div style={{ padding:"0 4px", marginBottom:16 }}>
-            <NewMembersPanel members={newMembers} currentUser={user as any} />
-          </div>
-        )}
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
             <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
@@ -3241,6 +3237,11 @@ export default function FeedPage() {
             it doesn't keep re-appearing every load. */}
         {feedTab === "foryou" && streakInfo && streakInfo.days >= 2 && !streakInfo.loggedToday && !streakDismissed && (
           <StreakCard days={streakInfo.days} onDismiss={dismissStreakCard} onLog={() => router.push('/post')} />
+        )}
+        {/* New Members panel — same placement as desktop, right under the
+            Recap/Streak banners, above the interleaved feed. */}
+        {feedTab === "foryou" && newMembers.length > 0 && user && (
+          <NewMembersPanel members={newMembers} currentUser={user as any} />
         )}
         {mobileItems.length === 0 && !loadingFeed && (
           <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
