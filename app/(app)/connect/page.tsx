@@ -572,7 +572,25 @@ function NearbyPlaces() {
 // ─────────────────────────────────────────────────────────────────────────────
 // RIGHT SIDEBAR
 // ─────────────────────────────────────────────────────────────────────────────
-function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joined"; onCreateGroup: () => void }) {
+function ConnectSidebar({
+  tab, onCreateGroup,
+  categoryFilter, setCategoryFilter,
+  groupCounts,
+  stats,
+}: {
+  tab: "local" | "online" | "joined";
+  onCreateGroup: () => void;
+  // The currently-active category filter ("all" or a category name).
+  // Lives in the parent so the main groups list can react to it.
+  categoryFilter: string;
+  setCategoryFilter: (cat: string) => void;
+  // Per-category counts for the visible (local or online) group list,
+  // so we can show "Running (3)" etc. and grey out empty categories.
+  groupCounts: Record<string, number>;
+  // Real stats panel data. Computed in parent from dbGroups so we don't
+  // show the previous hardcoded "4+ groups, 1,050+ members" placeholders.
+  stats: { active: number; members: number };
+}) {
   const effectiveTab = tab === "joined" ? "online" : tab;
   return (
     <div className="connect-sidebar" style={{ width:320, flexShrink:0, paddingTop:20, paddingBottom:20 }}>
@@ -592,17 +610,18 @@ function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joi
         </button>
       </div>
 
-      {/* Stats panel */}
+      {/* Stats panel — counts come from the real groups list. We removed
+          the placeholder "Featured Groups", "Trending Now", and the
+          "Free To Join" cell since they were either hardcoded or
+          obvious. Active count + total members is enough. */}
       <div style={{ background:C.darkCard, borderRadius:16, border:`1px solid ${C.darkBorder}`, padding:"16px", marginBottom:16 }}>
         <div style={{ fontWeight:900, fontSize:14, color:"#E2E8F0", marginBottom:12 }}>
           {effectiveTab==="local" ? "📍 Las Vegas Groups" : "🌍 Global Stats"}
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
           {[
-            { val: effectiveTab==="local" ? "4+" : "6+", label: effectiveTab==="local" ? "Active Groups" : "Featured Groups" },
-            { val: effectiveTab==="local" ? "1,050+" : "211K+", label:"Total Members" },
-            { val: effectiveTab==="local" ? "4" : "3", label: effectiveTab==="local" ? "Events This Week" : "Trending Now" },
-            { val:"Free", label:"To Join" },
+            { val: String(stats.active), label: effectiveTab==="local" ? "Active Groups" : "Total Groups" },
+            { val: stats.members > 0 ? stats.members.toLocaleString() : "—", label: "Total Members" },
           ].map((s,i) => (
             <div key={i} style={{ background:"#252A3D", borderRadius:10, padding:"12px 10px", textAlign:"center" }}>
               <div style={{ fontSize:18, fontWeight:900, color:C.blue }}>{s.val}</div>
@@ -612,15 +631,43 @@ function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joi
         </div>
       </div>
 
-      {/* Popular categories */}
+      {/* Popular categories — drives the main groups list filter. The
+          "All" pill clears the filter; tapping a category pill again
+          while it's active also clears (toggle behavior). */}
       <div style={{ background:C.darkCard, borderRadius:16, border:`1px solid ${C.darkBorder}`, padding:"16px", marginBottom:16 }}>
         <div style={{ fontWeight:900, fontSize:14, color:"#E2E8F0", marginBottom:12 }}>Browse by Category</div>
         <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-          {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
-            <button key={cat} style={{ padding:"6px 14px", borderRadius:99, border:`1.5px solid ${color}44`, background:`${color}18`, color:color, fontSize:11, fontWeight:800, cursor:"pointer" }}>
-              {cat}
-            </button>
-          ))}
+          {/* "All" pill — always present so users can clear the filter */}
+          <button
+            onClick={() => setCategoryFilter("all")}
+            style={{
+              padding:"6px 14px", borderRadius:99,
+              border: categoryFilter === "all" ? "1.5px solid #A78BFA" : "1.5px solid #2D1B6944",
+              background: categoryFilter === "all" ? "#7C3AED" : "#1A0D3E18",
+              color: categoryFilter === "all" ? "#fff" : "#A78BFA",
+              fontSize:11, fontWeight:800, cursor:"pointer",
+            }}
+          >All</button>
+          {Object.entries(CATEGORY_COLORS).map(([cat, color]) => {
+            const isActive = categoryFilter === cat;
+            const count = groupCounts[cat] || 0;
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(isActive ? "all" : cat)}
+                style={{
+                  padding:"6px 14px", borderRadius:99,
+                  border: `1.5px solid ${isActive ? color : color + "44"}`,
+                  background: isActive ? color : `${color}18`,
+                  color: isActive ? "#fff" : color,
+                  fontSize:11, fontWeight:800, cursor:"pointer",
+                  opacity: count === 0 && !isActive ? 0.5 : 1,
+                }}
+              >
+                {cat}{count > 0 && <span style={{ opacity: 0.7, marginLeft: 4 }}>· {count}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -714,14 +761,28 @@ function ConnectPageInner() {
   // Show only real DB groups. The mock fallbacks created the impression that
   // there were real Las Vegas groups when there weren't — better to show an
   // honest empty state and let users create the first one.
+  // Category filter applied to both Local and Online groups (driven by
+  // the "Browse by Category" pills in the sidebar). "all" = no filter.
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  // Filtered to Local / Online — also respects the search text and
+  // sidebar category filter. We deliberately let the sidebar filter
+  // affect both Local and Online tabs since the same chips render on both.
   const allLocal = dbGroups.filter(g => g.is_local);
   const allOnline = dbGroups.filter(g => !g.is_local);
 
+  const matchesCategoryFilter = (g: any) => {
+    if (categoryFilter === "all") return true;
+    return (g.category || "").toLowerCase() === categoryFilter.toLowerCase();
+  };
+
   const filteredLocal = allLocal.filter(g =>
-    !search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category.toLowerCase().includes(search.toLowerCase())
+    matchesCategoryFilter(g) &&
+    (!search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category.toLowerCase().includes(search.toLowerCase()))
   );
   const filteredOnline = allOnline.filter(g =>
-    !search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category.toLowerCase().includes(search.toLowerCase())
+    matchesCategoryFilter(g) &&
+    (!search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category.toLowerCase().includes(search.toLowerCase()))
   );
 
   function handleGroupCreated(group: any) {
@@ -896,7 +957,29 @@ function ConnectPageInner() {
           )}
         </div>
 
-        <ConnectSidebar tab={tab as "local" | "online" | "joined"} onCreateGroup={() => setShowCreateModal(true)} />
+        <ConnectSidebar
+          tab={tab as "local" | "online" | "joined"}
+          onCreateGroup={() => setShowCreateModal(true)}
+          categoryFilter={categoryFilter}
+          setCategoryFilter={setCategoryFilter}
+          groupCounts={(() => {
+            // Per-category counts for the *visible* tab (local vs online).
+            // We don't include "joined" because that tab has its own
+            // category filter row in the main content area.
+            const source = tab === "online" ? allOnline : allLocal;
+            const counts: Record<string, number> = {};
+            for (const g of source) {
+              const cat = g.category || "General";
+              counts[cat] = (counts[cat] || 0) + 1;
+            }
+            return counts;
+          })()}
+          stats={{
+            active: tab === "online" ? allOnline.length : allLocal.length,
+            members: (tab === "online" ? allOnline : allLocal)
+              .reduce((sum, g: any) => sum + (g.members || 0), 0),
+          }}
+        />
       </div>
     </div>
   );
