@@ -11,6 +11,7 @@ import FollowButton from "@/components/FollowButton";
 import ReportModal, { ReportTarget } from "@/components/ReportModal";
 import { clearBlockCache } from "@/lib/blocks";
 import { BUSINESS_TYPES, getBusinessType } from "@/lib/businessTypes";
+import GymLeaderboard from "@/components/GymLeaderboard";
 
 interface BusinessProfileViewProps {
   profile: any;
@@ -20,7 +21,7 @@ interface BusinessProfileViewProps {
   onProfileUpdate?: () => void;
 }
 
-type TabKey = "posts" | "events" | "groups" | "about";
+type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard";
 const HIGHLIGHT_SLOTS = 9;
 
 const DAYS: { key: string; label: string }[] = [
@@ -47,7 +48,7 @@ export default function BusinessProfileView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "") as TabKey;
-    if (["posts", "events", "groups", "about"].includes(hash)) setActiveTab(hash);
+    if (["posts", "events", "groups", "about", "leaderboard"].includes(hash)) setActiveTab(hash);
   }, []);
   function switchTab(t: TabKey) {
     setActiveTab(t);
@@ -367,13 +368,17 @@ export default function BusinessProfileView({
         )}
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+        <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24, overflowX: "auto" }}>
           {([
-            { key: "posts", label: "📸 Posts" },
-            { key: "events", label: "📅 Events" },
-            { key: "groups", label: "👥 Groups" },
-            { key: "about", label: "ℹ️ About" },
-          ] as const).map(t => (
+            { key: "posts", label: "📸 Posts", show: true },
+            // Leaderboard only renders for gym-type businesses since the
+            // category set (bench/squat/deadlift/etc.) doesn't make sense
+            // for, say, a yoga studio. Could be opened up later.
+            { key: "leaderboard", label: "🏆 Leaderboard", show: profile.business_type === "gym" },
+            { key: "events", label: "📅 Events", show: true },
+            { key: "groups", label: "👥 Groups", show: true },
+            { key: "about", label: "ℹ️ About", show: true },
+          ] as const).filter(t => t.show).map(t => (
             <button key={t.key} onClick={() => switchTab(t.key)} style={{
               padding: "11px 18px",
               background: "transparent",
@@ -384,6 +389,8 @@ export default function BusinessProfileView({
               fontSize: 14,
               cursor: "pointer",
               marginBottom: -1,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}>{t.label}</button>
           ))}
         </div>
@@ -419,6 +426,13 @@ export default function BusinessProfileView({
               Posts feed coming soon — announcements and content you publish.
             </div>
           </>
+        )}
+
+        {activeTab === "leaderboard" && (
+          <GymLeaderboard
+            gymId={profile.id}
+            isOwner={viewingOwn}
+          />
         )}
 
         {activeTab === "events" && (
