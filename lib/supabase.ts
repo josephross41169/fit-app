@@ -1,3 +1,7 @@
+// Side-effect import: installs the mobile /api/* fetch redirect (no-op on web).
+// MUST stay at the very top so it runs before any API call fires.
+import './mobileFetchShim'
+
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 
