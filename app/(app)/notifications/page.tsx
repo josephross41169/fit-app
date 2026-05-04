@@ -91,6 +91,7 @@ function notifText(n: Notif): string {
     case "badge": return `earned a badge: ${n.target_preview || "🏅"}`;
     case "mention": return "mentioned you";
     case "tag": return "tagged you in a post";
+    case "buddy_matched": return "matched with you as a workout buddy";
     default: return "interacted with you";
   }
 }
