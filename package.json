@@ -10,7 +10,7 @@
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "build:mobile": "cross-env NEXT_BUILD_TARGET=mobile next build && npx cap sync"
+    "build:mobile": "node ./scripts/build-mobile.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
@@ -25,7 +25,9 @@
     "@capacitor/status-bar": "^8.0.2",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.100.1",
+    "@zxing/browser": "^0.1.5",
     "lucide-react": "^0.544.0",
+    "mapbox-gl": "^3.7.0",
     "next": "14.2.35",
     "openai": "^6.34.0",
     "posthog-js": "^1.276.1",
@@ -35,6 +37,7 @@
     "recharts": "^3.8.1"
   },
   "devDependencies": {
+    "@types/mapbox-gl": "^3.4.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
