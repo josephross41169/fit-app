@@ -403,6 +403,11 @@ export default function UserProfilePage() {
   // count multi-workout days correctly when given the raw rows.
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
   const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
+  // Set of badge IDs that are pinned (top-5). Used to highlight them
+  // visually in the public profile badge grid.
+  const [pinnedBadgeIds, setPinnedBadgeIds] = useState<Set<string>>(new Set());
+  // Active public goals shown under highlights on the public profile.
+  const [profileGoals, setProfileGoals] = useState<any[]>([]);
 
   // Responsive layout. Matches the own-profile breakpoint (768px) so both pages
   // collapse to vertical stack at the same width.
@@ -665,12 +670,38 @@ export default function UserProfilePage() {
         setDays(builtDays);
       }
 
-      // Load badges
+      // Load badges with pin info — used to show pinned first on public profile
       const { data: badgeData } = await supabase
         .from('badges')
-        .select('badge_id')
+        .select('badge_id, pin_slot')
         .eq('user_id', profileData.id);
-      if (badgeData) setEarnedBadges(badgeData.map((b: any) => b.badge_id));
+      if (badgeData) {
+        // Sort: pinned first (by slot 1-5), then unpinned alphabetically
+        const sorted = (badgeData as any[]).sort((a, b) => {
+          const ap = a.pin_slot ?? 999;
+          const bp = b.pin_slot ?? 999;
+          if (ap !== bp) return ap - bp;
+          return a.badge_id.localeCompare(b.badge_id);
+        });
+        setEarnedBadges(sorted.map((b: any) => b.badge_id));
+        setPinnedBadgeIds(new Set(
+          sorted.filter((b: any) => b.pin_slot != null).map((b: any) => b.badge_id)
+        ));
+      }
+
+      // Load active public goals for this user (visible on their profile)
+      const { data: goalsData } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', profileData.id)
+        .eq('is_completed', false)
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(8);
+      if (goalsData) {
+        const now = Date.now();
+        setProfileGoals(goalsData.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
+      }
 
       setLoading(false);
     }
@@ -1152,6 +1183,46 @@ export default function UserProfilePage() {
                 <div style={{marginTop:10,fontSize:11,color:C.sub,textAlign:"center"}}>{highlights.length}/{HIGHLIGHT_SLOTS} photos</div>
               )}
             </div>
+
+            {/* Goals card — read-only view of this user's active public
+                goals with progress bars. Mirrors the own-profile card but
+                with no "+ New" button (you can't set goals for someone else). */}
+            {profileGoals.length > 0 && (
+              <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                  <div style={{fontWeight:900,fontSize:17,color:C.text}}>🎯 Goals</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {profileGoals.slice(0, 5).map((g: any) => {
+                    const pct = Math.min(100, (g.current / g.target) * 100);
+                    return (
+                      <div key={g.id} style={{
+                        background:"#1A1228",borderRadius:14,padding:"10px 12px",
+                        border:"1px solid #3D2A6E",
+                      }}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                          <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
+                          <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {g.title}
+                          </div>
+                          <div style={{fontSize:10,fontWeight:800,color:"#A78BFA",flexShrink:0}}>
+                            {Math.round(g.current)}/{g.target}
+                          </div>
+                        </div>
+                        <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
+                          <div style={{
+                            height:"100%",
+                            width:`${pct}%`,
+                            background:`linear-gradient(90deg, #7C3AED, #A78BFA)`,
+                            borderRadius:99,
+                          }}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* CENTER — Activity Log */}
@@ -1193,13 +1264,46 @@ export default function UserProfilePage() {
                 </div>
               ) : (
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  {BADGES.filter(b=>earnedBadges.includes(b.id)).map(b=>(
-                    <div key={b.id} style={{borderRadius:16,padding:"14px 8px",textAlign:"center",border:"1.5px solid #F5A623",background:"linear-gradient(135deg,#2A1F00,#3D2D00)",boxShadow:"0 0 16px rgba(245,166,35,0.4)"}}>
-                      <div style={{fontSize:26,marginBottom:4}}>{b.emoji}</div>
-                      <div style={{fontWeight:800,fontSize:11,color:"#FFD700",lineHeight:1.3}}>{b.label}</div>
-                      <div style={{fontSize:10,color:"#B8860B",marginTop:3,lineHeight:1.3}}>{b.desc}</div>
-                    </div>
-                  ))}
+                  {/* Sort badges: pinned first (in earnedBadges order, which
+                      already reflects pin slot 1-5), then the rest. The
+                      pinned set is rendered with a sparkle emoji + brighter
+                      shadow so they visibly stand out. */}
+                  {BADGES.filter(b=>earnedBadges.includes(b.id))
+                    .sort((a, b) => {
+                      const ai = earnedBadges.indexOf(a.id);
+                      const bi = earnedBadges.indexOf(b.id);
+                      return ai - bi;
+                    })
+                    .map(b=>{
+                      const isPinned = pinnedBadgeIds.has(b.id);
+                      return (
+                        <div key={b.id} style={{
+                          borderRadius:16,
+                          padding:"14px 8px",
+                          textAlign:"center",
+                          border: isPinned ? "2px solid #FBBF24" : "1.5px solid #F5A623",
+                          background: isPinned
+                            ? "linear-gradient(135deg,#3D2D00,#5C4400)"
+                            : "linear-gradient(135deg,#2A1F00,#3D2D00)",
+                          boxShadow: isPinned
+                            ? "0 0 24px rgba(251,191,36,0.7), 0 0 12px rgba(251,191,36,0.5)"
+                            : "0 0 16px rgba(245,166,35,0.4)",
+                          position: "relative",
+                        }}>
+                          {isPinned && (
+                            <div style={{
+                              position: "absolute", top: 4, right: 6,
+                              fontSize: 10, fontWeight: 900,
+                              background: "#FBBF24", color: "#3D2D00",
+                              padding: "2px 6px", borderRadius: 99,
+                            }}>📌</div>
+                          )}
+                          <div style={{fontSize:26,marginBottom:4}}>{b.emoji}</div>
+                          <div style={{fontWeight:800,fontSize:11,color: isPinned ? "#FFE58A" : "#FFD700",lineHeight:1.3}}>{b.label}</div>
+                          <div style={{fontSize:10,color:"#B8860B",marginTop:3,lineHeight:1.3}}>{b.desc}</div>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
