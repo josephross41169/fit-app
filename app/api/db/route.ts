@@ -785,19 +785,31 @@ export async function POST(req: NextRequest) {
         .from('conversation_participants').select('conversation_id').eq('user_id', userId);
       if (!partRows || partRows.length === 0) return NextResponse.json({ conversations: [] });
       const convIds = partRows.map((p: any) => p.conversation_id);
-      // Pull group_id alongside the rest. If group_id is non-null this is a
-      // group chat; we surface the group name + emoji as the "other user"
-      // shape so the existing UI can render it without big changes.
-      const { data: convRows } = await admin
+
+      // Try the group-aware query first. If the conversations table doesn't
+      // have a group_id column yet (migration not run), Supabase returns an
+      // error and we fall back to the legacy DM-only query.
+      // This keeps the messages page working pre-migration AND gives us
+      // group chats post-migration without any code change.
+      let convRows: any[] | null = null;
+      const groupAware = await admin
         .from('conversations')
-        .select(`id, created_at, group_id, group:group_id(id,name,emoji,slug), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+        .select(`id, created_at, group_id, group:groups!conversations_group_id_fkey(id,name,emoji,slug), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
         .in('id', convIds);
+      if (groupAware.error) {
+        // Fall back to legacy schema (no group_id) so DMs still load.
+        const legacy = await admin
+          .from('conversations')
+          .select(`id, created_at, conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+          .in('id', convIds);
+        convRows = legacy.data || [];
+      } else {
+        convRows = groupAware.data || [];
+      }
+
       const conversations = (convRows || []).map((row: any) => {
         const msgs = (row.messages || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         const isGroup = !!row.group_id;
-        // For DMs the "other user" is the participant that isn't me. For
-        // groups we synthesize a pseudo-user from the group info so the
-        // existing list UI doesn't need to special-case rendering.
         let otherUser: any;
         if (isGroup && row.group) {
           otherUser = {
