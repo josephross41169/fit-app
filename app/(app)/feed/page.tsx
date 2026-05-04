@@ -3051,6 +3051,11 @@ export default function FeedPage() {
                 </button>
               </div>
             )}
+            {newMembers.length > 0 && user && (
+              <div style={{ padding:"0 4px", marginTop:8 }}>
+                <NewMembersPanel members={newMembers} currentUser={user as any} />
+              </div>
+            )}
             <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
               <div>
                 <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>Suggested For You</div>
@@ -3145,6 +3150,11 @@ export default function FeedPage() {
           transition: ptrPullPx === 0 ? "transform 0.2s ease-out" : undefined,
         }}>
         <div style={{ height:1,background:"#2D1F52",margin:"12px 0 16px" }}/>
+        {newMembers.length > 0 && user && feedTab !== "notifications" && (
+          <div style={{ padding:"0 4px", marginBottom:16 }}>
+            <NewMembersPanel members={newMembers} currentUser={user as any} />
+          </div>
+        )}
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
             <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
