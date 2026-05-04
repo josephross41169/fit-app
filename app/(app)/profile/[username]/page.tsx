@@ -408,6 +408,10 @@ export default function UserProfilePage() {
   const [pinnedBadgeIds, setPinnedBadgeIds] = useState<Set<string>>(new Set());
   // Active public goals shown under highlights on the public profile.
   const [profileGoals, setProfileGoals] = useState<any[]>([]);
+  // Past (completed/expired) goals for the viewed user. Read-only here
+  // since you can't manage another person's goals.
+  const [profilePastGoals, setProfilePastGoals] = useState<any[]>([]);
+  const [profileGoalsHistoryTab, setProfileGoalsHistoryTab] = useState<"active"|"past">("active");
 
   // Responsive layout. Matches the own-profile breakpoint (768px) so both pages
   // collapse to vertical stack at the same width.
@@ -689,18 +693,27 @@ export default function UserProfilePage() {
         ));
       }
 
-      // Load active public goals for this user (visible on their profile)
+      // Load goals for this user (public only). Active and past are
+      // both fetched here so the user can flip between them without an
+      // additional round-trip on tab change.
       const { data: goalsData } = await supabase
         .from('goals')
         .select('*')
         .eq('user_id', profileData.id)
-        .eq('is_completed', false)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
-        .limit(8);
+        .limit(20);
       if (goalsData) {
         const now = Date.now();
-        setProfileGoals(goalsData.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
+        const active: any[] = [];
+        const past: any[] = [];
+        for (const g of goalsData as any[]) {
+          const expired = g.window_end && new Date(g.window_end).getTime() <= now;
+          if (g.is_completed === true || expired) past.push(g);
+          else active.push(g);
+        }
+        setProfileGoals(active.slice(0, 8));
+        setProfilePastGoals(past.slice(0, 12));
       }
 
       setLoading(false);
@@ -1187,40 +1200,75 @@ export default function UserProfilePage() {
             {/* Goals card — read-only view of this user's active public
                 goals with progress bars. Mirrors the own-profile card but
                 with no "+ New" button (you can't set goals for someone else). */}
-            {profileGoals.length > 0 && (
+            {(profileGoals.length > 0 || profilePastGoals.length > 0) && (
               <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                   <div style={{fontWeight:900,fontSize:17,color:C.text}}>🎯 Goals</div>
                 </div>
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {profileGoals.slice(0, 5).map((g: any) => {
-                    const pct = Math.min(100, (g.current / g.target) * 100);
+
+                {/* Active/Past toggle — read-only on public profile (no
+                    +New button since you can't author for someone else). */}
+                <div style={{display:"flex",gap:4,marginBottom:14,background:"#0D0820",borderRadius:8,padding:3}}>
+                  {([
+                    {key:"active",label:`Active${profileGoals.length?` (${profileGoals.length})`:""}`},
+                    {key:"past",  label:`Past${profilePastGoals.length?` (${profilePastGoals.length})`:""}`},
+                  ] as const).map(t=>(
+                    <button key={t.key} onClick={()=>setProfileGoalsHistoryTab(t.key)} style={{
+                      flex:1,padding:"6px 4px",borderRadius:6,border:"none",cursor:"pointer",
+                      fontWeight:700,fontSize:11,
+                      background:profileGoalsHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                      color:profileGoalsHistoryTab===t.key?"#fff":"#9CA3AF",
+                    }}>{t.label}</button>
+                  ))}
+                </div>
+
+                {(() => {
+                  const list = profileGoalsHistoryTab === "active" ? profileGoals : profilePastGoals;
+                  if (list.length === 0) {
                     return (
-                      <div key={g.id} style={{
-                        background:"#1A1228",borderRadius:14,padding:"10px 12px",
-                        border:"1px solid #3D2A6E",
-                      }}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                          <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
-                          <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {g.title}
-                          </div>
-                          <div style={{fontSize:10,fontWeight:800,color:"#A78BFA",flexShrink:0}}>
-                            {Math.round(g.current)}/{g.target}
-                          </div>
-                        </div>
-                        <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
-                          <div style={{
-                            height:"100%",
-                            width:`${pct}%`,
-                            background:`linear-gradient(90deg, #7C3AED, #A78BFA)`,
-                            borderRadius:99,
-                          }}/>
-                        </div>
+                      <div style={{textAlign:"center",padding:"16px 8px",color:C.sub,fontSize:12}}>
+                        {profileGoalsHistoryTab === "active" ? "No active goals." : "No past goals yet."}
                       </div>
                     );
-                  })}
-                </div>
+                  }
+                  return (
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {list.slice(0, 5).map((g: any) => {
+                        const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
+                        const completedSuccessfully = g.is_completed === true;
+                        const isPast = profileGoalsHistoryTab === "past";
+                        return (
+                          <div key={g.id} style={{
+                            background: isPast && completedSuccessfully ? "rgba(74,222,128,0.08)" : "#1A1228",
+                            borderRadius:14,padding:"10px 12px",
+                            border:`1px solid ${isPast && completedSuccessfully ? "#4ADE80" : "#3D2A6E"}`,
+                            opacity: isPast && !completedSuccessfully ? 0.7 : 1,
+                          }}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                              <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
+                              <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                {g.title}
+                              </div>
+                              <div style={{fontSize:10,fontWeight:800,color: completedSuccessfully ? "#4ADE80" : "#A78BFA",flexShrink:0}}>
+                                {completedSuccessfully ? "✓ Done" : `${Math.round(g.current)}/${g.target}`}
+                              </div>
+                            </div>
+                            <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
+                              <div style={{
+                                height:"100%",
+                                width:`${pct}%`,
+                                background: completedSuccessfully
+                                  ? "linear-gradient(90deg, #4ADE80, #22C55E)"
+                                  : "linear-gradient(90deg, #7C3AED, #A78BFA)",
+                                borderRadius:99,
+                              }}/>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
