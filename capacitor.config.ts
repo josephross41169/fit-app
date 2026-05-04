@@ -15,12 +15,14 @@ const config: CapacitorConfig = {
   appId: 'com.liveleeapp.app',
   appName: 'Livelee',
   webDir: 'out',
-  // ─── No `server` block ───────────────────────────────────────────────
-  // Removing server.url makes Capacitor load bundled assets instead of
-  // pointing the WebView at a remote URL. This was the cause of the
-  // TestFlight Safari issue: with server.url set, navigation could
-  // escape the WebView in some flows. Bundled mode keeps everything
-  // sandboxed inside the app.
+  server: {
+    // Production URL — points at the live site. Capacitor wraps the deployed
+    // web app rather than embedding a static build, so any code push that
+    // ships to Vercel reaches the iOS/Android shell instantly without a
+    // store re-submission. (Native code changes still require re-submission.)
+    url: 'https://liveleeapp.com',
+    cleartext: false,
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
@@ -45,6 +47,8 @@ const config: CapacitorConfig = {
     // sensitive permission. Missing or vague strings are the #1 reason iOS
     // builds get rejected at App Review. Each string lands in Info.plist
     // under the corresponding NS*UsageDescription key when Capacitor syncs.
+    // Edit if any feature wording changes — these texts are user-facing
+    // (shown in the iOS permission prompt).
     contentInset: 'automatic',
   },
 };
