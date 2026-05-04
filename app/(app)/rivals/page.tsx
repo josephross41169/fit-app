@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import {
   joinQueue, leaveQueue, getQueueEntry,
   getActiveRivalry, getLiveScores, getUserRecord,
@@ -627,6 +628,253 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKOUT BUDDY PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Cooperative 2-week challenge. Same matchmaking shape as rivals (pick
+// category, pick tier, queue) but the result is shared progress —  both
+// users hit the target = both win. No head-to-head competition.
+//
+// Categories supported: running, walking, biking, lifting, swimming, combat.
+// Targets defined server-side in /api/db buddy_request_match.
+
+const BUDDY_CATEGORIES: Array<{ id: string; emoji: string; name: string; desc: string }> = [
+  { id: "running",  emoji: "🏃", name: "Running",  desc: "Miles together over 14 days" },
+  { id: "walking",  emoji: "🚶", name: "Walking",  desc: "Steps & miles, low intensity" },
+  { id: "biking",   emoji: "🚴", name: "Biking",   desc: "Cycling miles total" },
+  { id: "lifting",  emoji: "🏋️", name: "Lifting",  desc: "Workout sessions" },
+  { id: "swimming", emoji: "🏊", name: "Swimming", desc: "Pool time" },
+  { id: "combat",   emoji: "🥊", name: "Combat",   desc: "Boxing / MMA sessions" },
+];
+
+const BUDDY_TIERS: Array<{ id: string; label: string; desc: string }> = [
+  { id: "beginner",     label: "🌱 Beginner",     desc: "Lower target, more forgiving" },
+  { id: "intermediate", label: "🔥 Intermediate", desc: "Mid-tier · standard difficulty" },
+  { id: "elite",        label: "💎 Elite",        desc: "High target · only the committed" },
+];
+
+function BuddyPanel({ userId }: { userId: string }) {
+  // Step machine: pick category → pick tier → queued → matched
+  const [step, setStep] = useState<"category" | "tier" | "queued" | "matched">("category");
+  const [category, setCategory] = useState<string | null>(null);
+  const [tier, setTier] = useState<string | null>(null);
+  const [activeMatch, setActiveMatch] = useState<any | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [polling, setPolling] = useState(false);
+
+  // Check for an existing active match or queue entry on mount
+  async function loadState() {
+    try {
+      const { data: match } = await supabase
+        .from("buddy_matches")
+        .select("*, user_a:user_a(id, username, full_name, avatar_url), user_b:user_b(id, username, full_name, avatar_url)")
+        .eq("status", "active")
+        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+        .order("starts_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (match) {
+        setActiveMatch(match);
+        setStep("matched");
+        return;
+      }
+      const { data: queueRow } = await supabase
+        .from("buddy_queue")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (queueRow) {
+        setCategory(queueRow.category);
+        setTier(queueRow.tier);
+        setStep("queued");
+      } else {
+        setStep("category");
+      }
+    } catch (e) { console.error(e); }
+  }
+  useEffect(() => { loadState(); /* eslint-disable-next-line */ }, [userId]);
+
+  // While queued, poll every 4s to see if we got matched
+  useEffect(() => {
+    if (step !== "queued") return;
+    setPolling(true);
+    const id = setInterval(loadState, 4000);
+    return () => { clearInterval(id); setPolling(false); };
+    // eslint-disable-next-line
+  }, [step]);
+
+  async function findMatch() {
+    if (!category || !tier) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/db", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "buddy_request_match", payload: { userId, category, tier } }),
+      });
+      const data = await res.json();
+      if (data.status === "matched" || data.status === "already_matched") {
+        await loadState();
+      } else {
+        setStep("queued");
+      }
+    } catch (e) { console.error(e); }
+    setSubmitting(false);
+  }
+
+  async function cancelQueue() {
+    if (!confirm("Cancel matchmaking?")) return;
+    await fetch("/api/db", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "buddy_cancel_queue", payload: { userId, category, tier } }),
+    });
+    setStep("category");
+    setCategory(null);
+    setTier(null);
+  }
+
+  // ── ACTIVE MATCH VIEW ──────────────────────────────────────────────────
+  if (step === "matched" && activeMatch) {
+    const isUserA = activeMatch.user_a?.id === userId;
+    const me      = isUserA ? activeMatch.user_a : activeMatch.user_b;
+    const buddy   = isUserA ? activeMatch.user_b : activeMatch.user_a;
+    const myProgress     = isUserA ? activeMatch.user_a_progress : activeMatch.user_b_progress;
+    const buddyProgress  = isUserA ? activeMatch.user_b_progress : activeMatch.user_a_progress;
+    const target  = activeMatch.target_value;
+    const unit    = activeMatch.target_unit;
+    const myPct    = Math.min(100, (myProgress / target) * 100);
+    const buddyPct = Math.min(100, (buddyProgress / target) * 100);
+    const endsLabel = new Date(activeMatch.ends_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "24px 22px", textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 6 }}>🤝</div>
+          <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 4 }}>You're paired up</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
+            {(BUDDY_CATEGORIES.find(c => c.id === activeMatch.category)?.name) || activeMatch.category}
+            {" · "}
+            Hit <strong>{target} {unit}</strong> each by {endsLabel}
+          </div>
+        </div>
+
+        {/* Two progress cards stacked — me + buddy */}
+        {[
+          { user: me, progress: myProgress, pct: myPct, isMe: true },
+          { user: buddy, progress: buddyProgress, pct: buddyPct, isMe: false },
+        ].map((row, i) => (
+          <div key={i} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              {row.user?.avatar_url ? (
+                <img src={row.user.avatar_url} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900 }}>
+                  {(row.user?.full_name || row.user?.username || "?")[0]?.toUpperCase()}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0" }}>
+                  {row.isMe ? "You" : (row.user?.full_name || `@${row.user?.username || "buddy"}`)}
+                </div>
+                <div style={{ fontSize: 11, color: "#9CA3AF" }}>
+                  {Math.round(row.progress * 10) / 10} / {target} {unit}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#A78BFA" }}>
+                {row.pct >= 100 ? "✓" : `${Math.round(row.pct)}%`}
+              </div>
+            </div>
+            <div style={{ height: 8, background: "#0D0D0D", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${row.pct}%`,
+                background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #7C3AED, #A78BFA)",
+                borderRadius: 99,
+                transition: "width 0.4s",
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── QUEUED VIEW ────────────────────────────────────────────────────────
+  if (step === "queued") {
+    return (
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "32px 24px", textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 10 }}>🔍</div>
+        <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 6 }}>Looking for a buddy…</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 24 }}>
+          {(BUDDY_CATEGORIES.find(c => c.id === category)?.name) || category} · {(BUDDY_TIERS.find(t => t.id === tier)?.label || tier)?.replace(/^\S+\s/, "")}
+        </div>
+        <div style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 99, overflow: "hidden", marginBottom: 20 }}>
+          <div style={{ height: "100%", width: "40%", background: "#A78BFA", borderRadius: 99, animation: "buddyPulse 1.5s ease-in-out infinite" }} />
+        </div>
+        <style>{`@keyframes buddyPulse { 0%,100% { transform: translateX(-50%); } 50% { transform: translateX(150%); } }`}</style>
+        <button onClick={cancelQueue} style={{
+          background: "transparent", border: "1.5px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.85)",
+          padding: "10px 22px", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer",
+        }}>Cancel</button>
+      </div>
+    );
+  }
+
+  // ── PICK CATEGORY ──────────────────────────────────────────────────────
+  if (step === "category") {
+    return (
+      <div>
+        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 24, border: "1px solid #7C3AED55", textAlign: "center" }}>
+          <div style={{ fontSize: 52, marginBottom: 10 }}>🤝</div>
+          <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>Find a Workout Buddy</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
+            Pick a category. We'll match you with someone going for the same goal — you both win when you both hit the target.
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {BUDDY_CATEGORIES.map(cat => (
+            <button key={cat.id} onClick={() => { setCategory(cat.id); setStep("tier"); }} style={{
+              background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 18, padding: "20px 14px",
+              cursor: "pointer", textAlign: "center", color: "#F0F0F0",
+            }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>{cat.emoji}</div>
+              <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 3 }}>{cat.name}</div>
+              <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>{cat.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── PICK TIER ──────────────────────────────────────────────────────────
+  return (
+    <div>
+      <button onClick={() => { setStep("category"); setCategory(null); }} style={{
+        background: "transparent", border: "none", color: "#9CA3AF", fontSize: 13, fontWeight: 700,
+        cursor: "pointer", marginBottom: 16, padding: 0,
+      }}>← Back</button>
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", borderRadius: 22, padding: "24px 22px", marginBottom: 20, border: "1px solid #7C3AED55", textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>{BUDDY_CATEGORIES.find(c => c.id === category)?.emoji}</div>
+        <div style={{ fontWeight: 900, fontSize: 18, color: "#fff" }}>{BUDDY_CATEGORIES.find(c => c.id === category)?.name}</div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>Choose how hard you want to push</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {BUDDY_TIERS.map(t => (
+          <button key={t.id} onClick={() => { setTier(t.id); setTimeout(findMatch, 0); }} disabled={submitting} style={{
+            background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 16, padding: "18px 20px",
+            cursor: submitting ? "not-allowed" : "pointer", textAlign: "left", color: "#F0F0F0", opacity: submitting ? 0.6 : 1,
+          }}>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 3 }}>{t.label}</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF" }}>{t.desc}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function RivalsPage() {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -641,6 +889,11 @@ export default function RivalsPage() {
   const [rivalCategory, setRivalCategory] = useState<RivalCategory | null>(null);
   const [rivalCompetition, setRivalCompetition] = useState<string | null>(null);
   const [rivalTier, setRivalTier] = useState<RivalTier | null>(null);
+
+  // Top-level page tab — Rivals (1v1 matchmaking, 7 days) vs
+  // Workout Buddy (cooperative 2-week shared challenge). Same matchmaking
+  // skeleton but the buddy outcome is win-together rather than head-to-head.
+  const [pageTab, setPageTab] = useState<"rivals" | "buddy">("rivals");
 
   // Load initial state: do I have an active rivalry? Am I already queued?
   const loadState = useCallback(async () => {
@@ -769,12 +1022,40 @@ export default function RivalsPage() {
       </div>
 
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "28px 20px 120px" }}>
+        {/* Top-level tab switch — Rivals (head-to-head) vs Workout Buddy
+            (cooperative 2-week challenge). Mirrors the Connect page tab
+            pattern so users feel at home. */}
+        <div style={{ display: "flex", gap: 6, padding: 5, background: "#1A1A1A", borderRadius: 14, border: "1px solid #2D1B69", marginBottom: 24 }}>
+          {([
+            { k: "rivals", label: "⚔️ Rivals", desc: "1v1 · 7 days" },
+            { k: "buddy",  label: "🤝 Workout Buddy", desc: "Team · 14 days" },
+          ] as const).map(t => (
+            <button
+              key={t.k}
+              onClick={() => setPageTab(t.k as any)}
+              style={{
+                flex: 1, padding: "11px 0", borderRadius: 10, border: "none",
+                background: pageTab === t.k ? "linear-gradient(135deg, #1A0D3E, #2D1B69)" : "transparent",
+                color: pageTab === t.k ? "#fff" : "#9CA3AF",
+                fontWeight: 800, fontSize: 13, cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {t.label}
+              <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.7, marginTop: 2 }}>{t.desc}</div>
+            </button>
+          ))}
+        </div>
+
         {error && (
           <div style={{ background: "#EF444422", border: "1px solid #EF444444", color: "#FCA5A5", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13 }}>
             {error}
           </div>
         )}
 
+        {pageTab === "buddy" ? (
+          <BuddyPanel userId={user.id} />
+        ) : (<>
         {matchStep === "category" && (
           <CategorySelect onSelect={(c) => {
             setRivalCategory(c);
@@ -828,6 +1109,7 @@ export default function RivalsPage() {
             </div>
           </div>
         )}
+        </>)}
       </div>
     </div>
   );
