@@ -1,6 +1,6 @@
 {
-  "name": "fit-app-web",
-  "version": "0.1.2",
+  "name": "fit-app",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,7 +10,7 @@
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "build:mobile": "next build && next export && npx cap sync"
+    "build:mobile": "cross-env NEXT_BUILD_TARGET=mobile next build && npx cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
@@ -25,13 +25,10 @@
     "@capacitor/status-bar": "^8.0.2",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.100.1",
-    "@zxing/browser": "^0.1.5",
-    "@zxing/library": "^0.21.3",
-    "mapbox-gl": "^3.7.0",
+    "lucide-react": "^0.544.0",
     "next": "14.2.35",
     "openai": "^6.34.0",
-    "pg": "^8.20.0",
-    "posthog-js": "^1.205.0",
+    "posthog-js": "^1.276.1",
     "react": "^18",
     "react-dom": "^18",
     "react-map-gl": "^7.1.7",
@@ -41,6 +38,8 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.21",
+    "cross-env": "^7.0.3",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",
