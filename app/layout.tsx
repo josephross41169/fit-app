@@ -27,7 +27,13 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Livelee" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        {/* Viewport: maximum-scale=1 prevents iOS Safari from auto-zooming
+            into <input>/<textarea> elements when the user focuses them.
+            Without it, any input with computed font-size < 16px triggers
+            an aggressive zoom-in that the user has to undo manually. We
+            still allow user-initiated pinch-to-zoom on the rest of the
+            page (via user-scalable=yes) so accessibility isn't broken. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes, viewport-fit=cover" />
       </head>
       <body>
         <PWARegister />
