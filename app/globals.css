@@ -110,3 +110,20 @@ input[type="number"] {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ─── iOS auto-zoom prevention ───────────────────────────────────────────
+   iOS Safari aggressively zooms into <input>/<textarea>/<select> elements
+   on focus when their computed font-size is below 16px. The viewport meta
+   already disables this with `maximum-scale=1`, but we also force a 16px
+   font-size on mobile-width form fields as a belt-and-suspenders fix —
+   covers PWA mode, in-app browsers, and any third-party containers where
+   the meta tag's hint may be ignored.
+   Only applies at <=767px (mobile breakpoint) so desktop UIs stay
+   untouched, and uses an attribute selector that excludes type=button etc. */
+@media (max-width: 767px) {
+  input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
