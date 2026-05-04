@@ -2,7 +2,6 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import RivalCard, { type Rival } from "@/components/RivalCard";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
@@ -169,171 +168,6 @@ const ONLINE_GROUPS_MOCK = [
     is_local: false,
   },
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RIVALS — MOCK DATA + COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-const mockRival: Rival = {
-  name: "Marcus Webb",
-  username: "marcuswebb",
-  tier: "grinder",
-  workoutsThisWeek: 4,
-  myWorkoutsThisWeek: 3,
-  loggedToday: true,
-  myLoggedToday: false,
-  record: { wins: 3, losses: 2 },
-  streak: 12,
-};
-
-const MOCK_RIVAL_FEED = [
-  { id: "1", user: "Marcus Webb", avatar: "MW", action: "completed a workout", detail: "Upper Body Strength · 52 min", time: "2h ago", emoji: "🏋️" },
-  { id: "2", user: "Marcus Webb", avatar: "MW", action: "hit a new PR", detail: "Bench Press — 225 lbs", time: "1d ago", emoji: "💪" },
-  { id: "3", user: "Marcus Webb", avatar: "MW", action: "logged a run", detail: "5.2 miles · 48:20", time: "2d ago", emoji: "🏃" },
-];
-
-function RivalsTab() {
-  return (
-    <div>
-      <style>{`
-        @keyframes rivalTabPulse {
-          0%   { box-shadow: 0 0 12px 2px #7C3AED44; }
-          50%  { box-shadow: 0 0 24px 6px #7C3AED77; }
-          100% { box-shadow: 0 0 12px 2px #7C3AED44; }
-        }
-        @keyframes rivalStatusPulse {
-          0%   { opacity: 1; }
-          50%  { opacity: 0.4; }
-          100% { opacity: 1; }
-        }
-      `}</style>
-
-      {/* Hero CTA */}
-      <div style={{
-        background: "linear-gradient(135deg, #2D1B69, #1A0D3E)",
-        borderRadius: 24, padding: "28px 24px", marginBottom: 24,
-        border: "1px solid #7C3AED55",
-        animation: "rivalTabPulse 3s ease-in-out infinite",
-        position: "relative", overflow: "hidden",
-      }}>
-        <div style={{ position: "absolute", top: -40, right: -40, width: 150, height: 150, borderRadius: "50%", background: "radial-gradient(circle, #7C3AED1A 0%, transparent 70%)", pointerEvents: "none" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-          <div style={{ fontSize: 44 }}>⚔️</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 900, fontSize: 20, color: "#fff" }}>Rival System</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 3 }}>
-              Pick a rival. Track them. Beat them. Repeat.
-            </div>
-          </div>
-          <div style={{
-            background: "#EF444422", border: "1px solid #EF444444",
-            borderRadius: 99, padding: "4px 12px",
-            fontSize: 11, fontWeight: 800, color: "#EF4444",
-            animation: "rivalStatusPulse 1.5s infinite",
-          }}>
-            🔴 ACTIVE
-          </div>
-        </div>
-
-        {/* Quick h2h summary */}
-        <div style={{ background: "rgba(0,0,0,0.35)", borderRadius: 16, padding: "16px 18px", marginBottom: 20, border: "1px solid rgba(124,58,237,0.2)" }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
-            This Week
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ textAlign: "center", minWidth: 40 }}>
-              <div style={{ fontWeight: 900, fontSize: 24, color: "#7C3AED" }}>3</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>YOU</div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ height: 10, background: "rgba(0,0,0,0.5)", borderRadius: 99, overflow: "hidden", display: "flex" }}>
-                <div style={{ width: "43%", background: "linear-gradient(90deg, #7C3AED, #9D5CF0)" }} />
-                <div style={{ flex: 1, background: "#EF4444", opacity: 0.8 }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                <span style={{ fontSize: 10, color: "#7C3AED", fontWeight: 700 }}>43%</span>
-                <span style={{ fontSize: 10, color: "#EF4444", fontWeight: 700 }}>57%</span>
-              </div>
-            </div>
-            <div style={{ textAlign: "center", minWidth: 40 }}>
-              <div style={{ fontWeight: 900, fontSize: 24, color: "#EF4444" }}>4</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>MARCUS</div>
-            </div>
-          </div>
-          <div style={{ marginTop: 12, textAlign: "center", fontSize: 12, color: "#EF4444", fontWeight: 700 }}>
-            They logged today and you haven't 👀
-          </div>
-        </div>
-
-        {/* Open rivals page CTA */}
-        <a href="/rivals" style={{ textDecoration: "none", display: "block" }}>
-          <button style={{
-            width: "100%", padding: "14px", borderRadius: 14, border: "none",
-            background: "linear-gradient(135deg, #7C3AED, #9D5CF0)",
-            color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
-            boxShadow: "0 6px 24px #7C3AED55", letterSpacing: 0.3,
-          }}>
-            ⚔️ Open Full Rivals Page →
-          </button>
-        </a>
-      </div>
-
-      {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
-        {[
-          { label: "Record", value: "3-2", color: "#7C3AED" },
-          { label: "Streak", value: "8🔥", color: "#F5A623" },
-          { label: "Win Rate", value: "60%", color: "#7C3AED" },
-        ].map((stat) => (
-          <div key={stat.label} style={{
-            background: "#1A1A1A", borderRadius: 14,
-            border: "1px solid #2D1B69", padding: "14px",
-            textAlign: "center",
-          }}>
-            <div style={{ fontWeight: 900, fontSize: 18, color: stat.color }}>{stat.value}</div>
-            <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginTop: 2 }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Recent activity teaser */}
-      <div style={{ fontWeight: 800, fontSize: 13, color: "#9CA3AF", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>
-        📡 Recent Activity
-      </div>
-      {[
-        { emoji: "💪", text: "Marcus logged Leg Day — 14,800 lbs", time: "2h ago", color: "#EF4444" },
-        { emoji: "🏆", text: "Marcus hit a PR on Squat — 315 lbs", time: "5h ago", color: "#EF4444" },
-        { emoji: "😴", text: "Marcus hasn't logged in 2 days — you're ahead", time: "2d ago", color: "#7C3AED" },
-      ].map((item, i) => (
-        <div key={i} style={{
-          background: "#1A1A1A", borderRadius: 12,
-          border: `1px solid ${item.color}22`, padding: "12px 14px",
-          marginBottom: 8, display: "flex", alignItems: "center", gap: 12,
-        }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: `${item.color}15`, border: `1px solid ${item.color}33`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16,
-          }}>{item.emoji}</div>
-          <div style={{ flex: 1, fontSize: 12, color: "#F0F0F0" }}>{item.text}</div>
-          <div style={{ fontSize: 10, color: "#6B7280", flexShrink: 0 }}>{item.time}</div>
-        </div>
-      ))}
-
-      <a href="/rivals" style={{ textDecoration: "none", display: "block", marginTop: 16 }}>
-        <div style={{
-          textAlign: "center", color: "#7C3AED", fontWeight: 800,
-          fontSize: 13, padding: "12px", borderRadius: 12,
-          border: "1px solid #7C3AED44", background: "rgba(124,58,237,0.08)",
-          cursor: "pointer",
-        }}>
-          View Full Battle Screen →
-        </div>
-      </a>
-    </div>
-  );
-}
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Running":      "#7C3AED",
@@ -738,8 +572,8 @@ function NearbyPlaces() {
 // ─────────────────────────────────────────────────────────────────────────────
 // RIGHT SIDEBAR
 // ─────────────────────────────────────────────────────────────────────────────
-function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joined" | "rivals"; onCreateGroup: () => void }) {
-  const effectiveTab = (tab === "joined" || tab === "rivals") ? "online" : tab;
+function ConnectSidebar({ tab, onCreateGroup }: { tab: "local" | "online" | "joined"; onCreateGroup: () => void }) {
+  const effectiveTab = tab === "joined" ? "online" : tab;
   return (
     <div className="connect-sidebar" style={{ width:320, flexShrink:0, paddingTop:20, paddingBottom:20 }}>
       {/* Create a group CTA */}
@@ -805,15 +639,22 @@ function ConnectPageInner() {
   // the right tab. Sidebar uses tab=mygroups; this page uses tab=joined; we
   // accept both for backwards compat.
   const searchParams = useSearchParams();
-  const initialTab: "local"|"online"|"joined"|"rivals" = (() => {
+  const router = useRouter();
+  // If anyone hits /connect?tab=rivals (old bookmarks), bounce them to
+  // the dedicated /rivals page since the Rivals tab here was removed.
+  useEffect(() => {
+    if (searchParams?.get("tab") === "rivals") {
+      router.replace("/rivals");
+    }
+  }, [searchParams, router]);
+  const initialTab: "local"|"online"|"joined" = (() => {
     const t = searchParams?.get("tab");
     if (t === "mygroups" || t === "joined") return "joined";
     if (t === "online") return "online";
-    if (t === "rivals") return "rivals";
     return "local";
   })();
 
-  const [tab, setTab] = useState<"local"|"online"|"joined"|"rivals">(initialTab);
+  const [tab, setTab] = useState<"local"|"online"|"joined">(initialTab);
   // Category filter for the My Groups tab — "all" shows everything,
   // otherwise filters joined groups by their `category` field.
   const [joinedCategory, setJoinedCategory] = useState<string>("all");
@@ -928,12 +769,11 @@ function ConnectPageInner() {
             { key:"local", label:"📍 Local Groups" },
             { key:"online", label:"🌍 Online Groups" },
             { key:"joined", label:"✅ My Groups" },
-            { key:"rivals", label:"⚔️ Rivals" },
           ] as const).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               padding:"10px 28px", fontWeight:800, fontSize:14, background:"none", border:"none", cursor:"pointer",
-              color: tab===t.key ? (t.key==="rivals" ? "#7C3AED" : C.blue) : C.sub,
-              borderBottom: tab===t.key ? `3px solid ${t.key==="rivals" ? "#7C3AED" : C.blue}` : "3px solid transparent",
+              color: tab===t.key ? C.blue : C.sub,
+              borderBottom: tab===t.key ? `3px solid ${C.blue}` : "3px solid transparent",
               transition:"all 0.15s",
             }}>
               {t.label}
@@ -946,13 +786,8 @@ function ConnectPageInner() {
       <div className="connect-layout" style={{ display:"flex", gap:48, maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px", alignItems:"flex-start" }}>
 
         <div style={{ flex:1, minWidth:0 }}>
-          {/* ── RIVALS TAB ── */}
-          {tab === "rivals" && (
-            <RivalsTab />
-          )}
-
           {/* Banner */}
-          {tab !== "joined" && tab !== "rivals" && (
+          {tab !== "joined" && (
             <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
               <div style={{ fontSize:40 }}>{tab==="local"?"📍":"🌍"}</div>
               <div style={{ flex:1 }}>
@@ -1026,7 +861,7 @@ function ConnectPageInner() {
             );
           })()}
 
-          {loadingGroups && tab !== "joined" && tab !== "rivals" && (
+          {loadingGroups && tab !== "joined" && (
             <div style={{ textAlign:"center", padding:"40px 0", color:C.sub, fontSize:14 }}>Loading groups...</div>
           )}
 
@@ -1054,14 +889,14 @@ function ConnectPageInner() {
                       .map(g => <GroupCard key={g.id} group={g} onJoin={() => loadJoinedGroups()} />)
           )}
 
-          {!loadingGroups && tab !== "joined" && tab !== "rivals" && (
+          {!loadingGroups && tab !== "joined" && (
             tab === "local"
               ? filteredLocal.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadGroups()} />)
               : filteredOnline.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadGroups()} />)
           )}
         </div>
 
-        <ConnectSidebar tab={tab as "local" | "online" | "joined" | "rivals"} onCreateGroup={() => setShowCreateModal(true)} />
+        <ConnectSidebar tab={tab as "local" | "online" | "joined"} onCreateGroup={() => setShowCreateModal(true)} />
       </div>
     </div>
   );
