@@ -34,6 +34,10 @@ export type BadgeRenderType = "progression" | "credential" | "yearly";
 export interface EarnedBadge {
   badge_id: string;
   year: number | null;
+  /** DB row id — needed for pin/unpin actions. Optional for older callers. */
+  id?: string;
+  /** Pin slot 1-5, null if unpinned. Lets the profile preview show pinned badges first. */
+  pin_slot?: number | null;
 }
 
 // Visual style per progression tier. Higher tiers = more dramatic.
@@ -315,6 +319,15 @@ export interface DisplayBadge {
 
   // Yearly-only
   year?: number;
+
+  // Pinning — copied from the underlying badge row(s). For ladder badges
+  // we use the lowest pin_slot found among all rows in the family. NULL
+  // when no row is pinned. Used to sort pinned badges first on the
+  // profile preview grid.
+  pin_slot?: number | null;
+  /** DB row id of the badge to pin/unpin. For ladders, this is the
+   *  current-tier row (the most recent unlock). */
+  badge_row_id?: string | null;
 }
 
 // What label to show as the progress unit. Falls back to "earned".
@@ -379,6 +392,31 @@ export function groupBadgesIntoFamilies(
   const earnedIds = new Set(earnedBadges.map((e) => e.badge_id));
 
   const result: DisplayBadge[] = [];
+  // Build a map of badge_id → { pin_slot, row_id } for quick lookup
+  // when populating DisplayBadge.pin_slot below. For ladder families we
+  // pick the lowest pin_slot found across all rows in the family.
+  const pinByBadgeId = new Map<string, { pin_slot: number | null; id: string | null }>();
+  for (const eb of earnedBadges) {
+    if (eb.id) {
+      pinByBadgeId.set(eb.badge_id, { pin_slot: eb.pin_slot ?? null, id: eb.id });
+    }
+  }
+  function getFamilyPin(memberIds: string[]): { pin_slot: number | null; id: string | null } {
+    let bestSlot: number | null = null;
+    let bestId: string | null = null;
+    for (const id of memberIds) {
+      const info = pinByBadgeId.get(id);
+      if (!info) continue;
+      if (info.pin_slot != null && (bestSlot == null || info.pin_slot < bestSlot)) {
+        bestSlot = info.pin_slot;
+        bestId = info.id;
+      }
+      // Track ANY id in case nothing's pinned (so the UI can still pin it)
+      if (bestId == null) bestId = info.id;
+    }
+    return { pin_slot: bestSlot, id: bestId };
+  }
+
   const consumedIds = new Set<string>(); // track what we've already placed
 
   // 1. Yearly badges — each (badge_id, year) combo is its own slot
@@ -390,6 +428,7 @@ export function groupBadgesIntoFamilies(
     const year = eb.year;
     const yearLabel = year ? `${year}` : "Unknown Year";
 
+    const yearlyPin = pinByBadgeId.get(eb.badge_id);
     result.push({
       key: `${eb.badge_id}-${year ?? "null"}`,
       renderType: "yearly",
@@ -398,6 +437,8 @@ export function groupBadgesIntoFamilies(
       desc: badge.desc,
       category: badge.category,
       year: year ?? undefined,
+      pin_slot: yearlyPin?.pin_slot ?? null,
+      badge_row_id: yearlyPin?.id ?? null,
     });
     consumedIds.add(eb.badge_id);
   }
@@ -408,6 +449,7 @@ export function groupBadgesIntoFamilies(
     const badge = BADGES.find((b) => b.id === credId);
     if (!badge) continue;
 
+    const credPin = pinByBadgeId.get(credId);
     result.push({
       key: credId,
       renderType: "credential",
@@ -415,6 +457,8 @@ export function groupBadgesIntoFamilies(
       label: badge.label,
       desc: badge.desc,
       category: badge.category,
+      pin_slot: credPin?.pin_slot ?? null,
+      badge_row_id: credPin?.id ?? null,
     });
     consumedIds.add(credId);
   }
@@ -431,6 +475,7 @@ export function groupBadgesIntoFamilies(
       if (CREDENTIAL_BADGE_IDS.has(onlyId) || consumedIds.has(onlyId)) continue;
       const badge = BADGES.find((b) => b.id === onlyId);
       if (!badge) continue;
+      const singlePin = pinByBadgeId.get(onlyId);
       result.push({
         key: family.key,
         renderType: "credential",
@@ -438,6 +483,8 @@ export function groupBadgesIntoFamilies(
         label: badge.label,
         desc: badge.desc,
         category: family.category,
+        pin_slot: singlePin?.pin_slot ?? null,
+        badge_row_id: singlePin?.id ?? null,
       });
       consumedIds.add(onlyId);
       continue;
@@ -490,6 +537,7 @@ export function groupBadgesIntoFamilies(
       progressLabel = PROGRESS_LABEL_BY_COUNTER[family.counterSource] ?? "earned";
     }
 
+    const famPin = getFamilyPin(family.members);
     result.push({
       key: family.key,
       renderType: "progression",
@@ -505,6 +553,8 @@ export function groupBadgesIntoFamilies(
       nextThreshold,
       isMaxed,
       progressLabel,
+      pin_slot: famPin.pin_slot,
+      badge_row_id: famPin.id,
     });
 
     for (const memberId of family.members) consumedIds.add(memberId);
@@ -516,6 +566,7 @@ export function groupBadgesIntoFamilies(
     const badge = BADGES.find((b) => b.id === eb.badge_id);
     if (!badge) continue;
 
+    const orphanPin = pinByBadgeId.get(eb.badge_id);
     result.push({
       key: `orphan-${eb.badge_id}`,
       renderType: "progression",
@@ -526,11 +577,18 @@ export function groupBadgesIntoFamilies(
       tier: 1,
       earnedCount: 1,
       maxTier: 1,
+      pin_slot: orphanPin?.pin_slot ?? null,
+      badge_row_id: orphanPin?.id ?? null,
     });
   }
 
-  // Sort: credentials first, then yearly (newest first), then progression by tier
+  // Sort: pinned first (by pin_slot 1-5), then credentials, then yearly
+  // (newest first), then progression by tier.
   result.sort((a, b) => {
+    // Pinned beats unpinned
+    const ap = a.pin_slot ?? 999;
+    const bp = b.pin_slot ?? 999;
+    if (ap !== bp) return ap - bp;
     const typeOrder = { credential: 0, yearly: 1, progression: 2 };
     if (typeOrder[a.renderType] !== typeOrder[b.renderType]) {
       return typeOrder[a.renderType] - typeOrder[b.renderType];
