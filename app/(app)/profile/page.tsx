@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +13,7 @@ import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/riv
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
+import { CreateGoalModal } from "@/components/GoalsTab";
 import { computeTier, getTierInfo } from "@/lib/tiers";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast, appUrl } from "@/lib/share";
@@ -1776,6 +1777,28 @@ export default function ProfilePage() {
   const [earnedBadges,setEarnedBadges] = useState<EarnedBadge[]>([]);
   // Active goals shown on profile under highlights. Public goals only.
   const [profileGoals, setProfileGoals] = useState<any[]>([]);
+  // Past (completed or expired) goals — same source, different filter.
+  // Loaded on demand when the user flips to the Past sub-tab so we don't
+  // pay the query for everyone.
+  const [profilePastGoals, setProfilePastGoals] = useState<any[]>([]);
+  const [profileGoalsHistoryTab, setProfileGoalsHistoryTab] = useState<"active"|"past">("active");
+  // Controls the create-goal modal mounted at the bottom of this page.
+  // Lives on profile so the +New button doesn't have to navigate to /post
+  // (which no longer has a goal tab anyway).
+  const [showGoalCreate, setShowGoalCreate] = useState(false);
+
+  // Reusable loader so we can refetch after creating a new goal.
+  const reloadProfileGoals = useCallback(() => {
+    if (!user) return;
+    supabase.from('goals').select('*').eq('user_id', user.id).eq('is_completed', false)
+      .order('created_at', { ascending: false }).limit(8)
+      .then(({ data }) => {
+        if (data) {
+          const now = Date.now();
+          setProfileGoals(data.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
+        }
+      });
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -1783,19 +1806,25 @@ export default function ProfilePage() {
       .then(({ data }) => {
         if (data) setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null })));
       });
-    // Load active public goals to show on profile under highlights. Only
-    // shows the user's own goals here — public profile component shows
-    // viewed-user's goals separately.
-    supabase.from('goals').select('*').eq('user_id', user.id).eq('is_completed', false)
-      .order('created_at', { ascending: false }).limit(8)
+    reloadProfileGoals();
+  }, [user, reloadProfileGoals]);
+
+  // Lazy-load past goals when the user opens the Past tab. Pulls
+  // completed=true OR window_end already passed.
+  useEffect(() => {
+    if (!user || profileGoalsHistoryTab !== "past") return;
+    if (profilePastGoals.length > 0) return;
+    supabase.from('goals').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending: false }).limit(20)
       .then(({ data }) => {
-        if (data) {
-          const now = Date.now();
-          // Filter out expired
-          setProfileGoals(data.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
-        }
+        if (!data) return;
+        const now = Date.now();
+        setProfilePastGoals(data.filter((g: any) =>
+          g.is_completed === true ||
+          (g.window_end && new Date(g.window_end).getTime() <= now)
+        ));
       });
-  }, [user]);
+  }, [user, profileGoalsHistoryTab, profilePastGoals.length]);
   const [showBadgeModal,setShowBadgeModal] = useState(false);
   const [selectedBadge,setSelectedBadge] = useState<string>("");
   const [badgeNote,setBadgeNote] = useState("");
@@ -3961,53 +3990,83 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Goals card — shows up to 5 active public goals with progress
-                bars. Tappable header opens the full Goals tab on /post.
+            {/* Goals card — shows up to 5 active or past goals with progress
+                bars. Has Active/Past sub-toggle. +New opens an inline
+                creation modal (CreateGoalModal mounted at bottom of page).
                 Empty-state nudges the user to set their first goal. */}
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>🎯 Goals</div>
                 <button
-                  onClick={()=>router.push('/post?tab=goal')}
+                  onClick={()=>setShowGoalCreate(true)}
                   style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}
                 >+ New</button>
               </div>
-              {profileGoals.length === 0 ? (
-                <div style={{textAlign:"center",padding:"16px 8px",color:C.sub,fontSize:12,lineHeight:1.5}}>
-                  No active goals.<br/>
-                  Tap + New to set one.
-                </div>
-              ) : (
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {profileGoals.slice(0, 5).map(g => {
-                    const pct = Math.min(100, (g.current / g.target) * 100);
-                    return (
-                      <div key={g.id} style={{
-                        background:"#1A1228",borderRadius:14,padding:"10px 12px",
-                        border:"1px solid #3D2A6E",
-                      }}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                          <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
-                          <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {g.title}
+
+              {/* Active/Past toggle */}
+              <div style={{display:"flex",gap:4,marginBottom:14,background:"#0D0820",borderRadius:8,padding:3}}>
+                {([
+                  {key:"active",label:`Active${profileGoals.length?` (${profileGoals.length})`:""}`},
+                  {key:"past",  label:`Past${profilePastGoals.length?` (${profilePastGoals.length})`:""}`},
+                ] as const).map(t=>(
+                  <button key={t.key} onClick={()=>setProfileGoalsHistoryTab(t.key)} style={{
+                    flex:1,padding:"6px 4px",borderRadius:6,border:"none",cursor:"pointer",
+                    fontWeight:700,fontSize:11,
+                    background:profileGoalsHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                    color:profileGoalsHistoryTab===t.key?"#fff":"#9CA3AF",
+                  }}>{t.label}</button>
+                ))}
+              </div>
+
+              {(() => {
+                const list = profileGoalsHistoryTab === "active" ? profileGoals : profilePastGoals;
+                if (list.length === 0) {
+                  return (
+                    <div style={{textAlign:"center",padding:"16px 8px",color:C.sub,fontSize:12,lineHeight:1.5}}>
+                      {profileGoalsHistoryTab === "active"
+                        ? <>No active goals.<br/>Tap + New to set one.</>
+                        : <>No past goals yet.</>}
+                    </div>
+                  );
+                }
+                return (
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {list.slice(0, 5).map(g => {
+                      const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
+                      const isPast = profileGoalsHistoryTab === "past";
+                      const completedSuccessfully = g.is_completed === true;
+                      return (
+                        <div key={g.id} style={{
+                          background: isPast && completedSuccessfully ? "rgba(74,222,128,0.08)" : "#1A1228",
+                          borderRadius:14, padding:"10px 12px",
+                          border:`1px solid ${isPast && completedSuccessfully ? "#4ADE80" : "#3D2A6E"}`,
+                          opacity: isPast && !completedSuccessfully ? 0.7 : 1,
+                        }}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                            <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
+                            <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              {g.title}
+                            </div>
+                            <div style={{fontSize:10,fontWeight:800,color: completedSuccessfully ? "#4ADE80" : C.purple,flexShrink:0}}>
+                              {completedSuccessfully ? "✓ Done" : `${Math.round(g.current)}/${g.target}`}
+                            </div>
                           </div>
-                          <div style={{fontSize:10,fontWeight:800,color:C.purple,flexShrink:0}}>
-                            {Math.round(g.current)}/{g.target}
+                          <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
+                            <div style={{
+                              height:"100%",
+                              width:`${pct}%`,
+                              background: completedSuccessfully
+                                ? "linear-gradient(90deg, #4ADE80, #22C55E)"
+                                : `linear-gradient(90deg, ${C.purple}, #A78BFA)`,
+                              borderRadius:99,
+                            }}/>
                           </div>
                         </div>
-                        <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
-                          <div style={{
-                            height:"100%",
-                            width:`${pct}%`,
-                            background:`linear-gradient(90deg, ${C.purple}, #A78BFA)`,
-                            borderRadius:99,
-                          }}/>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -4247,6 +4306,17 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Goal-create modal — opened from the Goals card +New button.
+          Lives at this level so the create flow is fully self-contained
+          on /profile (no need to navigate away to /post anymore). */}
+      {showGoalCreate && user && (
+        <CreateGoalModal
+          userId={user.id}
+          onClose={() => setShowGoalCreate(false)}
+          onCreated={() => { setShowGoalCreate(false); reloadProfileGoals(); }}
+        />
+      )}
     </div>
   );
 }
