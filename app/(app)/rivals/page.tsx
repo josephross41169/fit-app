@@ -704,13 +704,18 @@ function BuddyPanel({ userId }: { userId: string }) {
     // eslint-disable-next-line
   }, [step]);
 
-  async function findMatch() {
-    if (!category || !tier) return;
+  async function findMatch(tierOverride?: string) {
+    // tierOverride lets the caller pass the tier directly so we don't
+    // race React's setState — the on-click handler fires findMatch right
+    // after setTier, and the closure captures the OLD tier value. Passing
+    // it as an argument avoids the "have to double-click" bug.
+    const useTier = tierOverride || tier;
+    if (!category || !useTier) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/db", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "buddy_request_match", payload: { userId, category, tier } }),
+        body: JSON.stringify({ action: "buddy_request_match", payload: { userId, category, tier: useTier } }),
       });
       const data = await res.json();
       if (data.status === "matched" || data.status === "already_matched") {
@@ -861,7 +866,7 @@ function BuddyPanel({ userId }: { userId: string }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {BUDDY_TIERS.map(t => (
-          <button key={t.id} onClick={() => { setTier(t.id); setTimeout(findMatch, 0); }} disabled={submitting} style={{
+          <button key={t.id} onClick={() => { setTier(t.id); findMatch(t.id); }} disabled={submitting} style={{
             background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 16, padding: "18px 20px",
             cursor: submitting ? "not-allowed" : "pointer", textAlign: "left", color: "#F0F0F0", opacity: submitting ? 0.6 : 1,
           }}>
