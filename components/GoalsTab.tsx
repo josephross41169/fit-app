@@ -204,7 +204,7 @@ function GoalCard({ goal, onChange }: { goal: Goal; onChange: () => void }) {
 
 // ─── Create goal modal ─────────────────────────────────────────────────
 
-function CreateGoalModal({
+export function CreateGoalModal({
   userId, onClose, onCreated,
 }: {
   userId: string;
