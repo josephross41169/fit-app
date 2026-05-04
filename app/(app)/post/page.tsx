@@ -18,7 +18,6 @@ import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
 import MentionInput from "@/components/MentionInput";
-import GoalsTab from "@/components/GoalsTab";
 
 const C = {
   blue: "#7C3AED",
@@ -49,7 +48,7 @@ type PrevSession = { date: string; sets: PrevSet[] };
 type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string };
 type NutritionGoals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number; monthly_calories?: number; monthly_protein?: number; monthly_carbs?: number; monthly_fat?: number };
 type DailyTotals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number };
-type LogTab = "workout" | "nutrition" | "wellness" | "goal";
+type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
 type PostType = "Workout" | "Nutrition" | "Wellness" | "Achievement" | "Other";
 type WorkoutTemplate = { id: string; name: string; exercises: Exercise[] };
@@ -1841,7 +1840,6 @@ export default function PostPage() {
     { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#7C3AED" },
     { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#F59E0B" },
     { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#7C3AED" },
-    { key: "goal" as LogTab, icon: "🎯", label: "Goal", color: "#10B981" },
   ];
 
   return (
@@ -3100,11 +3098,11 @@ export default function PostPage() {
             </div>
           )}
 
-          {/* --- GOAL TAB ---
-              Self-contained component handles list + create modal. Auto-
-              tracks against activity_logs via the API actions wired in
-              profile/page.tsx. */}
-          {logTab === "goal" && <GoalsTab />}
+          {/* --- GOAL TAB (REMOVED) ---
+              Goals now live exclusively on the profile page (personal
+              goals) and on group pages under the Challenges section
+              (group goals). The tab here was confusing — goals aren't
+              an "activity log" entry, they're a separate construct. */}
 
         </>) : (
 
