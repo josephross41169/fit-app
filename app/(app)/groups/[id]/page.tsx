@@ -524,7 +524,19 @@ export default function GroupPage() {
   // ── UI State ──
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [tab, setTab] = useState<"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members"|"war">("posts");
+  // Top-level section — collapses the 7-tab clutter into 3 parents. Each
+  // parent owns a set of sub-tabs that drive the existing `tab` state.
+  // We keep `tab` independent so the giant switch-render code below
+  // doesn't have to change. Parent → default sub-tab map:
+  //   social     → posts  (also: notes, events, members)
+  //   board      → leaderboard (no sub-tabs, just shown directly)
+  //   challenges → challenges  (also: war, goals)
+  const [section, setSection] = useState<"social"|"board"|"challenges">("social");
+  const [tab, setTab] = useState<"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members"|"war"|"goals">("posts");
+  // Past/Active toggle for Wars + Challenges sub-tabs. Goals already had
+  // its own. This unifies the pattern across all three challenge types.
+  const [warHistoryTab, setWarHistoryTab] = useState<"active"|"past">("active");
+  const [goalsHistoryTab, setGoalsHistoryTab] = useState<"active"|"past">("active");
   const [postLikes, setPostLikes] = useState<Record<string,number>>({});
   const [likedPosts, setLikedPosts] = useState<Record<string,boolean>>({});
   const [noteText, setNoteText] = useState("");
@@ -862,7 +874,7 @@ export default function GroupPage() {
   }, [dbGroup]);
 
   useEffect(() => {
-    if (tab === "challenges" && (dbGroup as any)?.id) loadGroupGoals();
+    if ((tab === "challenges" || tab === "goals") && (dbGroup as any)?.id) loadGroupGoals();
   }, [tab, dbGroup, loadGroupGoals]);
 
   if (!loading && !group) {
@@ -2328,36 +2340,65 @@ export default function GroupPage() {
             )}
           </div>
 
-          {/* Tabs */}
-          <div className="groups-tabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}`, overflowX:"auto" }}>
+          {/* Tabs — two-tier. Parent sections collapse the previous flat
+              7-tab strip into 3 manageable groups. Sub-tabs render
+              below the parent strip and only show when the relevant
+              section is selected. */}
+          <div className="groups-tabs" style={{ display:"flex", gap:4, marginBottom:10, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}` }}>
             {([
-              { key:"posts", label:"📸 Posts" },
-              { key:"leaderboard", label:"🏆 Board" },
-              { key:"challenges", label:"⚡ Challenges" },
-              { key:"notes", label:"💬 Notes" },
-              { key:"war", label:"⚔️ Wars" },
-            ] as const).map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{
-                flex:1, padding:"9px 4px", borderRadius:10, border:"none",
-                background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
-                color: tab===t.key ? "#fff" : C.sub,
-                fontWeight:800, fontSize:12, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap", flexShrink:0,
-              }}>{t.label}</button>
-            ))}
-            {([
-              { key:"events", label:"🗓️ Events" },
-              { key:"members", label:"👥 Members" },
-            ] as const).map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className="groups-mobile-tabs-extra"
+              { key:"social",     label:"🤝 Social",      defaultSub:"posts" },
+              { key:"board",      label:"🏆 Board",       defaultSub:"leaderboard" },
+              { key:"challenges", label:"⚔️ Challenges", defaultSub:"challenges" },
+            ] as const).map(s => (
+              <button
+                key={s.key}
+                onClick={() => { setSection(s.key); setTab(s.defaultSub as any); }}
                 style={{
-                  flex:1, padding:"9px 4px", borderRadius:10, border:"none",
-                  background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
-                  color: tab===t.key ? "#fff" : C.sub,
-                  fontWeight:800, fontSize:12, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap", flexShrink:0,
-                }}>{t.label}</button>
+                  flex:1, padding:"11px 4px", borderRadius:10, border:"none",
+                  background: section===s.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
+                  color: section===s.key ? "#fff" : C.sub,
+                  fontWeight:800, fontSize:13, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap",
+                }}
+              >{s.label}</button>
             ))}
           </div>
+
+          {/* Sub-tabs — only shown for sections that have multiple kids.
+              Board has none (just renders the leaderboard directly). */}
+          {section === "social" && (
+            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.greenLight, borderRadius:12, padding:4, border:`1px solid ${C.greenMid}`, overflowX:"auto" }}>
+              {([
+                { key:"posts",   label:"📸 Posts"   },
+                { key:"notes",   label:"💬 Notes"   },
+                { key:"events",  label:"🗓️ Events" },
+                { key:"members", label:"👥 Members" },
+              ] as const).map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)} style={{
+                  flex:1, padding:"8px 4px", borderRadius:8, border:"none",
+                  background: tab===t.key ? "#FFFFFF18" : "transparent",
+                  color: tab===t.key ? "#fff" : C.sub,
+                  fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                }}>{t.label}</button>
+              ))}
+            </div>
+          )}
+
+          {section === "challenges" && (
+            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.greenLight, borderRadius:12, padding:4, border:`1px solid ${C.greenMid}`, overflowX:"auto" }}>
+              {([
+                { key:"challenges", label:"⚡ Challenges" },
+                { key:"war",        label:"⚔️ Wars"      },
+                { key:"goals",      label:"🎯 Goals"     },
+              ] as const).map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)} style={{
+                  flex:1, padding:"8px 4px", borderRadius:8, border:"none",
+                  background: tab===t.key ? "#FFFFFF18" : "transparent",
+                  color: tab===t.key ? "#fff" : C.sub,
+                  fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                }}>{t.label}</button>
+              ))}
+            </div>
+          )}
 
           {/* ── POSTS ── */}
           {tab==="posts" && (
@@ -3176,6 +3217,124 @@ export default function GroupPage() {
             </div>
           )}
 
+          {/* ── GOALS (sub-tab inside Challenges section) ──
+              Standalone view of group goals with Active/Past toggle.
+              Reuses the same `groupGoals` state and modal as the embedded
+              version inside the Challenges tab — it's just presented on
+              its own here for users who want to drill into goals without
+              the Member Challenges noise. */}
+          {tab === "goals" && (() => {
+            const GMETRICS: Record<string,{label:string;icon:string;unit:string}> = {
+              miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},
+              miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
+              miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},
+              miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
+              runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},
+              workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
+              lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},
+              yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
+              total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
+              meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},
+              cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
+              sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},
+              wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
+              nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
+            };
+            const activeGoals = groupGoals.filter(g => g.status === "active");
+            const pastGoals   = groupGoals.filter(g => g.status !== "active");
+
+            return (
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10}}>
+                  <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>🎯 Group Goals</div>
+                  {isOwnerOrMod && (
+                    <button onClick={() => setShowGoalModal(true)} style={{
+                      padding:"8px 14px",borderRadius:12,border:"none",
+                      background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                      color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
+                    }}>+ Set Goal</button>
+                  )}
+                </div>
+
+                {/* Active/Past toggle */}
+                <div style={{display:"flex",gap:6,marginBottom:14,background:"#1A1228",borderRadius:10,padding:3}}>
+                  {([
+                    {key:"active",label:`⚡ Active (${activeGoals.length})`},
+                    {key:"past",  label:`🏁 Past (${pastGoals.length})`},
+                  ] as const).map(t=>(
+                    <button key={t.key} onClick={()=>setGoalsHistoryTab(t.key)} style={{
+                      flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
+                      fontWeight:700,fontSize:11,
+                      background:goalsHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                      color:goalsHistoryTab===t.key?"#fff":"#6B7280",
+                    }}>{t.label}</button>
+                  ))}
+                </div>
+
+                {(goalsHistoryTab === "active" ? activeGoals : pastGoals).length === 0 ? (
+                  <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
+                    <div style={{fontSize:40,marginBottom:12}}>🎯</div>
+                    <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>
+                      {goalsHistoryTab === "active" ? "No active goals" : "No past goals"}
+                    </div>
+                    {goalsHistoryTab === "active" && (
+                      isOwnerOrMod
+                        ? <div style={{fontSize:13}}>Tap + Set Goal to start one for the group.</div>
+                        : <div style={{fontSize:13}}>Owners can set goals here.</div>
+                    )}
+                  </div>
+                ) : (
+                  (goalsHistoryTab === "active" ? activeGoals : pastGoals).map((goal: any) => {
+                    const meta = GMETRICS[goal.metric] || GMETRICS.workouts;
+                    const target = goal.goal || 0;
+                    const current = goal.creator_score || 0;
+                    const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+                    const isComplete = goal.status !== "active";
+                    return (
+                      <div key={goal.id} style={{
+                        background: isComplete ? "rgba(74,222,128,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
+                        borderRadius:16, padding:"14px 16px",
+                        border:`1px solid ${isComplete ? "#4ADE80" : "#7C3AED"}`,
+                        marginBottom:10,
+                      }}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{goal.title}</div>
+                            <div style={{fontSize:11,color:"#9CA3AF",marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+                              <span>{meta.icon} {meta.label}</span>
+                              {goal.end_date && (
+                                <span>· Ends {new Date(goal.end_date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#4ADE80":"#A78BFA",flexShrink:0}}>
+                            {Math.round(current)}/{target} {meta.unit}
+                          </div>
+                        </div>
+                        <div style={{height:6,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
+                          <div style={{
+                            height:"100%", width:`${pct}%`,
+                            background: isComplete ? "#4ADE80" : "linear-gradient(90deg,#7C3AED,#A78BFA)",
+                            borderRadius:99,
+                          }}/>
+                        </div>
+                        {isOwnerOrMod && goal.status === "active" && (
+                          <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+                            <button onClick={() => deleteGroupGoal(goal.id)} style={{
+                              padding:"5px 10px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",
+                              background:"rgba(239,68,68,0.08)",color:"#EF4444",
+                              fontWeight:700,fontSize:11,cursor:"pointer",
+                            }}>🗑 Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            );
+          })()}
+
           {/* ── MOBILE: Members tab ── */}
           {tab === "members" && (
             <div className="groups-mobile-tab-content">
@@ -3389,6 +3548,23 @@ export default function GroupPage() {
                   </div>
                 ) : (
                   <div>
+                    {/* Active/Past toggle — wars filter. Active = ongoing
+                        + open invitations; Past = completed/cancelled. */}
+                    <div style={{display:"flex",gap:6,marginBottom:14,background:"#1A1228",borderRadius:10,padding:3}}>
+                      {([
+                        {key:"active",label:`⚡ Active (${active.length + open.length})`},
+                        {key:"past",  label:`🏁 Past (${done.length})`},
+                      ] as const).map(t=>(
+                        <button key={t.key} onClick={()=>setWarHistoryTab(t.key)} style={{
+                          flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
+                          fontWeight:700,fontSize:11,
+                          background:warHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                          color:warHistoryTab===t.key?"#fff":"#6B7280",
+                        }}>{t.label}</button>
+                      ))}
+                    </div>
+
+                    {warHistoryTab === "active" ? (<>
                     {/* Active challenges */}
                     {active.map(chal => {
                       const meta = METRICS[chal.metric] || METRICS.miles_run;
@@ -3661,9 +3837,12 @@ export default function GroupPage() {
                         })}
                       </div>
                     )}
+                    </>) : (
+                    /* Past tab — completed/cancelled wars only */
+                    <>
 
                     {/* Completed wars */}
-                    {done.length>0 && (
+                    {done.length>0 ? (
                       <div>
                         <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",
                           letterSpacing:1,marginBottom:10}}>🏁 Past Wars</div>
@@ -3683,9 +3862,17 @@ export default function GroupPage() {
                           );
                         })}
                       </div>
+                    ) : (
+                      <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
+                        <div style={{fontSize:40,marginBottom:12}}>🏁</div>
+                        <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>No past wars</div>
+                        <div style={{fontSize:13}}>Completed wars will appear here.</div>
+                      </div>
+                    )}
+                    </>
                     )}
 
-                    {warChallenges.length===0 && !warLoading && (
+                    {warHistoryTab === "active" && warChallenges.length===0 && !warLoading && (
                       <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
                         <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
                         <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>No wars yet</div>
