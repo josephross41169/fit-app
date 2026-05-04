@@ -4,6 +4,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from "recharts";
+import { EXERCISES } from "@/lib/exercises";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Workout Progress Graphs
@@ -14,6 +15,39 @@ import {
 // Stats are computed from raw activity_logs rows (one per individual workout)
 // so multi-workout days count correctly — two workouts in one day = 2.
 // ─────────────────────────────────────────────────────────────────────────
+
+// Build a fast lookup of exercise name → category (Chest, Back, Legs, etc.)
+// once at module load. Keys are normalized lowercase; on lookup we also try a
+// substring match so "Bench Press (heavy)" or "barbell bench press" still
+// resolves. This map drives the "What you trained" chip cloud — it shows the
+// real muscle group(s) trained based on the exercises logged, instead of
+// reading the user's freeform workout title (which could be anything).
+const EXERCISE_CATEGORY_MAP: Map<string, string> = (() => {
+  const m = new Map<string, string>();
+  EXERCISES.forEach(e => m.set(e.name.toLowerCase(), e.category));
+  return m;
+})();
+
+// Resolve an exercise name to a muscle-group category. Falls back to substring
+// matching so partial / messy names still bucket correctly. Returns null if
+// nothing matches — the caller can decide how to handle (we ignore it so we
+// never invent a category for a typo).
+function categoryForExercise(name: string): string | null {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+  const exact = EXERCISE_CATEGORY_MAP.get(key);
+  if (exact) return exact;
+  // Substring fallback — match the longest known exercise name contained in
+  // the input. Prevents "Squat" matching "Goblet Squat" via prefix when the
+  // full name is in the map. We iterate longest-first.
+  const candidates: string[] = [];
+  EXERCISE_CATEGORY_MAP.forEach((_, k) => {
+    if (key.includes(k) || k.includes(key)) candidates.push(k);
+  });
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.length - a.length);
+  return EXERCISE_CATEGORY_MAP.get(candidates[0]) || null;
+}
 
 type WorkoutData = {
   date: string; exercise: string; weight: number;
@@ -213,22 +247,67 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     return (filteredWorkouts.length / weeksElapsed).toFixed(1);
   }, [filteredWorkouts, isCalendarMonth, rangeStart, rangeEnd, now]);
 
-  // ── Workout TYPES this period (for the chip cloud) ──────────────────────
-  // Replaces the old "Chest Workout (+2 more)" with a clean wrap of pills.
-  const periodTypes = useMemo(() => {
-    const counts = new Map<string, number>();
+  // ── Muscle groups + cardio types this period (for the chip cloud) ───────
+  // Replaces the old chip cloud that read `workout_type` (the freeform title
+  // the user typed when logging). That meant if someone titled a workout
+  // "imgay" the chip would literally say "imgay". Now we derive categories
+  // from the actual exercise data:
+  //   • lifting exercises → look up category in EXERCISES (Chest, Back, …)
+  //   • cardio entries     → use cardio.type directly (Run, Cycling, …)
+  // We track session count + last-trained date per category so the chip can
+  // show e.g. "Chest · 3 · last May 9".
+  const periodCategories = useMemo(() => {
+    type Bucket = { count: number; lastDate: number; isCardio: boolean };
+    const buckets = new Map<string, Bucket>();
+
+    // Per-workout dedupe — a single workout containing 5 chest exercises
+    // should count as ONE Chest session, not 5. We collect all categories
+    // hit per workout into a Set, then bump each bucket once.
     filteredWorkouts.forEach((w: any) => {
-      const raw = w.workout_type || w.workout?.type;
-      if (!raw) return;
-      // Strip a trailing "Day"/"day" — "Chest Day" → "Chest"
-      const clean = String(raw).replace(/\s*(Day|day)\s*$/, '').trim();
-      if (!clean) return;
-      counts.set(clean, (counts.get(clean) || 0) + 1);
+      const dateMs = new Date(w.logged_at || w.created_at || w.id || 0).getTime();
+      const validDate = !isNaN(dateMs);
+      const hitCategories = new Set<string>();
+      const hitCardio = new Set<string>();
+
+      const exList: any[] = w.exercises || w.workout?.exercises || [];
+      exList.forEach((ex: any) => {
+        const cat = categoryForExercise(ex?.name || '');
+        if (cat) hitCategories.add(cat);
+      });
+
+      const cardioList: any[] = w.cardio || w.workout?.cardio || [];
+      cardioList.forEach((c: any) => {
+        const t = (c?.type || '').trim();
+        if (t) hitCardio.add(t);
+      });
+
+      hitCategories.forEach(cat => {
+        const b = buckets.get(cat) || { count: 0, lastDate: 0, isCardio: false };
+        b.count += 1;
+        if (validDate && dateMs > b.lastDate) b.lastDate = dateMs;
+        buckets.set(cat, b);
+      });
+      hitCardio.forEach(t => {
+        const b = buckets.get(t) || { count: 0, lastDate: 0, isCardio: true };
+        b.count += 1;
+        if (validDate && dateMs > b.lastDate) b.lastDate = dateMs;
+        buckets.set(t, b);
+      });
     });
-    // Sort by count desc, alphabetical tiebreak
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([t, n]) => ({ type: t, count: n }));
+
+    // Sort by sessions desc, then most-recent first, then alphabetical.
+    return Array.from(buckets.entries())
+      .sort((a, b) => {
+        if (b[1].count !== a[1].count) return b[1].count - a[1].count;
+        if (b[1].lastDate !== a[1].lastDate) return b[1].lastDate - a[1].lastDate;
+        return a[0].localeCompare(b[0]);
+      })
+      .map(([name, b]) => ({
+        name,
+        count: b.count,
+        lastDate: b.lastDate ? fmtDate(new Date(b.lastDate).toISOString()) : '',
+        isCardio: b.isCardio,
+      }));
   }, [filteredWorkouts]);
 
   // ── Sessions per week (lifting) ─────────────────────────────────────────
@@ -296,8 +375,8 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
           <div style={{ fontSize: 20, fontWeight: 800, color: C.purple }}>{totalWorkouts}</div>
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Workout Types</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{periodTypes.length || "—"}</div>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Muscle Groups</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{periodCategories.length || "—"}</div>
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Avg/Week</div>
@@ -305,10 +384,10 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         </div>
       </div>
 
-      {/* Chip cloud — shows ALL workout types in the period with their counts.
-          Replaces the old single-line "Chest (+2 more)" truncation. Wraps
-          naturally — handles 1 type or 12 types without breaking layout. */}
-      {periodTypes.length > 0 && (
+      {/* Chip cloud — derived from real exercise + cardio data, NOT the user's
+          freeform workout title. Each chip shows the muscle group / cardio
+          type, the session count, and the most recent date trained. */}
+      {periodCategories.length > 0 && (
         <div style={{
           background: C.purpleDark, border: `1px solid ${C.purpleBorder}`,
           borderRadius: 12, padding: "12px 14px", marginBottom: 14,
@@ -317,15 +396,25 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
             What you trained
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {periodTypes.map(({ type, count }) => (
-              <span key={type} style={{
-                background: C.purpleMid, color: C.gold,
+            {periodCategories.map(({ name, count, lastDate, isCardio }) => (
+              <span key={name} style={{
+                background: C.purpleMid,
+                color: isCardio ? C.cyan : C.gold,
                 fontSize: 12, fontWeight: 700,
                 padding: "5px 10px", borderRadius: 999,
                 border: `1px solid ${C.purpleBorder}`,
                 whiteSpace: "nowrap",
+                display: "inline-flex", alignItems: "center", gap: 6,
               }}>
-                {type}{count > 1 && <span style={{ color: C.sub, marginLeft: 5, fontWeight: 600 }}>×{count}</span>}
+                <span>{isCardio ? "🏃 " : "💪 "}{name}</span>
+                <span style={{ color: C.sub, fontWeight: 600 }}>
+                  ×{count}
+                </span>
+                {lastDate && (
+                  <span style={{ color: C.sub, fontWeight: 500, fontSize: 11 }}>
+                    · {lastDate}
+                  </span>
+                )}
               </span>
             ))}
           </div>
