@@ -37,6 +37,12 @@ interface Conversation {
   };
   lastMessage: { content: string; created_at: string; sender_id: string } | null;
   unread: boolean;
+  // Group chat extension. When isGroup is true, otherUser is synthesized
+  // from group info (id = group id, full_name = "💬 Group Name"). The
+  // real group object is on `group` for routing into /groups/[slug].
+  group_id?: string | null;
+  isGroup?: boolean;
+  group?: { id: string; name: string; emoji: string | null; slug: string | null } | null;
 }
 
 interface Message {
@@ -268,7 +274,15 @@ function MessagesPageInner() {
   }, [user, loadConversations]);
 
   // ── Select conversation ─────────────────────────────────────────────────────
+  // Group conversations route into the group page's Chat tab — that's
+  // where group chat already lives, with full features (members, posts,
+  // etc). DMs open inline in the messages thread panel.
   const selectConversation = (conv: Conversation) => {
+    if (conv.isGroup && conv.group) {
+      const slug = conv.group.slug || conv.group.id;
+      window.location.href = `/groups/${slug}?tab=chat`;
+      return;
+    }
     setActiveConvId(conv.id);
     loadMessages(conv.id);
     setMobileShowThread(true);
@@ -514,7 +528,7 @@ function MessagesPageInner() {
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
                     <span className="text-xs truncate" style={{ color: "#8892A4" }}>
-                      @{conv.otherUser.username}
+                      {conv.isGroup ? "Group chat" : `@${conv.otherUser.username}`}
                     </span>
                     {conv.unread && (
                       <div
