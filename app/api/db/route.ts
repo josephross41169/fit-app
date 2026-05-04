@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { detectStrictPRs, buildHistoricalMaxes, recomputeAllPRs, type ActivityLogRow } from '@/lib/prs';
+import { progressFromLog, recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type ActivityLog as GoalActivityLog } from '@/lib/goals';
 
 // Mark as dynamic to avoid static collection at build time
 export const dynamic = 'force-dynamic';
@@ -714,6 +715,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ comment: data });
     }
 
+    // ── Ensure a group has a chat conversation (create if missing) ─────────
+    // Called by GroupChat component when an older group's chat trigger
+    // didn't fire (groups created before migration-group-chat.sql ran).
+    // Idempotent — finds-or-creates and returns the conversation id.
+    if (action === 'ensure_group_chat') {
+      const { groupId } = payload;
+      if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 });
+      // Find first
+      const { data: existing } = await admin
+        .from('conversations')
+        .select('id')
+        .eq('group_id', groupId)
+        .maybeSingle();
+      if (existing?.id) return NextResponse.json({ conversationId: existing.id });
+      // Create + backfill participants from group_members
+      const { data: created, error: cErr } = await admin
+        .from('conversations')
+        .insert({ group_id: groupId } as any)
+        .select('id')
+        .single();
+      if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
+      const convId = created.id;
+      const { data: members } = await admin
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', groupId);
+      if (Array.isArray(members) && members.length > 0) {
+        const rows = members.map((m: any) => ({ conversation_id: convId, user_id: m.user_id }));
+        await admin.from('conversation_participants').insert(rows);
+      }
+      return NextResponse.json({ conversationId: convId });
+    }
+
     // ── Create notification ────────────────────────────────────────────────
     if (action === 'create_notification') {
       const { userId, fromUserId, type, referenceId, body } = payload;
@@ -934,6 +968,312 @@ export async function POST(req: NextRequest) {
         groupId: hostGroupId,
         challengeId: chal.id,
       });
+    }
+
+    // ── Update goal progress from a single new activity log ────────────────
+    // Called immediately after logging a workout/nutrition/wellness entry.
+    // Walks all the user's active goals and bumps `current` for each one
+    // the log contributes to. Auto-completes any goal that crosses target,
+    // optionally creating a feed post.
+    if (action === 'update_goals_from_log') {
+      const { userId, logId } = payload || {};
+      if (!userId || !logId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { data: newLog } = await admin
+        .from('activity_logs')
+        .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
+        .eq('id', logId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!newLog) return NextResponse.json({ error: 'Log not found' }, { status: 404 });
+
+      // Pull all active (incomplete) goals for this user
+      const { data: goals } = await admin
+        .from('goals')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_completed', false);
+      if (!goals || goals.length === 0) return NextResponse.json({ ok: true, completed: [] });
+
+      const completedGoals: any[] = [];
+
+      for (const goal of goals as GoalType[]) {
+        let newCurrent = goal.current;
+
+        if (goal.metric === 'lift_pr') {
+          // Lift PR: take max of current vs new log's contribution
+          const liftValue = progressFromLog(goal, newLog as GoalActivityLog);
+          if (liftValue > newCurrent) newCurrent = liftValue;
+        } else if (goal.metric === 'workout_streak' || goal.metric === 'nutrition_avg') {
+          // These need full recompute — pull all logs in window and rerun
+          const { data: allLogs } = await admin
+            .from('activity_logs')
+            .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
+            .eq('user_id', userId)
+            .gte('logged_at', goal.window_start);
+          newCurrent = recomputeGoalProgress(goal, (allLogs || []) as GoalActivityLog[]);
+        } else {
+          // Sum metrics: incremental add
+          const delta = progressFromLog(goal, newLog as GoalActivityLog);
+          newCurrent = newCurrent + delta;
+        }
+
+        if (newCurrent === goal.current) continue; // no change
+
+        const justCompleted = !goal.is_completed && newCurrent >= goal.target;
+
+        const updateRow: any = { current: newCurrent };
+        if (justCompleted) {
+          updateRow.is_completed = true;
+          updateRow.completed_at = new Date().toISOString();
+        }
+
+        await admin.from('goals').update(updateRow).eq('id', goal.id);
+
+        if (justCompleted) {
+          completedGoals.push({ ...goal, ...updateRow });
+          // Auto-post to feed announcing completion. Caption is short and
+          // celebratory; no media. The post is public so followers see it.
+          try {
+            const caption = `🎯 Goal hit: ${goal.title} — ${newCurrent.toFixed(0)} ${goal.unit}!`;
+            const { data: postRow } = await admin.from('posts').insert({
+              user_id: userId,
+              caption,
+              post_type: 'general',
+              is_public: true,
+            }).select('id').single();
+            if (postRow?.id) {
+              await admin.from('goals').update({ feed_post_id: postRow.id }).eq('id', goal.id);
+            }
+          } catch (e) {
+            console.error('[goals] auto-post failed', e);
+          }
+        }
+      }
+
+      return NextResponse.json({ ok: true, completed: completedGoals });
+    }
+
+    // ── Recompute a single goal's current value from full history ──────────
+    // Used when creating a goal (some past logs may already count) or
+    // when the user deletes a contributing log.
+    if (action === 'recompute_goal') {
+      const { goalId } = payload || {};
+      if (!goalId) return NextResponse.json({ error: 'Missing goalId' }, { status: 400 });
+
+      const { data: goal } = await admin.from('goals').select('*').eq('id', goalId).maybeSingle();
+      if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
+
+      const { data: logs } = await admin
+        .from('activity_logs')
+        .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
+        .eq('user_id', goal.user_id)
+        .gte('logged_at', goal.window_start);
+
+      const newCurrent = recomputeGoalProgress(goal as GoalType, (logs || []) as GoalActivityLog[]);
+      const justCompleted = !goal.is_completed && newCurrent >= goal.target;
+      const updateRow: any = { current: newCurrent };
+      if (justCompleted) {
+        updateRow.is_completed = true;
+        updateRow.completed_at = new Date().toISOString();
+      }
+      await admin.from('goals').update(updateRow).eq('id', goalId);
+
+      return NextResponse.json({ ok: true, current: newCurrent, completed: justCompleted });
+    }
+
+    // ── Pin / unpin a badge ────────────────────────────────────────────────
+    // pinSlot: 1-5 to pin, null to unpin. UI enforces the 5-pin cap.
+    if (action === 'pin_badge') {
+      const { userId, badgeRowId, pinSlot } = payload || {};
+      if (!userId || !badgeRowId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      // If pinning to a slot, kick out any other badge in that slot first.
+      // This lets the user "swap" pinned badges by re-pinning to an
+      // occupied slot, which feels right — explicit "unpin first" is clunky.
+      if (pinSlot != null) {
+        await admin
+          .from('badges')
+          .update({ pin_slot: null })
+          .eq('user_id', userId)
+          .eq('pin_slot', pinSlot)
+          .neq('id', badgeRowId);
+      }
+
+      const { error } = await admin
+        .from('badges')
+        .update({ pin_slot: pinSlot })
+        .eq('id', badgeRowId)
+        .eq('user_id', userId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Workout buddy: request a match ─────────────────────────────────────
+    // Either pops the oldest waiting user with the same (category, tier)
+    // and creates a buddy_matches row, OR puts the requester in the queue.
+    //
+    // tierTargets defines the total to compete on. Two-week window.
+    if (action === 'buddy_request_match') {
+      const { userId, category, tier } = payload || {};
+      if (!userId || !category || !tier) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      // Already in an active match for this category? Don't double-match.
+      const { data: existingMatch } = await admin
+        .from('buddy_matches')
+        .select('id')
+        .eq('category', category)
+        .eq('status', 'active')
+        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+        .maybeSingle();
+      if (existingMatch) {
+        return NextResponse.json({ ok: true, status: 'already_matched', matchId: existingMatch.id });
+      }
+
+      // Look for a waiting user with same category+tier (excluding self).
+      const { data: waiter } = await admin
+        .from('buddy_queue')
+        .select('id, user_id')
+        .eq('category', category)
+        .eq('tier', tier)
+        .neq('user_id', userId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      // Target metric/value lookup. Mirrors the rivals tier idea but
+      // expressed as a 2-week shared total. Keep flat to avoid more DB
+      // tables — duplicate of UI table is OK at this size.
+      const TARGETS: Record<string, Record<string, { metric: string; value: number; unit: string }>> = {
+        running:  { beginner: { metric: 'distance', value: 10,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 25,  unit: 'miles' }, elite: { metric: 'distance', value: 50,  unit: 'miles' } },
+        walking:  { beginner: { metric: 'distance', value: 20,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 50,  unit: 'miles' }, elite: { metric: 'distance', value: 100, unit: 'miles' } },
+        biking:   { beginner: { metric: 'distance', value: 30,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 100, unit: 'miles' }, elite: { metric: 'distance', value: 200, unit: 'miles' } },
+        lifting:  { beginner: { metric: 'count',    value: 6,   unit: 'workouts' }, intermediate: { metric: 'count',    value: 10,  unit: 'workouts' }, elite: { metric: 'count',    value: 14,  unit: 'workouts' } },
+        swimming: { beginner: { metric: 'duration', value: 60,  unit: 'min'      }, intermediate: { metric: 'duration', value: 180, unit: 'min'   }, elite: { metric: 'duration', value: 360, unit: 'min'   } },
+        combat:   { beginner: { metric: 'count',    value: 4,   unit: 'sessions'}, intermediate: { metric: 'count',    value: 8,   unit: 'sessions'}, elite: { metric: 'count',    value: 12,  unit: 'sessions'} },
+      };
+      const tierConfig = TARGETS[category]?.[tier];
+      if (!tierConfig) return NextResponse.json({ error: 'Invalid category/tier' }, { status: 400 });
+
+      if (waiter) {
+        // Match found! Create the match and remove the waiter from queue.
+        const startsAt = new Date();
+        const endsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const { data: match, error: matchErr } = await admin
+          .from('buddy_matches')
+          .insert({
+            user_a: waiter.user_id, // they were here first
+            user_b: userId,
+            category,
+            tier,
+            target_metric: tierConfig.metric,
+            target_value: tierConfig.value,
+            target_unit: tierConfig.unit,
+            starts_at: startsAt.toISOString(),
+            ends_at: endsAt.toISOString(),
+            status: 'active',
+          })
+          .select()
+          .single();
+        if (matchErr) return NextResponse.json({ error: matchErr.message }, { status: 500 });
+
+        // Remove waiter from queue
+        await admin.from('buddy_queue').delete().eq('id', waiter.id);
+
+        // Notify the waiter that they got matched
+        try {
+          await admin.from('notifications').insert({
+            user_id: waiter.user_id,
+            from_user_id: userId,
+            type: 'buddy_matched',
+            reference_id: match.id,
+            body: `You've been matched with a workout buddy!`,
+          });
+        } catch { /* notifications table may not have all fields */ }
+
+        return NextResponse.json({ ok: true, status: 'matched', match });
+      } else {
+        // No match — add to queue.
+        // Upsert because a user may have re-clicked Find Match.
+        await admin
+          .from('buddy_queue')
+          .upsert({ user_id: userId, category, tier }, { onConflict: 'user_id,category,tier' });
+        return NextResponse.json({ ok: true, status: 'queued' });
+      }
+    }
+
+    // ── Workout buddy: cancel queue entry ──────────────────────────────────
+    if (action === 'buddy_cancel_queue') {
+      const { userId, category, tier } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      let q = admin.from('buddy_queue').delete().eq('user_id', userId);
+      if (category) q = q.eq('category', category);
+      if (tier) q = q.eq('tier', tier);
+      await q;
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Workout buddy: update progress from a new log ──────────────────────
+    // Called alongside update_goals_from_log. Bumps either user_a_progress
+    // or user_b_progress on every active match the user is in.
+    if (action === 'buddy_update_from_log') {
+      const { userId, logId } = payload || {};
+      if (!userId || !logId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      const { data: log } = await admin
+        .from('activity_logs')
+        .select('id, log_type, logged_at, workout_category, workout_type, cardio')
+        .eq('id', logId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!log || log.log_type !== 'workout') return NextResponse.json({ ok: true });
+
+      const { data: matches } = await admin
+        .from('buddy_matches')
+        .select('*')
+        .eq('status', 'active')
+        .or(`user_a.eq.${userId},user_b.eq.${userId}`);
+
+      if (!matches || matches.length === 0) return NextResponse.json({ ok: true });
+
+      const completedMatches: any[] = [];
+      for (const match of matches as any[]) {
+        // Check window
+        const ts = new Date(log.logged_at).getTime();
+        if (ts < new Date(match.starts_at).getTime()) continue;
+        if (ts > new Date(match.ends_at).getTime()) continue;
+        // Category match
+        if ((log as any).workout_category !== match.category) continue;
+
+        // Compute contribution
+        let contrib = 0;
+        if (match.target_metric === 'count') {
+          contrib = 1;
+        } else if (match.target_metric === 'distance') {
+          const cardio = Array.isArray((log as any).cardio) ? (log as any).cardio : [];
+          for (const c of cardio) contrib += parseFloat(String((c as any).distance || '0')) || 0;
+        } else if (match.target_metric === 'duration') {
+          const cardio = Array.isArray((log as any).cardio) ? (log as any).cardio : [];
+          for (const c of cardio) contrib += parseFloat(String((c as any).duration || '0')) || 0;
+        }
+        if (contrib <= 0) continue;
+
+        const isUserA = match.user_a === userId;
+        const newProgress = (isUserA ? match.user_a_progress : match.user_b_progress) + contrib;
+        const updateRow: any = isUserA ? { user_a_progress: newProgress } : { user_b_progress: newProgress };
+
+        // Both users hit target = match completes (both win)
+        const otherProgress = isUserA ? match.user_b_progress : match.user_a_progress;
+        if (newProgress >= match.target_value && otherProgress >= match.target_value) {
+          updateRow.status = 'completed';
+          updateRow.completed_at = new Date().toISOString();
+          completedMatches.push({ ...match, ...updateRow });
+        }
+
+        await admin.from('buddy_matches').update(updateRow).eq('id', match.id);
+      }
+
+      return NextResponse.json({ ok: true, completed: completedMatches });
     }
 
     // ── Recompute all PRs for a user (admin / backfill) ────────────────────
