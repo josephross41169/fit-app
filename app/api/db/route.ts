@@ -785,16 +785,38 @@ export async function POST(req: NextRequest) {
         .from('conversation_participants').select('conversation_id').eq('user_id', userId);
       if (!partRows || partRows.length === 0) return NextResponse.json({ conversations: [] });
       const convIds = partRows.map((p: any) => p.conversation_id);
+      // Pull group_id alongside the rest. If group_id is non-null this is a
+      // group chat; we surface the group name + emoji as the "other user"
+      // shape so the existing UI can render it without big changes.
       const { data: convRows } = await admin
         .from('conversations')
-        .select(`id, created_at, conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+        .select(`id, created_at, group_id, group:group_id(id,name,emoji,slug), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
         .in('id', convIds);
       const conversations = (convRows || []).map((row: any) => {
-        const other = (row.conversation_participants || []).find((p: any) => p.user_id !== userId);
         const msgs = (row.messages || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const isGroup = !!row.group_id;
+        // For DMs the "other user" is the participant that isn't me. For
+        // groups we synthesize a pseudo-user from the group info so the
+        // existing list UI doesn't need to special-case rendering.
+        let otherUser: any;
+        if (isGroup && row.group) {
+          otherUser = {
+            id: row.group.id,
+            username: row.group.slug || row.group.name,
+            full_name: `${row.group.emoji || '💬'} ${row.group.name}`,
+            avatar_url: null,
+          };
+        } else {
+          const other = (row.conversation_participants || []).find((p: any) => p.user_id !== userId);
+          otherUser = other?.users || { id:'', username:'Unknown', full_name:'Unknown', avatar_url: null };
+        }
         return {
-          id: row.id, created_at: row.created_at,
-          otherUser: other?.users || { id:'', username:'Unknown', full_name:'Unknown', avatar_url: null },
+          id: row.id,
+          created_at: row.created_at,
+          group_id: row.group_id || null,
+          group: row.group || null,
+          isGroup,
+          otherUser,
           lastMessage: msgs[0] || null,
           unread: msgs[0] ? msgs[0].sender_id !== userId : false,
         };
