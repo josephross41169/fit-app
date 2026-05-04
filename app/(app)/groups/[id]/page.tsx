@@ -2649,49 +2649,11 @@ export default function GroupPage() {
               {challengeViewTab === "completed" ? (
                 /* ── COMPLETED TAB ── */
                 <div>
-                  {/* Completed group goals */}
-                  {groupGoals.filter(g=>g.status!=="active").length > 0 && (
-                    <div style={{marginBottom:20}}>
-                      <div style={{fontWeight:800,fontSize:14,color:"#9CA3AF",marginBottom:12}}>🎯 Past Group Goals</div>
-                      {groupGoals.filter(g=>g.status!=="active").map(goal=>{
-                        const GMETRICS2: Record<string,{label:string;icon:string;unit:string}> = {
-                          miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
-                          miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
-                          runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
-                          lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
-                          total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
-                          meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
-                          sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
-                          nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
-                          // Legacy keys preserved so old goals still display
-                          miles_cycled:{label:"Miles Cycled",icon:"🚴",unit:"mi"},total_workouts:{label:"Total Workouts",icon:"💪",unit:"workouts"},
-                          weight_lifted:{label:"Weight Lifted",icon:"🏋️",unit:"lbs"},weight_lost:{label:"Weight Lost",icon:"⚖️",unit:"lbs"},
-                        };
-                        const meta2=GMETRICS2[goal.metric]||GMETRICS2.miles_run;
-                        const members2=goal.group_challenge_members||[];
-                        const total2=members2.reduce((s:number,m:any)=>s+(m.contribution||0),0);
-                        const pct2=Math.min(100,Math.round((total2/(goal.goal||1))*100));
-                        return (
-                          <div key={goal.id} style={{background:"#111118",borderRadius:14,border:"1px solid #2D1F52",marginBottom:10,padding:"14px 16px"}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                              <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0"}}>{goal.title}</div>
-                              <span style={{fontSize:12,fontWeight:800,color:pct2>=100?"#4ADE80":"#6B7280"}}>{pct2}%</span>
-                            </div>
-                            <div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>{meta2.icon} {meta2.label} · {total2}/{goal.goal||0} {meta2.unit}</div>
-                            <div style={{height:6,background:"rgba(255,255,255,0.06)",borderRadius:99,overflow:"hidden"}}>
-                              <div style={{height:"100%",width:`${pct2}%`,background:pct2>=100?"#4ADE80":"#7C3AED",borderRadius:99}}/>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
                   {/* Completed member challenges */}
                   {(()=>{
                     const now=new Date();
                     const completed=displayChallenges.filter((ch:any)=>ch.is_active===false||(ch.deadline&&new Date(ch.deadline)<=now));
-                    if(completed.length===0 && groupGoals.filter(g=>g.status!=="active").length===0) return (
+                    if(completed.length===0) return (
                       <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
                         <div style={{fontSize:40,marginBottom:12}}>🏅</div>
                         <div style={{fontWeight:700,fontSize:15,color:"#F0F0F0",marginBottom:8}}>No completed challenges yet</div>
@@ -2763,145 +2725,7 @@ export default function GroupPage() {
               ) : (
                 /* ── ACTIVE TAB ── */
                 <div>
-                  {/* ── GROUP GOALS section ── */}
-                  <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
-                    🎯 Group Goals
-                    <span style={{fontSize:11,color:"#6B7280",fontWeight:400}}>· auto-applied to everyone</span>
-                  </div>
-
-              {/* Active group goals */}
-              {groupGoals.filter(g=>g.status==="active").map(goal=>{
-                const GMETRICS: Record<string,{label:string;icon:string;unit:string}> = {
-                  // Fitness — keys must match groupGoalSync.ts
-                  miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},
-                  miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
-                  miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},
-                  miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
-                  runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},
-                  workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
-                  lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},
-                  yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
-                  total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
-                  // Wellness
-                  meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},
-                  cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
-                  sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},
-                  wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
-                  nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
-                  // Legacy keys — keep so old goals still render readable
-                  miles_cycled:{label:"Miles Cycled",icon:"🚴",unit:"mi"},
-                  total_workouts:{label:"Total Workouts",icon:"💪",unit:"workouts"},
-                  weight_lifted:{label:"Weight Lifted",icon:"🏋️",unit:"lbs"},
-                  weight_lost:{label:"Weight Lost",icon:"⚖️",unit:"lbs"},
-                };
-                const meta = GMETRICS[goal.metric] || GMETRICS.miles_run;
-                const members = goal.group_challenge_members || [];
-                const totalContrib = members.reduce((s:number,m:any)=>s+(m.contribution||0),0);
-                const goalTarget = goal.goal || 1;
-                const pct = Math.min(100, Math.round((totalContrib/goalTarget)*100));
-                const top3 = [...members].sort((a:any,b:any)=>(b.contribution||0)-(a.contribution||0)).slice(0,3);
-                const daysLeft = goal.end_date ? Math.max(0,Math.ceil((new Date(goal.end_date).getTime()-Date.now())/86400000)) : null;
-
-                return (
-                  <div key={goal.id} style={{marginBottom:16,borderRadius:18,overflow:"hidden",
-                    border:"2px solid #7C3AED",background:"linear-gradient(135deg,#1A1230,#120A28)"}}>
-                    {/* Header */}
-                    <div style={{background:"linear-gradient(135deg,#2D1B69,#1A0D3E)",padding:"16px 20px"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontWeight:900,fontSize:17,color:"#fff",marginBottom:2}}>{goal.title}</div>
-                          <div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>
-                            {meta.icon} {meta.label} · {members.length} members enrolled
-                            {daysLeft!==null && <span> · ⏱ {daysLeft}d left</span>}
-                          </div>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                          <div style={{textAlign:"center" as const}}>
-                            <div style={{fontSize:28,fontWeight:900,color:"#fff"}}>{totalContrib}</div>
-                            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase" as const}}>/ {goalTarget} {meta.unit}</div>
-                          </div>
-                          {isOwnerOrMod && (
-                            <button onClick={()=>deleteGroupGoal(goal.id)} style={{
-                              width:28,height:28,borderRadius:"50%",border:"none",
-                              background:"rgba(239,68,68,0.2)",color:"#EF4444",
-                              cursor:"pointer",fontSize:14,display:"flex",
-                              alignItems:"center",justifyContent:"center",flexShrink:0,
-                            }}>✕</button>
-                          )}
-                        </div>
-                      </div>
-                      {/* Progress bar */}
-                      <div style={{marginBottom:6}}>
-                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:11,color:"rgba(255,255,255,0.6)"}}>
-                          <span>Team Progress</span><span style={{color:"#7C3AED",fontWeight:800}}>{pct}%</span>
-                        </div>
-                        <div style={{height:10,background:"rgba(255,255,255,0.1)",borderRadius:99,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${pct}%`,borderRadius:99,transition:"width 0.8s",
-                            background:pct>=100?"linear-gradient(90deg,#4ADE80,#34D399)":"linear-gradient(90deg,#7C3AED,#A78BFA)"}}/>
-                        </div>
-                        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>
-                          {pct>=100?"🏆 Goal reached! Keep going!":
-                            `${goalTarget-totalContrib} ${meta.unit} to go`}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Top 3 contributors */}
-                    <div style={{padding:"14px 20px"}}>
-                      <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:1,marginBottom:10}}>
-                        🏅 Top Contributors
-                      </div>
-                      {top3.length === 0 ? (
-                        <div style={{fontSize:12,color:"#6B7280",textAlign:"center" as const,padding:"10px 0"}}>No contributions yet — be the first!</div>
-                      ) : top3.map((m:any,i:number)=>{
-                        const u = m.users;
-                        const contrib = m.contribution || 0;
-                        const maxContrib = top3[0]?.contribution || 1;
-                        return (
-                          <div key={m.user_id||i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                            <span style={{fontSize:16,width:24,textAlign:"center" as const,flexShrink:0}}>
-                              {i===0?"🥇":i===1?"🥈":"🥉"}
-                            </span>
-                            <div style={{width:34,height:34,borderRadius:"50%",flexShrink:0,overflow:"hidden",
-                              background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
-                              display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#fff"}}>
-                              {u?.avatar_url
-                                ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-                                : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
-                            </div>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontWeight:700,fontSize:13,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                {u?.full_name||u?.username||"Member"}
-                              </div>
-                              <div style={{height:4,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:3,overflow:"hidden"}}>
-                                <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
-                                  background:i===0?"#F5A623":"#7C3AED",borderRadius:99}}/>
-                              </div>
-                            </div>
-                            <span style={{fontSize:12,fontWeight:800,color:i===0?"#F5A623":"#A78BFA",flexShrink:0}}>
-                              {contrib} {meta.unit}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {groupGoals.filter(g=>g.status==="active").length === 0 && (
-                <div style={{textAlign:"center",padding:"24px",background:"#111118",borderRadius:16,
-                  border:"1px dashed #2D1F52",marginBottom:20}}>
-                  <div style={{fontSize:32,marginBottom:8}}>🎯</div>
-                  <div style={{fontWeight:700,fontSize:14,color:"#F0F0F0",marginBottom:4}}>No active group goals</div>
-                  <div style={{fontSize:12,color:"#6B7280"}}>
-                    {isOwnerOrMod?"Set a goal for the whole group to work toward together.":"Ask an admin to set a group goal."}
-                  </div>
-                </div>
-              )}
-
-              <div style={{height:1,background:"#2D1F52",margin:"20px 0"}}/>
-
-              {/* ── MEMBER CHALLENGES (opt-in) ── */}
+                  {/* ── MEMBER CHALLENGES (opt-in) ── */}
               <div style={{fontWeight:800,fontSize:14,color:"#F0F0F0",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
                 ⚡ Member Challenges
                 <span style={{fontSize:11,color:"#6B7280",fontWeight:400}}>· optional, members choose to join</span>
@@ -3287,7 +3111,16 @@ export default function GroupPage() {
                   (goalsHistoryTab === "active" ? activeGoals : pastGoals).map((goal: any) => {
                     const meta = GMETRICS[goal.metric] || GMETRICS.workouts;
                     const target = goal.goal || 0;
-                    const current = goal.creator_score || 0;
+                    // Compute current progress by summing all members' contributions
+                    // (same source the Challenges/Active tab uses). The legacy
+                    // `creator_score` field only tracked the goal-creator's solo
+                    // progress and ignored everyone else, which is why this tab
+                    // used to show 0 even when contributions existed.
+                    const members = goal.group_challenge_members || [];
+                    const current = members.reduce((s: number, m: any) => s + (m.contribution || 0), 0);
+                    const top3 = [...members]
+                      .sort((a: any, b: any) => (b.contribution || 0) - (a.contribution || 0))
+                      .slice(0, 3);
                     const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
                     const isComplete = goal.status !== "active";
                     return (
@@ -3307,8 +3140,11 @@ export default function GroupPage() {
                               )}
                             </div>
                           </div>
-                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#4ADE80":"#A78BFA",flexShrink:0}}>
-                            {Math.round(current)}/{target} {meta.unit}
+                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#4ADE80":"#A78BFA",flexShrink:0,textAlign:"right" as const}}>
+                            <div>{Math.round(current * 100) / 100}/{target} {meta.unit}</div>
+                            {target > 0 && (
+                              <div style={{fontSize:10,color:"#6B7280",fontWeight:600,marginTop:1}}>{Math.round(pct)}%</div>
+                            )}
                           </div>
                         </div>
                         <div style={{height:6,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
@@ -3318,6 +3154,50 @@ export default function GroupPage() {
                             borderRadius:99,
                           }}/>
                         </div>
+
+                        {/* Top contributors — surfaces who's actually doing the work
+                            so the goal feels social rather than abstract. Only
+                            renders when at least one person has logged toward it. */}
+                        {top3.length > 0 && top3.some((m: any) => (m.contribution || 0) > 0) && (
+                          <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                            <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
+                              🏅 Top Contributors
+                            </div>
+                            {top3.map((m: any, i: number) => {
+                              const u = m.users;
+                              const contrib = m.contribution || 0;
+                              if (contrib <= 0) return null;
+                              const maxContrib = top3[0]?.contribution || 1;
+                              return (
+                                <div key={m.user_id || i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                                  <span style={{fontSize:14,width:20,textAlign:"center" as const,flexShrink:0}}>
+                                    {i===0?"🥇":i===1?"🥈":"🥉"}
+                                  </span>
+                                  <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
+                                    background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
+                                    {u?.avatar_url
+                                      ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                                      : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
+                                  </div>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontWeight:700,fontSize:12,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                      {u?.full_name||u?.username||"Member"}
+                                    </div>
+                                    <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:2,overflow:"hidden"}}>
+                                      <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
+                                        background:i===0?"#F5A623":"#7C3AED",borderRadius:99}}/>
+                                    </div>
+                                  </div>
+                                  <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#A78BFA",flexShrink:0}}>
+                                    {Math.round(contrib * 100) / 100} {meta.unit}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {isOwnerOrMod && goal.status === "active" && (
                           <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
                             <button onClick={() => deleteGroupGoal(goal.id)} style={{
