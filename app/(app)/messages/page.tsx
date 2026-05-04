@@ -37,12 +37,14 @@ interface Conversation {
   };
   lastMessage: { content: string; created_at: string; sender_id: string } | null;
   unread: boolean;
-  // Group chat extension. When isGroup is true, otherUser is synthesized
-  // from group info (id = group id, full_name = "💬 Group Name"). The
-  // real group object is on `group` for routing into /groups/[slug].
   group_id?: string | null;
   isGroup?: boolean;
-  group?: { id: string; name: string; emoji: string | null; slug: string | null } | null;
+  group?: { id: string; name: string; emoji: string | null; slug: string | null; banner_url?: string | null; creator_id?: string | null } | null;
+  // Set on group conversations only — user's role on that group. Owners
+  // and moderators can change the group's photo from the chat header.
+  myRole?: 'owner' | 'moderator' | 'member' | null;
+  // Headcount for groups (so we can show "5 members" in the thread header).
+  memberCount?: number;
 }
 
 interface Message {
@@ -122,6 +124,10 @@ function MessagesPageInner() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(initialConvId);
   const [messages, setMessages] = useState<Message[]>([]);
+  // Sender info lookup for the active conversation. Populated when the
+  // active conv is a group (so we can show "Liam Pavone" above each
+  // message). For DMs we don't bother — name's already in the header.
+  const [groupSenders, setGroupSenders] = useState<Record<string, { username: string; full_name: string | null; avatar_url: string | null }>>({});
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -274,15 +280,10 @@ function MessagesPageInner() {
   }, [user, loadConversations]);
 
   // ── Select conversation ─────────────────────────────────────────────────────
-  // Group conversations route into the group page's Chat tab — that's
-  // where group chat already lives, with full features (members, posts,
-  // etc). DMs open inline in the messages thread panel.
+  // Both DMs and group chats open in the same inline thread panel. The
+  // get_messages query just loads whatever messages belong to the
+  // conversation_id — it doesn't care if it's a group or DM.
   const selectConversation = (conv: Conversation) => {
-    if (conv.isGroup && conv.group) {
-      const slug = conv.group.slug || conv.group.id;
-      window.location.href = `/groups/${slug}?tab=chat`;
-      return;
-    }
     setActiveConvId(conv.id);
     loadMessages(conv.id);
     setMobileShowThread(true);
@@ -297,6 +298,34 @@ function MessagesPageInner() {
       loadMessages(activeConvId);
     }
   }, [activeConvId, loadMessages]);
+
+  // For group conversations, fetch each unique sender's profile so we can
+  // show "Liam Pavone" above their messages. Skipped for DMs since the
+  // thread header already shows the other person's name. Cached in
+  // groupSenders so repeated loads don't refetch known users.
+  useEffect(() => {
+    const activeConv = conversations.find((c) => c.id === activeConvId);
+    if (!activeConv?.isGroup || messages.length === 0) return;
+    const knownIds = new Set(Object.keys(groupSenders));
+    const missing = Array.from(new Set(messages.map(m => m.sender_id))).filter(id => !knownIds.has(id));
+    if (missing.length === 0) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .in('id', missing);
+        if (data) {
+          setGroupSenders(prev => {
+            const next = { ...prev };
+            for (const u of data as any[]) next[u.id] = u;
+            return next;
+          });
+        }
+      } catch (e) { console.error(e); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, activeConvId, conversations]);
 
   // ── Send message ────────────────────────────────────────────────────────────
   const sendMessage = async () => {
@@ -557,7 +586,9 @@ function MessagesPageInner() {
       >
         {activeConv ? (
           <>
-            {/* Thread header */}
+            {/* Thread header — different look for DMs vs group chats.
+                For groups we show "Group · N members" as the subtitle and,
+                for owners/moderators, a small "Change photo" button. */}
             <div
               className="flex items-center gap-3 px-4 py-3 border-b"
               style={{ borderColor: "#1E2130", background: "#0F1117" }}
@@ -574,14 +605,67 @@ function MessagesPageInner() {
                 avatarUrl={activeConv.otherUser.avatar_url}
                 size={36}
               />
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="font-semibold text-sm" style={{ color: "#E2E8F0" }}>
                   {activeConv.otherUser.full_name || activeConv.otherUser.username}
                 </div>
                 <div className="text-xs" style={{ color: "#8892A4" }}>
-                  @{activeConv.otherUser.username}
+                  {activeConv.isGroup
+                    ? `Group · ${activeConv.memberCount ?? 0} member${activeConv.memberCount === 1 ? "" : "s"}`
+                    : `@${activeConv.otherUser.username}`}
                 </div>
               </div>
+              {/* Change photo affordance — only for group owners/mods.
+                  Tapping the label opens the hidden file input below. */}
+              {activeConv.isGroup && (activeConv.myRole === 'owner' || activeConv.myRole === 'moderator') && activeConv.group && (
+                <label
+                  htmlFor={`group-photo-${activeConv.group.id}`}
+                  style={{
+                    fontSize: 11, fontWeight: 700, color: "#A78BFA",
+                    background: "#1A1228", border: "1px solid #3D2A6E",
+                    padding: "6px 10px", borderRadius: 99, cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  📸 Change
+                  <input
+                    id={`group-photo-${activeConv.group.id}`}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !activeConv.group) return;
+                      try {
+                        const { uploadPhoto } = await import('@/lib/uploadPhoto');
+                        const { compressImage } = await import('@/lib/compressImage');
+                        const reader = new FileReader();
+                        reader.onload = async (ev) => {
+                          const dataUrl = ev.target!.result as string;
+                          const path = `groups/${activeConv.group!.id}/banner.jpg`;
+                          const compressed = await compressImage(dataUrl);
+                          const url = await uploadPhoto(compressed, 'activity', path);
+                          if (url) {
+                            const cacheBusted = `${url}?t=${Date.now()}`;
+                            await fetch('/api/db', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                action: 'update_group_banner',
+                                payload: { groupId: activeConv.group!.id, bannerUrl: cacheBusted, userId: user?.id || null },
+                              }),
+                            });
+                            // Reload conversations so the new image appears immediately.
+                            loadConversations();
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      } catch (err) { console.error(err); }
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             {/* Messages */}
@@ -614,6 +698,32 @@ function MessagesPageInner() {
                     key={msg.id}
                     className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
                   >
+                    {/* Sender label — only in groups, only on incoming
+                        messages (your own messages are right-aligned + you
+                        already know they're yours). Helps distinguish
+                        between multiple participants. */}
+                    {!isMine && activeConv.isGroup && groupSenders[msg.sender_id] && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 4, fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>
+                        {groupSenders[msg.sender_id].avatar_url ? (
+                          <img
+                            src={groupSenders[msg.sender_id].avatar_url || ""}
+                            alt=""
+                            style={{ width: 18, height: 18, borderRadius: "50%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 9, fontWeight: 800, color: "#fff",
+                          }}>
+                            {(groupSenders[msg.sender_id].full_name || groupSenders[msg.sender_id].username || "?")[0].toUpperCase()}
+                          </div>
+                        )}
+                        <span>{groupSenders[msg.sender_id].full_name || groupSenders[msg.sender_id].username}</span>
+                      </div>
+                    )}
+
                     {/* Story-reply / story-reaction header tag */}
                     {(storyReplyUrl || storyReactUrl) && !isMine && (
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
