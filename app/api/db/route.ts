@@ -794,7 +794,7 @@ export async function POST(req: NextRequest) {
       let convRows: any[] | null = null;
       const groupAware = await admin
         .from('conversations')
-        .select(`id, created_at, group_id, group:groups!conversations_group_id_fkey(id,name,emoji,slug), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+        .select(`id, created_at, group_id, group:groups!conversations_group_id_fkey(id,name,emoji,slug,banner_url,creator_id), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
         .in('id', convIds);
       if (groupAware.error) {
         // Fall back to legacy schema (no group_id) so DMs still load.
@@ -807,6 +807,22 @@ export async function POST(req: NextRequest) {
         convRows = groupAware.data || [];
       }
 
+      // Pre-fetch the user's role for each group they're in. Used so
+      // the messages UI can show the "change photo" button to owners
+      // and moderators only.
+      const groupConvIds = (convRows || []).filter((r: any) => r.group_id).map((r: any) => r.group_id);
+      const groupRoleByGroupId = new Map<string, string>();
+      if (groupConvIds.length > 0) {
+        const { data: roleRows } = await admin
+          .from('group_members')
+          .select('group_id, role')
+          .eq('user_id', userId)
+          .in('group_id', groupConvIds);
+        for (const r of (roleRows || []) as any[]) {
+          groupRoleByGroupId.set(r.group_id, r.role);
+        }
+      }
+
       const conversations = (convRows || []).map((row: any) => {
         const msgs = (row.messages || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         const isGroup = !!row.group_id;
@@ -816,18 +832,27 @@ export async function POST(req: NextRequest) {
             id: row.group.id,
             username: row.group.slug || row.group.name,
             full_name: `${row.group.emoji || '💬'} ${row.group.name}`,
-            avatar_url: null,
+            // Use the group's banner image as the chat avatar.
+            avatar_url: row.group.banner_url || null,
           };
         } else {
           const other = (row.conversation_participants || []).find((p: any) => p.user_id !== userId);
           otherUser = other?.users || { id:'', username:'Unknown', full_name:'Unknown', avatar_url: null };
         }
+        // Member count for groups — useful for the thread header.
+        const memberCount = isGroup ? (row.conversation_participants?.length || 0) : 0;
+        const myRole = isGroup ? (groupRoleByGroupId.get(row.group_id) || 'member') : null;
         return {
           id: row.id,
           created_at: row.created_at,
           group_id: row.group_id || null,
           group: row.group || null,
           isGroup,
+          // Role of the current user on this group (for permission checks
+          // in the UI). Null for DMs.
+          myRole,
+          // Total participant count — surface "5 members" in group chat header.
+          memberCount,
           otherUser,
           lastMessage: msgs[0] || null,
           unread: msgs[0] ? msgs[0].sender_id !== userId : false,
