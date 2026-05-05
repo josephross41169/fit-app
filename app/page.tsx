@@ -27,7 +27,7 @@ export default function LandingPage() {
         {/* Logo */}
         <div className="mb-3 text-center">
           <div className="text-9xl font-black text-white tracking-tighter leading-none drop-shadow-lg">
-            FIT
+            Livelee
           </div>
           <div className="text-5xl -mt-2">💪</div>
         </div>
