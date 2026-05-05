@@ -13,30 +13,28 @@
 //
 // Why this layout:
 //   - Workout + Wellness on top: both fit comfortably in half-widths since
-//     wellness usually has 1-3 short entries and workout has tabular data
-//     that already wraps fine in a narrower column.
+//     wellness usually has 1-3 short entries and workout has tabular data.
 //   - Nutrition full-width on the bottom: meals plus photos need horizontal
 //     space; food pics look better laid out in a row than cropped narrow.
-//   - Result is roughly 1.4:1 ratio — works as Instagram feed post (close
-//     to square), X attachment, Facebook, anywhere.
+//   - Result is roughly 1.4:1 — works as Instagram feed post, X, Facebook.
 //
-// Why we build our own layout instead of snapshotting the live card:
-//   The visible profile card is a single-column tall layout. Capturing it
-//   would produce a long skinny image only good for Stories. Building a
-//   wider composition off-screen gives us a shape that posts cleanly on
-//   every platform.
+// CORS handling:
+//   Supabase storage serves photos with CORS headers, but if any image
+//   fails to load with crossOrigin='anonymous' it would taint the canvas
+//   and html2canvas would throw. We pre-validate each photo URL before
+//   render and silently drop any that won't load — better to ship a
+//   share image without a broken photo than crash the share entirely.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 
-// What the caller passes in. Built from the same `day` data the visible
-// DayCard already uses. All sections optional — missing ones render an
-// empty-state tile so the layout grid stays consistent.
+// What the caller passes in. All sections optional — missing ones render
+// an empty-state tile so the layout stays consistent.
 export interface ShareCardData {
-  dateLabel: string;          // "Yesterday" or "Sunday 5/3"
-  monthShort: string;         // "MAY"
-  dayNum: number;             // 4
+  dateLabel: string;
+  monthShort: string;
+  dayNum: number;
   username?: string;
   displayName?: string;
   avatarUrl?: string | null;
@@ -70,8 +68,6 @@ interface Props {
 }
 
 // ─── Composition dimensions ──────────────────────────────────────────────────
-// Designed at 1600px wide. html2canvas renders at scale=2 so output PNG is
-// 3200px wide — sharp on retina displays and high-res social uploads.
 const SHARE_W = 1600;
 
 const C = {
@@ -87,6 +83,28 @@ const C = {
   green:    "#22C55E",
 };
 
+// Pre-validate a photo URL: try to load it with crossOrigin='anonymous' and
+// return true iff it loaded without a CORS taint. We use this to filter
+// out any URLs that would crash html2canvas. 4-second timeout per image
+// so a hanging URL can't hang the share flow.
+function probeImage(url: string): Promise<boolean> {
+  return new Promise(resolve => {
+    if (!url) return resolve(false);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      resolve(ok);
+    };
+    img.onload = () => finish(img.naturalWidth > 0);
+    img.onerror = () => finish(false);
+    img.src = url;
+    setTimeout(() => finish(false), 4000);
+  });
+}
+
 // ─── Main button + portal trigger ────────────────────────────────────────────
 export default function ActivityShareButton({
   data,
@@ -94,28 +112,37 @@ export default function ActivityShareButton({
   style,
 }: Props) {
   const [busy, setBusy] = useState(false);
-  // When true, the off-screen composition is portal-rendered and ready to
-  // be snapshotted.
   const [snapshotMode, setSnapshotMode] = useState(false);
+  const [safePhotos, setSafePhotos] = useState<string[]>([]);
   const shareNodeRef = useRef<HTMLDivElement | null>(null);
 
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
     if (busy) return;
     setBusy(true);
-    setSnapshotMode(true);
 
     try {
-      // Wait for React commit + paint, then for any in-flight images so the
-      // snapshot has full content. 300ms is enough for the layout, image
-      // wait below handles photo loading.
-      await new Promise(r => setTimeout(r, 300));
+      // Pre-flight: filter photo URLs to ones that load cleanly with CORS.
+      // Anything that fails (404, CORS denied, slow-as-mud) is dropped so
+      // it can't taint the canvas later. We do this BEFORE mounting the
+      // share composition so the composition only renders safe images.
+      const candidatePhotos = (data.nutrition?.photoUrls || []).slice(0, 4);
+      const probes = await Promise.all(candidatePhotos.map(probeImage));
+      const safe = candidatePhotos.filter((_, i) => probes[i]);
+      setSafePhotos(safe);
+
+      // Now mount the off-screen composition.
+      setSnapshotMode(true);
+
+      // Wait for React commit + paint.
+      await new Promise(r => setTimeout(r, 400));
 
       const node = shareNodeRef.current;
       if (!node) throw new Error("Share composition failed to mount");
 
-      // Wait for every <img> in the composition to finish loading. Capped
-      // per-image at 3s so a single slow CDN request can't hang capture.
+      // Wait for any <img> inside the composition to fully paint. After the
+      // probe filter above, all remaining images load cleanly — but they
+      // still need a moment to actually render in the DOM.
       const imgs = Array.from(node.querySelectorAll("img"));
       await Promise.all(
         imgs.map(img =>
@@ -130,7 +157,7 @@ export default function ActivityShareButton({
         )
       );
 
-      // Dynamic import — keeps html2canvas (~50KB gz) out of the main bundle.
+      // Dynamic import — keeps html2canvas (~50KB gz) out of main bundle.
       const html2canvasMod = await import("html2canvas");
       const html2canvas = html2canvasMod.default;
 
@@ -142,6 +169,14 @@ export default function ActivityShareButton({
         allowTaint: false,
         windowWidth: SHARE_W,
         windowHeight: node.offsetHeight,
+        // Ignore any element that html2canvas might choke on. We don't
+        // expect this list to do much given the composition is built from
+        // simple divs + validated images, but it's a safety net.
+        ignoreElements: (el) => {
+          // Skip iframes and videos which html2canvas can't render.
+          const tag = el.tagName.toLowerCase();
+          return tag === "iframe" || tag === "video";
+        },
       });
 
       const blob: Blob | null = await new Promise(resolve => {
@@ -152,8 +187,6 @@ export default function ActivityShareButton({
       const fname = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
       const url = URL.createObjectURL(blob);
 
-      // iOS Safari's download attribute is unreliable. Open in a new tab
-      // so the user can long-press → Save to Photos.
       const isIOSSafari =
         typeof navigator !== "undefined" &&
         /iPad|iPhone|iPod/.test(navigator.userAgent) &&
@@ -176,8 +209,17 @@ export default function ActivityShareButton({
     } finally {
       setSnapshotMode(false);
       setBusy(false);
+      setSafePhotos([]);
     }
   }
+
+  // Build the data passed to the composition with only the safe photos.
+  const dataForRender: ShareCardData = {
+    ...data,
+    nutrition: data.nutrition
+      ? { ...data.nutrition, photoUrls: safePhotos }
+      : data.nutrition,
+  };
 
   return (
     <>
@@ -205,9 +247,6 @@ export default function ActivityShareButton({
         {busy ? "⏳" : "📸"}
       </button>
 
-      {/* Off-screen render. Portal'd to body so parent overflow/transform
-          context can't clip it. Positioned far off-screen (rather than
-          display:none) so it lays out properly for html2canvas. */}
       {snapshotMode && typeof document !== "undefined" &&
         createPortal(
           <div
@@ -220,7 +259,7 @@ export default function ActivityShareButton({
               pointerEvents: "none",
             }}
           >
-            <ShareComposition data={data} forwardedRef={shareNodeRef} />
+            <ShareComposition data={dataForRender} forwardedRef={shareNodeRef} />
           </div>,
           document.body
         )
@@ -249,7 +288,7 @@ function ShareComposition({
         boxSizing: "border-box",
       }}
     >
-      {/* ─── Header: date tile + display name + Livelee brand ─── */}
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 32 }}>
         <div
           style={{
@@ -282,7 +321,7 @@ function ShareComposition({
         </div>
       </div>
 
-      {/* ─── TOP ROW: workout (left) + wellness (right), 50/50 split ─── */}
+      {/* Top row: workout + wellness */}
       <div style={{ display: "flex", gap: 24, marginBottom: 24 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <WorkoutTile workout={data.workout} />
@@ -292,13 +331,12 @@ function ShareComposition({
         </div>
       </div>
 
-      {/* ─── BOTTOM ROW: nutrition full width with photos ─── */}
+      {/* Bottom: nutrition full width */}
       <NutritionTile nutrition={data.nutrition} />
     </div>
   );
 }
 
-// ─── Tile: header bar shared by all 3 sections ───────────────────────────────
 function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; subtitle?: string }) {
   return (
     <div
@@ -321,12 +359,10 @@ function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; 
   );
 }
 
-// ─── Workout tile ────────────────────────────────────────────────────────────
 function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
   if (!workout || (!workout.exercises?.length && !workout.cardio?.length)) {
     return <EmptyTile emoji="💪" title="Workout" message="Rest day" />;
   }
-
   const subtitle = [
     workout.duration && workout.duration !== "—" ? `⏱ ${workout.duration}` : null,
     workout.calories ? `🔥 ${workout.calories} cal` : null,
@@ -336,7 +372,6 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
     <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}` }}>
       <TileHeader emoji="💪" title={workout.type || "Workout"} subtitle={subtitle || undefined} />
       <div style={{ padding: 22 }}>
-        {/* Exercise table */}
         {workout.exercises && workout.exercises.length > 0 && (
           <div style={{ marginBottom: workout.cardio && workout.cardio.length > 0 ? 18 : 0 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 100px", gap: 8, fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, padding: "0 4px" }}>
@@ -359,7 +394,6 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
           </div>
         )}
 
-        {/* Cardio summary */}
         {workout.cardio && workout.cardio.length > 0 && (
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🏃 Cardio</div>
@@ -379,7 +413,6 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
   );
 }
 
-// ─── Wellness tile ───────────────────────────────────────────────────────────
 function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
   if (!wellness || !wellness.entries || wellness.entries.length === 0) {
     return <EmptyTile emoji="🌿" title="Wellness" message="None logged" />;
@@ -413,11 +446,12 @@ function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
   );
 }
 
-// ─── Nutrition tile (full width on bottom, fits photos) ──────────────────────
 function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] }) {
   if (!nutrition || (!nutrition.meals?.length && !nutrition.calories)) {
     return <EmptyTile emoji="🥗" title="Nutrition" message="None logged" />;
   }
+  // Photos are already pre-validated by the parent — only safe ones reach
+  // here. Cap at 4 for layout (2x2 grid).
   const photos = (nutrition.photoUrls || []).slice(0, 4);
   return (
     <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}` }}>
@@ -427,9 +461,7 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
         subtitle={`${nutrition.calories} kcal · ${nutrition.protein}g protein`}
       />
       <div style={{ padding: 22, display: "flex", gap: 24 }}>
-        {/* Left: macros + meals */}
         <div style={{ flex: photos.length > 0 ? "1.5" : "1", minWidth: 0 }}>
-          {/* Macros row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
             <Macro value={nutrition.calories} label="Calories" unit="kcal" color={C.gold} />
             <Macro value={nutrition.protein} label="Protein" unit="g" color="#3B82F6" />
@@ -437,7 +469,6 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
             <Macro value={nutrition.fat} label="Fat" unit="g" color={C.green} />
           </div>
 
-          {/* Meals list */}
           {nutrition.meals && nutrition.meals.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {nutrition.meals.slice(0, 5).map((m, i) => (
@@ -456,13 +487,16 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
           )}
         </div>
 
-        {/* Right: food photo grid (only if photos exist) */}
         {photos.length > 0 && (
           <div style={{ flex: "1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignContent: "start" }}>
             {photos.map((url, i) => (
               <div key={i} style={{ aspectRatio: "1 / 1", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.border}` }}>
-                {/* crossOrigin set so canvas is not tainted by Supabase storage CORS */}
-                <img src={url} crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} alt="" />
+                <img
+                  src={url}
+                  crossOrigin="anonymous"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  alt=""
+                />
               </div>
             ))}
           </div>
@@ -472,7 +506,6 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
   );
 }
 
-// ─── Macro stat box ──────────────────────────────────────────────────────────
 function Macro({ value, label, unit, color }: { value: number; label: string; unit: string; color: string }) {
   return (
     <div style={{ background: "#0D0D0D", borderRadius: 14, padding: "14px 12px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
@@ -483,7 +516,6 @@ function Macro({ value, label, unit, color }: { value: number; label: string; un
   );
 }
 
-// ─── Empty-state tile ────────────────────────────────────────────────────────
 function EmptyTile({ emoji, title, message }: { emoji: string; title: string; message: string }) {
   return (
     <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}`, height: "100%" }}>
