@@ -169,7 +169,7 @@ export default function SignupPage() {
         </p>
         <div style={{ background: DARK_CARD, borderRadius: 16, padding: 22, border: `1.5px solid ${DARK_BORDER}`, marginBottom: 22, textAlign: "left" as const }}>
           <div style={{ fontSize: 13, color: "#9CA3AF", lineHeight: 1.7 }}>
-            <div style={{ marginBottom: 8 }}>1. Open your inbox and find the email from FIT</div>
+            <div style={{ marginBottom: 8 }}>1. Open your inbox and find the email from Livelee</div>
             <div style={{ marginBottom: 8 }}>2. Click the &ldquo;Confirm your email&rdquo; link</div>
             <div>3. You&apos;ll be redirected back to set up your profile</div>
           </div>
@@ -198,7 +198,7 @@ export default function SignupPage() {
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0 }}>FIT</h1>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0 }}>Livelee</h1>
           <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 4 }}>Choose your account type</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -228,7 +228,7 @@ export default function SignupPage() {
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0, letterSpacing: -1 }}>FIT</h1>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0, letterSpacing: -1 }}>Livelee</h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 4 }}>
             {accountType === "business" ? "🏢 Business Account" : "Your fitness journey starts here."}
           </p>
