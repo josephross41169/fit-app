@@ -16,49 +16,63 @@
 //   But none of them belong inside the iOS bundle anyway — the mobile app
 //   calls them remotely on https://liveleeapp.com via the fetch shim.
 //
-//   So during the mobile build we temporarily move both aside, build the
-//   static export of just the UI pages, sync that into the iOS project, then
-//   restore everything. The web build is untouched (this script is only run
-//   by `npm run build:mobile`).
+//   So during the mobile build we temporarily move both completely OUT of
+//   the project tree (not just rename them in place — Next.js scans every
+//   folder under app/ regardless of name, so app/api.bak still got picked
+//   up). We park them in a sibling `.mobile-build-stash/` folder, build the
+//   static export of just the UI pages, sync that into the iOS project,
+//   then restore everything. The web build is untouched (this script is
+//   only run by `npm run build:mobile`).
 //
 // Used by the `build:mobile` script in package.json. Run from repo root:
 //   npm run build:mobile
 // ─────────────────────────────────────────────────────────────────────────────
 import { spawnSync } from 'node:child_process';
-import { existsSync, renameSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, renameSync, mkdirSync, rmSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 
 const ROOT = process.cwd();
+const STASH = resolve(ROOT, '.mobile-build-stash');
 
 // Things to move aside before building, then restore after. Each entry is
-// [original path, backup path]. The api directory is the big one — it
-// contains routes like /api/db, /api/exercise-images, /api/debug-ai-env
-// that all use server-only features incompatible with static export.
+// [original repo path, stash subpath]. Stash is a hidden folder OUTSIDE the
+// app/ tree so Next.js never scans these files during the mobile build.
 const stowList = [
-  [resolve(ROOT, 'middleware.ts'), resolve(ROOT, 'middleware.ts.bak')],
-  [resolve(ROOT, 'app/api'),       resolve(ROOT, 'app/api.bak')],
+  { from: resolve(ROOT, 'middleware.ts'), to: resolve(STASH, 'middleware.ts') },
+  { from: resolve(ROOT, 'app/api'),       to: resolve(STASH, 'app__api')      },
 ];
 
 const stowed = [];
 
 function stow() {
-  for (const [original, backup] of stowList) {
-    if (existsSync(original)) {
-      renameSync(original, backup);
-      stowed.push([original, backup]);
-      console.log(`▸ moved ${original.replace(ROOT + '/', '')} → ${backup.replace(ROOT + '/', '')} for static export`);
+  // Make sure the stash dir exists and is empty (a previous crashed run may
+  // have left old files in it — those would block restoration).
+  if (existsSync(STASH)) rmSync(STASH, { recursive: true, force: true });
+  mkdirSync(STASH, { recursive: true });
+
+  for (const item of stowList) {
+    if (existsSync(item.from)) {
+      // Make sure parent of stash target exists (for nested paths).
+      mkdirSync(dirname(item.to), { recursive: true });
+      renameSync(item.from, item.to);
+      stowed.push(item);
+      console.log(`▸ stashed ${item.from.replace(ROOT + '/', '')}`);
     }
   }
 }
 
 function restore() {
   // Reverse so we restore in the opposite order we stowed.
-  for (const [original, backup] of [...stowed].reverse()) {
-    if (existsSync(backup)) {
-      renameSync(backup, original);
-      console.log(`▸ restored ${original.replace(ROOT + '/', '')}`);
+  for (const item of [...stowed].reverse()) {
+    if (existsSync(item.to)) {
+      // Make sure parent of original location exists (it should, but defensive).
+      mkdirSync(dirname(item.from), { recursive: true });
+      renameSync(item.to, item.from);
+      console.log(`▸ restored ${item.from.replace(ROOT + '/', '')}`);
     }
   }
+  // Clean up the stash folder once empty.
+  try { rmSync(STASH, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 stow();
