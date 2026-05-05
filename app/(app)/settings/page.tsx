@@ -116,6 +116,24 @@ export default function SettingsPage() {
         </Row>
       </Section>
 
+      {/* ── SECTION: Integrations ──────────────────────────────────── */}
+      {/* Hosts third-party data sources that can sync into Livelee. The
+          HealthKit sub-page handles the iOS-only UX and is safe to link
+          from web too — that page renders a friendly "iOS app only"
+          message when HealthKit isn't available, so web users don't get
+          a broken experience. */}
+      <Section title="🔌 Integrations">
+        <Row>
+          <Link href="/settings/healthkit" style={linkStyle}>
+            🍎 Apple Health →
+          </Link>
+        </Row>
+        <div style={{ fontSize: 12, color: "#6B7280", marginTop: 8, paddingLeft: 4 }}>
+          Sync workouts, steps, sleep, weight, and more from Apple Health
+          (iOS only). More integrations like Whoop and Oura coming soon.
+        </div>
+      </Section>
+
       {/* ── SECTION: Privacy & Safety ───────────────────────────────── */}
       <Section title="🛡️ Privacy & Safety">
         <Row>
