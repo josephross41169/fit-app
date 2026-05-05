@@ -27,6 +27,7 @@
     "@supabase/supabase-js": "^2.100.1",
     "@zxing/browser": "^0.1.5",
     "capacitor-health": "^8.1.0",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.544.0",
     "mapbox-gl": "^3.7.0",
     "next": "14.2.35",
