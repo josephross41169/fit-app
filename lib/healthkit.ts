@@ -404,8 +404,8 @@ export async function runHealthKitSync(userId: string): Promise<SyncResult> {
 
   // ─── 4. WEIGHT ───────────────────────────────────────────────────────────
   // Each HealthKit weight reading is its own sample (no aggregation needed).
-  // HK reports weight in kg; convert to lbs for the weights table since the
-  // app's UI is lbs-first.
+  // HK reports weight in kg; convert to lbs for the weight_logs table since
+  // the app's UI is lbs-first. Table is `weight_logs`, column is `weight_lbs`.
   try {
     const { resultData } = await CapacitorHealthkit.queryHKitSampleType<any>({
       sampleName: SampleNames.WEIGHT,
@@ -416,14 +416,15 @@ export async function runHealthKitSync(userId: string): Promise<SyncResult> {
     if (Array.isArray(resultData) && resultData.length > 0) {
       const rows = resultData.map((s: any) => ({
         user_id: userId,
-        weight: Number(s.value) ? Number(s.value) * 2.20462 : null,
-        recorded_at: s.startDate || s.endDate || new Date().toISOString(),
+        weight_lbs: Number(s.value) ? Number(s.value) * 2.20462 : null,
+        logged_at: s.startDate || s.endDate || new Date().toISOString(),
+        is_public: false,
         external_id: s.UUID || s.uuid || null,
         external_source: 'healthkit',
-      })).filter((r: any) => r.external_id && r.weight != null);
+      })).filter((r: any) => r.external_id && r.weight_lbs != null);
       if (rows.length > 0) {
         const { error, count } = await supabase
-          .from('weights')
+          .from('weight_logs')
           .upsert(rows, {
             onConflict: 'user_id,external_source,external_id',
             ignoreDuplicates: true,
