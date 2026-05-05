@@ -18,6 +18,7 @@ import { shareWithToast, appUrl } from "@/lib/share";
 import { FeedPostSkeleton, SkeletonStyles } from "@/components/Skeleton";
 import MentionInput, { parseMentions } from "@/components/MentionInput";
 import { getCached, setCached } from "@/lib/queryCache";
+import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
 
 const C = {
   blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
@@ -2447,6 +2448,18 @@ export default function FeedPage() {
     }
     loadActivityFeed();
   }, []);
+
+  // Background HealthKit sync. Runs once on mount, after auth resolves, if
+  // the user has previously connected Apple Health on this device. The
+  // helper itself short-circuits on web/Android and respects a 2-minute
+  // cooldown so this isn't a heavy call. Fires asynchronously — the feed
+  // doesn't wait on it. New activity logs from the sync will appear on
+  // the next feed refresh (pull-to-refresh, navigating away and back, or
+  // posting something new).
+  useEffect(() => {
+    if (!user) return;
+    maybeRunHealthKitAutoSync(user.id);
+  }, [user]);
 
   // Re-fetch activity logs when filter changes
   useEffect(() => {
