@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>FIT</string>
+	<string>Livelee</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,5 +47,28 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<!-- ─────────────────────────────────────────────────────────────────
+	     HealthKit usage descriptions
+
+	     Apple shows these strings to the user verbatim in the permission
+	     prompt when Livelee asks to access HealthKit. Required by Apple —
+	     omitting them causes an immediate crash on first read. Keep them
+	     specific (Apple rejects vague phrases like "for app features").
+	     ───────────────────────────────────────────────────────────────── -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>Livelee reads your workouts, steps, calories, weight, sleep, heart rate, and mindful minutes from Apple Health so you don't have to log them manually. This data powers your activity feed, badges, and progress charts inside Livelee.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Livelee writes workouts you log inside the app back to Apple Health so your activity stays in sync across all your fitness apps.</string>
+
+	<!-- ─────────────────────────────────────────────────────────────────
+	     Photo library / camera (already required by existing photo
+	     upload feature; included here for completeness so the merge into
+	     ios/App/App/Info.plist doesn't drop them if they're missing).
+	     ───────────────────────────────────────────────────────────────── -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Livelee uses your photo library so you can attach photos to workouts and posts.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Livelee uses the camera so you can capture photos of meals, workouts, and progress shots to share or log.</string>
 </dict>
 </plist>
