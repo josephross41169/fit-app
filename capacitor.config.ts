@@ -3,13 +3,10 @@ import { CapacitorConfig } from '@capacitor/cli';
 // ─────────────────────────────────────────────────────────────────────────────
 // Livelee — Capacitor configuration for iOS + Android wrappers.
 //
-// IMPORTANT: appId is the permanent bundle identifier registered with Apple
-// once the app is submitted to TestFlight or the App Store. Changing it later
-// means re-submitting as a brand new app and losing reviews/users. Do not
-// modify after first submission.
-//
-// Format: reverse-domain notation. Domain `liveleeapp.com` reversed is
-// `com.liveleeapp`, plus the app name `app`.
+// IMPORTANT: appId is the permanent bundle identifier registered with Apple.
+// Keep this matching the existing TestFlight app's bundle ID — changing it
+// would create a brand new app entry on Apple's side and lose all current
+// testers. Do not modify after first submission.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // SAFARI ESCAPE FIX
@@ -25,7 +22,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 // redirected to the live site at runtime by `lib/mobileFetchShim.ts`.
 // ─────────────────────────────────────────────────────────────────────────────
 const config: CapacitorConfig = {
-  appId: 'com.liveleeapp.app',
+  appId: 'com.fitapp.fit',
   appName: 'Livelee',
   webDir: 'out',
   plugins: {
