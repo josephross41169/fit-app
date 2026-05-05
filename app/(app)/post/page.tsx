@@ -9,7 +9,7 @@ import { compressImage } from "@/lib/compressImage";
 import { track } from "@/components/PostHogProvider";
 import AIFoodScanner from "@/components/AIFoodScanner";
 import { EXERCISES } from "@/lib/exercises";
-import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
+import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
 import { BADGES } from "@/lib/badges";
 import { awardXp } from "@/lib/xp";
 
@@ -1179,6 +1179,12 @@ export default function PostPage() {
       // Scans the user's active group goals and updates their contribution
       // based on what's actually in activity_logs right now. Best-effort.
       try { await syncGroupChallengeProgressFor(user.id); } catch {}
+
+      // -- Sync member-challenge progress (auto-tracked challenges) ----------
+      // Same recompute pattern for member challenges that have a metric_key
+      // set (e.g. "workouts" or "miles_run"). Manual challenges with no
+      // metric_key are untouched. Best-effort.
+      try { await syncMemberChallengeProgressFor(user.id); } catch {}
 
       // -- Notify tagged workout partners ----------------------------------
       // Workout tags only fire when this is a workout log AND there are tagged
