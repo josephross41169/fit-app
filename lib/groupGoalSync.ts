@@ -46,12 +46,18 @@ interface ActiveChallenge {
   created_at: string;
 }
 
-/** Compute a user's current contribution to one specific challenge. */
-async function computeContribution(userId: string, challenge: ActiveChallenge): Promise<number> {
-  const from = challenge.start_date || challenge.created_at;
-  const to   = challenge.end_date   || new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString();
-
-  switch (challenge.metric) {
+/** Compute a user's contribution toward a metric in a date window. Reused by
+ *  both group-goal sync (group_challenge_members.contribution) and member-
+ *  challenge sync (challenge_participants.score). The same metric keys mean
+ *  the same numbers — a "miles_run" challenge and a "miles_run" group goal
+ *  always agree on the user's miles. */
+export async function computeMetricContribution(
+  userId: string,
+  metric: MetricKey,
+  from: string,
+  to: string,
+): Promise<number> {
+  switch (metric) {
     case "miles_run": {
       // Sum cardio.miles from workout rows in category=running
       const { data } = await supabase
@@ -183,6 +189,14 @@ async function computeContribution(userId: string, challenge: ActiveChallenge): 
     default:
       return 0;
   }
+}
+
+/** Original challenge-shaped wrapper. Exists so callers that already pass the
+ *  full ActiveChallenge row don't need to extract metric / dates themselves. */
+async function computeContribution(userId: string, challenge: ActiveChallenge): Promise<number> {
+  const from = challenge.start_date || challenge.created_at;
+  const to   = challenge.end_date   || new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString();
+  return computeMetricContribution(userId, challenge.metric, from, to);
 }
 
 /** After a user logs a workout/wellness/nutrition entry, call this to sync
@@ -358,5 +372,106 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
     console.log("[groupGoalSync] DONE");
   } catch (err) {
     console.error("[groupGoalSync] unexpected error:", err);
+  }
+}
+
+/** ── Member challenge auto-sync ─────────────────────────────────────────────
+ *  Mirrors syncGroupChallengeProgressFor but for `challenges` + `challenge_participants`.
+ *
+ *  Member challenges (per-user opt-in challenges inside groups) optionally
+ *  have a `metric_key` (e.g. "miles_run", "workouts"). When set, the
+ *  challenge is auto-tracked: the user's `score` is recomputed from full
+ *  activity_logs history every time this runs.
+ *
+ *  When metric_key is null, the challenge is "manual" — a custom challenge
+ *  like "acts of service" or "journal entries" that has no clean mapping to
+ *  workout data. Those keep the existing log_challenge_progress flow where
+ *  the user enters values by hand, and we don't touch them.
+ *
+ *  Self-correcting: like group goals, this overwrites score with the
+ *  recomputed total — so editing or deleting workouts always lands on the
+ *  right number, no double-counting. Best-effort: errors are logged but
+ *  never thrown, can't block a save. */
+export async function syncMemberChallengeProgressFor(userId: string): Promise<void> {
+  console.log("[memberChallengeSync] START for user:", userId);
+  try {
+    // 1. Find every challenge this user has joined
+    const { data: parts, error: pErr } = await supabase
+      .from("challenge_participants")
+      .select("challenge_id, score")
+      .eq("user_id", userId);
+
+    if (pErr) {
+      console.error("[memberChallengeSync] participants query error:", pErr);
+      return;
+    }
+    if (!parts || parts.length === 0) {
+      console.log("[memberChallengeSync] user has no challenges");
+      return;
+    }
+
+    const ids = parts.map((p: any) => p.challenge_id).filter(Boolean);
+    if (ids.length === 0) return;
+
+    // 2. Fetch the challenge rows — only ones with metric_key set are auto-trackable
+    const nowIso = new Date().toISOString();
+    const { data: challenges, error: cErr } = await supabase
+      .from("challenges")
+      .select("id, group_id, name, metric_key, metric_label, deadline, is_active, created_at")
+      .in("id", ids);
+
+    if (cErr) {
+      console.error("[memberChallengeSync] challenges query error:", cErr);
+      return;
+    }
+
+    const trackable = (challenges || []).filter((c: any) => {
+      if (!c.metric_key) return false;          // manual-only challenge, skip
+      if (c.is_active === false) return false;  // archived
+      if (c.deadline && c.deadline < nowIso) return false; // expired
+      return true;
+    });
+
+    console.log("[memberChallengeSync] trackable challenges:", trackable.length);
+    if (trackable.length === 0) return;
+
+    // 3. For each, recompute and write the new score
+    for (const ch of trackable as any[]) {
+      const from = ch.created_at;
+      const to = ch.deadline || new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString();
+      const score = await computeMetricContribution(userId, ch.metric_key as MetricKey, from, to);
+      console.log("[memberChallengeSync] →", ch.name, "metric:", ch.metric_key, "score:", score);
+
+      const { error: upErr } = await supabase
+        .from("challenge_participants")
+        .update({ score })
+        .eq("challenge_id", ch.id)
+        .eq("user_id", userId);
+
+      if (upErr) {
+        console.error("[memberChallengeSync]   participant update failed:", upErr);
+        continue;
+      }
+
+      // Mirror to leaderboard_entries — same pattern as the manual log path
+      // in /api/db log_challenge_progress, so leaderboards stay in sync.
+      if (ch.group_id) {
+        const { error: lbErr } = await supabase
+          .from("leaderboard_entries")
+          .upsert({
+            group_id: ch.group_id,
+            user_id: userId,
+            challenge_id: ch.id,
+            score,
+            metric_label: ch.metric_label || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "group_id,user_id,challenge_id" });
+        if (lbErr) console.warn("[memberChallengeSync]   leaderboard upsert failed (non-fatal):", lbErr);
+      }
+    }
+
+    console.log("[memberChallengeSync] DONE");
+  } catch (err) {
+    console.error("[memberChallengeSync] unexpected error:", err);
   }
 }
