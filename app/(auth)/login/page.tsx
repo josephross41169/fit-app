@@ -62,7 +62,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0, letterSpacing: -1 }}>FIT</h1>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0, letterSpacing: -1 }}>Livelee</h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 4 }}>Welcome back. Let&apos;s get after it.</p>
         </div>
 
