@@ -946,10 +946,16 @@ const BADGE_DEFS: Record<string, { emoji: string; label: string }> = {
 };
 
 // ── DARK SIDEBAR: One user's full activity block ──────────────────────────────
+// userBadges here is *per-card* — only badges that were earned within a
+// few minutes of this card's underlying activity logs. So an empty list
+// means nothing new was unlocked by this workout/log; we hide the whole
+// Badges section in that case to avoid cluttering the feed with stale
+// achievements that already showed up on prior cards.
 function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: string[] }) {
   const hasActivity = post.workout || post.nutrition || post.wellness;
   if (!hasActivity) return null;
-  const displayBadges = userBadges.slice(0, 4);
+  // De-dupe in case a badge somehow ended up in the list twice (defensive).
+  const displayBadges = Array.from(new Set(userBadges));
   return (
     <div style={{ background:C.darkCard, borderRadius:18, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:16 }}>
       {/* User header */}
@@ -976,10 +982,12 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
         {post.nutrition && <SideNutrition nutrition={post.nutrition} />}
         {post.wellness && <SideWellness wellness={post.wellness} />}
       </div>
-      {/* Badges */}
+      {/* Badges — only show NEW ones earned by this specific card's logs */}
       {displayBadges.length > 0 && (
         <div style={{ padding:"8px 14px 12px", borderTop:`1px solid ${C.darkBorder}` }}>
-          <div style={{ fontSize:10, fontWeight:700, color:C.darkSub, textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Badges</div>
+          <div style={{ fontSize:10, fontWeight:700, color:"#F5A623", textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>
+            ✨ {displayBadges.length === 1 ? "New badge unlocked" : `${displayBadges.length} new badges unlocked`}
+          </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             {displayBadges.map(badgeId => {
               const def = BADGE_DEFS[badgeId] || { emoji: "🏆", label: badgeId };
@@ -990,11 +998,6 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
                 </div>
               );
             })}
-            {userBadges.length > 4 && (
-              <div style={{ display:"flex", alignItems:"center", background:"rgba(245,166,35,0.08)", border:"1px solid rgba(245,166,35,0.2)", borderRadius:99, padding:"4px 10px" }}>
-                <span style={{ fontSize:11, fontWeight:700, color:"#F5A623" }}>+{userBadges.length - 4} more</span>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1753,7 +1756,11 @@ export default function FeedPage() {
   const [activityLogsHasMore, setActivityLogsHasMore] = useState(true);
   const [loadingMoreActivity, setLoadingMoreActivity] = useState(false);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [userBadgeMap, setUserBadgeMap] = useState<Record<string, string[]>>({});
+  // Per-user list of recently-earned badges (last 7 days) WITH their
+  // created_at timestamps. We store the timestamps so each activity card
+  // can match badges to the specific workout/log that earned them, rather
+  // than showing every recent badge on every card from that user.
+  const [userBadgeMap, setUserBadgeMap] = useState<Record<string, Array<{ badge_id: string; created_at: string }>>>({});
   // Report state — when non-null, ReportModal is shown for that target.
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [loadingFeed, setLoadingFeed] = useState(true);
@@ -2377,15 +2384,22 @@ export default function FeedPage() {
       setActivityLogsHasMore(data.length === PAGE_SIZE);
       setActivityLogsPage(page);
       // badge loading
+      // We store created_at alongside badge_id so each activity card can
+      // match badges by timestamp (±5 min window) instead of dumping the
+      // user's whole 7-day badge collection onto every card. This way a
+      // badge only appears on the card it was earned from.
       if (filtered.length > 0) {
         const userIds = [...new Set(filtered.map((l: any) => l.user_id).filter(Boolean))];
         if (userIds.length > 0) {
           const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
           const { data: badgeData } = await supabase.from('badges').select('user_id, badge_id, created_at')
-            .in('user_id', userIds).gte('created_at', sevenDaysAgo.toISOString()).eq('show_celebration', true);
+            .in('user_id', userIds).gte('created_at', sevenDaysAgo.toISOString());
           if (badgeData) {
-            const map: Record<string, string[]> = {};
-            badgeData.forEach((b: any) => { if (!map[b.user_id]) map[b.user_id] = []; map[b.user_id].push(b.badge_id); });
+            const map: Record<string, Array<{ badge_id: string; created_at: string }>> = {};
+            badgeData.forEach((b: any) => {
+              if (!map[b.user_id]) map[b.user_id] = [];
+              map[b.user_id].push({ badge_id: b.badge_id, created_at: b.created_at });
+            });
             if (append) setUserBadgeMap(prev => ({ ...prev, ...map }));
             else setUserBadgeMap(map);
           }
@@ -2664,7 +2678,29 @@ export default function FeedPage() {
         photoUrls: normalizePhotoUrls(...wels.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
       } : null;
 
-      return { ...entry, workout, nutrition, wellness };
+      // Match badges to this specific card. Each card's logs were created
+      // within seconds of any badges those logs auto-awarded. We collect
+      // every timestamp from this card's logs and find badges whose
+      // created_at falls within a ±5 minute window of any of them. Result:
+      // badges only appear on the card that actually earned them.
+      const userBadgesWithTime = userBadgeMap[entry._userId] || [];
+      const cardLogTimes: number[] = [
+        ...entry._workoutLogs,
+        ...entry._nutritionLogs,
+        ...entry._wellnessLogs,
+      ]
+        .map((l: any) => new Date(l.logged_at || l.created_at).getTime())
+        .filter((t: number) => !isNaN(t));
+      const WINDOW_MS = 5 * 60 * 1000; // 5 minute window
+      const matchedBadges = userBadgesWithTime
+        .filter(b => {
+          const badgeTime = new Date(b.created_at).getTime();
+          if (isNaN(badgeTime)) return false;
+          return cardLogTimes.some(t => Math.abs(badgeTime - t) <= WINDOW_MS);
+        })
+        .map(b => b.badge_id);
+
+      return { ...entry, workout, nutrition, wellness, _matchedBadges: matchedBadges };
     });
   })();
 
@@ -3039,7 +3075,7 @@ export default function FeedPage() {
           <div style={{ padding:"0 12px" }}>
             {sidebarActivityPosts.length > 0
               ? sidebarActivityPosts.map((post: any) => (
-                  <SideUserBlock key={post.id} post={post} userBadges={userBadgeMap[post._userId] || []} />
+                  <SideUserBlock key={post.id} post={post} userBadges={post._matchedBadges || []} />
                 ))
               : activityPosts.map(post => (
                   <SideUserBlock key={post.id} post={post} userBadges={[]} />
