@@ -1279,17 +1279,19 @@ export async function POST(req: NextRequest) {
     // Called alongside update_goals_from_log. Bumps either user_a_progress
     // or user_b_progress on every active match the user is in.
     if (action === 'buddy_update_from_log') {
-      const { userId, logId } = payload || {};
-      if (!userId || !logId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-      const { data: log } = await admin
-        .from('activity_logs')
-        .select('id, log_type, logged_at, workout_category, workout_type, cardio')
-        .eq('id', logId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (!log || log.log_type !== 'workout') return NextResponse.json({ ok: true });
-
+      // ── Recompute every active match's progress from full history ─────────
+      // The previous implementation added the new log's contribution to the
+      // existing user_a_progress / user_b_progress. That double-counted on
+      // edit (e.g. logging 3 mi then editing to 5 → progress went 3 → 8
+      // instead of 3 → 5). It also re-added on every photo/note save.
+      //
+      // Now we ignore the specific logId and instead pull every workout in
+      // the match window matching the match's category/metric, sum them
+      // fresh, and write the result. Self-correcting: edits, deletes, and
+      // repeat saves all land on the right number.
       const { data: matches } = await admin
         .from('buddy_matches')
         .select('*')
@@ -1300,28 +1302,44 @@ export async function POST(req: NextRequest) {
 
       const completedMatches: any[] = [];
       for (const match of matches as any[]) {
-        // Check window
-        const ts = new Date(log.logged_at).getTime();
-        if (ts < new Date(match.starts_at).getTime()) continue;
-        if (ts > new Date(match.ends_at).getTime()) continue;
-        // Category match
-        if ((log as any).workout_category !== match.category) continue;
+        // Pull all the user's workout logs in the match window matching the
+        // category. We do this once per match — typically there are 1–3
+        // active matches per user, so the cost is bounded.
+        const { data: logs } = await admin
+          .from('activity_logs')
+          .select('id, log_type, logged_at, workout_category, workout_duration_min, cardio')
+          .eq('user_id', userId)
+          .eq('log_type', 'workout')
+          .eq('workout_category', match.category)
+          .gte('logged_at', match.starts_at)
+          .lte('logged_at', match.ends_at);
 
-        // Compute contribution
-        let contrib = 0;
-        if (match.target_metric === 'count') {
-          contrib = 1;
-        } else if (match.target_metric === 'distance') {
-          const cardio = Array.isArray((log as any).cardio) ? (log as any).cardio : [];
-          for (const c of cardio) contrib += parseFloat(String((c as any).distance || '0')) || 0;
-        } else if (match.target_metric === 'duration') {
-          const cardio = Array.isArray((log as any).cardio) ? (log as any).cardio : [];
-          for (const c of cardio) contrib += parseFloat(String((c as any).duration || '0')) || 0;
+        let newProgress = 0;
+        for (const log of (logs || []) as any[]) {
+          if (match.target_metric === 'count') {
+            newProgress += 1;
+          } else if (match.target_metric === 'distance') {
+            const cardio = Array.isArray(log.cardio) ? log.cardio : [];
+            for (const c of cardio) {
+              const m = parseFloat(String(c?.miles ?? c?.distance ?? 0));
+              if (!isNaN(m)) newProgress += m;
+            }
+          } else if (match.target_metric === 'duration') {
+            const cardio = Array.isArray(log.cardio) ? log.cardio : [];
+            for (const c of cardio) newProgress += parseFloat(String(c?.duration || 0)) || 0;
+            // Fall back to workout-level duration if cardio entries don't
+            // carry per-entry duration. Avoids zero-progress on logs that
+            // only set workout_duration_min.
+            if (!cardio.some((c: any) => c?.duration != null)) {
+              newProgress += parseFloat(String(log.workout_duration_min || 0)) || 0;
+            }
+          }
         }
-        if (contrib <= 0) continue;
 
         const isUserA = match.user_a === userId;
-        const newProgress = (isUserA ? match.user_a_progress : match.user_b_progress) + contrib;
+        const currentProgress = isUserA ? match.user_a_progress : match.user_b_progress;
+        if (newProgress === currentProgress) continue; // no change
+
         const updateRow: any = isUserA ? { user_a_progress: newProgress } : { user_b_progress: newProgress };
 
         // Both users hit target = match completes (both win)
