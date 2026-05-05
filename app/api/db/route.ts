@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { detectStrictPRs, buildHistoricalMaxes, recomputeAllPRs, type ActivityLogRow } from '@/lib/prs';
-import { progressFromLog, recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type ActivityLog as GoalActivityLog } from '@/lib/goals';
+import { recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type ActivityLog as GoalActivityLog } from '@/lib/goals';
 
 // Mark as dynamic to avoid static collection at build time
 export const dynamic = 'force-dynamic';
@@ -1056,26 +1056,29 @@ export async function POST(req: NextRequest) {
 
       const completedGoals: any[] = [];
 
+      // ── Always recompute from full history ───────────────────────────────
+      // Previously we did an incremental delta-add for sum metrics like
+      // cardio_distance and workout_count. That works for fresh inserts but
+      // breaks when editing: every save of an edited log added the log's
+      // CURRENT total to the goal again, so editing a 3 mi run to be 5 mi
+      // pushed the goal from 3 → 8 instead of 3 → 5. It also re-added the
+      // delta on every photo/note edit, even if no goal-relevant field
+      // changed.
+      //
+      // Recomputing from the full activity_logs window for each goal is
+      // self-correcting: the goal's `current` is always exactly what the
+      // logs in its window add up to, regardless of how many times this
+      // endpoint was called or whether logs were edited / deleted. The
+      // extra DB read per goal is cheap; users typically have 1–5 active
+      // goals at a time.
       for (const goal of goals as GoalType[]) {
-        let newCurrent = goal.current;
+        const { data: windowLogs } = await admin
+          .from('activity_logs')
+          .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
+          .eq('user_id', userId)
+          .gte('logged_at', goal.window_start);
 
-        if (goal.metric === 'lift_pr') {
-          // Lift PR: take max of current vs new log's contribution
-          const liftValue = progressFromLog(goal, newLog as GoalActivityLog);
-          if (liftValue > newCurrent) newCurrent = liftValue;
-        } else if (goal.metric === 'workout_streak' || goal.metric === 'nutrition_avg') {
-          // These need full recompute — pull all logs in window and rerun
-          const { data: allLogs } = await admin
-            .from('activity_logs')
-            .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
-            .eq('user_id', userId)
-            .gte('logged_at', goal.window_start);
-          newCurrent = recomputeGoalProgress(goal, (allLogs || []) as GoalActivityLog[]);
-        } else {
-          // Sum metrics: incremental add
-          const delta = progressFromLog(goal, newLog as GoalActivityLog);
-          newCurrent = newCurrent + delta;
-        }
+        const newCurrent = recomputeGoalProgress(goal, (windowLogs || []) as GoalActivityLog[]);
 
         if (newCurrent === goal.current) continue; // no change
 
