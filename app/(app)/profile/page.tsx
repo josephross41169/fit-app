@@ -14,7 +14,7 @@ import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
-import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
+import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
 import { computeTier, getTierInfo } from "@/lib/tiers";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast, appUrl } from "@/lib/share";
@@ -404,37 +404,39 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   }
 
   // Helper: after any activity log is inserted/updated, fire all the
-  // background trackers (PR detection, goal progress, buddy matches).
-  // Each is best-effort — errors are swallowed so the user always sees
-  // their save succeed even if a tracker fails.
+  // background trackers (PR detection, goal progress, group goals, member
+  // challenges, buddy matches). Each is best-effort — errors are swallowed
+  // so the user always sees their save succeed even if a tracker fails.
   async function fireTrackers(logId: string, kind: 'workout' | 'nutrition' | 'wellness') {
     if (!user || !logId) return;
     try {
       const triggers: Array<Promise<any>> = [
-        // Goals: applies to all kinds
+        // Personal goals: applies to all kinds (nutrition_avg goals fire on
+        // nutrition logs, workout_count fires on workout logs, etc.)
         fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'update_goals_from_log', payload: { userId: user.id, logId } }),
         }).catch(() => {}),
+        // Group goals: also applies to all kinds. nutrition_logs / wellness_*
+        // metrics fire on those log types.
+        syncGroupChallengeProgressFor(user.id).catch(() => {}),
+        // Member challenges (auto-tracked ones with metric_key set): same.
+        syncMemberChallengeProgressFor(user.id).catch(() => {}),
       ];
       if (kind === 'workout') {
-        // PRs
+        // PRs — workout-only
         triggers.push(fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'detect_prs_from_log', payload: { userId: user.id, logId } }),
         }).catch(() => {}));
-        // Workout buddy
+        // Wars / buddy matches — workout-only, recomputes from history server-side
         triggers.push(fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'buddy_update_from_log', payload: { userId: user.id, logId } }),
         }).catch(() => {}));
-        // Group challenge contributions — recomputes the user's contribution
-        // to every active group goal they belong to from full activity_logs
-        // history. Same self-correcting recompute pattern as personal goals.
-        triggers.push(syncGroupChallengeProgressFor(user.id).catch(() => {}));
       }
       await Promise.all(triggers);
     } catch { /* best-effort */ }
@@ -4376,3 +4378,6 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+
+
