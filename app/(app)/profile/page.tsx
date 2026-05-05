@@ -14,6 +14,7 @@ import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
+import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 import { computeTier, getTierInfo } from "@/lib/tiers";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast, appUrl } from "@/lib/share";
@@ -430,6 +431,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'buddy_update_from_log', payload: { userId: user.id, logId } }),
         }).catch(() => {}));
+        // Group challenge contributions — recomputes the user's contribution
+        // to every active group goal they belong to from full activity_logs
+        // history. Same self-correcting recompute pattern as personal goals.
+        triggers.push(syncGroupChallengeProgressFor(user.id).catch(() => {}));
       }
       await Promise.all(triggers);
     } catch { /* best-effort */ }
@@ -446,17 +451,67 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       weight: (ex.weights || [])[0] || ex.weight || '',
       weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
     }));
-    const cardioData = (woBuf.cardio || []).length > 0 ? woBuf.cardio : null;
+    const cardioData = (woBuf.cardio || []).length > 0
+      ? woBuf.cardio.map((c: any) => {
+          // Group goal sync (lib/groupGoalSync.ts) reads `c.miles` as a
+          // numeric value, but the editor stores distance as a string in
+          // `c.distance`. We mirror it as a parsed number into `miles` to
+          // match what /post page writes — without this, group goals like
+          // "Run 151 mi this month" never see profile-edited cardio.
+          const distNum = parseFloat(String(c.distance || '')) || 0;
+          const out: any = { ...c };
+          if (distNum > 0) out.miles = distNum;
+          return out;
+        })
+      : null;
+
+    // ── Derive workout_category from the data the user entered ──────────────
+    // workout_category is the standardized classifier that drives goals,
+    // badges, stats, and rivalries. The /post page sets it explicitly via
+    // a category picker; this profile editor doesn't have that picker, so
+    // we infer it from the cardio type or fall back to "lifting" if any
+    // exercises are logged.
+    //
+    // Without this, goals like "run 15 miles this month" never update from
+    // a profile-edited workout — the goal asks "is workout_category =
+    // 'running'?" and gets undefined → 0 contribution → goal stays at 0/15.
+    const cardioCatMap: Record<string, string> = {
+      run: 'running', running: 'running', jog: 'running', jogging: 'running',
+      walk: 'walking', walking: 'walking', hike: 'walking', hiking: 'walking',
+      bike: 'biking', biking: 'biking', cycle: 'biking', cycling: 'biking', ride: 'biking',
+      swim: 'swimming', swimming: 'swimming',
+      row: 'rowing', rowing: 'rowing', erg: 'rowing',
+    };
+    const inferCategory = (): string | null => {
+      const firstCardio = (woBuf.cardio || [])[0];
+      const cType = (firstCardio?.type || '').toLowerCase().trim();
+      if (cType) {
+        // Try direct map first, then substring match for "Trail Running" etc.
+        if (cardioCatMap[cType]) return cardioCatMap[cType];
+        for (const k of Object.keys(cardioCatMap)) {
+          if (cType.includes(k)) return cardioCatMap[k];
+        }
+        return 'other'; // cardio of unknown type — better than null
+      }
+      if (normalizedExercises.length > 0) return 'lifting';
+      return null;
+    };
+    const inferredCategory = inferCategory();
+
     let savedLogId: string | null = workoutLogId || null;
     if (workoutLogId) {
-      // Update existing log — save ALL fields including cardio
-      await supabase.from('activity_logs').update({
+      // Update existing log — save ALL fields including cardio + category.
+      // Only overwrite workout_category when we have a meaningful inference;
+      // otherwise leave whatever was there (e.g. set originally by /post).
+      const updatePayload: any = {
         workout_type: woBuf.type || null,
         workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
         workout_calories: woBuf.calories || null,
         exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
         cardio: cardioData,
-      }).eq('id', workoutLogId);
+      };
+      if (inferredCategory) updatePayload.workout_category = inferredCategory;
+      await supabase.from('activity_logs').update(updatePayload).eq('id', workoutLogId);
     } else if (user) {
       // No existing log for this day — insert a new one so it persists after refresh
       const { data: insertedRow } = await supabase.from('activity_logs').insert({
@@ -465,6 +520,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         is_public: true,
         logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
         workout_type: woBuf.type || null,
+        workout_category: inferredCategory,
         workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
         workout_calories: woBuf.calories || null,
         exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
@@ -4320,6 +4376,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-
-
