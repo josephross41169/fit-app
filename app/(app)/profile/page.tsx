@@ -12,6 +12,7 @@ import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBad
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
+import ActivityShareButton from "@/components/ActivityShareButton";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
 import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
@@ -361,6 +362,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [nutBuf,setNutBuf] = useState<Nutrition>(nutrition ?? {calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});
   const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
   const [showAllBadges, setShowAllBadges] = useState(false);
+  // Ref to the entire card root so the share button can snapshot it as PNG.
+  // We pass this to ActivityShareButton which calls html2canvas on it.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // While we're capturing the card image we force every collapsible
+  // section open so the snapshot includes everything. We restore the
+  // user's prior open/closed state after capture finishes.
+  const [capturing, setCapturing] = useState(false);
+  const prevExpandedRef = useRef<{ open: boolean; nut: boolean; woOpen: boolean; wellOpen: boolean } | null>(null);
   const parts = day.id.split("/");
   const m = parseInt(parts[0]) || 1;
   const d = parseInt(parts[1]) || 1;
@@ -651,7 +660,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
-    <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
+    <div ref={cardRef} className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
 
       {/* HEADER */}
       <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?headerOpenBg:headerClosedBg,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
@@ -706,6 +715,34 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             }
           </div>
         )}
+        {/* Share / save-as-image button. Force-expands every section before
+            capture, snapshots the whole card to PNG, then restores. The
+            click handler stops propagation so the header toggle doesn't
+            also fire. */}
+        <div style={{flexShrink:0}} onClick={e=>e.stopPropagation()}>
+          <ActivityShareButton
+            targetRef={cardRef}
+            filename={`livelee-${day.id.replace(/\//g,'-')}`}
+            onBeforeCapture={() => {
+              prevExpandedRef.current = { open, nut, woOpen, wellOpen };
+              setCapturing(true);
+              setOpen(true);
+              setNut(true);
+              setWoOpen(true);
+              setWellOpen(true);
+            }}
+            onAfterCapture={() => {
+              const prev = prevExpandedRef.current;
+              if (prev) {
+                setOpen(prev.open);
+                setNut(prev.nut);
+                setWoOpen(prev.woOpen);
+                setWellOpen(prev.wellOpen);
+              }
+              setCapturing(false);
+            }}
+          />
+        </div>
       </button>
 
       {/* BODY */}
