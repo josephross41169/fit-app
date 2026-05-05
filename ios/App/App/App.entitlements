@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ─────────────────────────────────────────────────────────────────
+	     HealthKit capability
+
+	     Apple requires apps to declare the HealthKit entitlement in
+	     addition to the NSHealthShareUsageDescription / NSHealthUpdateUsageDescription
+	     strings in Info.plist. Without this entitlement HKHealthStore
+	     instantiation throws and our sync helper fails before the
+	     permission prompt ever appears.
+
+	     com.apple.developer.healthkit          : enables HealthKit at all
+	     com.apple.developer.healthkit.access   : array of optional access
+	                                              modes. Empty array means
+	                                              "use default access" —
+	                                              do not list 'health-records'
+	                                              here unless we plan to read
+	                                              clinical records, which we
+	                                              don't. Including it would
+	                                              trigger extra App Review
+	                                              scrutiny.
+	     ───────────────────────────────────────────────────────────────── -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.access</key>
+	<array/>
+</dict>
+</plist>
