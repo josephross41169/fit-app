@@ -107,29 +107,26 @@ const C = {
   green:    "#22C55E",
 };
 
-// Pre-validate a photo URL: try to load it with crossOrigin='anonymous' and
-// resolve true iff it loaded without a CORS taint. URLs that fail are
-// dropped from the share render. 4-second cap per image.
-function probeImage(url: string): Promise<boolean> {
-  return new Promise(resolve => {
-    if (!url) return resolve(false);
-    try {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      let done = false;
-      const finish = (ok: boolean) => {
-        if (done) return;
-        done = true;
-        resolve(ok);
-      };
-      img.onload = () => finish(img.naturalWidth > 0);
-      img.onerror = () => finish(false);
-      img.src = url;
-      setTimeout(() => finish(false), 4000);
-    } catch {
-      resolve(false);
-    }
-  });
+// Fetch a remote image and convert it to a data URL. This sidesteps the
+// CORS-tainted-canvas problem: html2canvas treats data URLs as same-origin,
+// so even if the original Supabase storage URL has no CORS headers, the
+// data URL version is safe to render. Returns null if the fetch fails.
+async function urlToDataUrl(url: string): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { mode: "cors", credentials: "omit" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn("[share] failed to fetch image as blob:", url, err);
+    return null;
+  }
 }
 
 // ─── Inner component (the real implementation) ──────────────────────────────
@@ -145,12 +142,13 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
     setBusy(true);
 
     try {
-      // Pre-flight: filter photo URLs to ones that load cleanly with CORS.
-      // Any URL that fails to load with crossOrigin='anonymous' would taint
-      // the canvas and crash html2canvas, so we drop them up front.
+      // Pre-flight: fetch each photo URL and convert to a data URL. Data
+      // URLs aren't CORS-tainted, so html2canvas can render them safely
+      // regardless of whether the original Supabase URL sends CORS headers.
+      // Any fetch that fails is dropped silently.
       const candidatePhotos = (data.nutrition?.photoUrls || []).slice(0, 4);
-      const probes = await Promise.all(candidatePhotos.map(probeImage));
-      const safe = candidatePhotos.filter((_, i) => probes[i]);
+      const dataUrls = await Promise.all(candidatePhotos.map(urlToDataUrl));
+      const safe = dataUrls.filter((u): u is string => !!u);
       setSafePhotos(safe);
 
       // Now mount the off-screen composition.
@@ -506,7 +504,6 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
               <div key={i} style={{ aspectRatio: "1 / 1", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.border}` }}>
                 <img
                   src={url}
-                  crossOrigin="anonymous"
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                   alt=""
                 />
