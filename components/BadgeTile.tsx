@@ -354,6 +354,8 @@ export function BadgeTile({
 
   return (
     <div style={{
+      width: "100%",
+      boxSizing: "border-box",
       borderRadius: 16,
       padding: compact ? "12px 6px" : "16px 10px",
       textAlign: "center",
