@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -11,7 +11,9 @@ import FollowButton from "@/components/FollowButton";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
-import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
+// Lazy-load WorkoutProgressGraphs — it's a chart-heavy component that lives
+// below the fold. Defers loading until the user actually scrolls to it.
+const WorkoutProgressGraphs = lazy(() => import("@/components/WorkoutProgressGraphs"));
 import ActivityShareButton from "@/components/ActivityShareButton";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
@@ -4146,7 +4148,7 @@ export default function ProfilePage() {
                   if (src) {
                     return (
                       <div key={i} className="highlight-slot" style={{position:"relative",aspectRatio:"1",borderRadius:12,overflow:"hidden",cursor:"pointer"}}>
-                        <img onClick={()=>{ if(!editingHighlights) setHighlightLb(src); }} src={src} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                        <img onClick={()=>{ if(!editingHighlights) setHighlightLb(src); }} src={src} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                         <button
                           className="highlight-remove"
                           onClick={(e)=>{e.stopPropagation();removeHighlight(i);}}
@@ -4269,7 +4271,17 @@ export default function ProfilePage() {
                     internally. */}
                 {rawWorkoutLogs.length > 0 && (
                   <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.purpleMid}`,marginBottom:20}}>
-                    <WorkoutProgressGraphs workouts={rawWorkoutLogs} />
+                    <Suspense fallback={
+                      <div style={{
+                        height: 280,
+                        background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                        backgroundSize: "200% 100%",
+                        animation: "skeletonShimmer 1.4s ease-in-out infinite",
+                        borderRadius: 12,
+                      }} />
+                    }>
+                      <WorkoutProgressGraphs workouts={rawWorkoutLogs} />
+                    </Suspense>
                   </div>
                 )}
                 {(()=>{
