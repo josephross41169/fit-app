@@ -11,26 +11,19 @@
 //     │      Nutrition (wide)     │
 //     └───────────────────────────┘
 //
-// Why this layout:
-//   - Workout + Wellness on top: both fit comfortably in half-widths since
-//     wellness usually has 1-3 short entries and workout has tabular data.
-//   - Nutrition full-width on the bottom: meals plus photos need horizontal
-//     space; food pics look better laid out in a row than cropped narrow.
-//   - Result is roughly 1.4:1 — works as Instagram feed post, X, Facebook.
-//
-// CORS handling:
-//   Supabase storage serves photos with CORS headers, but if any image
-//   fails to load with crossOrigin='anonymous' it would taint the canvas
-//   and html2canvas would throw. We pre-validate each photo URL before
-//   render and silently drop any that won't load — better to ship a
-//   share image without a broken photo than crash the share entirely.
+// SAFETY DESIGN:
+//   This component wraps itself in an error boundary. If anything inside
+//   throws — including bad data, a missing module, an html2canvas crash,
+//   or a CORS error — the component renders nothing instead of crashing
+//   the parent page. Previous iterations took down the whole profile
+//   page when html2canvas tainted the canvas; this version contains
+//   blast radius to a single hidden button.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, Component, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-// What the caller passes in. All sections optional — missing ones render
-// an empty-state tile so the layout stays consistent.
+// ─── Public type: shape of one day's data for the share render ──────────────
 export interface ShareCardData {
   dateLabel: string;
   monthShort: string;
@@ -67,7 +60,38 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-// ─── Composition dimensions ──────────────────────────────────────────────────
+// ─── Error boundary: contains all crashes inside the share button ───────────
+// If anything inside the inner component throws during render, the boundary
+// renders null (no button) instead of letting the error propagate up to the
+// parent page. We log to console so the issue is visible in dev tools but
+// the user just sees no button rather than a full page crash.
+class ShareErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(_err: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(err: Error, info: React.ErrorInfo) {
+    console.error("[ActivityShareButton] caught error, hiding button:", err, info);
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+// Public default export wraps the inner implementation in the boundary.
+export default function ActivityShareButton(props: Props) {
+  return (
+    <ShareErrorBoundary>
+      <ActivityShareButtonInner {...props} />
+    </ShareErrorBoundary>
+  );
+}
+
+// ─── Composition dimensions ─────────────────────────────────────────────────
 const SHARE_W = 1600;
 
 const C = {
@@ -84,33 +108,32 @@ const C = {
 };
 
 // Pre-validate a photo URL: try to load it with crossOrigin='anonymous' and
-// return true iff it loaded without a CORS taint. We use this to filter
-// out any URLs that would crash html2canvas. 4-second timeout per image
-// so a hanging URL can't hang the share flow.
+// resolve true iff it loaded without a CORS taint. URLs that fail are
+// dropped from the share render. 4-second cap per image.
 function probeImage(url: string): Promise<boolean> {
   return new Promise(resolve => {
     if (!url) return resolve(false);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    let done = false;
-    const finish = (ok: boolean) => {
-      if (done) return;
-      done = true;
-      resolve(ok);
-    };
-    img.onload = () => finish(img.naturalWidth > 0);
-    img.onerror = () => finish(false);
-    img.src = url;
-    setTimeout(() => finish(false), 4000);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      let done = false;
+      const finish = (ok: boolean) => {
+        if (done) return;
+        done = true;
+        resolve(ok);
+      };
+      img.onload = () => finish(img.naturalWidth > 0);
+      img.onerror = () => finish(false);
+      img.src = url;
+      setTimeout(() => finish(false), 4000);
+    } catch {
+      resolve(false);
+    }
   });
 }
 
-// ─── Main button + portal trigger ────────────────────────────────────────────
-export default function ActivityShareButton({
-  data,
-  filename = "livelee-activity",
-  style,
-}: Props) {
+// ─── Inner component (the real implementation) ──────────────────────────────
+function ActivityShareButtonInner({ data, filename = "livelee-activity", style }: Props) {
   const [busy, setBusy] = useState(false);
   const [snapshotMode, setSnapshotMode] = useState(false);
   const [safePhotos, setSafePhotos] = useState<string[]>([]);
@@ -123,9 +146,8 @@ export default function ActivityShareButton({
 
     try {
       // Pre-flight: filter photo URLs to ones that load cleanly with CORS.
-      // Anything that fails (404, CORS denied, slow-as-mud) is dropped so
-      // it can't taint the canvas later. We do this BEFORE mounting the
-      // share composition so the composition only renders safe images.
+      // Any URL that fails to load with crossOrigin='anonymous' would taint
+      // the canvas and crash html2canvas, so we drop them up front.
       const candidatePhotos = (data.nutrition?.photoUrls || []).slice(0, 4);
       const probes = await Promise.all(candidatePhotos.map(probeImage));
       const safe = candidatePhotos.filter((_, i) => probes[i]);
@@ -133,16 +155,14 @@ export default function ActivityShareButton({
 
       // Now mount the off-screen composition.
       setSnapshotMode(true);
-
       // Wait for React commit + paint.
       await new Promise(r => setTimeout(r, 400));
 
       const node = shareNodeRef.current;
       if (!node) throw new Error("Share composition failed to mount");
 
-      // Wait for any <img> inside the composition to fully paint. After the
-      // probe filter above, all remaining images load cleanly — but they
-      // still need a moment to actually render in the DOM.
+      // Wait for any <img> to actually render. Probed images all load
+      // cleanly but they still need a tick to paint.
       const imgs = Array.from(node.querySelectorAll("img"));
       await Promise.all(
         imgs.map(img =>
@@ -157,7 +177,7 @@ export default function ActivityShareButton({
         )
       );
 
-      // Dynamic import — keeps html2canvas (~50KB gz) out of main bundle.
+      // Dynamic import — keeps html2canvas (~50KB gz) out of the main bundle.
       const html2canvasMod = await import("html2canvas");
       const html2canvas = html2canvasMod.default;
 
@@ -169,11 +189,7 @@ export default function ActivityShareButton({
         allowTaint: false,
         windowWidth: SHARE_W,
         windowHeight: node.offsetHeight,
-        // Ignore any element that html2canvas might choke on. We don't
-        // expect this list to do much given the composition is built from
-        // simple divs + validated images, but it's a safety net.
         ignoreElements: (el) => {
-          // Skip iframes and videos which html2canvas can't render.
           const tag = el.tagName.toLowerCase();
           return tag === "iframe" || tag === "video";
         },
@@ -205,6 +221,8 @@ export default function ActivityShareButton({
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("[share] capture failed", err);
+      // Show an alert here is fine — this catch only triggers from inside
+      // a click handler so it can't crash the whole page.
       alert("Couldn't generate the share image. Try again, or take a regular screenshot.");
     } finally {
       setSnapshotMode(false);
@@ -268,7 +286,7 @@ export default function ActivityShareButton({
   );
 }
 
-// ─── Composition: the actual shareable layout ────────────────────────────────
+// ─── Composition ────────────────────────────────────────────────────────────
 function ShareComposition({
   data,
   forwardedRef,
@@ -288,7 +306,6 @@ function ShareComposition({
         boxSizing: "border-box",
       }}
     >
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 32 }}>
         <div
           style={{
@@ -321,7 +338,6 @@ function ShareComposition({
         </div>
       </div>
 
-      {/* Top row: workout + wellness */}
       <div style={{ display: "flex", gap: 24, marginBottom: 24 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <WorkoutTile workout={data.workout} />
@@ -331,7 +347,6 @@ function ShareComposition({
         </div>
       </div>
 
-      {/* Bottom: nutrition full width */}
       <NutritionTile nutrition={data.nutrition} />
     </div>
   );
@@ -450,8 +465,6 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
   if (!nutrition || (!nutrition.meals?.length && !nutrition.calories)) {
     return <EmptyTile emoji="🥗" title="Nutrition" message="None logged" />;
   }
-  // Photos are already pre-validated by the parent — only safe ones reach
-  // here. Cap at 4 for layout (2x2 grid).
   const photos = (nutrition.photoUrls || []).slice(0, 4);
   return (
     <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}` }}>
