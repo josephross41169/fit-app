@@ -496,6 +496,48 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ─── Loading skeleton ───────────────────────────────────────────────────────
+// Renders a shimmer placeholder matching the group page layout (banner,
+// header card, tab bar, content cards) while data is loading. Replaces
+// the previous "Loading group..." text which made the page feel slow
+// even though most of the load time is network. The structure becomes
+// visible instantly so it FEELS like the page loaded fast.
+function GroupSkeleton() {
+  const shimmer: React.CSSProperties = {
+    background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+    backgroundSize: "200% 100%",
+    animation: "skeletonShimmer 1.4s ease-in-out infinite",
+  };
+  return (
+    <div style={{ background: "#0D0D0D", minHeight: "100vh", paddingBottom: 80 }}>
+      <style jsx global>{`
+        @keyframes skeletonShimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      {/* Banner */}
+      <div style={{ ...shimmer, height: 200, width: "100%" }} />
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "20px 16px" }}>
+        {/* Group header card */}
+        <div style={{ ...shimmer, height: 110, borderRadius: 18, marginTop: -40, marginBottom: 16 }} />
+        {/* Tabs row */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} style={{ ...shimmer, height: 38, flex: 1, borderRadius: 12 }} />
+          ))}
+        </div>
+        {/* Content cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{ ...shimmer, height: 140, borderRadius: 16 }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GroupPage() {
   const { id } = useParams<{ id:string }>();
   const router = useRouter();
@@ -659,15 +701,38 @@ export default function GroupPage() {
 
         const legacyEvents = ((data.events || []) as any[])
           .filter((e: any) => isUpcoming(e.event_date));
-        // Only show approved events in the public list. Pending submissions
-        // go into the admin's approval queue (see pendingEvents below).
-        const { data: newEvents } = await supabase
-          .from("events_with_counts")
-          .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved")
-          .eq("group_id", data.group.id)
-          .eq("is_public", true)
-          .or("approved.is.null,approved.eq.true")
-          .order("event_date", { ascending: true });
+
+        // ── Parallel fan-out ───────────────────────────────────────────
+        // Steps 3-5 below all depend on `data.group.id` but NOT on each
+        // other. Previously they ran sequentially which made the page take
+        // 4 round-trips to finish loading. Running them in Promise.all
+        // collapses them to a single round-trip's worth of latency.
+        const isOwner = !!(user && data.group.created_by === user.id);
+        const [newEventsResult, pendingResult, lbDataResult] = await Promise.all([
+          // Approved events from the new events table
+          supabase
+            .from("events_with_counts")
+            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved")
+            .eq("group_id", data.group.id)
+            .eq("is_public", true)
+            .or("approved.is.null,approved.eq.true")
+            .order("event_date", { ascending: true }),
+          // Pending events (only fetched if user is owner — non-owners get [])
+          isOwner
+            ? supabase
+                .from("events")
+                .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, creator_id, users:creator_id (id, username, full_name, avatar_url)")
+                .eq("group_id", data.group.id)
+                .eq("approved", false)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] as any[] }),
+          // Leaderboard
+          fetch(`/api/db?action=get_leaderboard&groupId=${data.group.id}`).then(r => r.json()),
+        ]);
+
+        const newEvents = (newEventsResult as any).data;
+        const pending = (pendingResult as any).data;
+
         // Adapt new-schema rows to the shape the existing EventCard expects.
         // Filter out past events here too (date_tbd events are kept since
         // they have no date to compare).
@@ -686,20 +751,8 @@ export default function GroupPage() {
             _isNewEvent: true, // flag so card knows to link to /events/[id]
           }));
         setDbEvents([...adapted, ...legacyEvents]);
-
-        // If the user is the group owner, load any pending event submissions
-        // that need their approval. Pending = approved=false on the events table.
-        if (user && data.group.created_by === user.id) {
-          const { data: pending } = await supabase
-            .from("events")
-            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, creator_id, users:creator_id (id, username, full_name, avatar_url)")
-            .eq("group_id", data.group.id)
-            .eq("approved", false)
-            .order("created_at", { ascending: false });
-          setPendingEvents(pending || []);
-        } else {
-          setPendingEvents([]);
-        }
+        setPendingEvents(pending || []);
+        setDbLeaderboard(lbDataResult.leaderboard || []);
 
         setDbChallenges(data.challenges || []);
         setDbNotes(data.notes || []);
@@ -722,23 +775,23 @@ export default function GroupPage() {
         (data.joined_challenge_ids || []).forEach((cid: string) => { scores[cid] = 0; });
         setChallengeScores(scores);
 
-        // Load leaderboard
-        const lbParams = new URLSearchParams({ action: 'get_leaderboard', groupId: data.group.id });
-        const lbRes = await fetch(`/api/db?${lbParams}`);
-        const lbData = await lbRes.json();
-        setDbLeaderboard(lbData.leaderboard || []);
-
-        // Load event comments
+        // ── Background: event comments ─────────────────────────────────
+        // Comments are only visible inside the events tab. We DON'T await
+        // this — the page is "loaded" without comments. They populate in
+        // the background and are ready by the time the user (maybe) clicks
+        // into the events tab. Removed from the critical-path load.
         if (data.events?.length > 0) {
-          const commentMap: Record<string, any[]> = {};
-          await Promise.all((data.events as any[]).map(async (ev: any) => {
-            try {
-              const cRes = await fetch(`/api/db?action=get_event_comments&eventId=${ev.id}`);
-              const cData = await cRes.json();
-              if (cData.comments?.length > 0) commentMap[ev.id] = cData.comments;
-            } catch {}
-          }));
-          if (Object.keys(commentMap).length > 0) setEventComments(commentMap);
+          (async () => {
+            const commentMap: Record<string, any[]> = {};
+            await Promise.all((data.events as any[]).map(async (ev: any) => {
+              try {
+                const cRes = await fetch(`/api/db?action=get_event_comments&eventId=${ev.id}`);
+                const cData = await cRes.json();
+                if (cData.comments?.length > 0) commentMap[ev.id] = cData.comments;
+              } catch {}
+            }));
+            if (Object.keys(commentMap).length > 0) setEventComments(commentMap);
+          })();
         }
       }
     } catch {
@@ -890,11 +943,7 @@ export default function GroupPage() {
   }
 
   if (loading || !group) {
-    return (
-      <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <div style={{ fontWeight:700, fontSize:16, color:C.sub }}>Loading group...</div>
-      </div>
-    );
+    return <GroupSkeleton />;
   }
 
   const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
