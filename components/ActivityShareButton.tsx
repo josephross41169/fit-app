@@ -145,12 +145,27 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
 
     try {
       // Pre-flight: rewrite each photo URL through our same-origin proxy
-      // route. The proxy fetches Supabase storage server-side and serves
-      // the image with our own CORS headers, which lets html2canvas render
-      // it without tainting the canvas. Done for all 3 categories.
-      const wkPhotos = (data.workout?.photoUrls || []).slice(0, 4).map(toProxyUrl);
-      const ntPhotos = (data.nutrition?.photoUrls || []).slice(0, 4).map(toProxyUrl);
-      const wlPhotos = (data.wellness?.photoUrls || []).slice(0, 4).map(toProxyUrl);
+      // route, then HEAD-check each one to drop URLs the proxy can't fetch
+      // (404, 502, expired Supabase signed URLs, etc.). Only photos that
+      // actually load make it into the share image — no broken empty
+      // placeholders. Done for all 3 categories.
+      async function filterReachable(urls: string[]): Promise<string[]> {
+        const proxied = urls.map(toProxyUrl);
+        const checks = await Promise.all(
+          proxied.map(async (u) => {
+            try {
+              const r = await fetch(u, { method: "GET", cache: "force-cache" });
+              return r.ok ? u : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        return checks.filter((u): u is string => !!u);
+      }
+      const wkPhotos = await filterReachable((data.workout?.photoUrls || []).slice(0, 4));
+      const ntPhotos = await filterReachable((data.nutrition?.photoUrls || []).slice(0, 4));
+      const wlPhotos = await filterReachable((data.wellness?.photoUrls || []).slice(0, 4));
       setSafeWorkoutPhotos(wkPhotos);
       setSafeNutritionPhotos(ntPhotos);
       setSafeWellnessPhotos(wlPhotos);
