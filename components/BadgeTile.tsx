@@ -445,6 +445,8 @@ export function BadgeTile({
           lineHeight: 1.3, marginBottom: compact ? 0 : 4,
           textShadow: "0 1px 3px rgba(0,0,0,0.85)",
           letterSpacing: 0.3,
+          // Compensate for letter-spacing trailing space on last letter.
+          textIndent: 0.3,
         }}>{label}</div>
         {desc && !compact && (
           <div style={{
@@ -486,15 +488,23 @@ export function BadgeTile({
 
         <div style={{
           display: "inline-block",
+          maxWidth: "100%",
+          boxSizing: "border-box",
           background: "rgba(0,0,0,0.55)",
           backdropFilter: "blur(4px)",
           border: `1px solid ${style.accentColor}`,
           borderRadius: 99,
-          padding: "2px 9px",
+          // Compact preview tiles are narrow (3-up grid), so reduce horizontal
+          // padding and letter-spacing so the rank label ("BRONZE", "SILVER",
+          // etc.) fits inside the tile without overflowing right.
+          padding: compact ? "2px 6px" : "2px 9px",
           fontSize: 9, fontWeight: 900,
           color: style.accentColor,
-          letterSpacing: 0.8,
+          letterSpacing: compact ? 0.4 : 0.8,
           textShadow: "0 1px 2px rgba(0,0,0,0.8)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "clip",
         }}>
           {style.name}
         </div>
