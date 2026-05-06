@@ -359,7 +359,14 @@ export function BadgeTile({
       textAlign: "center",
       border: `2px solid ${style.border}`,
       background: style.gradient,
-      boxShadow: `0 0 14px ${style.glow}, 0 0 36px ${style.glow}, 0 0 16px ${theme.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
+      // Compact mode (used in the profile preview grid) intentionally uses
+      // a tighter glow. The full 36px glow extends well past the cell and
+      // makes the badge visually appear offset within the equal-width
+      // grid columns. Tighter glow keeps the visual center of each tile
+      // aligned with its actual center.
+      boxShadow: compact
+        ? `0 0 6px ${style.glow}, 0 0 12px ${style.glow}, inset 0 1px 0 rgba(255,255,255,0.3)`
+        : `0 0 14px ${style.glow}, 0 0 36px ${style.glow}, 0 0 16px ${theme.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
       position: "relative",
       overflow: "hidden",
       transition: "transform 0.2s",
