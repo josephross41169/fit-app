@@ -38,6 +38,7 @@ export interface ShareCardData {
     calories?: number;
     exercises?: { name: string; sets: number; reps: number; weight: string }[];
     cardio?: { type: string; duration?: string; distance?: string }[];
+    photoUrls?: string[];
   } | null;
 
   nutrition?: {
@@ -51,6 +52,7 @@ export interface ShareCardData {
 
   wellness?: {
     entries?: { activity: string; emoji?: string; notes?: string; duration?: number }[];
+    photoUrls?: string[];
   } | null;
 }
 
@@ -131,7 +133,9 @@ function toProxyUrl(url: string): string {
 function ActivityShareButtonInner({ data, filename = "livelee-activity", style }: Props) {
   const [busy, setBusy] = useState(false);
   const [snapshotMode, setSnapshotMode] = useState(false);
-  const [safePhotos, setSafePhotos] = useState<string[]>([]);
+  const [safeWorkoutPhotos, setSafeWorkoutPhotos] = useState<string[]>([]);
+  const [safeNutritionPhotos, setSafeNutritionPhotos] = useState<string[]>([]);
+  const [safeWellnessPhotos, setSafeWellnessPhotos] = useState<string[]>([]);
   const shareNodeRef = useRef<HTMLDivElement | null>(null);
 
   async function handleClick(e: React.MouseEvent) {
@@ -143,15 +147,19 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
       // Pre-flight: rewrite each photo URL through our same-origin proxy
       // route. The proxy fetches Supabase storage server-side and serves
       // the image with our own CORS headers, which lets html2canvas render
-      // it without tainting the canvas.
-      const candidatePhotos = (data.nutrition?.photoUrls || []).slice(0, 4);
-      const safe = candidatePhotos.map(toProxyUrl);
-      setSafePhotos(safe);
+      // it without tainting the canvas. Done for all 3 categories.
+      const wkPhotos = (data.workout?.photoUrls || []).slice(0, 4).map(toProxyUrl);
+      const ntPhotos = (data.nutrition?.photoUrls || []).slice(0, 4).map(toProxyUrl);
+      const wlPhotos = (data.wellness?.photoUrls || []).slice(0, 4).map(toProxyUrl);
+      setSafeWorkoutPhotos(wkPhotos);
+      setSafeNutritionPhotos(ntPhotos);
+      setSafeWellnessPhotos(wlPhotos);
 
       // Now mount the off-screen composition.
       setSnapshotMode(true);
-      // Wait for React commit + paint.
-      await new Promise(r => setTimeout(r, 400));
+      // Wait for React commit + paint. Longer than usual because the
+      // proxied images need a network round-trip through our server.
+      await new Promise(r => setTimeout(r, 800));
 
       const node = shareNodeRef.current;
       if (!node) throw new Error("Share composition failed to mount");
@@ -167,7 +175,7 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
                 const done = () => resolve();
                 img.addEventListener("load", done, { once: true });
                 img.addEventListener("error", done, { once: true });
-                setTimeout(done, 3000);
+                setTimeout(done, 8000);
               })
         )
       );
@@ -222,16 +230,26 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
     } finally {
       setSnapshotMode(false);
       setBusy(false);
-      setSafePhotos([]);
+      setSafeWorkoutPhotos([]);
+      setSafeNutritionPhotos([]);
+      setSafeWellnessPhotos([]);
     }
   }
 
-  // Build the data passed to the composition with only the safe photos.
+  // Build the data passed to the composition with proxied photos for all
+  // three categories. Each section's photoUrls is overridden with our
+  // safe (proxied) list so html2canvas can render them.
   const dataForRender: ShareCardData = {
     ...data,
+    workout: data.workout
+      ? { ...data.workout, photoUrls: safeWorkoutPhotos }
+      : data.workout,
     nutrition: data.nutrition
-      ? { ...data.nutrition, photoUrls: safePhotos }
+      ? { ...data.nutrition, photoUrls: safeNutritionPhotos }
       : data.nutrition,
+    wellness: data.wellness
+      ? { ...data.wellness, photoUrls: safeWellnessPhotos }
+      : data.wellness,
   };
 
   return (
@@ -391,8 +409,8 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
               <div style={{ textAlign: "right" }}>Weight</div>
             </div>
             {workout.exercises.slice(0, 8).map((e, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 50px 50px 1fr", gap: 8, padding: "10px 4px", borderTop: `1px solid ${C.border}`, fontSize: 15, alignItems: "center" }}>
-                <div style={{ fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</div>
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 50px 50px 1fr", gap: 8, padding: "14px 4px", borderTop: `1px solid ${C.border}`, fontSize: 15, alignItems: "center" }}>
+                <div style={{ fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>{e.name}</div>
                 <div style={{ textAlign: "center", color: C.purpleLt, fontWeight: 800 }}>{e.sets}</div>
                 <div style={{ textAlign: "center", color: C.purpleLt, fontWeight: 800 }}>{e.reps}</div>
                 <div style={{ textAlign: "right", color: C.gold, fontWeight: 800, fontSize: 13, lineHeight: 1.3 }}>{e.weight || "—"}</div>
@@ -417,6 +435,10 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
               </div>
             ))}
           </div>
+        )}
+
+        {workout.photoUrls && workout.photoUrls.length > 0 && (
+          <PhotoGrid photos={workout.photoUrls} />
         )}
       </div>
     </div>
@@ -451,6 +473,9 @@ function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
             )}
           </div>
         ))}
+        {wellness.photoUrls && wellness.photoUrls.length > 0 && (
+          <PhotoGrid photos={wellness.photoUrls} />
+        )}
       </div>
     </div>
   );
@@ -496,17 +521,19 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
         </div>
 
         {photos.length > 0 && (
-          <div style={{ flex: "1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignContent: "start" }}>
-            {photos.map((url, i) => (
-              <div key={i} style={{ aspectRatio: "1 / 1", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.border}` }}>
-                <img
-                  src={url}
-                  crossOrigin="anonymous"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  alt=""
-                />
-              </div>
-            ))}
+          <div style={{ flex: "1", minWidth: 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: photos.length === 1 ? "1fr" : "1fr 1fr", gap: 10, alignContent: "start" }}>
+              {photos.map((url, i) => (
+                <div key={i} style={{ aspectRatio: "1 / 1", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.border}`, background: "#0D0D0D" }}>
+                  <img
+                    src={url}
+                    crossOrigin="anonymous"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    alt=""
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -520,6 +547,45 @@ function Macro({ value, label, unit, color }: { value: number; label: string; un
       <div style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
       <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>{unit}</div>
       <div style={{ fontSize: 11, color: C.sub, marginTop: 2, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+    </div>
+  );
+}
+
+// Reusable photo grid for tiles. 1 photo full width, 2+ in a 2-column grid.
+// Lives below the rest of the tile content. We cap at 4 since we only have
+// space for a 2x2 grid before things start looking cluttered.
+function PhotoGrid({ photos }: { photos: string[] }) {
+  const list = photos.slice(0, 4);
+  if (list.length === 0) return null;
+  const cols = list.length === 1 ? "1fr" : "1fr 1fr";
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: cols,
+        gap: 10,
+        marginTop: 16,
+      }}
+    >
+      {list.map((url, i) => (
+        <div
+          key={i}
+          style={{
+            aspectRatio: "1 / 1",
+            borderRadius: 14,
+            overflow: "hidden",
+            border: `2px solid ${C.border}`,
+            background: "#0D0D0D",
+          }}
+        >
+          <img
+            src={url}
+            crossOrigin="anonymous"
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            alt=""
+          />
+        </div>
+      ))}
     </div>
   );
 }
