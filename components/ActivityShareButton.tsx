@@ -107,25 +107,23 @@ const C = {
   green:    "#22C55E",
 };
 
-// Fetch a remote image and convert it to a data URL. This sidesteps the
-// CORS-tainted-canvas problem: html2canvas treats data URLs as same-origin,
-// so even if the original Supabase storage URL has no CORS headers, the
-// data URL version is safe to render. Returns null if the fetch fails.
-async function urlToDataUrl(url: string): Promise<string | null> {
-  if (!url) return null;
+// Convert a remote image URL to a same-origin proxy URL. The proxy lives
+// at /api/image-proxy and fetches the image server-side, sidestepping any
+// CORS issues with Supabase storage. Returns the original URL unchanged
+// if it's already same-origin (e.g., a data URL or a relative path).
+function toProxyUrl(url: string): string {
+  if (!url) return url;
+  // Data URLs and relative paths are already safe.
+  if (url.startsWith("data:") || url.startsWith("/")) return url;
   try {
-    const res = await fetch(url, { mode: "cors", credentials: "omit" });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise<string | null>(resolve => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch (err) {
-    console.warn("[share] failed to fetch image as blob:", url, err);
-    return null;
+    const u = new URL(url, typeof window !== "undefined" ? window.location.origin : "https://liveleeapp.com");
+    // If it's already on our origin, no proxy needed.
+    if (typeof window !== "undefined" && u.origin === window.location.origin) {
+      return url;
+    }
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  } catch {
+    return url;
   }
 }
 
@@ -142,13 +140,12 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
     setBusy(true);
 
     try {
-      // Pre-flight: fetch each photo URL and convert to a data URL. Data
-      // URLs aren't CORS-tainted, so html2canvas can render them safely
-      // regardless of whether the original Supabase URL sends CORS headers.
-      // Any fetch that fails is dropped silently.
+      // Pre-flight: rewrite each photo URL through our same-origin proxy
+      // route. The proxy fetches Supabase storage server-side and serves
+      // the image with our own CORS headers, which lets html2canvas render
+      // it without tainting the canvas.
       const candidatePhotos = (data.nutrition?.photoUrls || []).slice(0, 4);
-      const dataUrls = await Promise.all(candidatePhotos.map(urlToDataUrl));
-      const safe = dataUrls.filter((u): u is string => !!u);
+      const safe = candidatePhotos.map(toProxyUrl);
       setSafePhotos(safe);
 
       // Now mount the off-screen composition.
@@ -387,18 +384,18 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
       <div style={{ padding: 22 }}>
         {workout.exercises && workout.exercises.length > 0 && (
           <div style={{ marginBottom: workout.cardio && workout.cardio.length > 0 ? 18 : 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 100px", gap: 8, fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, padding: "0 4px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 50px 50px 1fr", gap: 8, fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, padding: "0 4px" }}>
               <div>Exercise</div>
               <div style={{ textAlign: "center" }}>Sets</div>
               <div style={{ textAlign: "center" }}>Reps</div>
               <div style={{ textAlign: "right" }}>Weight</div>
             </div>
             {workout.exercises.slice(0, 8).map((e, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 100px", gap: 8, padding: "10px 4px", borderTop: `1px solid ${C.border}`, fontSize: 15, alignItems: "center" }}>
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 50px 50px 1fr", gap: 8, padding: "10px 4px", borderTop: `1px solid ${C.border}`, fontSize: 15, alignItems: "center" }}>
                 <div style={{ fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</div>
                 <div style={{ textAlign: "center", color: C.purpleLt, fontWeight: 800 }}>{e.sets}</div>
                 <div style={{ textAlign: "center", color: C.purpleLt, fontWeight: 800 }}>{e.reps}</div>
-                <div style={{ textAlign: "right", color: C.gold, fontWeight: 800, fontSize: 14 }}>{e.weight || "—"}</div>
+                <div style={{ textAlign: "right", color: C.gold, fontWeight: 800, fontSize: 13, lineHeight: 1.3 }}>{e.weight || "—"}</div>
               </div>
             ))}
             {workout.exercises.length > 8 && (
@@ -440,7 +437,7 @@ function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
       <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 12 }}>
         {wellness.entries.map((e, i) => (
           <div key={i} style={{ background: C.cardBg2, borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, border: `1px solid ${C.border}` }}>
-            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, lineHeight: 1, flexShrink: 0 }}>
               {e.emoji || "🌿"}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -484,7 +481,7 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {nutrition.meals.slice(0, 5).map((m, i) => (
                 <div key={i} style={{ background: C.cardBg2, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, border: `1px solid ${C.border}` }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, flexShrink: 0 }}>
                     {m.emoji || "🍽️"}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -504,6 +501,7 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
               <div key={i} style={{ aspectRatio: "1 / 1", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.border}` }}>
                 <img
                   src={url}
+                  crossOrigin="anonymous"
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                   alt=""
                 />
