@@ -832,23 +832,35 @@ export default function GroupPage() {
     if (!dbId) return;
     setWarLoading(true);
     try {
-      // Our group's challenges
-      const { data, error } = await supabase
-        .from("group_challenges")
-        .select(`*, 
-          creator_group:creator_group_id(id,name,emoji),
-          opponent_group:opponent_group_id(id,name,emoji),
-          winner_group:winner_group_id(id,name),
-          group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted),
-          group_challenge_media(id,media_url,media_type,caption,created_at,user_id)`)
-        .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
-        .neq("is_group_goal", true)
-        .order("created_at", { ascending: false });
+      // Run the two independent queries in parallel: this group's
+      // challenges AND the open challenges from other groups. Previously
+      // they ran sequentially, doubling the latency for the wars panel.
+      const [{ data, error }, { data: openData }] = await Promise.all([
+        supabase
+          .from("group_challenges")
+          .select(`*,
+            creator_group:creator_group_id(id,name,emoji),
+            opponent_group:opponent_group_id(id,name,emoji),
+            winner_group:winner_group_id(id,name),
+            group_challenge_members(user_id,group_id,contribution,weight_entry,weight_submitted),
+            group_challenge_media(id,media_url,media_type,caption,created_at,user_id)`)
+          .or(`creator_group_id.eq.${dbId},opponent_group_id.eq.${dbId}`)
+          .neq("is_group_goal", true)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("group_challenges")
+          .select(`*, creator_group:creator_group_id(id,name,emoji)`)
+          .eq("status", "open")
+          .neq("creator_group_id", dbId)
+          .order("created_at", { ascending: false }),
+      ]);
 
       let challenges = error ? [] : (data || []);
       if (error) console.error("loadWarChallenges error:", error.message);
 
-      // Fetch user profiles for all members across all challenges
+      // Fetch user profiles for all members across all challenges. This
+      // must come after the main query since we need the user IDs from
+      // the response. Still parallel-safe with setting open challenges.
       const allUserIds = [...new Set(
         challenges.flatMap((c:any) =>
           (c.group_challenge_members||[]).map((m:any) => m.user_id).filter(Boolean)
@@ -875,22 +887,18 @@ export default function GroupPage() {
       }
 
       setWarChallenges(challenges);
-
-      // All open challenges from OTHER groups (the discovery board)
-      const { data: openData } = await supabase
-        .from("group_challenges")
-        .select(`*, creator_group:creator_group_id(id,name,emoji)`)
-        .eq("status", "open")
-        .neq("creator_group_id", dbId)
-        .order("created_at", { ascending: false });
       setOpenBoardChallenges(openData || []);
     } catch(e) { console.error("loadWarChallenges exception:", e); }
     setWarLoading(false);
   }, [dbGroup, tab]);
 
   useEffect(() => {
-    if ((dbGroup as any)?.id) loadWarChallenges();
-  }, [dbGroup, loadWarChallenges]);
+    // Only fetch wars/challenges data when the user actually navigates to
+    // a tab that needs it. Previously this ran as soon as dbGroup was set,
+    // even if the user was on the overview tab and would never see the
+    // wars panel. Saves a query on initial group page load.
+    if ((dbGroup as any)?.id && (tab === "war" || tab === "challenges")) loadWarChallenges();
+  }, [dbGroup, tab, loadWarChallenges]);
 
   // ── Group Goals hook (must be before early returns) ─────────────────────────
   const loadGroupGoals = useCallback(async () => {
