@@ -714,10 +714,27 @@ function ConnectPageInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadGroups();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setCurrentUserId(user.id);
-    });
+    // Kick off both initial network calls in parallel. Previously these
+    // ran sequentially (getUser first, THEN loadGroups). Now both fire
+    // at once. Once we have the user ID, we re-fetch get_groups with the
+    // userId so the API can flag groups the user is already a member of.
+    // If the user is landing on the My Groups tab, we also pre-fetch the
+    // joined-groups list in parallel so it's ready instantly when they
+    // look at it.
+    (async () => {
+      const [{ data: { user } }] = await Promise.all([
+        supabase.auth.getUser(),
+        loadGroups(),
+      ]);
+
+      if (user) {
+        setCurrentUserId(user.id);
+        // If user landing on joined tab, prefetch in parallel.
+        if (initialTab === "joined") {
+          loadJoinedGroups(user.id);
+        }
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -726,10 +743,15 @@ function ConnectPageInner() {
     }
   }, [tab, currentUserId]);
 
-  async function loadJoinedGroups() {
+  async function loadJoinedGroups(uid?: string) {
+    // Accept optional uid so callers can pass a freshly-fetched user ID
+    // without waiting for state to flush. Falls back to currentUserId
+    // for the existing tab-switch trigger.
+    const userId = uid ?? currentUserId;
+    if (!userId) return;
     setLoadingJoined(true);
     try {
-      const res = await fetch(`/api/db?action=get_user_groups&userId=${currentUserId}`);
+      const res = await fetch(`/api/db?action=get_user_groups&userId=${userId}`);
       const data = await res.json();
       if (data.groups) {
         setJoinedGroups(data.groups.map((g: any) => normalizeDbGroup({ ...g, is_member: true })));
@@ -923,12 +945,46 @@ function ConnectPageInner() {
           })()}
 
           {loadingGroups && tab !== "joined" && (
-            <div style={{ textAlign:"center", padding:"40px 0", color:C.sub, fontSize:14 }}>Loading groups...</div>
+            <div>
+              <style jsx global>{`
+                @keyframes connectSkeletonShimmer {
+                  0%   { background-position: 200% 0; }
+                  100% { background-position: -200% 0; }
+                }
+              `}</style>
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} style={{
+                  height: 130,
+                  borderRadius: 18,
+                  marginBottom: 12,
+                  background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                  backgroundSize: "200% 100%",
+                  animation: "connectSkeletonShimmer 1.4s ease-in-out infinite",
+                }} />
+              ))}
+            </div>
           )}
 
           {tab === "joined" && (
             loadingJoined
-              ? <div style={{ textAlign:"center", padding:"40px 0", color:C.sub, fontSize:14 }}>Loading your groups...</div>
+              ? <div>
+                  <style jsx global>{`
+                    @keyframes connectSkeletonShimmer2 {
+                      0%   { background-position: 200% 0; }
+                      100% { background-position: -200% 0; }
+                    }
+                  `}</style>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                      height: 130,
+                      borderRadius: 18,
+                      marginBottom: 12,
+                      background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                      backgroundSize: "200% 100%",
+                      animation: "connectSkeletonShimmer2 1.4s ease-in-out infinite",
+                    }} />
+                  ))}
+                </div>
               : !currentUserId
                 ? (
                   <div style={{ textAlign:"center", padding:"40px 24px", background:C.white, borderRadius:18, border:`2px dashed ${C.greenMid}` }}>
