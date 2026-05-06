@@ -731,7 +731,6 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   duration: c.duration || undefined,
                   distance: c.distance || undefined,
                 })),
-                photoUrls: photos,
               } : null,
               nutrition: nutrition ? {
                 calories: nutrition.calories,
@@ -753,7 +752,6 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   notes: e.notes,
                   duration: (e as any).duration,
                 })),
-                photoUrls: photos,
               } : null,
             }}
             filename={`livelee-${day.id.replace(/\//g,'-')}`}
