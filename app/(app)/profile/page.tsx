@@ -1390,6 +1390,68 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
 // (crop modal removed — photos use adjust-to-fit / object-fit:cover)
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+// ─── Loading skeleton ───────────────────────────────────────────────────────
+// Renders a structural placeholder while the real profile page is loading
+// its data. Mimics the page's layout (avatar block, level XP, activity
+// cards, badges panel) using shimmer animations so the user perceives
+// the page as loaded instantly. Total LOC small enough to inline rather
+// than splitting into its own file.
+function ProfileSkeleton() {
+  // Single shimmer style reused everywhere. Pulled out so we only inject
+  // the keyframes once.
+  const shimmer: React.CSSProperties = {
+    background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+    backgroundSize: "200% 100%",
+    animation: "skeletonShimmer 1.4s ease-in-out infinite",
+  };
+  return (
+    <div style={{ background: "#0D0D0D", minHeight: "100vh", paddingBottom: 80 }}>
+      <style jsx global>{`
+        @keyframes skeletonShimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      {/* Banner placeholder */}
+      <div style={{ ...shimmer, height: 180, width: "100%" }} />
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "20px 16px" }}>
+        {/* Avatar + name row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: -60 }}>
+          <div style={{ ...shimmer, width: 120, height: 120, borderRadius: "50%", border: "4px solid #0D0D0D" }} />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ ...shimmer, height: 24, width: "40%", borderRadius: 8 }} />
+            <div style={{ ...shimmer, height: 16, width: "25%", borderRadius: 8 }} />
+          </div>
+        </div>
+        {/* Stats strip */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 24 }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} style={{ ...shimmer, height: 64, borderRadius: 14 }} />
+          ))}
+        </div>
+        {/* 3-column main area */}
+        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr 320px", gap: 16, marginTop: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...shimmer, height: 280, borderRadius: 18 }} />
+            <div style={{ ...shimmer, height: 200, borderRadius: 18 }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...shimmer, height: 90, borderRadius: 18 }} />
+            <div style={{ ...shimmer, height: 240, borderRadius: 18 }} />
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} style={{ ...shimmer, height: 80, borderRadius: 14 }} />
+            ))}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...shimmer, height: 320, borderRadius: 18 }} />
+            <div style={{ ...shimmer, height: 240, borderRadius: 18 }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
@@ -2551,6 +2613,17 @@ export default function ProfilePage() {
 
   const manualBadges = BADGES.filter(b => isManualBadge(b.id));
   const HIGHLIGHT_SLOTS = 9;
+
+  // ── EARLY: loading skeleton ─────────────────────────────────────────
+  // Profile page fires 15+ useEffects on mount. Without this skeleton the
+  // user sees a blank dark page for 1-2 seconds while data loads. The
+  // skeleton renders structure (header bar, activity card stubs, badges
+  // panel) immediately so it FEELS like the page loaded fast even though
+  // the actual data is still coming in. Replaced by the real layout as
+  // soon as `user` is populated.
+  if (!user) {
+    return <ProfileSkeleton />;
+  }
 
   // ── BRANCH: business accounts render a completely different layout ──
   // The entire athlete profile (followers/following, badges, activity log,
