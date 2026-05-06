@@ -12,6 +12,7 @@ import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBad
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
+import ActivityShareButton from "@/components/ActivityShareButton";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
 import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
@@ -706,6 +707,56 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             }
           </div>
         )}
+        {/* Share / save-as-image button. Self-contained — wraps itself in
+            an error boundary so any crash inside is contained to the
+            button, not the page. */}
+        <div style={{flexShrink:0}} onClick={e=>e.stopPropagation()}>
+          <ActivityShareButton
+            data={{
+              dateLabel: day.label,
+              monthShort: MONTHS[m-1],
+              dayNum: d,
+              workout: workout ? {
+                type: workout.type,
+                duration: workout.duration,
+                calories: workout.calories,
+                exercises: (workout.exercises || []).map(e => ({
+                  name: e.name,
+                  sets: e.sets,
+                  reps: e.reps,
+                  weight: e.weight || '',
+                })),
+                cardio: ((workout as any).cardio || []).map((c: any) => ({
+                  type: c.type || 'Cardio',
+                  duration: c.duration || undefined,
+                  distance: c.distance || undefined,
+                })),
+              } : null,
+              nutrition: nutrition ? {
+                calories: nutrition.calories,
+                protein: nutrition.protein,
+                carbs: nutrition.carbs,
+                fat: nutrition.fat,
+                meals: (nutrition.meals || []).map(meal => ({
+                  key: meal.key,
+                  name: meal.name,
+                  cal: meal.cal,
+                  emoji: meal.emoji,
+                })),
+                photoUrls: photos,
+              } : null,
+              wellness: wellness ? {
+                entries: (wellness.entries || []).map(e => ({
+                  activity: e.activity,
+                  emoji: e.emoji,
+                  notes: e.notes,
+                  duration: (e as any).duration,
+                })),
+              } : null,
+            }}
+            filename={`livelee-${day.id.replace(/\//g,'-')}`}
+          />
+        </div>
       </button>
 
       {/* BODY */}
