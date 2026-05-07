@@ -22,7 +22,7 @@ const C = {
 };
 
 type Tab = "today"|"workout"|"nutrition"|"prs"|"body";
-type Range = "1W"|"1M"|"3M"|"6M"|"1Y";
+type Range = "1W"|"1M"|"1Y";
 type NutritionGoals = { calories:number; protein:number; carbs:number; fat:number; water_oz:number };
 
 // ── Muscle detection ──────────────────────────────────────────────────────────
@@ -68,8 +68,38 @@ function normalizeCardio(raw:string):string {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function daysAgo(n:number){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString(); }
-function rangeToIso(r:Range){ return daysAgo(r==="1W"?7:r==="1M"?30:r==="3M"?90:r==="6M"?180:365); }
-function rangeLabel(r:Range){ return r==="1W"?"this week":r==="1M"?"last 30 days":r==="3M"?"last 3 months":r==="6M"?"last 6 months":"last year"; }
+
+// Returns the start (00:00:00 local time) of the current Mon-Sun week. We
+// compute the Monday of the week containing today, then zero out the time.
+// JavaScript's getDay() is Sun=0..Sat=6, so we shift it to Mon=0..Sun=6
+// before subtracting.
+function startOfWeekMonday(): Date {
+  const d = new Date();
+  const dayMonZero = (d.getDay() + 6) % 7; // Mon=0..Sun=6
+  d.setDate(d.getDate() - dayMonZero);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function startOfMonth(): Date {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+function startOfYear(): Date {
+  const d = new Date();
+  return new Date(d.getFullYear(), 0, 1, 0, 0, 0, 0);
+}
+
+// rangeToIso returns the ISO-string lower bound for a query. 1W = start
+// of this Mon-Sun week. 1M = start of this calendar month. 1Y = start of
+// this calendar year. Switched away from rolling N-days-back so the
+// filter aligns with how users actually think about "this week" /
+// "this month" / "this year."
+function rangeToIso(r:Range){
+  if (r === "1W") return startOfWeekMonday().toISOString();
+  if (r === "1M") return startOfMonth().toISOString();
+  return startOfYear().toISOString(); // 1Y
+}
+function rangeLabel(r:Range){ return r==="1W"?"this week":r==="1M"?"this month":"this year"; }
 function fmt(iso:string){ return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function fmtDay(iso:string){ return new Date(iso).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }
 function calcVol(exs:any[]):number {
@@ -468,7 +498,10 @@ export default function StatsPage(){
   // ── Derived ────────────────────────────────────────────────────────────────
   const streaks=calcStreak(allWorkoutDates);
   const totalWorkouts=workoutLogs.length;
-  const rangeWeeks=range==="1W"?1:range==="1M"?4:range==="3M"?13:range==="6M"?26:52;
+  // Approximate "weeks in this range" used as a denominator for averages.
+  // 1W=1 week. 1M=~4 weeks. 1Y=52 weeks. Doesn't need to be exact since
+  // it's just an average normalizer.
+  const rangeWeeks=range==="1W"?1:range==="1M"?4:52;
   // Count only actual weeks that had at least 1 workout (not all weeks in range)
   const activeWeeks=(()=>{
     const ws=new Set<string>();
@@ -713,7 +746,7 @@ export default function StatsPage(){
           <div style={{fontWeight:900,fontSize:21,color:C.text}}>📊 Stats</div>
           {tab!=="today"&&tab!=="prs"&&(
             <div style={{display:"flex",gap:4}}>
-              {(["1W","1M","3M","6M","1Y"] as Range[]).map(r=>(
+              {(["1W","1M","1Y"] as Range[]).map(r=>(
                 <button key={r} onClick={()=>setRange(r)} style={{
                   padding:"4px 9px",borderRadius:20,border:`1px solid ${range===r?C.purple:C.border}`,
                   background:range===r?C.purple:"transparent",
