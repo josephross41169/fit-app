@@ -1628,6 +1628,13 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
   // We compare specific fields rather than the whole post object because
   // the parent often passes a fresh object on every render (the same data
   // but a new identity), which would defeat memo.
+  //
+  // Fields covered match the in-card mutation paths via onUpdate:
+  //   - liked / likes (toggle like)
+  //   - comments length (add comment)
+  //   - photos length (add/remove photo from own post)
+  // Plus caption and currentUser id for completeness. Callbacks are
+  // intentionally ignored — the parent recreates them every render.
   const a = prev.post;
   const b = next.post;
   return (
@@ -1635,6 +1642,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
     a.likes === b.likes &&
     a.liked === b.liked &&
     a.comments?.length === b.comments?.length &&
+    a.photos?.length === b.photos?.length &&
     a.caption === b.caption &&
     prev.currentUser?.id === next.currentUser?.id
   );
@@ -2369,15 +2377,22 @@ export default function FeedPage() {
       .order('logged_at', { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
     if (filter !== "all") query = query.eq('log_type', filter);
-    const { data } = await query;
+
+    // PERF: blocked-users lookup is independent of the activity_logs query —
+    // we just need both sets before we can filter. Run them in parallel
+    // instead of waiting on the logs query before kicking off blocks. Saves
+    // one round-trip on every activity-feed load (which fires on mount, on
+    // filter change, and on page change).
+    const [{ data }, blocks] = await Promise.all([
+      query,
+      user ? loadBlockedUsers(user.id) : Promise.resolve(new Set<string>()),
+    ]);
+
     if (data) {
       // Filter out activity from blocked users in either direction
-      let filtered = data;
-      if (user) {
-        const blocks = await loadBlockedUsers(user.id);
-        if (blocks.size > 0) {
-          filtered = data.filter((l: any) => !blocks.has(l.user_id));
-        }
+      let filtered: any[] = data;
+      if (blocks && blocks.size > 0) {
+        filtered = data.filter((l: any) => !blocks.has(l.user_id));
       }
 
       if (append) setActivityLogs(prev => [...prev, ...filtered]);
@@ -2557,7 +2572,15 @@ export default function FeedPage() {
   // handles the no-posts-yet case. Previously this fell back to mock data,
   // which made the feed look populated with fake profiles when the user
   // actually had nothing to see — confusing and looked broken.
-  const displayPosts = dbPosts.map((p: any) => ({
+  //
+  // PERF: useMemo so this entire mapping (which builds 20-30 objects with
+  // nested comment-mapping arrays) only runs when dbPosts actually changes.
+  // Previously this re-ran on every parent re-render — every search keystroke,
+  // every story timer tick, every poll — creating thousands of throwaway
+  // objects per minute. Relative time strings ("5m ago") will only refresh
+  // when posts get re-fetched/updated, which happens often enough in normal
+  // use; perfectly fresh timestamps weren't worth the wasted CPU.
+  const displayPosts = useMemo(() => dbPosts.map((p: any) => ({
         id: p.id,
         user: p.users?.full_name || p.users?.username || "User",
         username: p.users?.username || "user",
@@ -2595,7 +2618,7 @@ export default function FeedPage() {
         wellness: null,
         _ownerId: p.user_id,
         user_id: p.user_id,
-      } as any));
+      } as any)), [dbPosts]);
   // NOTE: We deliberately do NOT filter to "photos only" here. An earlier
   // version had `.filter(p => p.photos.length > 0)` which made For You drop
   // every text-only or activity-only post — including the user's own posts —
