@@ -1,21 +1,28 @@
 // components/GroupHighlights.tsx
 //
-// Renders a 27-slot photo grid for a group. Empty slots are dashed
-// placeholders. Owners and moderators see an "Edit Highlights" button
-// that opens a modal where they can pick photos from the group's full
-// photo pool (posts + notes + war media, surfaced via /api/group-photos).
+// Renders a horizontally-scrollable strip of curated highlights for a
+// group. Owners and moderators can pick from any photo OR video posted
+// in the group (across posts, notes, and war media). Members see only
+// the curated strip — no empty placeholders, no edit affordances.
 //
-// Storage: `groups.highlights` is a jsonb array of URLs. The picker
-// stages changes locally; clicking Save fires `save_group_highlights`
-// to replace the full array. We don't try to do partial updates — the
-// grid is small (max 27) so writing the whole array is fine.
+// Videos autoplay muted when scrolled into view (standard mobile feed
+// pattern — Instagram, TikTok, etc.). Tap to unmute. We use a single
+// IntersectionObserver per tile so we can pause off-screen ones to save
+// bandwidth and CPU.
+//
+// Storage: `groups.highlights` is a jsonb array of media URLs (photos
+// AND videos mixed). We rely on file extension to distinguish at render
+// time — no separate type field needed.
 
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
-type Photo = {
+type MediaKind = "photo" | "video";
+
+type GroupPhoto = {
   url: string;
+  kind: MediaKind;
   source: "post" | "note" | "war";
   source_id: string;
   user_id: string;
@@ -27,6 +34,7 @@ type Photo = {
 };
 
 type SourceFilter = "all" | "post" | "note" | "war";
+type KindFilter = "all" | "photo" | "video";
 
 const SOURCE_LABELS: Record<SourceFilter, string> = {
   all: "All",
@@ -35,13 +43,12 @@ const SOURCE_LABELS: Record<SourceFilter, string> = {
   war: "Wars",
 };
 
-const SOURCE_EMOJI: Record<Photo["source"], string> = {
+const SOURCE_EMOJI: Record<GroupPhoto["source"], string> = {
   post: "📷",
   note: "📝",
   war: "⚔️",
 };
 
-// Theme tokens — matches the rest of the group page.
 const C = {
   card: "#181028",
   cardElev: "#241636",
@@ -57,16 +64,21 @@ const C = {
 
 const MAX_SLOTS = 27;
 
+// Detect whether a URL points at a video. Most uploads land in supabase
+// storage with predictable extensions. Falls back to photo so we never
+// silently break a known-good image.
+export function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const u = url.toLowerCase().split("?")[0];
+  return /\.(mp4|mov|webm|m4v|hevc)$/.test(u);
+}
+
 export type GroupHighlightsProps = {
   groupId: string;
   groupName?: string;
-  /** URLs to show in the grid right now. Pass them down from the parent. */
   highlights: string[];
-  /** "owner" | "moderator" | "member" | null. If null/member, edit is hidden. */
   role: string | null;
-  /** Auth user id, needed to call save_group_highlights. */
   currentUserId: string | null;
-  /** Called after a successful save with the new array so the parent can update. */
   onSaved?: (urls: string[]) => void;
 };
 
@@ -79,25 +91,24 @@ export default function GroupHighlights({
   onSaved,
 }: GroupHighlightsProps) {
   const [editing, setEditing] = useState(false);
-  const [allPhotos, setAllPhotos] = useState<Photo[]>([]);
+  const [allMedia, setAllMedia] = useState<GroupPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosLoaded, setPhotosLoaded] = useState(false);
   const [staged, setStaged] = useState<string[]>(highlights);
   const [filter, setFilter] = useState<SourceFilter>("all");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const canEdit = role === "owner" || role === "moderator";
 
-  // Sync staged with parent highlights any time the modal isn't open.
-  // While editing, staged is the source of truth and we don't overwrite it.
+  // Mirror parent highlights into staged when the modal isn't open. Inside
+  // the modal, staged is the source of truth and we don't overwrite.
   useEffect(() => {
     if (!editing) setStaged(highlights);
   }, [highlights, editing]);
 
-  // Fetch full photo pool the first time the user opens the editor. Cached
-  // for the lifetime of the modal so we don't refetch when they toggle filters.
-  const loadPhotos = useCallback(async () => {
+  const loadMedia = useCallback(async () => {
     if (photosLoaded) return;
     setPhotosLoading(true);
     try {
@@ -108,13 +119,18 @@ export default function GroupHighlights({
       });
       const data = await res.json();
       if (Array.isArray(data.photos)) {
-        setAllPhotos(data.photos);
+        // Backend doesn't tag kind explicitly; we infer from URL.
+        const tagged: GroupPhoto[] = data.photos.map((p: any) => ({
+          ...p,
+          kind: isVideoUrl(p.url) ? "video" : "photo",
+        }));
+        setAllMedia(tagged);
         setPhotosLoaded(true);
       } else {
-        setAllPhotos([]);
+        setAllMedia([]);
       }
     } catch {
-      setAllPhotos([]);
+      setAllMedia([]);
     }
     setPhotosLoading(false);
   }, [groupId, photosLoaded]);
@@ -124,13 +140,13 @@ export default function GroupHighlights({
     setStaged(highlights);
     setSaveError(null);
     setEditing(true);
-    loadPhotos();
+    loadMedia();
   }
 
   function toggleStaged(url: string) {
     setStaged(prev => {
       if (prev.includes(url)) return prev.filter(u => u !== url);
-      if (prev.length >= MAX_SLOTS) return prev; // grid full, ignore
+      if (prev.length >= MAX_SLOTS) return prev;
       return [...prev, url];
     });
   }
@@ -176,20 +192,28 @@ export default function GroupHighlights({
     setSaving(false);
   }
 
-  const filteredPhotos = filter === "all"
-    ? allPhotos
-    : allPhotos.filter(p => p.source === filter);
+  const filteredMedia = allMedia.filter(p => {
+    if (filter !== "all" && p.source !== filter) return false;
+    if (kindFilter !== "all" && p.kind !== kindFilter) return false;
+    return true;
+  });
+
+  // Don't render anything when there are no highlights and the viewer
+  // can't edit — keeps non-curated groups from showing an empty shell.
+  if (highlights.length === 0 && !canEdit) return null;
 
   return (
     <div style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.border}` }}>
-      {/* Header — title + edit button (mods only) */}
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 18 }}>📸</span>
           <span style={{ fontWeight: 800, fontSize: 14, color: C.text }}>Highlights</span>
-          <span style={{ fontSize: 11, color: C.sub, fontWeight: 600 }}>
-            {highlights.length} / {MAX_SLOTS}
-          </span>
+          {highlights.length > 0 && (
+            <span style={{ fontSize: 11, color: C.sub, fontWeight: 600 }}>
+              {highlights.length}
+            </span>
+          )}
         </div>
         {canEdit && (
           <button
@@ -205,50 +229,15 @@ export default function GroupHighlights({
         )}
       </div>
 
-      {/* Grid — 3 cols × 9 rows = 27 slots. Empty slots are dashed boxes. */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 4,
-        }}
-      >
-        {Array.from({ length: MAX_SLOTS }).map((_, i) => {
-          const url = highlights[i];
-          if (!url) {
-            return (
-              <div
-                key={`empty-${i}`}
-                style={{
-                  aspectRatio: "1 / 1",
-                  borderRadius: 6,
-                  border: `1px dashed ${C.border}`,
-                  background: "rgba(255,255,255,0.02)",
-                }}
-              />
-            );
-          }
-          return (
-            <div
-              key={i}
-              style={{
-                aspectRatio: "1 / 1",
-                borderRadius: 6,
-                overflow: "hidden",
-                border: `1px solid ${C.border}`,
-                background: C.cardElev,
-              }}
-            >
-              <img
-                src={url}
-                alt=""
-                loading="lazy"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
-            </div>
-          );
-        })}
-      </div>
+      {/* Body — horizontal scroller (no empty placeholders). Empty state
+          shown only to mods/owners; members short-circuited above. */}
+      {highlights.length === 0 ? (
+        <div style={{ padding: "20px 14px", textAlign: "center", fontSize: 13, color: C.sub, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+          No highlights yet — tap Edit to feature photos and videos from this group.
+        </div>
+      ) : (
+        <HighlightsStrip urls={highlights} />
+      )}
 
       {/* Editor modal */}
       {editing && (
@@ -276,7 +265,7 @@ export default function GroupHighlights({
                   Edit Highlights{groupName ? ` — ${groupName}` : ""}
                 </div>
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 3 }}>
-                  Pick up to {MAX_SLOTS} photos from this group's media. Selected: {staged.length}/{MAX_SLOTS}
+                  Pick up to {MAX_SLOTS} photos or videos. Selected: {staged.length}/{MAX_SLOTS}
                 </div>
               </div>
               <button
@@ -292,77 +281,102 @@ export default function GroupHighlights({
               </button>
             </div>
 
-            {/* Selected strip — shows current selections in order, with reorder/remove */}
+            {/* Selected strip */}
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
                 Selected ({staged.length})
               </div>
               {staged.length === 0 ? (
                 <div style={{ fontSize: 12, color: C.sub, padding: "10px 0" }}>
-                  Tap photos below to add them to highlights.
+                  Tap items below to add them to highlights.
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
-                  {staged.map((url, idx) => (
-                    <div key={url} style={{ position: "relative", flexShrink: 0, width: 70 }}>
-                      <img
-                        src={url}
-                        alt=""
-                        style={{
-                          width: 70, height: 70, objectFit: "cover", borderRadius: 8,
-                          border: `2px solid ${C.purple}`, display: "block",
-                        }}
-                      />
-                      <div style={{
-                        position: "absolute", top: 2, left: 2,
-                        background: C.purple, color: "#fff",
-                        fontSize: 10, fontWeight: 800,
-                        borderRadius: 99, padding: "1px 6px",
-                      }}>
-                        {idx + 1}
+                  {staged.map((url, idx) => {
+                    const isVid = isVideoUrl(url);
+                    return (
+                      <div key={url} style={{ position: "relative", flexShrink: 0, width: 70 }}>
+                        {isVid ? (
+                          <video
+                            src={url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            style={{
+                              width: 70, height: 70, objectFit: "cover", borderRadius: 8,
+                              border: `2px solid ${C.purple}`, display: "block", background: "#000",
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={url}
+                            alt=""
+                            style={{
+                              width: 70, height: 70, objectFit: "cover", borderRadius: 8,
+                              border: `2px solid ${C.purple}`, display: "block",
+                            }}
+                          />
+                        )}
+                        {/* Order badge */}
+                        <div style={{
+                          position: "absolute", top: 2, left: 2,
+                          background: C.purple, color: "#fff",
+                          fontSize: 10, fontWeight: 800,
+                          borderRadius: 99, padding: "1px 6px",
+                        }}>
+                          {idx + 1}
+                        </div>
+                        {isVid && (
+                          <div style={{
+                            position: "absolute", top: 2, right: 2,
+                            background: "rgba(0,0,0,0.7)", color: "#fff",
+                            fontSize: 9, fontWeight: 700,
+                            borderRadius: 4, padding: "1px 4px",
+                          }}>▶</div>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, gap: 2 }}>
+                          <button
+                            onClick={() => moveStaged(idx, -1)}
+                            disabled={idx === 0}
+                            style={{
+                              flex: 1, padding: "2px 0", borderRadius: 4,
+                              background: C.cardElev, color: idx === 0 ? C.sub : C.text,
+                              border: "none", fontSize: 10, cursor: idx === 0 ? "default" : "pointer",
+                            }}
+                          >
+                            ←
+                          </button>
+                          <button
+                            onClick={() => moveStaged(idx, 1)}
+                            disabled={idx === staged.length - 1}
+                            style={{
+                              flex: 1, padding: "2px 0", borderRadius: 4,
+                              background: C.cardElev, color: idx === staged.length - 1 ? C.sub : C.text,
+                              border: "none", fontSize: 10, cursor: idx === staged.length - 1 ? "default" : "pointer",
+                            }}
+                          >
+                            →
+                          </button>
+                          <button
+                            onClick={() => clearStaged(url)}
+                            style={{
+                              flex: 1, padding: "2px 0", borderRadius: 4,
+                              background: "rgba(239,68,68,0.18)", color: C.red,
+                              border: "none", fontSize: 10, cursor: "pointer", fontWeight: 700,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, gap: 2 }}>
-                        <button
-                          onClick={() => moveStaged(idx, -1)}
-                          disabled={idx === 0}
-                          style={{
-                            flex: 1, padding: "2px 0", borderRadius: 4,
-                            background: C.cardElev, color: idx === 0 ? C.sub : C.text,
-                            border: "none", fontSize: 10, cursor: idx === 0 ? "default" : "pointer",
-                          }}
-                        >
-                          ←
-                        </button>
-                        <button
-                          onClick={() => moveStaged(idx, 1)}
-                          disabled={idx === staged.length - 1}
-                          style={{
-                            flex: 1, padding: "2px 0", borderRadius: 4,
-                            background: C.cardElev, color: idx === staged.length - 1 ? C.sub : C.text,
-                            border: "none", fontSize: 10, cursor: idx === staged.length - 1 ? "default" : "pointer",
-                          }}
-                        >
-                          →
-                        </button>
-                        <button
-                          onClick={() => clearStaged(url)}
-                          style={{
-                            flex: 1, padding: "2px 0", borderRadius: 4,
-                            background: "rgba(239,68,68,0.18)", color: C.red,
-                            border: "none", fontSize: 10, cursor: "pointer", fontWeight: 700,
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Source filter chips */}
-            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 6, overflowX: "auto" }}>
+            {/* Filters: source + kind */}
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 6, flexWrap: "wrap" }}>
               {(Object.keys(SOURCE_LABELS) as SourceFilter[]).map(s => {
                 const active = filter === s;
                 return (
@@ -370,7 +384,7 @@ export default function GroupHighlights({
                     key={s}
                     onClick={() => setFilter(s)}
                     style={{
-                      flexShrink: 0, padding: "6px 12px", borderRadius: 99,
+                      padding: "6px 12px", borderRadius: 99,
                       border: `1px solid ${active ? C.purple : C.border}`,
                       background: active ? C.purple : "transparent",
                       color: active ? "#fff" : C.sub,
@@ -381,27 +395,46 @@ export default function GroupHighlights({
                   </button>
                 );
               })}
+              <div style={{ width: 1, background: C.border, alignSelf: "stretch", margin: "0 4px" }} />
+              {(["all", "photo", "video"] as KindFilter[]).map(k => {
+                const active = kindFilter === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setKindFilter(k)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 99,
+                      border: `1px solid ${active ? C.gold : C.border}`,
+                      background: active ? "rgba(245,166,35,0.2)" : "transparent",
+                      color: active ? C.gold : C.sub,
+                      fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    }}
+                  >
+                    {k === "all" ? "📸+▶" : k === "photo" ? "📸 Photos" : "▶ Videos"}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Photo pool */}
+            {/* Media pool */}
             <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
               {photosLoading && (
                 <div style={{ textAlign: "center", padding: 40, color: C.sub, fontSize: 13 }}>
-                  Loading photos...
+                  Loading media...
                 </div>
               )}
-              {!photosLoading && filteredPhotos.length === 0 && (
+              {!photosLoading && filteredMedia.length === 0 && (
                 <div style={{ textAlign: "center", padding: 40, color: C.sub, fontSize: 13 }}>
-                  No {filter === "all" ? "" : SOURCE_LABELS[filter].toLowerCase() + " "}photos posted in this group yet.
+                  No matching media in this group yet.
                 </div>
               )}
-              {!photosLoading && filteredPhotos.length > 0 && (
+              {!photosLoading && filteredMedia.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 6 }}>
-                  {filteredPhotos.map(p => {
+                  {filteredMedia.map(p => {
                     const selected = staged.includes(p.url);
                     return (
                       <button
-                        key={p.url}
+                        key={p.url + p.source_id}
                         onClick={() => toggleStaged(p.url)}
                         style={{
                           position: "relative", aspectRatio: "1 / 1", borderRadius: 8,
@@ -409,22 +442,40 @@ export default function GroupHighlights({
                           background: C.cardElev, cursor: "pointer", padding: 0,
                         }}
                       >
-                        <img
-                          src={p.url}
-                          alt=""
-                          loading="lazy"
-                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                        />
-                        {/* Source badge top-left */}
+                        {p.kind === "video" ? (
+                          // Preview-only — autoplay happens in the public strip.
+                          <video
+                            src={p.url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", background: "#000" }}
+                          />
+                        ) : (
+                          <img
+                            src={p.url}
+                            alt=""
+                            loading="lazy"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          />
+                        )}
+                        {/* Source badge */}
                         <div style={{
                           position: "absolute", top: 4, left: 4,
-                          fontSize: 11, color: "#fff",
+                          fontSize: 10, color: "#fff",
                           background: "rgba(0,0,0,0.55)",
                           padding: "1px 6px", borderRadius: 99, fontWeight: 700,
                         }}>
                           {SOURCE_EMOJI[p.source]} {p.source}
                         </div>
-                        {/* Selected check */}
+                        {p.kind === "video" && (
+                          <div style={{
+                            position: "absolute", bottom: 4, left: 4,
+                            fontSize: 11, color: "#fff",
+                            background: "rgba(0,0,0,0.7)",
+                            padding: "1px 6px", borderRadius: 99, fontWeight: 800,
+                          }}>▶</div>
+                        )}
                         {selected && (
                           <div style={{
                             position: "absolute", top: 4, right: 4,
@@ -441,13 +492,13 @@ export default function GroupHighlights({
               )}
             </div>
 
-            {/* Footer — save / cancel */}
+            {/* Footer */}
             <div style={{ padding: 14, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               {saveError ? (
                 <div style={{ fontSize: 12, color: C.red, flex: 1 }}>{saveError}</div>
               ) : (
                 <div style={{ fontSize: 11, color: C.sub, flex: 1 }}>
-                  Drag arrows to reorder. Tap a photo to toggle.
+                  Tap an item to toggle. Use ←/→ to reorder selected.
                 </div>
               )}
               <div style={{ display: "flex", gap: 8 }}>
@@ -479,5 +530,183 @@ export default function GroupHighlights({
         </div>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// HighlightsStrip — public-facing horizontal scroller. Re-used by group AND
+// profile pages, so it's exported as a named export. Takes a flat URL list,
+// renders photos and videos at uniform tile size, autoplays videos when
+// they scroll into view.
+// ─────────────────────────────────────────────────────────────────────────
+
+export function HighlightsStrip({ urls }: { urls: string[] }) {
+  if (urls.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        overflowX: "auto",
+        // Snap each tile into place when scrolling — feels much better than
+        // free scrolling for a row of square highlights.
+        scrollSnapType: "x mandatory",
+        WebkitOverflowScrolling: "touch",
+        paddingBottom: 4,
+      }}
+    >
+      {urls.map((url, i) => (
+        <HighlightTile key={url + i} url={url} />
+      ))}
+    </div>
+  );
+}
+
+function HighlightTile({ url }: { url: string }) {
+  const isVid = isVideoUrl(url);
+  const tileRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  const [showFull, setShowFull] = useState(false);
+
+  // Autoplay-on-scroll for videos. Each tile has its own observer so we
+  // can play and pause based on visibility without the parent caring.
+  // Threshold 0.5 = play when at least half the tile is visible.
+  useEffect(() => {
+    if (!isVid || !tileRef.current || !videoRef.current) return;
+    const v = videoRef.current;
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            // play() can reject if the browser blocks autoplay (rare for
+            // muted video but possible on iOS low-power mode). We swallow
+            // the rejection so the page doesn't error out.
+            v.play().catch(() => {});
+          } else {
+            v.pause();
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(tileRef.current);
+    return () => observer.disconnect();
+  }, [isVid]);
+
+  // Tap behavior:
+  //   photos → open lightbox
+  //   videos → first tap unmutes, second tap opens lightbox with controls
+  function onTileClick() {
+    if (isVid) {
+      if (muted) {
+        setMuted(false);
+        if (videoRef.current) videoRef.current.muted = false;
+      } else {
+        setShowFull(true);
+      }
+    } else {
+      setShowFull(true);
+    }
+  }
+
+  // Tile size: ~200px on desktop, scales down to 42vw on mobile so 2-3
+  // tiles peek into view at a time and the user understands it scrolls.
+  const tileSize = "min(200px, 42vw)";
+
+  return (
+    <>
+      <div
+        ref={tileRef}
+        onClick={onTileClick}
+        style={{
+          position: "relative",
+          width: tileSize,
+          height: tileSize,
+          flexShrink: 0,
+          borderRadius: 12,
+          overflow: "hidden",
+          border: `1px solid ${C.border}`,
+          background: "#000",
+          cursor: "pointer",
+          scrollSnapAlign: "start",
+        }}
+      >
+        {isVid ? (
+          <video
+            ref={videoRef}
+            src={url}
+            muted={muted}
+            loop
+            playsInline
+            preload="metadata"
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        ) : (
+          <img
+            src={url}
+            alt=""
+            loading="lazy"
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        )}
+        {isVid && (
+          <div style={{
+            position: "absolute", bottom: 6, right: 6,
+            background: "rgba(0,0,0,0.65)",
+            color: "#fff",
+            fontSize: 11, fontWeight: 800,
+            padding: "3px 8px", borderRadius: 99,
+            display: "flex", alignItems: "center", gap: 4,
+            pointerEvents: "none" as const,
+          }}>
+            {muted ? "🔇" : "🔊"}
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox modal — full-screen view */}
+      {showFull && (
+        <div
+          onClick={() => setShowFull(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)",
+            zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20, cursor: "zoom-out",
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: "100%", maxHeight: "100%" }}>
+            {isVid ? (
+              <video
+                src={url}
+                autoPlay
+                loop
+                controls
+                playsInline
+                style={{ maxWidth: "min(900px, 100vw)", maxHeight: "90vh", display: "block", borderRadius: 12 }}
+              />
+            ) : (
+              <img
+                src={url}
+                alt=""
+                style={{ maxWidth: "min(900px, 100vw)", maxHeight: "90vh", display: "block", borderRadius: 12 }}
+              />
+            )}
+          </div>
+          <button
+            onClick={() => setShowFull(false)}
+            style={{
+              position: "absolute", top: 16, right: 16,
+              background: "rgba(255,255,255,0.15)", border: "none",
+              color: "#fff", width: 40, height: 40, borderRadius: 99,
+              fontSize: 18, fontWeight: 800, cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </>
   );
 }
