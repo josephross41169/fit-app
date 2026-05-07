@@ -42,7 +42,11 @@ const iStyle = {
   boxSizing: "border-box" as const,
 };
 
-type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; notes?: string };
+// `reps` (singular string) is kept for backward compat — it becomes the
+// "default" rep count used to seed the per-set repsArr. `repsArr` is the
+// new source of truth: one entry per set so users can log pyramid sets
+// like 12/8/6 without losing data. Same pattern as `weights`.
+type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string };
 type PrevSet = { weight: string; reps: string };
 type PrevSession = { date: string; sets: PrevSet[] };
 type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string };
@@ -596,6 +600,8 @@ export default function PostPage() {
         reps: repStart,
         weight: "",
         weights: Array(setCount).fill(""),
+        // Seed all sets with the AI's suggested rep target.
+        repsArr: Array(setCount).fill(repStart),
         notes: ex.notes || "",
       };
     });
@@ -674,17 +680,25 @@ export default function PostPage() {
       if (firstCardio && (firstCardio.miles || firstCardio.distance)) {
         setWoDistance(String(firstCardio.miles ?? firstCardio.distance ?? ''));
       }
-      // Restore exercises with per-set weights
-      const exs: Exercise[] = (data.exercises || []).map((ex: any) => ({
-        name: ex.name || '',
-        sets: String(ex.sets || 3),
-        reps: String(ex.reps || 10),
-        weight: ex.weight || '',
-        weights: Array.isArray(ex.weights) && ex.weights.length > 0
-          ? ex.weights
-          : Array(parseInt(String(ex.sets)) || 3).fill(ex.weight || ''),
-        notes: ex.notes || '',
-      }));
+      // Restore exercises with per-set weights AND per-set reps. Legacy
+      // logs only have a single `reps` value — fan it out to fill repsArr
+      // so the UI shows it across all sets.
+      const exs: Exercise[] = (data.exercises || []).map((ex: any) => {
+        const setCount = parseInt(String(ex.sets)) || 3;
+        return {
+          name: ex.name || '',
+          sets: String(ex.sets || 3),
+          reps: String(ex.reps || 10),
+          weight: ex.weight || '',
+          weights: Array.isArray(ex.weights) && ex.weights.length > 0
+            ? ex.weights
+            : Array(setCount).fill(ex.weight || ''),
+          repsArr: Array.isArray(ex.repsArr) && ex.repsArr.length > 0
+            ? ex.repsArr
+            : Array(setCount).fill(String(ex.reps || '')),
+          notes: ex.notes || '',
+        };
+      });
       setExercises(exs);
       // Restore cardio
       if (data.cardio && data.cardio.length > 0) {
@@ -778,10 +792,18 @@ export default function PostPage() {
 
   // Load template into workout form
   function loadTemplate(tpl: WorkoutTemplate) {
-    setExercises(tpl.exercises.map(ex => ({
-      ...ex,
-      weights: ex.weights && ex.weights.length > 0 ? ex.weights : Array(parseInt(ex.sets) || 3).fill(ex.weight || ''),
-    })));
+    setExercises(tpl.exercises.map(ex => {
+      const setCount = parseInt(ex.sets) || 3;
+      return {
+        ...ex,
+        weights: ex.weights && ex.weights.length > 0
+          ? ex.weights
+          : Array(setCount).fill(ex.weight || ''),
+        repsArr: ex.repsArr && ex.repsArr.length > 0
+          ? ex.repsArr
+          : Array(setCount).fill(String(ex.reps || '')),
+      };
+    }));
     setTemplateDropdownOpen(false);
   }
 
@@ -799,6 +821,7 @@ export default function PostPage() {
           reps: ex.reps,
           weight: (ex.weights || [])[0] || ex.weight || '',
           weights: ex.weights || [],
+          repsArr: ex.repsArr || [],
           notes: ex.notes || undefined,
         })),
       }).select().single();
@@ -925,14 +948,27 @@ export default function PostPage() {
           woPhotoUrl = await uploadPhoto(await compressImage(woPhoto), 'activity', `${user.id}/workout-${Date.now()}.jpg`);
         }
         // Normalize exercises: ensure weights array is stored
-        const normalizedExercises = exercises.map(ex => ({
-          name: ex.name,
-          sets: ex.sets,
-          reps: ex.reps,
-          weight: (ex.weights || [])[0] || ex.weight || '',
-          weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
-          notes: ex.notes || undefined,
-        }));
+        // and per-set reps (repsArr) is persisted alongside per-set weights.
+        // The legacy `reps` field is kept set to repsArr[0] so older code paths
+        // (PR detection, badge engines, exports) still see a meaningful value.
+        const normalizedExercises = exercises.map(ex => {
+          const setCount = parseInt(String(ex.sets)) || 1;
+          const weights = ex.weights && ex.weights.length > 0
+            ? ex.weights
+            : Array(setCount).fill(ex.weight || '');
+          const repsArr = ex.repsArr && ex.repsArr.length > 0
+            ? ex.repsArr
+            : Array(setCount).fill(ex.reps || '');
+          return {
+            name: ex.name,
+            sets: ex.sets,
+            reps: repsArr[0] || ex.reps,
+            weight: weights[0] || ex.weight || '',
+            weights,
+            repsArr,
+            notes: ex.notes || undefined,
+          };
+        });
 
         // ── Build the cardio + exercises payload ─────────────────────────
         // The form has two primary-activity modes:
@@ -2468,7 +2504,7 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
-                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""] }])}
+                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"] }])}
                     style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
                     + Add Exercise
                   </button>
@@ -2504,31 +2540,34 @@ export default function PostPage() {
                         </div>
                       )}
 
-                      {/* Sets / Reps row */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                        <div>
-                          <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Sets</label>
-                          <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => {
-                            const newSets = e.target.value;
-                            const n = parseInt(newSets) || 1;
-                            setExercises(exs => exs.map((x, j) => {
-                              if (j !== i) return x;
-                              const existingWeights = x.weights || [];
-                              // Find the last filled weight to use as default for new sets
-                              const lastFilledW = [...existingWeights].reverse().find(w => w !== '') || x.weight || '';
-                              const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? lastFilledW);
-                              return { ...x, sets: newSets, weights: newWeights };
-                            }));
-                          }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Reps</label>
-                          <input style={iStyle} type="text" inputMode="numeric" value={ex.reps} onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, reps: e.target.value } : x))} />
-                        </div>
+                      {/* Sets row — single field. Reps and weight are both
+                          per-set, captured in the rows below. */}
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Sets</label>
+                        <input style={iStyle} type="text" inputMode="numeric" value={ex.sets} onChange={e => {
+                          const newSets = e.target.value;
+                          const n = parseInt(newSets) || 1;
+                          setExercises(exs => exs.map((x, j) => {
+                            if (j !== i) return x;
+                            // Resize both per-set arrays to match the new set count.
+                            // For each new slot we seed from the last filled value
+                            // so a user adding a 4th set doesn't get an empty box.
+                            const existingWeights = x.weights || [];
+                            const existingReps = x.repsArr || [];
+                            const lastFilledW = [...existingWeights].reverse().find(w => w !== '') || x.weight || '';
+                            const lastFilledR = [...existingReps].reverse().find(r => r !== '') || x.reps || '';
+                            const newWeights = Array(n).fill('').map((_, k) => existingWeights[k] ?? lastFilledW);
+                            const newReps    = Array(n).fill('').map((_, k) => existingReps[k]    ?? lastFilledR);
+                            return { ...x, sets: newSets, weights: newWeights, repsArr: newReps };
+                          }));
+                        }} />
                       </div>
 
-                      {/* Per-set weight with increment buttons */}
-                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Weight (lbs)</label>
+                      {/* Per-set rows — each set has its own reps + weight
+                          inputs side-by-side, with quick +2.5/+5/+10 lb
+                          buttons. Lets users log pyramid sets, drop sets,
+                          warm-up sets etc. without losing detail. */}
+                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Reps × Weight (per set)</label>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {Array.from({ length: numSets }).map((_, s) => {
                           function updateW(delta: number) {
@@ -2543,10 +2582,27 @@ export default function PostPage() {
                           }
                           return (
                             <div key={s} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 11, color: C.sub, fontWeight: 700, width: 28, flexShrink: 0 }}>S{s+1}</span>
+                              <span style={{ fontSize: 11, color: C.sub, fontWeight: 700, width: 24, flexShrink: 0 }}>S{s+1}</span>
+                              {/* Reps for this specific set. Free-text but
+                                  numeric keypad on mobile so it feels native. */}
+                              <input
+                                style={{ ...iStyle, width: 56, padding: "7px 8px", fontSize: 13, textAlign: "center" as const, flexShrink: 0 }}
+                                type="text" inputMode="numeric" placeholder="reps"
+                                value={(ex.repsArr || [])[s] ?? ''}
+                                onChange={e => setExercises(exs => exs.map((x, j) => {
+                                  if (j !== i) return x;
+                                  const rs = [...(x.repsArr || Array(numSets).fill(''))];
+                                  rs[s] = e.target.value;
+                                  // Mirror set-1 reps into the legacy `reps` field so
+                                  // older code paths (PR detection, badges, exports)
+                                  // still see a meaningful single value.
+                                  return { ...x, repsArr: rs, reps: rs[0] || x.reps };
+                                }))}
+                              />
+                              <span style={{ fontSize: 12, color: C.sub, fontWeight: 700, flexShrink: 0 }}>×</span>
                               <input
                                 style={{ ...iStyle, flex: 1, padding: "7px 10px", fontSize: 13 }}
-                                type="text" inputMode="decimal" placeholder="0"
+                                type="text" inputMode="decimal" placeholder="lbs"
                                 value={(ex.weights || [])[s] ?? ''}
                                 onChange={e => setExercises(exs => exs.map((x, j) => {
                                   if (j !== i) return x;
