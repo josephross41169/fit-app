@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { isBusinessAccount } from "@/lib/businessTypes";
+import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
 const PURPLE = "#7C3AED";
 const PURPLE_BG = "rgba(124,58,237,0.15)";
@@ -208,8 +208,10 @@ function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: Tab; a
 export default function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  // Unread badges come from a shared hook so we don't duplicate polling +
+  // realtime subscriptions with MessagesFAB. The hook also handles the
+  // "hide badge while on /messages or /notifications" logic internally.
+  const { unreadMessages, unreadNotifs } = useUnreadCounts();
   const [moreOpen, setMoreOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
@@ -244,84 +246,10 @@ export default function BottomNav() {
     });
   }
 
-  // ── Unread messages badge ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) { setUnreadMessages(0); return; }
-    if (pathname === '/messages') { setUnreadMessages(0); return; }
-
-    let cancelled = false;
-
-    async function fetchUnread() {
-      try {
-        const { data: parts } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', user!.id);
-
-        if (cancelled) return;
-        if (!parts || parts.length === 0) { setUnreadMessages(0); return; }
-
-        const convIds = parts.map((p: any) => p.conversation_id);
-        const { count } = await supabase
-          .from('messages')
-          .select('id', { count: 'exact', head: true })
-          .in('conversation_id', convIds)
-          .neq('sender_id', user!.id)
-          .is('read_at', null);
-
-        if (!cancelled) setUnreadMessages(count || 0);
-      } catch {
-        if (!cancelled) setUnreadMessages(0);
-      }
-    }
-
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 15000);
-
-    let channel: any = null;
-    try {
-      channel = supabase
-        .channel(`nav-msg-${user.id}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
-          () => { fetchUnread(); })
-        .subscribe();
-    } catch { /* realtime not available yet */ }
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      try { channel?.unsubscribe(); } catch {}
-    };
-  }, [user, pathname]);
-
-  // ── Unread notifications badge ───────────────────────────────────────────
-  useEffect(() => {
-    if (!user) { setUnreadNotifs(0); return; }
-    if (pathname === '/notifications') { setUnreadNotifs(0); return; }
-
-    let cancelled = false;
-
-    async function fetchUnreadNotifs() {
-      try {
-        const { count } = await supabase
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('recipient_id', user!.id)
-          .is('read_at', null);
-        if (!cancelled) setUnreadNotifs(count || 0);
-      } catch {
-        if (!cancelled) setUnreadNotifs(0);
-      }
-    }
-
-    fetchUnreadNotifs();
-    const interval = setInterval(fetchUnreadNotifs, 30000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [user, pathname]);
+  // ── Unread badges ──────────────────────────────────────────────────────
+  // Polling + realtime moved to lib/useUnreadCounts.ts (called above) so
+  // BottomNav and MessagesFAB share a single subscription instead of each
+  // running their own. See the hook for the full rationale.
 
   const getBadge = (href: string) => {
     if (href === '/messages') return unreadMessages;
