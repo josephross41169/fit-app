@@ -49,6 +49,39 @@ function categoryForExercise(name: string): string | null {
   return EXERCISE_CATEGORY_MAP.get(candidates[0]) || null;
 }
 
+// Bucket a cardio entry's freeform type string (which can be anything the
+// user typed when logging — "Morning Run", "treadmill", "running", "trail
+// run", "biking") into one of a fixed set of canonical disciplines. This
+// keeps the "What you trained" chip cloud tight: all run subtypes show up
+// as a single "Running" chip with a combined session count instead of
+// four separate chips.
+//
+// Mirrors the normalizeCardio function in app/(app)/stats/page.tsx — keep
+// them in sync if you add new cardio types in one place. Returns the
+// canonical label or null if the input is blank.
+function normalizeCardioForChip(raw: string): string | null {
+  const s = (raw || '').toLowerCase().trim();
+  if (!s) return null;
+  const TYPES: { keys: string[]; label: string }[] = [
+    { keys: ['run', 'jog', 'sprint', 'treadmill', 'trail'], label: 'Running' },
+    { keys: ['cycle', 'bike', 'cycling', 'spin'], label: 'Cycling' },
+    { keys: ['swim'], label: 'Swimming' },
+    { keys: ['row', 'rowing', 'erg'], label: 'Rowing' },
+    { keys: ['elliptical'], label: 'Elliptical' },
+    { keys: ['stair'], label: 'Stair Climber' },
+    { keys: ['hiit'], label: 'HIIT' },
+    { keys: ['walk'], label: 'Walking' },
+    { keys: ['hike', 'hiking'], label: 'Hiking' },
+  ];
+  for (const { keys, label } of TYPES) {
+    if (keys.some(k => s.includes(k))) return label;
+  }
+  // Unknown type — pass it through as-is (capitalized) rather than dropping
+  // it, so users still see weird/legacy entries instead of them silently
+  // disappearing.
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 type WorkoutData = {
   date: string; exercise: string; weight: number;
   reps: number; sets: number; volume: number;
@@ -277,7 +310,11 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
 
       const cardioList: any[] = w.cardio || w.workout?.cardio || [];
       cardioList.forEach((c: any) => {
-        const t = (c?.type || '').trim();
+        // Bucket all cardio entries under their canonical discipline so
+        // "Morning Run", "Evening Run", "Trail Run", "running" etc. all
+        // collapse into a single "Running" chip with a combined count.
+        // Same logic mirrored in app/(app)/stats/page.tsx normalizeCardio().
+        const t = normalizeCardioForChip(c?.type || '');
         if (t) hitCardio.add(t);
       });
 
