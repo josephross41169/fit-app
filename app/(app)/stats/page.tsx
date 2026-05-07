@@ -339,6 +339,9 @@ export default function StatsPage(){
   const router=useRouter();
   const [tab,setTab]=useState<Tab>("today");
   const [range,setRange]=useState<Range>("1M");
+  // Tracks which muscle group cards on the Workout tab are expanded to
+  // show per-exercise breakdowns. Multiple can be open at once.
+  const [expandedMuscle,setExpandedMuscle]=useState<Record<string,boolean>>({});
   const [loading,setLoading]=useState(true);
   const [expandedPR,setExpandedPR]=useState<string|null>(null);
   const [showGoalEditor,setShowGoalEditor]=useState(false);
@@ -715,6 +718,39 @@ export default function StatsPage(){
     }));
     return Object.entries(g).sort((a,b)=>b[1]-a[1]).map(([name,value])=>({name,value}));
   })();
+
+  // Per-muscle-group exercise breakdown. For each muscle group, lists every
+  // exercise that hit it with: total sets, max weight, total volume, last
+  // logged date. Used in the expandable muscle-group cards on the workout
+  // tab — clicking a group reveals these.
+  const muscleGroupDetails = (() => {
+    type ExStat = { name: string; sets: number; reps: number; maxWeight: number; totalVolume: number; lastDate: string };
+    const byMuscle: Record<string, Record<string, ExStat>> = {};
+    workoutLogs.forEach(l => {
+      const exs = Array.isArray(l.exercises) ? l.exercises : [];
+      exs.forEach((ex: any) => {
+        const m = getMuscle(ex.name || "");
+        if (!byMuscle[m]) byMuscle[m] = {};
+        const exName = String(ex.name || "Unknown").trim();
+        if (!byMuscle[m][exName]) {
+          byMuscle[m][exName] = { name: exName, sets: 0, reps: 0, maxWeight: 0, totalVolume: 0, lastDate: l.logged_at };
+        }
+        const sets = parseInt(String(ex.sets)) || 0;
+        const reps = parseInt(String(ex.reps)) || 0;
+        const wt = parseFloat(String(ex.weight)) || 0;
+        byMuscle[m][exName].sets += sets;
+        byMuscle[m][exName].reps += reps * sets;
+        if (wt > byMuscle[m][exName].maxWeight) byMuscle[m][exName].maxWeight = wt;
+        byMuscle[m][exName].totalVolume += sets * reps * wt;
+        if (l.logged_at > byMuscle[m][exName].lastDate) byMuscle[m][exName].lastDate = l.logged_at;
+      });
+    });
+    const result: Record<string, ExStat[]> = {};
+    Object.keys(byMuscle).forEach(m => {
+      result[m] = Object.values(byMuscle[m]).sort((a, b) => b.totalVolume - a.totalVolume);
+    });
+    return result;
+  })();
   const muscleRadar=["Chest","Back","Legs","Shoulders","Arms","Core"].map(m=>({
     group:m,
     sessions:workoutLogs.filter(l=>(Array.isArray(l.exercises)?l.exercises:[]).some((ex:any)=>getMuscle(ex.name||"")===m)).length,
@@ -731,11 +767,32 @@ export default function StatsPage(){
     return Object.entries(weeks).sort().map(([date,vol])=>({week:fmt(date),volume:Math.round(vol)}));
   })();
 
-  // Training frequency by day of week
-  const freqByDay=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(day=>{
-    const idx=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].indexOf(day);
-    const jsDay=idx<6?idx+1:0;
-    return{day,count:workoutLogs.filter(l=>new Date(l.logged_at).getDay()===jsDay).length};
+  // Training frequency by day of week. Computed three ways:
+  //   - freqByDay: any workout (lifting OR cardio) — used for the "Fav Day"
+  //     stat at the top of the page.
+  //   - freqByDayLift: workouts that include lifting exercises only.
+  //   - freqByDayCardio: workouts that include cardio entries only.
+  // The split versions power separate per-discipline charts so lifting
+  // and cardio patterns don't mash together.
+  const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const jsDayFor = (idx:number) => idx<6?idx+1:0;
+  const freqByDay = dayKeys.map((day,idx)=>{
+    const jsDay = jsDayFor(idx);
+    return { day, count: workoutLogs.filter(l=>new Date(l.logged_at).getDay()===jsDay).length };
+  });
+  const freqByDayLift = dayKeys.map((day,idx)=>{
+    const jsDay = jsDayFor(idx);
+    return { day, count: workoutLogs.filter(l=>{
+      const hasLifting = Array.isArray(l.exercises) && l.exercises.length > 0;
+      return hasLifting && new Date(l.logged_at).getDay()===jsDay;
+    }).length };
+  });
+  const freqByDayCardio = dayKeys.map((day,idx)=>{
+    const jsDay = jsDayFor(idx);
+    return { day, count: workoutLogs.filter(l=>{
+      const hasCardio = Array.isArray(l.cardio) && l.cardio.length > 0;
+      return hasCardio && new Date(l.logged_at).getDay()===jsDay;
+    }).length };
   });
 
   // Nutrition
@@ -1273,22 +1330,37 @@ export default function StatsPage(){
 
 
 
-            {/* Training days */}
+            {/* Training days — split by discipline. Lifting and cardio
+                often have totally different weekly patterns (lift Mon/Wed/Fri,
+                run Tue/Thu/Sat) so combining them muddies the picture.
+                Charts are stacked vertically on mobile, side-by-side on
+                wider screens via grid auto-fit. */}
             <SecHead title="Training by Day of Week"/>
             {workoutLogs.length>0?(
-              <ChartWrap>
-                <ResponsiveContainer width="100%" height={130}>
-                  <BarChart data={freqByDay} margin={{top:4,right:8,left:-16,bottom:0}}>
-                    <XAxis dataKey="day" tick={{fontSize:11,fill:C.sub}}/>
-                    <YAxis tick={{fontSize:10,fill:C.sub}} allowDecimals={false}/>
-                    <Tooltip content={<Tip/>}/>
-                    <Bar dataKey="count" name="Sessions" radius={[4,4,0,0]}>
-                      {freqByDay.map((e,i)=><Cell key={i} fill={e.day===favDay?C.gold:C.purple}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div style={{fontSize:11,color:C.sub,textAlign:"center",marginTop:4}}>🏅 Gold = most frequent training day</div>
-              </ChartWrap>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:10,marginBottom:20}}>
+                <ChartWrap>
+                  <div style={{fontSize:11,fontWeight:800,color:C.purple,padding:"4px 8px 8px",textTransform:"uppercase",letterSpacing:0.8}}>🏋️ Lifting</div>
+                  <ResponsiveContainer width="100%" height={130}>
+                    <BarChart data={freqByDayLift} margin={{top:4,right:8,left:-16,bottom:0}}>
+                      <XAxis dataKey="day" tick={{fontSize:11,fill:C.sub}}/>
+                      <YAxis tick={{fontSize:10,fill:C.sub}} allowDecimals={false}/>
+                      <Tooltip content={<Tip/>}/>
+                      <Bar dataKey="count" name="Sessions" fill={C.purple} radius={[4,4,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartWrap>
+                <ChartWrap>
+                  <div style={{fontSize:11,fontWeight:800,color:C.cyan,padding:"4px 8px 8px",textTransform:"uppercase",letterSpacing:0.8}}>🏃 Cardio</div>
+                  <ResponsiveContainer width="100%" height={130}>
+                    <BarChart data={freqByDayCardio} margin={{top:4,right:8,left:-16,bottom:0}}>
+                      <XAxis dataKey="day" tick={{fontSize:11,fill:C.sub}}/>
+                      <YAxis tick={{fontSize:10,fill:C.sub}} allowDecimals={false}/>
+                      <Tooltip content={<Tip/>}/>
+                      <Bar dataKey="count" name="Sessions" fill={C.cyan} radius={[4,4,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartWrap>
+              </div>
             ):<Empty icon="📅" text="Log workouts to see training patterns"/>}
 
             {/* Cardio breakdown — one card per discipline. Each card shows
@@ -1348,19 +1420,69 @@ export default function StatsPage(){
               )}
             </>)}
 
-            {/* Muscle group breakdown */}
+            {/* Muscle group breakdown — each group is an expandable card.
+                Tap to reveal a per-exercise breakdown showing total sets,
+                max weight (your PR for that lift in the range), and total
+                volume. Sorted by volume so heaviest lifts surface first. */}
             <SecHead title="Muscle Group Focus"/>
             {muscleGroups.length>0?(
-              <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-                {muscleGroups.map(({name,value})=>(
-                  <div key={name} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                      <span style={{fontSize:13,fontWeight:700}}>{name}</span>
-                      <span style={{fontSize:12,fontWeight:700,color:MUSCLE_COLORS[name]||C.sub}}>{value} sets</span>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+                {muscleGroups.map(({name,value})=>{
+                  const isOpen = !!expandedMuscle[name];
+                  const details = muscleGroupDetails[name] || [];
+                  return (
+                    <div key={name} style={{background:C.card,borderRadius:14,padding:14,border:`1px solid ${isOpen?(MUSCLE_COLORS[name]||C.purple):C.border}`,transition:"border-color 0.15s"}}>
+                      <button
+                        onClick={()=>setExpandedMuscle(p=>({...p,[name]:!p[name]}))}
+                        style={{
+                          background:"transparent",border:"none",padding:0,width:"100%",
+                          display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",
+                        }}
+                      >
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontSize:12,color:C.sub,transform:isOpen?"rotate(90deg)":"rotate(0)",transition:"transform 0.15s"}}>▶</span>
+                          <span style={{fontSize:14,fontWeight:800,color:C.text}}>{name}</span>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontSize:11,color:C.sub}}>{details.length} {details.length===1?"exercise":"exercises"}</span>
+                          <span style={{fontSize:12,fontWeight:800,color:MUSCLE_COLORS[name]||C.sub,background:`${MUSCLE_COLORS[name]||C.purple}22`,padding:"3px 9px",borderRadius:99}}>
+                            {value} sets
+                          </span>
+                        </div>
+                      </button>
+                      {/* Progress bar visible when collapsed for at-a-glance volume comparison */}
+                      {!isOpen && (
+                        <div style={{marginTop:10}}>
+                          <ProgBar value={value} max={muscleGroups[0].value} color={MUSCLE_COLORS[name]||C.sub}/>
+                        </div>
+                      )}
+                      {/* Expanded: per-exercise list */}
+                      {isOpen && details.length > 0 && (
+                        <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:8}}>
+                          <div style={{display:"grid",gridTemplateColumns:"1.5fr 60px 80px 80px",gap:6,padding:"0 4px",fontSize:10,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6}}>
+                            <div>Exercise</div>
+                            <div style={{textAlign:"center"}}>Sets</div>
+                            <div style={{textAlign:"right"}}>Max</div>
+                            <div style={{textAlign:"right"}}>Volume</div>
+                          </div>
+                          {details.slice(0,15).map(d=>(
+                            <div key={d.name} style={{display:"grid",gridTemplateColumns:"1.5fr 60px 80px 80px",gap:6,padding:"8px 4px",borderTop:`1px solid ${C.border}`,fontSize:12,alignItems:"center"}}>
+                              <div style={{color:C.text,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
+                              <div style={{textAlign:"center",color:C.purple,fontWeight:700}}>{d.sets}</div>
+                              <div style={{textAlign:"right",color:C.gold,fontWeight:800}}>{d.maxWeight>0?`${d.maxWeight} lbs`:"—"}</div>
+                              <div style={{textAlign:"right",color:C.text,fontWeight:700,fontSize:11}}>
+                                {d.totalVolume > 0 ? (d.totalVolume>=1000?`${(d.totalVolume/1000).toFixed(1)}k`:d.totalVolume) : "—"}
+                              </div>
+                            </div>
+                          ))}
+                          {details.length > 15 && (
+                            <div style={{padding:"6px 4px",fontSize:11,color:C.sub,textAlign:"center",fontStyle:"italic"}}>+{details.length - 15} more</div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <ProgBar value={value} max={muscleGroups[0].value} color={MUSCLE_COLORS[name]||C.sub}/>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ):<Empty icon="💪" text="Log exercises to see muscle group breakdown"/>}
 
