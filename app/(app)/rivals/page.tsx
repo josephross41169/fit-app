@@ -231,7 +231,10 @@ function MatchingScreen({ category, tier, onMatched, onCancel }: {
   const t = getTierLabel(tier);
   const [elapsed, setElapsed] = useState(0);
 
-  // Poll for active rivalry every 3 seconds (someone else might match with us)
+  // Poll for active rivalry every 8 seconds (someone else might match with us).
+  // Was 3s; the user is staring at a "searching..." spinner so they cannot
+  // perceive a difference between 3s and 8s, but the DB query frequency
+  // matters at scale.
   useEffect(() => {
     const startedAt = Date.now();
     const interval = setInterval(async () => {
@@ -241,7 +244,7 @@ function MatchingScreen({ category, tier, onMatched, onCancel }: {
         clearInterval(interval);
         onMatched();
       }
-    }, 3000);
+    }, 8000);
     return () => clearInterval(interval);
   }, [onMatched]);
 
@@ -695,11 +698,12 @@ function BuddyPanel({ userId }: { userId: string }) {
   }
   useEffect(() => { loadState(); /* eslint-disable-next-line */ }, [userId]);
 
-  // While queued, poll every 4s to see if we got matched
+  // While queued, poll every 8s to see if we got matched. Was 4s; the
+  // matchmaking flow doesn't need sub-5s freshness — we're showing a spinner.
   useEffect(() => {
     if (step !== "queued") return;
     setPolling(true);
-    const id = setInterval(loadState, 4000);
+    const id = setInterval(loadState, 8000);
     return () => { clearInterval(id); setPolling(false); };
     // eslint-disable-next-line
   }, [step]);
