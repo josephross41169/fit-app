@@ -666,30 +666,36 @@ function BuddyPanel({ userId }: { userId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
 
-  // Check for an existing active match or queue entry on mount
+  // Check for an existing active match or queue entry on mount.
+  //
+  // WHY THIS GOES THROUGH /api/db: this used to do a direct supabase query
+  // with a Postgrest embedded join (`user_a:user_a(id,username,...)`) to
+  // hydrate the buddy users. That requires a foreign-key relationship from
+  // buddy_matches.user_a → users.id to be registered in Postgres. The
+  // buddy_matches table was created ad-hoc in Supabase without that FK,
+  // so the embedded join silently returned null — meaning users could
+  // queue up and the server would create the match row, but neither
+  // client could read it back. Both stayed stuck on "Searching..." forever.
+  //
+  // The server endpoint uses the admin client (service role) which bypasses
+  // the FK requirement AND any RLS policies, then hydrates the user objects
+  // via a separate users query before returning.
   async function loadState() {
     try {
-      const { data: match } = await supabase
-        .from("buddy_matches")
-        .select("*, user_a:user_a(id, username, full_name, avatar_url), user_b:user_b(id, username, full_name, avatar_url)")
-        .eq("status", "active")
-        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-        .order("starts_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (match) {
-        setActiveMatch(match);
+      const res = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "buddy_get_active_match", payload: { userId } }),
+      });
+      const data = await res.json();
+      if (data.match) {
+        setActiveMatch(data.match);
         setStep("matched");
         return;
       }
-      const { data: queueRow } = await supabase
-        .from("buddy_queue")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (queueRow) {
-        setCategory(queueRow.category);
-        setTier(queueRow.tier);
+      if (data.queue) {
+        setCategory(data.queue.category);
+        setTier(data.queue.tier);
         setStep("queued");
       } else {
         setStep("category");
