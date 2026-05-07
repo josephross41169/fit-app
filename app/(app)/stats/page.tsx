@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -499,15 +499,32 @@ export default function StatsPage(){
   // basically free (millisecond), so the 1W/1M/1Y pills feel instant.
   // Ref-stable across renders that don't change the inputs, so child
   // components don't re-compute unnecessarily either.
-  const sinceTs = (() => {
+  //
+  // PERF: useMemo so unrelated state changes (tab switch, modal open, weight
+  // input typing, etc.) don't re-run the filter. Range and *All deps catch
+  // every legitimate trigger. Old code used IIFE + bare filter on every
+  // render despite the comment above claiming "ref-stable" — it wasn't.
+  const sinceTs = useMemo(() => {
     if (range === "1W") return startOfWeekMonday().getTime();
     if (range === "1M") return startOfMonth().getTime();
     return startOfYear().getTime();
-  })();
-  const workoutLogs = workoutLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
-  const nutritionLogs = nutritionLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
-  const wellnessLogs = wellnessLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
-  const weightLogs = weightLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
+  }, [range]);
+  const workoutLogs = useMemo(
+    () => workoutLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs),
+    [workoutLogsAll, sinceTs]
+  );
+  const nutritionLogs = useMemo(
+    () => nutritionLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs),
+    [nutritionLogsAll, sinceTs]
+  );
+  const wellnessLogs = useMemo(
+    () => wellnessLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs),
+    [wellnessLogsAll, sinceTs]
+  );
+  const weightLogs = useMemo(
+    () => weightLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs),
+    [weightLogsAll, sinceTs]
+  );
 
   async function saveWeight() {
     const lbs = parseFloat(weightInput);
