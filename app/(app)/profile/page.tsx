@@ -169,7 +169,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
   );
 }
 
-type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[]};
+type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[];repsArr?:string[]};
 type CardioEntry = {type:string;duration:string;distance:string};
 type Meal        = {key:string;emoji:string;name:string;cal:number};
 // ── Wellness display: per-activity emoji + accent color ──────────────────
@@ -448,14 +448,26 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   async function saveWorkout() {
     setWorkout({...woBuf});
     setEditWo(false);
-    // Normalize exercises: ensure weights array stored properly
-    const normalizedExercises = (woBuf.exercises || []).map((ex: any) => ({
-      name: ex.name,
-      sets: ex.sets,
-      reps: ex.reps,
-      weight: (ex.weights || [])[0] || ex.weight || '',
-      weights: ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''],
-    }));
+    // Normalize exercises: ensure both per-set weights and per-set reps
+    // are stored. The legacy `reps` field is kept set to the first value
+    // for backward compat with PR detection / badge engines.
+    const normalizedExercises = (woBuf.exercises || []).map((ex: any) => {
+      const setCount = parseInt(String(ex.sets)) || 1;
+      const weights = ex.weights && ex.weights.length > 0
+        ? ex.weights
+        : Array(setCount).fill(ex.weight || '');
+      const repsArr = ex.repsArr && ex.repsArr.length > 0
+        ? ex.repsArr
+        : Array(setCount).fill(String(ex.reps || ''));
+      return {
+        name: ex.name,
+        sets: ex.sets,
+        reps: parseInt(repsArr[0]) || ex.reps,
+        weight: weights[0] || ex.weight || '',
+        weights,
+        repsArr,
+      };
+    });
     const cardioData = (woBuf.cardio || []).length > 0
       ? woBuf.cardio.map((c: any) => {
           // Group goal sync (lib/groupGoalSync.ts) reads `c.miles` as a
@@ -809,6 +821,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   const weights: string[] = ex.weights && ex.weights.length === numSets
                     ? ex.weights
                     : Array.from({length: numSets}, (_,k) => (ex.weights?.[k] ?? ex.weight ?? ''));
+                  // Same fan-out logic for per-set reps. Legacy logs only have
+                  // a single `reps` number — we replicate it across all sets
+                  // so existing data still displays. New edits will save the
+                  // per-set values back as repsArr.
+                  const repsArr: string[] = ex.repsArr && ex.repsArr.length === numSets
+                    ? ex.repsArr
+                    : Array.from({length: numSets}, (_,k) => (ex.repsArr?.[k] ?? String(ex.reps || '')));
                   return (
                   <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:12,marginBottom:10,border:`1px solid ${C.purpleMid}`}}>
                     {/* Name + remove */}
@@ -816,35 +835,51 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                       <input style={{...iStyle,flex:1}} placeholder="Exercise name" value={ex.name} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,name:e.target.value}:x)}))}/>
                       <button onClick={()=>setWoBuf(w=>({...w,exercises:w.exercises.filter((_,j)=>j!==i)}))} style={{width:32,height:32,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer",flexShrink:0}}>×</button>
                     </div>
-                    {/* Sets / Reps */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                      <div>
-                        <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:0.8}}>Sets</label>
-                        <input style={iStyle} type="number" value={ex.sets} onChange={e=>{
-                          const n = Math.max(1, +e.target.value);
-                          setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
-                            if(j!==i) return x;
-                            const ws = x.weights || Array(x.sets).fill(x.weight||'');
-                            const lastW = [...ws].reverse().find(v=>v!=='')||x.weight||'';
-                            const newWs = Array.from({length:n},(_,k)=>ws[k]??lastW);
-                            return {...x,sets:n,weights:newWs};
-                          })}));
-                        }}/>
-                      </div>
-                      <div>
-                        <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:0.8}}>Reps</label>
-                        <input style={iStyle} type="number" value={ex.reps} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,reps:+e.target.value}:x)}))}/>
-                      </div>
+                    {/* Sets count — single field; reps and weight live per-set below. */}
+                    <div style={{marginBottom:8}}>
+                      <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:0.8}}>Sets</label>
+                      <input style={iStyle} type="number" value={ex.sets} onChange={e=>{
+                        const n = Math.max(1, +e.target.value);
+                        setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                          if(j!==i) return x;
+                          // Resize both per-set arrays to the new count, seeding
+                          // empty slots with the last filled value (or fall back
+                          // to the legacy single-value field).
+                          const ws = x.weights || Array(x.sets).fill(x.weight||'');
+                          const rs = x.repsArr || Array(x.sets).fill(String(x.reps||''));
+                          const lastW = [...ws].reverse().find(v=>v!=='')||x.weight||'';
+                          const lastR = [...rs].reverse().find(v=>v!=='')||String(x.reps||'');
+                          const newWs = Array.from({length:n},(_,k)=>ws[k]??lastW);
+                          const newRs = Array.from({length:n},(_,k)=>rs[k]??lastR);
+                          return {...x,sets:n,weights:newWs,repsArr:newRs};
+                        })}));
+                      }}/>
                     </div>
-                    {/* Per-set weight with increment buttons */}
-                    <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:0.8}}>Weight (lbs) per set</label>
+                    {/* Per-set rows: reps × weight, with quick-add weight buttons. */}
+                    <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:0.8}}>Reps × Weight (per set)</label>
                     <div style={{display:"flex",flexDirection:"column",gap:5}}>
                       {weights.map((_,s)=>(
                         <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
-                          <span style={{fontSize:11,color:C.sub,fontWeight:700,width:26,flexShrink:0}}>S{s+1}</span>
+                          <span style={{fontSize:11,color:C.sub,fontWeight:700,width:24,flexShrink:0}}>S{s+1}</span>
+                          <input
+                            style={{...iStyle,width:52,padding:"6px 6px",fontSize:13,textAlign:"center" as const,flexShrink:0}}
+                            type="text" inputMode="numeric" placeholder="reps"
+                            value={repsArr[s]}
+                            onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                              if(j!==i) return x;
+                              const rs=[...(x.repsArr||Array(numSets).fill(String(x.reps||'')))];
+                              rs[s]=e.target.value;
+                              // Mirror set-1 reps back into the legacy `reps`
+                              // field so PR detection / older code paths still
+                              // see a meaningful value when reading this log.
+                              const newReps = parseInt(rs[0]) || x.reps;
+                              return {...x,repsArr:rs,reps:newReps};
+                            })}))}
+                          />
+                          <span style={{fontSize:12,color:C.sub,fontWeight:700,flexShrink:0}}>×</span>
                           <input
                             style={{...iStyle,flex:1,padding:"6px 8px",fontSize:13}}
-                            type="text" inputMode="decimal" placeholder="0"
+                            type="text" inputMode="decimal" placeholder="lbs"
                             value={weights[s]}
                             onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
                               if(j!==i) return x;
