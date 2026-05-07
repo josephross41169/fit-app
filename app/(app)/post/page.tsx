@@ -367,6 +367,11 @@ export default function PostPage() {
   const [includeCardio, setIncludeCardio] = useState(false);
   const [includeLifting, setIncludeLifting] = useState(true);
   const [cardioSubcategory, setCardioSubcategory] = useState<string>("running");
+  // For "running" only — subtype lets the stats page break runs into
+  // outdoor / treadmill / trail / HIIT-run since these have noticeably
+  // different metrics worth tracking separately. Ignored for non-run
+  // cardio types. Stored on the cardio entry as `run_type`.
+  const [cardioRunType, setCardioRunType] = useState<string>("outdoor");
   const [cardioBlockDuration, setCardioBlockDuration] = useState("");
   const [cardioBlockDistance, setCardioBlockDistance] = useState("");
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
@@ -699,6 +704,10 @@ export default function PostPage() {
         setCardioSubcategory(data.workout_category);
         setCardioBlockDuration(data.workout_duration_min ? String(data.workout_duration_min) : '');
         setCardioBlockDistance(firstCardio ? String(firstCardio.miles ?? firstCardio.distance ?? '') : '');
+        // Restore run subtype if it was a running log
+        if (data.workout_category === "running" && firstCardio?.run_type) {
+          setCardioRunType(firstCardio.run_type);
+        }
       } else if (hasCardio && hasExercises) {
         // Combined workout — both blocks active
         setIncludeCardio(true);
@@ -706,6 +715,7 @@ export default function PostPage() {
         setCardioSubcategory(data.cardio[0].type || 'running');
         setCardioBlockDuration(data.cardio[0].duration ? String(data.cardio[0].duration) : '');
         setCardioBlockDistance(data.cardio[0].distance ? String(data.cardio[0].distance) : (data.cardio[0].miles ? String(data.cardio[0].miles) : ''));
+        if (data.cardio[0].run_type) setCardioRunType(data.cardio[0].run_type);
       } else if (hasExercises) {
         setIncludeCardio(false);
         setIncludeLifting(true);
@@ -960,10 +970,16 @@ export default function PostPage() {
               distance: cardioBlockDistance || null,
               duration: cardioBlockDuration || null,
             };
+            // Persist run subtype (outdoor / treadmill / trail / hiit) so the
+            // stats page can break running stats down further. Only meaningful
+            // for runs; ignored for other cardio types.
+            if (cardioSubcategory === "running") {
+              cardioEntry.run_type = cardioRunType;
+            }
             if (distNum > 0) cardioEntry.miles = distNum;
             if (distNum > 0 && durNum > 0) {
               if (cardioSubcategory === "running") cardioEntry.pace_min_per_mile = durNum / distNum;
-              else if (cardioSubcategory === "biking") cardioEntry.mph = (distNum / durNum) * 60;
+              else if (cardioSubcategory === "cycling" || cardioSubcategory === "biking") cardioEntry.mph = (distNum / durNum) * 60;
               else if (cardioSubcategory === "swimming") cardioEntry.pace_min_per_100 = (durNum / distNum) * 100;
             }
             cardioPayload = [cardioEntry];
@@ -2255,7 +2271,7 @@ export default function PostPage() {
                       const m = Math.floor(p);
                       const s = Math.round((p - m) * 60);
                       paceText = `${m}:${s.toString().padStart(2, "0")} min/mi`;
-                    } else if (cardioSubcategory === "biking") {
+                    } else if (cardioSubcategory === "cycling" || cardioSubcategory === "biking") {
                       paceText = `${((distNum / durNum) * 60).toFixed(1)} mph`;
                     } else if (cardioSubcategory === "swimming") {
                       const p = (durNum / distNum) * 100;
@@ -2264,7 +2280,7 @@ export default function PostPage() {
                       paceText = `${m}:${s.toString().padStart(2, "0")} min/100yd`;
                     }
                   }
-                  const showPace = ["running","biking","swimming"].includes(cardioSubcategory);
+                  const showPace = ["running","cycling","biking","swimming"].includes(cardioSubcategory);
                   const distUnit = cardioSubcategory === "swimming" ? "yards" : cardioSubcategory === "rowing" ? "meters" : "miles";
                   return (
                     <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
@@ -2273,12 +2289,33 @@ export default function PostPage() {
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
                         <select style={iStyle} value={cardioSubcategory} onChange={e => setCardioSubcategory(e.target.value)}>
                           <option value="running">🏃 Running</option>
-                          <option value="walking">🚶 Walking</option>
-                          <option value="biking">🚴 Biking</option>
+                          <option value="cycling">🚴 Cycling</option>
                           <option value="swimming">🏊 Swimming</option>
                           <option value="rowing">🚣 Rowing</option>
+                          <option value="elliptical">⚡ Elliptical</option>
+                          <option value="hiit">🔥 HIIT</option>
+                          <option value="stairclimber">🪜 Stair Climber</option>
+                          <option value="walking">🚶 Walking</option>
+                          <option value="hiking">🥾 Hiking</option>
+                          <option value="other">💪 Other</option>
                         </select>
                       </div>
+                      {/* Run subtype — only shown when cardio type is running.
+                          Lets the stats page distinguish road runs (where pace
+                          comparisons make sense) from treadmill (no wind), trail
+                          (elevation matters more than pace), and HIIT runs
+                          (interval workouts where avg pace is meaningless). */}
+                      {cardioSubcategory === "running" && (
+                        <div style={{ marginBottom: 10 }}>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Run Type</label>
+                          <select style={iStyle} value={cardioRunType} onChange={e => setCardioRunType(e.target.value)}>
+                            <option value="outdoor">🌆 Outdoor Run</option>
+                            <option value="treadmill">🏃 Treadmill</option>
+                            <option value="trail">🌲 Trail Run</option>
+                            <option value="hiit">⚡ HIIT Run</option>
+                          </select>
+                        </div>
+                      )}
                       <div style={{ display: "flex", gap: 10 }}>
                         <div style={{ flex: 1 }}>
                           <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
