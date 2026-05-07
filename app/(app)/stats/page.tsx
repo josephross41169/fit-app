@@ -811,37 +811,26 @@ export default function StatsPage(){
   });
 
   // Nutrition
-  // The user-set goals in `nutrition_goals` are now treated as MONTHLY
-  // targets (per Joey's decision — easier to set realistic monthly numbers
-  // than to nail daily ones). Daily targets are derived as monthly/30 for
-  // any per-day comparison (consistency check, "set a goal" subtitles).
-  const dailyGoal = goals ? {
-    calories: Math.round(goals.calories / 30),
-    protein:  Math.round(goals.protein  / 30),
-    carbs:    Math.round(goals.carbs    / 30),
-    fat:      Math.round(goals.fat      / 30),
-    water_oz: Math.round(goals.water_oz / 30),
-  } : null;
-
+  // Goals are stored and entered as DAILY targets — what the user wants
+  // to hit each day (e.g. 2200 kcal/day, 180g protein/day). Earlier we
+  // tried treating them as monthly totals and dividing by 30, but that
+  // was confusing — people think in daily numbers. The "this month"
+  // progress views below derive monthly totals as daily × elapsed days.
   const daysLogged=nutritionLogs.length;
   const avgCal=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.calories_total||0),0)/daysLogged):0;
   const avgProt=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.protein_g||0),0)/daysLogged):0;
   const avgCarbs=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.carbs_g||0),0)/daysLogged):0;
   const avgFat=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.fat_g||0),0)/daysLogged):0;
-  // Hits are now compared to the daily-equivalent goal (monthly/30) so the
-  // consistency % means "what fraction of logged days hit the equivalent
-  // daily share of the monthly goal."
-  const proteinHit=dailyGoal?nutritionLogs.filter(l=>(l.protein_g||0)>=dailyGoal.protein).length:0;
-  const calorieHit=dailyGoal?nutritionLogs.filter(l=>Math.abs((l.calories_total||0)-dailyGoal.calories)<=dailyGoal.calories*0.1).length:0;
+  // Hits compare each day's totals against the daily goal directly.
+  const proteinHit=goals?nutritionLogs.filter(l=>(l.protein_g||0)>=goals.protein).length:0;
+  const calorieHit=goals?nutritionLogs.filter(l=>Math.abs((l.calories_total||0)-goals.calories)<=goals.calories*0.1).length:0;
   const proteinPct=daysLogged>0?Math.round((proteinHit/daysLogged)*100):0;
   const caloriePct=daysLogged>0?Math.round((calorieHit/daysLogged)*100):0;
 
-  // Water tracking — many logs may not have water set, so treat null as 0.
-  // Average is across logged days. Days-hit is the count of days whose
-  // total water_oz met or exceeded the daily share of the monthly goal.
+  // Water tracking — null treated as 0. Hit = days that met daily water goal.
   const totalWater  = nutritionLogs.reduce((s,l)=>s+(l.water_oz||0),0);
   const avgWater    = daysLogged>0?Math.round(totalWater/daysLogged):0;
-  const waterHit    = dailyGoal?nutritionLogs.filter(l=>(l.water_oz||0)>=dailyGoal.water_oz).length:0;
+  const waterHit    = goals?nutritionLogs.filter(l=>(l.water_oz||0)>=goals.water_oz).length:0;
   const waterPct    = daysLogged>0?Math.round((waterHit/daysLogged)*100):0;
   // Last-14-day water sparkline. Bucket logs into the last 14 calendar days
   // so we get a steady 14-point series even when some days have no logs.
@@ -932,10 +921,8 @@ export default function StatsPage(){
     protein:Math.round(l.protein_g||0),
     carbs:Math.round(l.carbs_g||0),
     fat:Math.round(l.fat_g||0),
-    // Goals overlaid on the chart are the daily-derived versions so the
-    // line stays meaningful at any zoom level.
-    calGoal: dailyGoal?.calories || 0,
-    protGoal: dailyGoal?.protein || 0,
+    calGoal: goals?.calories || 0,
+    protGoal: goals?.protein || 0,
   }));
   const macroPie=avgCal>0?[
     {name:"Protein",value:Math.round(avgProt*4),color:C.green},
@@ -1300,10 +1287,10 @@ export default function StatsPage(){
               <div style={{marginBottom:14,padding:"12px 14px",background:"rgba(255,255,255,0.04)",borderRadius:12}}>
                 <div style={{fontSize:10,fontWeight:800,color:C.subLight,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:10}}>Today</div>
                 {[
-                  // dailyGoal is monthly/30 — the per-day share of the user's
-                  // monthly target. Falls back to a sane default if no goal set.
-                  {label:"🔥 Calories",current:Math.round(todayNut?.calories||0),goal:dailyGoal?.calories||67,unit:"kcal",color:C.gold},
-                  {label:"🥩 Protein",current:Math.round(todayNut?.protein||0),goal:dailyGoal?.protein||5,unit:"g",color:"#34D399"},
+                  // goals are daily targets directly. Falls back to common
+                  // sensible defaults if no goal set yet.
+                  {label:"🔥 Calories",current:Math.round(todayNut?.calories||0),goal:goals?.calories||2000,unit:"kcal",color:C.gold},
+                  {label:"🥩 Protein",current:Math.round(todayNut?.protein||0),goal:goals?.protein||150,unit:"g",color:"#34D399"},
                 ].map(({label,current,goal,unit,color})=>{
                   const pct=Math.min(100,Math.round((current/goal)*100));
                   return (
@@ -1324,21 +1311,23 @@ export default function StatsPage(){
                 })}
               </div>
 
-              {/* THIS MONTH — goals are monthly targets directly (no longer
-                  multiplied by days-in-month). Compares this calendar month's
-                  running totals against the user's set monthly goal. */}
+              {/* THIS MONTH — daily goal × elapsed days = how much you
+                  should have eaten by today if you'd hit your goal every
+                  day. So progress fills predictably as the month passes,
+                  not just at month end. */}
               {(()=>{
                 const now=new Date();
+                const elapsedDays = now.getDate(); // day of month, 1-based
                 const monthLogs=nutritionLogs.filter((l:any)=>{const d=new Date(l.logged_at);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
                 const monthCals=Math.round(monthLogs.reduce((s:number,l:any)=>s+(l.calories_total||0),0));
                 const monthProt=Math.round(monthLogs.reduce((s:number,l:any)=>s+(l.protein_g||0),0));
-                const calGoal = goals?.calories || 60000;
-                const protGoal = goals?.protein || 4500;
+                const calGoal = (goals?.calories || 2000) * elapsedDays;
+                const protGoal = (goals?.protein || 150) * elapsedDays;
                 const calPct=Math.min(100,Math.round((monthCals/calGoal)*100));
                 const protPct=Math.min(100,Math.round((monthProt/protGoal)*100));
                 return (
                   <div>
-                    <div style={{fontSize:10,fontWeight:800,color:C.subLight,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:10}}>This Month</div>
+                    <div style={{fontSize:10,fontWeight:800,color:C.subLight,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:10}}>This Month — Day {elapsedDays} of {new Date(now.getFullYear(),now.getMonth()+1,0).getDate()}</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                       {[
                         {label:"🔥 Calories",current:monthCals,goal:calGoal,pct:calPct,unit:"kcal",color:C.gold},
@@ -1456,25 +1445,25 @@ export default function StatsPage(){
 
             {/* Today's nutrition */}
             <SecHead title="Today's Nutrition"/>
-            {!dailyGoal?(
+            {!goals?(
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
-                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:6}}>No monthly goals set yet</div>
-                <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Set your monthly calorie and macro targets to track daily progress (we'll show daily share automatically).</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:6}}>No daily goals set yet</div>
+                <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Set your daily calorie and macro targets to track progress.</div>
                 <button onClick={()=>{setTab("nutrition");setTimeout(()=>setShowGoalEditor(true),100);}} style={{padding:"8px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚙️ Set Goals</button>
               </div>
             ):(
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
                 {todayNut?(<>
-                  <MacroRow label="🔥 Calories" current={Math.round(todayNut.calories)} goal={dailyGoal.calories} color={C.gold} unit=" kcal"/>
-                  <MacroRow label="🥩 Protein"  current={Math.round(todayNut.protein)}  goal={dailyGoal.protein}  color={C.green} unit="g"/>
-                  <MacroRow label="🍞 Carbs"    current={Math.round(todayNut.carbs)}    goal={dailyGoal.carbs}    color={C.purple} unit="g"/>
-                  <MacroRow label="🥑 Fat"      current={Math.round(todayNut.fat)}      goal={dailyGoal.fat}      color={C.gold} unit="g"/>
-                  {dailyGoal.water_oz>0&&<MacroRow label="💧 Water" current={Math.round(todayNut.water_oz)} goal={dailyGoal.water_oz} color={C.cyan} unit=" oz"/>}
+                  <MacroRow label="🔥 Calories" current={Math.round(todayNut.calories)} goal={goals.calories} color={C.gold} unit=" kcal"/>
+                  <MacroRow label="🥩 Protein"  current={Math.round(todayNut.protein)}  goal={goals.protein}  color={C.green} unit="g"/>
+                  <MacroRow label="🍞 Carbs"    current={Math.round(todayNut.carbs)}    goal={goals.carbs}    color={C.purple} unit="g"/>
+                  <MacroRow label="🥑 Fat"      current={Math.round(todayNut.fat)}      goal={goals.fat}      color={C.gold} unit="g"/>
+                  {goals.water_oz>0&&<MacroRow label="💧 Water" current={Math.round(todayNut.water_oz)} goal={goals.water_oz} color={C.cyan} unit=" oz"/>}
                 </>):(
                   <div style={{textAlign:"center",padding:"12px 0"}}>
                     <div style={{fontSize:24,marginBottom:8}}>🥗</div>
                     <div style={{fontSize:14,color:C.subLight,fontWeight:700,marginBottom:4}}>Nothing logged yet today</div>
-                    <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Daily goal: {dailyGoal.calories.toLocaleString()} kcal · {dailyGoal.protein}g protein · {dailyGoal.carbs}g carbs · {dailyGoal.fat}g fat</div>
+                    <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Daily goal: {goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat</div>
                     <button onClick={()=>router.push("/post")} style={{padding:"7px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Log Nutrition</button>
                   </div>
                 )}
@@ -1993,20 +1982,20 @@ export default function StatsPage(){
             <div style={{background:C.card,borderRadius:16,padding:16,border:`1px solid ${showGoalEditor?C.purple:C.border}`,marginBottom:20}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showGoalEditor?16:0}}>
                 <div>
-                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>⚙️ Monthly Nutrition Goals</div>
-                  {!showGoalEditor&&goals&&<div style={{fontSize:12,color:C.sub,marginTop:3}}>{goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat <span style={{opacity:0.7}}>per month</span></div>}
-                  {!showGoalEditor&&!goals&&<div style={{fontSize:12,color:C.red,marginTop:3}}>No monthly goals set — tap Edit to add targets</div>}
+                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>⚙️ Daily Nutrition Goals</div>
+                  {!showGoalEditor&&goals&&<div style={{fontSize:12,color:C.sub,marginTop:3}}>{goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat <span style={{opacity:0.7}}>per day</span></div>}
+                  {!showGoalEditor&&!goals&&<div style={{fontSize:12,color:C.red,marginTop:3}}>No daily goals set — tap Edit to add targets</div>}
                 </div>
                 <button onClick={()=>setShowGoalEditor(g=>!g)} style={{padding:"6px 14px",borderRadius:20,border:`1px solid ${C.borderHi}`,background:showGoalEditor?C.purple:"transparent",color:showGoalEditor?"#fff":C.sub,fontWeight:700,fontSize:12,cursor:"pointer"}}>{showGoalEditor?"Cancel":"✏️ Edit"}</button>
               </div>
               {showGoalEditor&&(<>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
                   {([
-                    {label:"🔥 Calories / month",key:"calories" as keyof NutritionGoals},
-                    {label:"🥩 Protein (g) / month",key:"protein" as keyof NutritionGoals},
-                    {label:"🍞 Carbs (g) / month",key:"carbs" as keyof NutritionGoals},
-                    {label:"🥑 Fat (g) / month",key:"fat" as keyof NutritionGoals},
-                    {label:"💧 Water (oz) / month",key:"water_oz" as keyof NutritionGoals},
+                    {label:"🔥 Calories / day",key:"calories" as keyof NutritionGoals},
+                    {label:"🥩 Protein (g) / day",key:"protein" as keyof NutritionGoals},
+                    {label:"🍞 Carbs (g) / day",key:"carbs" as keyof NutritionGoals},
+                    {label:"🥑 Fat (g) / day",key:"fat" as keyof NutritionGoals},
+                    {label:"💧 Water (oz) / day",key:"water_oz" as keyof NutritionGoals},
                   ] as {label:string;key:keyof NutritionGoals}[]).map(({label,key})=>(
                     <div key={key}>
                       <div style={{fontSize:11,color:C.sub,marginBottom:5,fontWeight:600}}>{label}</div>
@@ -2041,8 +2030,8 @@ export default function StatsPage(){
             {/* Averages */}
             <SecHead title={`Averages — ${rangeLabel(range)}`}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <BigNum icon="🔥" label="Avg Daily Calories" value={avgCal>0?avgCal.toLocaleString():"—"} sub={dailyGoal?`daily share: ${dailyGoal.calories.toLocaleString()} kcal`:"set a monthly goal"} color={C.gold}/>
-              <BigNum icon="🥩" label="Avg Protein" value={avgProt>0?`${avgProt}g`:"—"} sub={dailyGoal?`daily share: ${dailyGoal.protein}g`:"set a monthly goal"} color={C.green}/>
+              <BigNum icon="🔥" label="Avg Daily Calories" value={avgCal>0?avgCal.toLocaleString():"—"} sub={goals?`goal: ${goals.calories.toLocaleString()}/day`:"set a daily goal"} color={C.gold}/>
+              <BigNum icon="🥩" label="Avg Protein" value={avgProt>0?`${avgProt}g`:"—"} sub={goals?`goal: ${goals.protein}g/day`:"set a daily goal"} color={C.green}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
               <MiniNum label="Avg Carbs" value={avgCarbs>0?`${avgCarbs}g`:"—"} color={C.purple}/>
@@ -2050,14 +2039,13 @@ export default function StatsPage(){
               <MiniNum label="Days Logged" value={daysLogged} color={C.text}/>
             </div>
 
-            {/* Consistency — uses the per-day-share (monthly/30) goal so
-                the "hit" check is meaningful at the day level. */}
-            {dailyGoal&&daysLogged>0&&(<>
+            {/* Consistency — % of logged days that hit each daily target. */}
+            {goals&&daysLogged>0&&(<>
               <SecHead title="Daily Goal Consistency"/>
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
                 {[
-                  {label:`🥩 Protein ≥ ${dailyGoal.protein}g/day`,pct:proteinPct,hit:proteinHit,color:C.green},
-                  {label:`🔥 Calories ~${dailyGoal.calories.toLocaleString()}/day (±10%)`,pct:caloriePct,hit:calorieHit,color:C.gold},
+                  {label:`🥩 Protein ≥ ${goals.protein}g/day`,pct:proteinPct,hit:proteinHit,color:C.green},
+                  {label:`🔥 Calories ~${goals.calories.toLocaleString()}/day (±10%)`,pct:caloriePct,hit:calorieHit,color:C.gold},
                 ].map(({label,pct,hit,color})=>(
                   <div key={label} style={{marginBottom:16}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -2073,13 +2061,12 @@ export default function StatsPage(){
               </div>
             </>)}
 
-            {/* Water tracking — quick stats card + 14-day sparkline. Only
-                shown if the user has logged any water in the range. */}
+            {/* Water tracking */}
             {totalWater > 0 && (<>
               <SecHead title="Hydration"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                <BigNum icon="💧" label="Avg Water / Day" value={`${avgWater} oz`} sub={dailyGoal?`daily share: ${dailyGoal.water_oz} oz`:"set a monthly goal"} color="#38BDF8"/>
-                <BigNum icon="✅" label="Days Hit Goal" value={dailyGoal?`${waterHit}/${daysLogged}`:"—"} sub={dailyGoal?`${waterPct}% consistency`:"set a goal"} color={waterPct>=70?C.green:C.text}/>
+                <BigNum icon="💧" label="Avg Water / Day" value={`${avgWater} oz`} sub={goals?`goal: ${goals.water_oz} oz/day`:"set a daily goal"} color="#38BDF8"/>
+                <BigNum icon="✅" label="Days Hit Goal" value={goals?`${waterHit}/${daysLogged}`:"—"} sub={goals?`${waterPct}% consistency`:"set a goal"} color={waterPct>=70?C.green:C.text}/>
               </div>
               <ChartWrap>
                 <div style={{fontSize:11,fontWeight:800,color:"#38BDF8",padding:"4px 8px 8px",textTransform:"uppercase" as const,letterSpacing:0.8}}>💧 Last 14 Days (oz)</div>
@@ -2092,9 +2079,9 @@ export default function StatsPage(){
                     <Bar dataKey="oz" name="Water (oz)" fill="#38BDF8" radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
-                {dailyGoal && (
+                {goals && (
                   <div style={{fontSize:11,color:C.sub,textAlign:"center" as const,marginTop:6}}>
-                    Daily target line: {dailyGoal.water_oz} oz
+                    Daily goal: {goals.water_oz} oz
                   </div>
                 )}
               </ChartWrap>
