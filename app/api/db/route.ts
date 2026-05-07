@@ -1275,6 +1275,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── Workout buddy: load active match + queue entry ─────────────────────
+    // Returns whatever state the user is in: { match: {...} } if matched,
+    // { queue: {...} } if waiting, or { match: null, queue: null } otherwise.
+    //
+    // WHY THIS EXISTS: The rivals page used to do this read client-side via
+    // a Postgrest embedded join (`select("*, user_a:user_a(id,username,...)`).
+    // That requires a foreign-key relationship from buddy_matches.user_a →
+    // users.id to be registered in Postgres. The buddy_matches table was
+    // created ad-hoc in Supabase without that FK, so the embedded join
+    // silently returned null — meaning users would queue up successfully
+    // server-side but never see the match appear on either client.
+    //
+    // Doing the read here via the admin client bypasses both the FK
+    // requirement AND any RLS policies that might be blocking client reads.
+    // We do the user lookup as a separate query and stitch it together.
+    if (action === 'buddy_get_active_match') {
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      // 1. Look for an active match where this user is either side
+      const { data: match } = await admin
+        .from('buddy_matches')
+        .select('*')
+        .eq('status', 'active')
+        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+        .order('starts_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (match) {
+        // 2. Hydrate user_a + user_b in a single users query
+        const { data: users } = await admin
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .in('id', [match.user_a, match.user_b]);
+        const userA = users?.find((u: any) => u.id === match.user_a) || null;
+        const userB = users?.find((u: any) => u.id === match.user_b) || null;
+
+        // Return in the shape the client expects: user_a / user_b are
+        // hydrated user objects, not just IDs. Rest of the match row
+        // (category, tier, target_*, starts_at, ends_at, status,
+        // user_a_progress, user_b_progress) is passed through unchanged.
+        return NextResponse.json({
+          match: { ...match, user_a: userA, user_b: userB },
+          queue: null,
+        });
+      }
+
+      // 3. No active match — check if the user is queued
+      const { data: queueRow } = await admin
+        .from('buddy_queue')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      return NextResponse.json({ match: null, queue: queueRow || null });
+    }
+
     // ── Workout buddy: update progress from a new log ──────────────────────
     // Called alongside update_goals_from_log. Bumps either user_a_progress
     // or user_b_progress on every active match the user is in.
