@@ -11,10 +11,11 @@
 //   - the post creation page (focus mode, no distractions)
 // Hidden when no user is signed in.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
 const PURPLE = "#7C3AED";
 
@@ -69,52 +70,17 @@ export default function MessagesFAB() {
   const [open, setOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [unreadTotal, setUnreadTotal] = useState(0);
+  // Unread total comes from the shared hook so we don't duplicate
+  // BottomNav's polling + realtime subscription. Hook returns 0 when on
+  // /messages, which matches the FAB's old behavior.
+  const { unreadMessages: unreadTotal } = useUnreadCounts();
 
   const hidden = !user || HIDDEN_ROUTES.some(r => pathname?.startsWith(r));
 
-  // Total unread badge — shown on the closed handle
-  useEffect(() => {
-    if (!user) { setUnreadTotal(0); return; }
-    let cancelled = false;
-    async function fetchUnread() {
-      try {
-        const { data: parts } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', user!.id);
-        if (cancelled) return;
-        if (!parts || parts.length === 0) { setUnreadTotal(0); return; }
-        const convIds = parts.map((p: any) => p.conversation_id);
-        const { count } = await supabase
-          .from('messages')
-          .select('id', { count: 'exact', head: true })
-          .in('conversation_id', convIds)
-          .neq('sender_id', user!.id)
-          .is('read_at', null);
-        if (!cancelled) setUnreadTotal(count || 0);
-      } catch {
-        if (!cancelled) setUnreadTotal(0);
-      }
-    }
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 20000);
-
-    let channel: any = null;
-    try {
-      channel = supabase
-        .channel(`fab-msg-${user.id}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
-          () => { fetchUnread(); })
-        .subscribe();
-    } catch { /* realtime not available yet */ }
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      try { channel?.unsubscribe(); } catch {}
-    };
-  }, [user]);
+  // ── Removed local unread polling ───────────────────────────────────────
+  // This component used to run its own setInterval(20s) + realtime channel
+  // for the badge count, doing the exact same query BottomNav was already
+  // doing. Now both share useUnreadCounts (60s safety poll + realtime).
 
   // Load conversations when overlay opens
   async function loadConversations() {
