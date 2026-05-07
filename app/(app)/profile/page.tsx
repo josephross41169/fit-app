@@ -8,6 +8,7 @@ import { compressImage } from "@/lib/compressImage";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
+import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
@@ -1575,9 +1576,9 @@ export default function ProfilePage() {
   const [showHighlightPicker,setShowHighlightPicker] = useState(false);
   useEffect(()=>{
     if(!user) return;
-    // Highlights are photos only — Instagram-style. We exclude videos from this
-    // list so the picker grid doesn't show broken thumbnails. Posts with mixed
-    // carousels still surface (we just take the first image URL).
+    // Pool of media available for highlights — both photos AND videos.
+    // Videos previously got filtered out so the highlights row was photo-only.
+    // Now that the strip supports autoplay video tiles, we accept both.
     supabase.from('posts')
       .select('media_url, media_type, media_types')
       .eq('user_id', user.id)
@@ -1586,19 +1587,10 @@ export default function ProfilePage() {
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (!data) return;
-        const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
-        const photoOnly = data
+        const urls = data
           .map((p: any) => p.media_url as string)
-          .filter((url): url is string => Boolean(url))
-          .filter((url, i) => {
-            const row = data[i];
-            // Skip if explicitly marked as a video, or sniffed as one from the URL.
-            if (row.media_type === 'video') return false;
-            if (Array.isArray(row.media_types) && row.media_types[0] === 'video') return false;
-            if (VIDEO_EXT_RE.test(url)) return false;
-            return true;
-          });
-        setFeedPhotos(photoOnly);
+          .filter((url): url is string => Boolean(url));
+        setFeedPhotos(urls);
       });
   },[user?.id]);
 
@@ -2881,8 +2873,8 @@ export default function ProfilePage() {
             {feedPhotos.length === 0 ? (
               <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
                 <div style={{fontSize:40,marginBottom:12}}>📭</div>
-                <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No feed photos yet</div>
-                <div style={{fontSize:13}}>Post photos to your feed first, then add them as highlights</div>
+                <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No media yet</div>
+                <div style={{fontSize:13}}>Post photos or videos to your feed first, then add them as highlights</div>
               </div>
             ) : (
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
@@ -2904,8 +2896,18 @@ export default function ProfilePage() {
                         setHighlights(prev => prev.filter(u => u !== src));
                         alert("Couldn't add that highlight. Try again.");
                       }
-                    }} style={{padding:0,border:`3px solid ${alreadyAdded?C.purple:C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"none",aspectRatio:"1",position:"relative"}}>
-                      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                    }} style={{padding:0,border:`3px solid ${alreadyAdded?C.purple:C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"#000",aspectRatio:"1",position:"relative"}}>
+                      {/* Render video preview for video URLs (muted, no
+                          autoplay) so users can pick clips for highlights.
+                          isVideoUrl checks file extension. */}
+                      {isVideoUrl(src) ? (
+                        <video src={src} muted playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      ) : (
+                        <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                      )}
+                      {isVideoUrl(src) && (
+                        <div style={{position:"absolute",bottom:6,left:6,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:99}}>▶</div>
+                      )}
                       {alreadyAdded && (
                         <div style={{position:"absolute",inset:0,background:"rgba(22,163,74,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
                           <span style={{fontSize:28}}>✓</span>
@@ -4162,50 +4164,61 @@ export default function ProfilePage() {
                   awkwardly in the narrow profile column. They moved to a
                   dedicated row below (see next div). */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
-                {highlights.length > 0 && (
-                  <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
-                    {editingHighlights ? "✓ Done" : "✏️ Edit"}
-                  </button>
-                )}
+                <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights {highlights.length > 0 && <span style={{fontSize:12,color:C.sub,fontWeight:600,marginLeft:6}}>{highlights.length}</span>}</div>
+                <div style={{display:"flex",gap:6}}>
+                  {highlights.length > 0 && (
+                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
+                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
+                    </button>
+                  )}
+                  {highlights.length < HIGHLIGHT_SLOTS && (
+                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",border:"none",cursor:"pointer"}}>
+                      + Add
+                    </button>
+                  )}
+                </div>
               </div>
-              {/* Nav buttons row — three equal-width buttons. flex with
-                  flex:1 so each takes equal share. Wraps to 2-row layout
-                  on very narrow viewports via flex-wrap. */}
-              <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+              {/* Nav buttons row */}
+              <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
                 <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
                 <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
                 <a href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</a>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-                {Array.from({length:HIGHLIGHT_SLOTS}).map((_,i) => {
-                  const src = highlights[i];
-                  if (src) {
+              {/* Highlights strip — horizontal scroll. Same component used by
+                  group highlights (HighlightsStrip from GroupHighlights.tsx).
+                  Auto-plays videos when scrolled into view, supports tap-to-
+                  unmute, opens lightbox on tap. We render an edit overlay on
+                  top when editingHighlights is true so users can remove items
+                  without losing the strip's visual flow. */}
+              {highlights.length === 0 ? (
+                <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(124,58,237,0.06)",color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:24}}>+</span>
+                  <span>Add highlights — photos and videos from your posts</span>
+                </button>
+              ) : editingHighlights ? (
+                // Edit mode: show items as small thumbnails with × buttons.
+                // We don't autoplay here so the user can focus on managing
+                // the list. Videos still show their first frame as a poster.
+                <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6}}>
+                  {highlights.map((src, idx) => {
+                    const isVid = isVideoUrl(src);
                     return (
-                      <div key={i} className="highlight-slot" style={{position:"relative",aspectRatio:"1",borderRadius:12,overflow:"hidden",cursor:"pointer"}}>
-                        <img onClick={()=>{ if(!editingHighlights) setHighlightLb(src); }} src={src} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-                        <button
-                          className="highlight-remove"
-                          onClick={(e)=>{e.stopPropagation();removeHighlight(i);}}
-                          style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:14,lineHeight:"22px",textAlign:"center",cursor:"pointer",opacity:editingHighlights?1:0,transition:"opacity 0.15s",padding:0}}>×</button>
+                      <div key={src+idx} style={{position:"relative",flexShrink:0,width:96,height:96,borderRadius:10,overflow:"hidden",border:`1px solid ${C.purpleMid}`,background:"#000"}}>
+                        {isVid ? (
+                          <video src={src} muted playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        ) : (
+                          <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        )}
+                        {isVid && (
+                          <div style={{position:"absolute",bottom:4,right:4,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,fontWeight:800,padding:"1px 5px",borderRadius:99}}>▶</div>
+                        )}
+                        <button onClick={()=>removeHighlight(idx)} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.85)",border:"none",color:"#fff",fontSize:14,lineHeight:"22px",cursor:"pointer",padding:0}}>×</button>
                       </div>
                     );
-                  }
-                  if (i === highlights.length) {
-                    return (
-                      <button key={i} onClick={()=>setShowHighlightPicker(true)} style={{aspectRatio:"1",borderRadius:12,border:`2px dashed ${C.purpleMid}`,background:"#1A1230",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:2,padding:0}}>
-                        <span style={{fontSize:22,color:C.purple,lineHeight:1}}>+</span>
-                        <span style={{fontSize:9,color:C.sub,fontWeight:600}}>Add</span>
-                      </button>
-                    );
-                  }
-                  return (
-                    <div key={i} style={{aspectRatio:"1",borderRadius:12,background:`${C.purpleMid}55`,border:`1px solid ${C.purpleMid}`}}/>
-                  );
-                })}
-              </div>
-              {highlights.length > 0 && (
-                <div style={{marginTop:10,fontSize:11,color:C.sub,textAlign:"center"}}>{highlights.length}/{HIGHLIGHT_SLOTS} photos</div>
+                  })}
+                </div>
+              ) : (
+                <HighlightsStrip urls={highlights} />
               )}
             </div>
 
