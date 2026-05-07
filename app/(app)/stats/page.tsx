@@ -342,6 +342,10 @@ export default function StatsPage(){
   // Tracks which muscle group cards on the Workout tab are expanded to
   // show per-exercise breakdowns. Multiple can be open at once.
   const [expandedMuscle,setExpandedMuscle]=useState<Record<string,boolean>>({});
+  // Per-session card expand toggles. Keyed by session id (or array index
+  // fallback). When true the card shows ALL exercises and cardio entries
+  // instead of the truncated top-3 view. Tap card body to toggle.
+  const [expandedSession,setExpandedSession]=useState<Record<string,boolean>>({});
   const [loading,setLoading]=useState(true);
   const [expandedPR,setExpandedPR]=useState<string|null>(null);
   const [showGoalEditor,setShowGoalEditor]=useState(false);
@@ -1603,7 +1607,10 @@ export default function StatsPage(){
 
 
 
-            {/* This week detail — rich cards */}
+            {/* This week detail — rich cards. Tap any card to expand and
+                see every exercise and cardio entry from that session
+                (including per-set reps × weight when available). Tap
+                again to collapse back to the top-3 summary. */}
             {thisWeekLogs.length>0&&(<>
               <SecHead title="This Week's Sessions"/>
               <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
@@ -1611,17 +1618,53 @@ export default function StatsPage(){
                   const exs=Array.isArray(l.exercises)?l.exercises:[];
                   const cardios=Array.isArray(l.cardio)?l.cardio:[];
                   const vol=calcVol(exs);
+                  const sessionKey = l.id || `wk-${i}`;
+                  const isOpen = !!expandedSession[sessionKey];
                   // Primary muscle group from sets distribution
                   const mc:Record<string,number>={};
                   exs.forEach((ex:any)=>{const m=getMuscle(ex.name||"");mc[m]=(mc[m]||0)+(parseInt(String(ex.sets))||1);});
                   const muscle=Object.entries(mc).sort((a,b)=>b[1]-a[1])[0]?.[0]||"";
                   const color=MUSCLE_COLORS[muscle]||C.sub;
-                  // Top exercises by volume
-                  const topExs=[...exs].sort((a:any,b:any)=>(parseFloat(String(b.weight))||0)-(parseFloat(String(a.weight))||0)).slice(0,3);
+                  // When collapsed, show top 3 exercises by max weight.
+                  // When expanded, show every exercise in the order it
+                  // was logged (preserves the user's workout sequence).
+                  const topExs = isOpen
+                    ? exs
+                    : [...exs].sort((a:any,b:any)=>(parseFloat(String(b.weight))||0)-(parseFloat(String(a.weight))||0)).slice(0,3);
+                  const hasMore = exs.length > 3 || cardios.length > 0;
+                  // Format a single exercise's set summary. Prefers per-set
+                  // arrays (repsArr × weights) when they exist so pyramid
+                  // sets like 12/8/6 surface correctly. Falls back to the
+                  // legacy single-value display for older logs.
+                  const fmtSets = (ex:any) => {
+                    const repsArr = Array.isArray(ex.repsArr) ? ex.repsArr : null;
+                    const weights = Array.isArray(ex.weights) ? ex.weights : null;
+                    // If we have per-set data AND any of it varies, show
+                    // each set. Otherwise show compact "3×10 @ 135 lbs".
+                    if (repsArr && weights && repsArr.length === weights.length && repsArr.length > 0) {
+                      const allSameReps = repsArr.every((r:any)=>String(r)===String(repsArr[0]));
+                      const allSameWeight = weights.every((w:any)=>String(w)===String(weights[0]));
+                      if (allSameReps && allSameWeight) {
+                        return `${repsArr.length}×${repsArr[0]} @ ${weights[0]} lbs`;
+                      }
+                      // Show each set on its own when they differ
+                      return repsArr.map((r:any,k:number)=>`${r}@${weights[k]||0}`).join(" · ");
+                    }
+                    return `${ex.sets}×${ex.reps} @ ${ex.weight} lbs`;
+                  };
                   return(
-                    <div key={i} style={{background:C.card,borderRadius:14,padding:"14px 16px",border:`1px solid ${muscle?color:C.border}`}}>
+                    <div
+                      key={i}
+                      onClick={()=>hasMore && setExpandedSession(s=>({...s,[sessionKey]:!s[sessionKey]}))}
+                      style={{
+                        background:C.card,borderRadius:14,padding:"14px 16px",
+                        border:`1px solid ${muscle?color:C.border}`,
+                        cursor: hasMore ? "pointer" : "default",
+                        transition: "background 0.15s",
+                      }}
+                    >
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:exs.length>0||cardios.length>0?10:0}}>
-                        <div>
+                        <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:8}}>
                             <div style={{fontWeight:800,fontSize:14,color:C.text}}>{l.workout_type||"Workout"}</div>
                             {muscle&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,background:`${color}22`,color}}>{muscle}</span>}
@@ -1634,21 +1677,26 @@ export default function StatsPage(){
                             {cardios.length>0&&<span>🏃 {cardios.length} cardio</span>}
                           </div>
                         </div>
-                        {vol>0&&<div style={{fontSize:13,fontWeight:900,color:C.gold,flexShrink:0}}>{vol>=1000?`${(vol/1000).toFixed(1)}k`:vol.toFixed(0)}<span style={{fontSize:10,fontWeight:400,color:C.sub}}> lbs</span></div>}
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          {vol>0&&<div style={{fontSize:13,fontWeight:900,color:C.gold}}>{vol>=1000?`${(vol/1000).toFixed(1)}k`:vol.toFixed(0)}<span style={{fontSize:10,fontWeight:400,color:C.sub}}> lbs</span></div>}
+                          {hasMore && (
+                            <span style={{fontSize:12,color:C.sub,transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>▼</span>
+                          )}
+                        </div>
                       </div>
-                      {/* Top exercises */}
+                      {/* Exercises — top 3 by weight when collapsed, all when open */}
                       {topExs.length>0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:4}}>
                           {topExs.map((ex:any,j:number)=>(
-                            <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"5px 8px",background:C.bg,borderRadius:7}}>
-                              <span style={{fontSize:12,color:C.subLight}}>{ex.name}</span>
-                              <span style={{fontSize:12,fontWeight:700,color:C.gold}}>{ex.sets}×{ex.reps} @ {ex.weight} lbs</span>
+                            <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"5px 8px",background:C.bg,borderRadius:7,gap:8}}>
+                              <span style={{fontSize:12,color:C.subLight,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                              <span style={{fontSize:12,fontWeight:700,color:C.gold,flexShrink:0,textAlign:"right" as const}}>{fmtSets(ex)}</span>
                             </div>
                           ))}
-                          {exs.length>3&&<div style={{fontSize:11,color:C.sub,textAlign:"center",paddingTop:2}}>+{exs.length-3} more exercises</div>}
+                          {!isOpen && exs.length>3&&<div style={{fontSize:11,color:C.sub,textAlign:"center",paddingTop:2}}>+{exs.length-3} more — tap to expand</div>}
                         </div>
                       )}
-                      {/* Cardio details */}
+                      {/* Cardio entries always render fully (usually only 1-2 per session) */}
                       {cardios.length>0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:topExs.length>0?6:0}}>
                           {cardios.map((c:any,j:number)=>(
@@ -1659,6 +1707,13 @@ export default function StatsPage(){
                               </span>
                             </div>
                           ))}
+                        </div>
+                      )}
+                      {/* Notes show only when expanded — keeps the collapsed
+                          card compact but lets the user see what they wrote. */}
+                      {isOpen && l.notes && (
+                        <div style={{marginTop:8,padding:"8px 10px",background:C.bg,borderRadius:8,fontSize:12,color:C.subLight,fontStyle:"italic" as const}}>
+                          📝 {l.notes}
                         </div>
                       )}
                     </div>
