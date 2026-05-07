@@ -419,7 +419,7 @@ export default function StatsPage(){
         // hook). Way faster than re-fetching whenever the user toggles
         // 1W/1M/1Y.
         supabase.from("activity_logs")
-          .select("id,log_type,logged_at,workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes")
+          .select("id,log_type,logged_at,workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes,meal_type")
           .eq("user_id",user.id).gte("logged_at",yearStart)
           .order("logged_at",{ascending:true}),
         supabase.from("personal_records")
@@ -820,6 +820,59 @@ export default function StatsPage(){
     {name:"Fat",value:Math.round(avgFat*9),color:C.gold},
   ]:[];
 
+  // Per-meal-type breakdown — separate cards for breakfast/lunch/dinner/
+  // snack so users can see which meal carries which macros. Useful for
+  // spotting things like "I'm under-eating protein at breakfast" or "my
+  // dinner is half my daily calories." Falls back to time-of-day buckets
+  // for legacy logs that don't have meal_type set.
+  const mealTypeStats = (() => {
+    type MealBucket = {
+      count: number;
+      totalCal: number;
+      totalProt: number;
+      totalCarbs: number;
+      totalFat: number;
+    };
+    const buckets: Record<string, MealBucket> = {
+      breakfast: { count:0, totalCal:0, totalProt:0, totalCarbs:0, totalFat:0 },
+      lunch:     { count:0, totalCal:0, totalProt:0, totalCarbs:0, totalFat:0 },
+      dinner:    { count:0, totalCal:0, totalProt:0, totalCarbs:0, totalFat:0 },
+      snack:     { count:0, totalCal:0, totalProt:0, totalCarbs:0, totalFat:0 },
+    };
+    nutritionLogs.forEach((l: any) => {
+      // Pick the bucket. Prefer meal_type from the log if set, else fall
+      // back to inferring by hour-of-day (breakfast 5-11, lunch 11-15,
+      // dinner 17-22, otherwise snack).
+      let key = (l.meal_type || "").toLowerCase().trim();
+      if (!buckets[key]) {
+        const hr = new Date(l.logged_at).getHours();
+        if (hr >= 5 && hr < 11) key = "breakfast";
+        else if (hr >= 11 && hr < 15) key = "lunch";
+        else if (hr >= 17 && hr < 22) key = "dinner";
+        else key = "snack";
+      }
+      buckets[key].count++;
+      buckets[key].totalCal += l.calories_total || 0;
+      buckets[key].totalProt += l.protein_g || 0;
+      buckets[key].totalCarbs += l.carbs_g || 0;
+      buckets[key].totalFat += l.fat_g || 0;
+    });
+    return (["breakfast","lunch","dinner","snack"] as const).map(k => {
+      const b = buckets[k];
+      return {
+        key: k,
+        label: k.charAt(0).toUpperCase() + k.slice(1),
+        emoji: k === "breakfast" ? "🍳" : k === "lunch" ? "🥗" : k === "dinner" ? "🍽️" : "🍎",
+        count: b.count,
+        avgCal: b.count > 0 ? Math.round(b.totalCal / b.count) : 0,
+        avgProt: b.count > 0 ? Math.round(b.totalProt / b.count) : 0,
+        avgCarbs: b.count > 0 ? Math.round(b.totalCarbs / b.count) : 0,
+        avgFat: b.count > 0 ? Math.round(b.totalFat / b.count) : 0,
+        totalCal: Math.round(b.totalCal),
+      };
+    }).filter(m => m.count > 0);
+  })();
+
   // PRs grouped by muscle group
   const prsByEx=prList.reduce((acc:Record<string,any[]>,pr)=>{
     if(!acc[pr.exercise_name]) acc[pr.exercise_name]=[];
@@ -843,13 +896,148 @@ export default function StatsPage(){
   const firstW=weightLogs[0]?.weight_lbs;
   const lastW=weightLogs[weightLogs.length-1]?.weight_lbs;
   const wDelta=firstW&&lastW?Number((lastW-firstW).toFixed(1)):null;
-  const wellnessByType=(()=>{
-    const f:Record<string,number>={};
-    wellnessLogs.forEach(l=>{const t=l.wellness_type||"Other";f[t]=(f[t]||0)+1;});
-    return Object.entries(f).sort((a,b)=>b[1]-a[1]).map(([type,count])=>({type,count}));
+
+  // Per-wellness-discipline stats — same treatment as cardio breakdown.
+  // For each activity type tracks: count, total mins, avg mins, longest
+  // single session, last logged date.
+  const wellnessByType = (() => {
+    type Bucket = { count:number; totalMin:number; longest:number; lastDate:string };
+    const t: Record<string, Bucket> = {};
+    wellnessLogs.forEach(l => {
+      const type = l.wellness_type || "Other";
+      if (!t[type]) t[type] = { count: 0, totalMin: 0, longest: 0, lastDate: "" };
+      const mins = parseFloat(String(l.wellness_duration_min)) || 0;
+      t[type].count++;
+      t[type].totalMin += mins;
+      if (mins > t[type].longest) t[type].longest = mins;
+      if (l.logged_at > t[type].lastDate) t[type].lastDate = l.logged_at;
+    });
+    return Object.entries(t)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([type, b]) => ({
+        type,
+        count: b.count,
+        totalMin: Math.round(b.totalMin),
+        avgMin: b.count > 0 ? Math.round(b.totalMin / b.count) : 0,
+        longest: Math.round(b.longest),
+        lastDate: b.lastDate,
+      }));
   })();
-  const avgSleepHours=0; // would need wellness_data column
-  const totalWellnessMins=wellnessLogs.reduce((s,l)=>s+(l.wellness_duration_min||0),0);
+
+  const totalWellnessMins = wellnessLogs.reduce((s, l) => s + (parseFloat(String(l.wellness_duration_min)) || 0), 0);
+
+  // Day-of-week pattern for wellness — when do you actually take recovery
+  // time? Helps users spot "I never do wellness on weekdays" patterns.
+  const wellnessDayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const freqByDayWellness = wellnessDayKeys.map((day, idx) => {
+    const jsDay = idx < 6 ? idx + 1 : 0;
+    return {
+      day,
+      count: wellnessLogs.filter(l => new Date(l.logged_at).getDay() === jsDay).length,
+    };
+  });
+
+  // Time-of-day breakdown — Morning (5-12), Afternoon (12-17), Evening (17-22),
+  // Night (22-5). Gives users a sense of when they prioritize recovery.
+  const timeOfDayBuckets = (() => {
+    const b = { morning: 0, afternoon: 0, evening: 0, night: 0 };
+    wellnessLogs.forEach(l => {
+      const h = new Date(l.logged_at).getHours();
+      if (h >= 5 && h < 12) b.morning++;
+      else if (h >= 12 && h < 17) b.afternoon++;
+      else if (h >= 17 && h < 22) b.evening++;
+      else b.night++;
+    });
+    return b;
+  })();
+
+  // Wellness streak — consecutive days with at least one wellness log.
+  // Both current (running back from today) and longest in the data.
+  const wellnessStreak = (() => {
+    if (wellnessLogs.length === 0) return { current: 0, longest: 0 };
+    // Set of YYYY-MM-DD strings for unique wellness days.
+    const days = new Set<string>();
+    wellnessLogs.forEach(l => {
+      days.add(new Date(l.logged_at).toISOString().slice(0, 10));
+    });
+    // Sort ascending so we can scan for consecutive runs.
+    const sorted = Array.from(days).sort();
+    let longest = 0;
+    let run = 1;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1] + "T00:00:00").getTime();
+      const cur = new Date(sorted[i] + "T00:00:00").getTime();
+      if (cur - prev === 86400000) run++;
+      else {
+        if (run > longest) longest = run;
+        run = 1;
+      }
+    }
+    if (run > longest) longest = run;
+    // Current streak: starting from today going backwards.
+    let current = 0;
+    const today = new Date(); today.setHours(0,0,0,0);
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today); d.setDate(today.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      if (days.has(key)) current++;
+      else if (i === 0) {
+        // Today not logged yet — check if yesterday was, that still counts as
+        // an active streak of 0 today but "1 day ago" if yesterday was.
+        // Don't break, just continue to count yesterday-onward.
+        continue;
+      } else break;
+    }
+    return { current, longest };
+  })();
+
+  // Wellness consistency — % of days in the selected range that had at
+  // least one wellness session. Caps at the actual elapsed days for the
+  // current period (so 1M doesn't say "5%" on May 3rd).
+  const wellnessConsistency = (() => {
+    const start = new Date(sinceTs);
+    const today = new Date();
+    const elapsedDays = Math.max(1, Math.floor((today.getTime() - start.getTime()) / 86400000) + 1);
+    const days = new Set<string>();
+    wellnessLogs.forEach(l => {
+      days.add(new Date(l.logged_at).toISOString().slice(0, 10));
+    });
+    return Math.round((days.size / elapsedDays) * 100);
+  })();
+
+  const activeDaysWellness = (() => {
+    const days = new Set<string>();
+    wellnessLogs.forEach(l => {
+      days.add(new Date(l.logged_at).toISOString().slice(0, 10));
+    });
+    return days.size;
+  })();
+
+  // Activity mix radar — top 6 wellness types by session count, used as
+  // input for a recharts RadarChart so the user can see which disciplines
+  // they're heavy on vs neglecting.
+  const wellnessRadar = wellnessByType.slice(0, 6).map(w => ({
+    activity: w.type,
+    sessions: w.count,
+  }));
+
+  const avgSleepHours = 0; // would need wellness_data column
+
+  // Emoji helper for wellness types — falls back to leaf for unknowns.
+  const wellnessEmoji = (raw: string): string => {
+    const s = (raw || "").toLowerCase();
+    if (s.includes("cold") || s.includes("plunge") || s.includes("ice")) return "🧊";
+    if (s.includes("sauna") || s.includes("hot")) return "🔥";
+    if (s.includes("yoga")) return "🧘";
+    if (s.includes("med")) return "🕯️";
+    if (s.includes("stretch") || s.includes("mobility")) return "🤸";
+    if (s.includes("massage")) return "💆";
+    if (s.includes("breath")) return "🌬️";
+    if (s.includes("walk")) return "🚶";
+    if (s.includes("nap") || s.includes("sleep")) return "😴";
+    if (s.includes("foam")) return "🛞";
+    return "🌿";
+  };
 
   if(!user) return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1668,6 +1856,26 @@ export default function StatsPage(){
               </>)}
             </div>
 
+            {/* Inline range pills divider — same global filter as the top
+                pills, placed here for convenient access while reading the
+                nutrition section. */}
+            <div style={{marginTop:12,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:120}}>
+                <div style={{height:1,flex:1,background:C.border}}/>
+                <div style={{fontWeight:900,fontSize:16,color:C.gold}}>🥗 Nutrition</div>
+                <div style={{height:1,flex:1,background:C.border}}/>
+              </div>
+              <div style={{display:"flex",gap:4,flexShrink:0}}>
+                {(["1W","1M","1Y"] as Range[]).map(r=>(
+                  <button key={r} onClick={()=>setRange(r)} style={{
+                    padding:"4px 9px",borderRadius:20,border:`1px solid ${range===r?C.gold:C.border}`,
+                    background:range===r?C.gold:"transparent",
+                    color:range===r?"#fff":C.sub,fontWeight:700,fontSize:10,cursor:"pointer",
+                  }}>{r}</button>
+                ))}
+              </div>
+            </div>
+
             {/* Averages */}
             <SecHead title={`Averages — ${rangeLabel(range)}`}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
@@ -1697,6 +1905,45 @@ export default function StatsPage(){
                       <div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:99}}/>
                     </div>
                     <div style={{fontSize:10,color:C.sub,marginTop:4}}>{hit} of {daysLogged} days</div>
+                  </div>
+                ))}
+              </div>
+            </>)}
+
+            {/* Per-meal-time breakdown — surfaces patterns like "I under-eat
+                protein at breakfast" or "my dinner is half my calories." */}
+            {mealTypeStats.length > 0 && (<>
+              <SecHead title="Meals Breakdown"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginBottom:20}}>
+                {mealTypeStats.map(m=>(
+                  <div key={m.key} style={{background:C.card,borderRadius:14,padding:14,border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:20}}>{m.emoji}</span>
+                        <span style={{fontWeight:800,fontSize:14,color:C.text}}>{m.label}</span>
+                      </div>
+                      <span style={{fontSize:12,fontWeight:700,color:C.gold,background:"rgba(251,191,36,0.12)",padding:"3px 9px",borderRadius:99}}>
+                        {m.count}× logged
+                      </span>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,fontSize:11}}>
+                      <div>
+                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Cal</div>
+                        <div style={{color:C.gold,fontWeight:800,fontSize:13}}>{m.avgCal>0?m.avgCal.toLocaleString():"—"}</div>
+                      </div>
+                      <div>
+                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg P</div>
+                        <div style={{color:C.green,fontWeight:800,fontSize:13}}>{m.avgProt>0?`${m.avgProt}g`:"—"}</div>
+                      </div>
+                      <div>
+                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg C</div>
+                        <div style={{color:C.purple,fontWeight:800,fontSize:13}}>{m.avgCarbs>0?`${m.avgCarbs}g`:"—"}</div>
+                      </div>
+                      <div>
+                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg F</div>
+                        <div style={{color:C.text,fontWeight:800,fontSize:13}}>{m.avgFat>0?`${m.avgFat}g`:"—"}</div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1848,7 +2095,7 @@ export default function StatsPage(){
 
           {/* ═══════════════════════════════════════════════ BODY ══ */}
           {tab==="body"&&(<>
-            {/* Body weight */}
+            {/* ── BODY WEIGHT SECTION ──────────────────────────────────── */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               <BigNum icon="⚖️" label="Current Weight" value={latestWeight?`${latestWeight} lbs`:"—"} sub={wDelta!==null?`${wDelta>=0?"+":""}${wDelta} lbs in ${rangeLabel(range)}`:"no data"} color={wDelta!==null?(wDelta<0?C.green:wDelta>0?C.red:C.text):C.text}/>
               <BigNum icon="🌿" label="Wellness Sessions" value={wellnessLogs.length} sub={rangeLabel(range)} color={C.green}/>
@@ -1883,77 +2130,242 @@ export default function StatsPage(){
               </div>
             )}
 
-            {/* Wellness weekly frequency */}
-            <SecHead title="Wellness Sessions Per Week (12 Weeks)"/>
-            <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-              {wellnessLogs.length>0?(()=>{
-                const now = new Date();
-                const weeks: {label:string; count:number}[] = [];
-                for(let i=11; i>=0; i--) {
-                  const wStart = new Date(now);
-                  wStart.setDate(now.getDate() - now.getDay() - i*7);
-                  wStart.setHours(0,0,0,0);
-                  const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
-                  const count = wellnessLogs.filter((l:any) => {
-                    const dt = new Date(l.logged_at);
-                    return dt >= wStart && dt < wEnd;
-                  }).length;
-                  weeks.push({ label: `${wStart.toLocaleString("default",{month:"short"})} ${wStart.getDate()}`, count });
-                }
-                const maxCount = Math.max(...weeks.map(w=>w.count), 1);
-                return (
-                  <div>
-                    <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80,marginBottom:8}}>
-                      {weeks.map((w,i)=>(
-                        <div key={i} style={{flex:1,display:"flex",flexDirection:"column" as const,alignItems:"center",gap:3}}>
-                          {w.count>0&&(
-                            <div style={{fontSize:9,fontWeight:700,color:i===11?C.green:C.sub}}>{w.count}</div>
-                          )}
-                          <div style={{
-                            width:"100%",
-                            height:`${Math.max(4, Math.round((w.count/maxCount)*64))}px`,
-                            borderRadius:4,
-                            background: w.count===0
-                              ? "rgba(255,255,255,0.06)"
-                              : i===11 ? C.green : `${C.green}99`,
-                          }}/>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.sub}}>
-                      <span>{weeks[0].label}</span>
-                      <span style={{color:C.green,fontWeight:700}}>This week</span>
-                    </div>
-                    <div style={{marginTop:10,display:"flex",gap:16,justifyContent:"center"}}>
-                      <span style={{fontSize:12,color:C.sub}}>
-                        Best week: <strong style={{color:C.text}}>{Math.max(...weeks.map(w=>w.count))} sessions</strong>
-                      </span>
-                      <span style={{fontSize:12,color:C.sub}}>
-                        Avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/week</strong>
-                      </span>
-                    </div>
-                  </div>
-                );
-              })():<div style={{color:C.sub,fontSize:13,textAlign:"center" as const,padding:"20px 0"}}>Log wellness activities to track consistency</div>}
-            </div>
-
-            {/* Activity breakdown */}
-            {wellnessByType.length>0&&(<>
-              <SecHead title="Activity Breakdown"/>
-              <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-                {wellnessByType.map(({type,count})=>(
-                  <div key={type} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                      <span style={{fontSize:13,fontWeight:700}}>{type}</span>
-                      <span style={{fontSize:12,fontWeight:700,color:C.green}}>{count}×</span>
-                    </div>
-                    <ProgBar value={count} max={wellnessByType[0].count} color={C.green}/>
-                  </div>
+            {/* ── 🌿 WELLNESS DEEP DIVE ──────────────────────────────────── */}
+            {/* Section divider with inline 1W/1M/1Y pills, matching the
+                Running and Lifting dividers on the Workout tab. Same global
+                range state, just placed here for accessibility. */}
+            <div style={{marginTop:32,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:120}}>
+                <div style={{height:1,flex:1,background:C.border}}/>
+                <div style={{fontWeight:900,fontSize:16,color:C.green}}>🌿 Wellness</div>
+                <div style={{height:1,flex:1,background:C.border}}/>
+              </div>
+              <div style={{display:"flex",gap:4,flexShrink:0}}>
+                {(["1W","1M","1Y"] as Range[]).map(r=>(
+                  <button key={r} onClick={()=>setRange(r)} style={{
+                    padding:"4px 9px",borderRadius:20,border:`1px solid ${range===r?C.green:C.border}`,
+                    background:range===r?C.green:"transparent",
+                    color:range===r?"#fff":C.sub,fontWeight:700,fontSize:10,cursor:"pointer",
+                  }}>{r}</button>
                 ))}
               </div>
-            </>)}
+            </div>
 
-            {/* Recovery quality */}
+            {wellnessLogs.length === 0 ? (
+              <Empty icon="🌿" text="Log wellness activities (cold plunge, sauna, yoga, meditation) to see trends here"/>
+            ) : (
+              <>
+                {/* Hero stats — Mindful Minutes is the aspirational big number,
+                    plus sessions, active days, and consistency %. */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                  <BigNum icon="🧘" label="Mindful Minutes" value={totalWellnessMins>=60?`${Math.floor(totalWellnessMins/60)}h ${Math.round(totalWellnessMins%60)}m`:`${Math.round(totalWellnessMins)}m`} sub={rangeLabel(range)} color={C.green}/>
+                  <BigNum icon="✨" label="Consistency" value={`${wellnessConsistency}%`} sub={`${activeDaysWellness} active days`} color={wellnessConsistency>=50?C.gold:C.text}/>
+                </div>
+
+                {/* Streak card — flame visual that shows current + best. */}
+                <div style={{background:`linear-gradient(135deg, rgba(34,197,94,0.18), rgba(34,197,94,0.04))`,borderRadius:14,padding:"14px 16px",border:`1px solid ${C.green}55`,marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{fontSize:36,filter:wellnessStreak.current>0?"none":"grayscale(100%)"}}>
+                      🔥
+                    </div>
+                    <div>
+                      <div style={{fontWeight:900,fontSize:22,color:C.text,lineHeight:1}}>
+                        {wellnessStreak.current} {wellnessStreak.current===1?"day":"days"}
+                      </div>
+                      <div style={{fontSize:11,color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginTop:3}}>
+                        Current streak
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right" as const}}>
+                    <div style={{fontWeight:800,fontSize:16,color:C.gold,lineHeight:1}}>
+                      🏆 {wellnessStreak.longest}
+                    </div>
+                    <div style={{fontSize:10,color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginTop:3}}>
+                      Best
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-discipline cards */}
+                {wellnessByType.length>0&&(<>
+                  <SecHead title="Activity Breakdown"/>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginBottom:20}}>
+                    {wellnessByType.map(w=>{
+                      const lastDays = w.lastDate ? Math.floor((Date.now() - new Date(w.lastDate).getTime()) / 86400000) : null;
+                      const lastLabel = lastDays === null ? "—" : lastDays === 0 ? "Today" : lastDays === 1 ? "Yesterday" : `${lastDays}d ago`;
+                      return (
+                        <div key={w.type} style={{background:C.card,borderRadius:14,padding:14,border:`1px solid ${C.border}`}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:20}}>{wellnessEmoji(w.type)}</span>
+                              <span style={{fontWeight:800,fontSize:14,color:C.text}}>{w.type}</span>
+                            </div>
+                            <span style={{fontSize:12,fontWeight:700,color:C.green,background:"rgba(34,197,94,0.12)",padding:"3px 9px",borderRadius:99}}>
+                              {w.count}× sessions
+                            </span>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,fontSize:11}}>
+                            <div>
+                              <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Total Time</div>
+                              <div style={{color:C.text,fontWeight:800,fontSize:13}}>
+                                {w.totalMin >= 60 ? `${(w.totalMin/60).toFixed(1)}h` : `${w.totalMin}m`}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Session</div>
+                              <div style={{color:C.green,fontWeight:800,fontSize:13}}>
+                                {w.avgMin > 0 ? `${w.avgMin}m` : "—"}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Longest</div>
+                              <div style={{color:C.gold,fontWeight:800,fontSize:13}}>
+                                {w.longest > 0 ? `${w.longest}m` : "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{paddingTop:10,marginTop:10,borderTop:`1px solid ${C.border}`,fontSize:11,color:C.sub,display:"flex",justifyContent:"space-between"}}>
+                            <span>Last: <strong style={{color:C.text}}>{lastLabel}</strong></span>
+                            <ProgBar value={w.count} max={wellnessByType[0].count} color={C.green}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>)}
+
+                {/* Day of week + Time of day side by side */}
+                <SecHead title="When You Recover"/>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:10,marginBottom:20}}>
+                  <ChartWrap>
+                    <div style={{fontSize:11,fontWeight:800,color:C.green,padding:"4px 8px 8px",textTransform:"uppercase" as const,letterSpacing:0.8}}>📅 By Day of Week</div>
+                    <ResponsiveContainer width="100%" height={130}>
+                      <BarChart data={freqByDayWellness} margin={{top:4,right:8,left:-16,bottom:0}}>
+                        <XAxis dataKey="day" tick={{fontSize:11,fill:C.sub}}/>
+                        <YAxis tick={{fontSize:10,fill:C.sub}} allowDecimals={false}/>
+                        <Tooltip content={<Tip/>}/>
+                        <Bar dataKey="count" name="Sessions" fill={C.green} radius={[4,4,0,0]}/>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartWrap>
+                  <ChartWrap>
+                    <div style={{fontSize:11,fontWeight:800,color:C.green,padding:"4px 8px 8px",textTransform:"uppercase" as const,letterSpacing:0.8}}>🕐 By Time of Day</div>
+                    <div style={{padding:"4px 12px 14px"}}>
+                      {[
+                        {label:"🌅 Morning",sub:"5am–12pm",val:timeOfDayBuckets.morning},
+                        {label:"☀️ Afternoon",sub:"12pm–5pm",val:timeOfDayBuckets.afternoon},
+                        {label:"🌆 Evening",sub:"5pm–10pm",val:timeOfDayBuckets.evening},
+                        {label:"🌙 Night",sub:"10pm–5am",val:timeOfDayBuckets.night},
+                      ].map(b=>{
+                        const max = Math.max(timeOfDayBuckets.morning,timeOfDayBuckets.afternoon,timeOfDayBuckets.evening,timeOfDayBuckets.night,1);
+                        return (
+                          <div key={b.label} style={{marginBottom:10}}>
+                            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+                              <span style={{color:C.text,fontWeight:700}}>{b.label}</span>
+                              <span style={{color:C.sub}}>{b.val}× <span style={{opacity:0.7}}>· {b.sub}</span></span>
+                            </div>
+                            <ProgBar value={b.val} max={max} color={C.green}/>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ChartWrap>
+                </div>
+
+                {/* Activity mix radar */}
+                {wellnessRadar.length >= 3 && (
+                  <>
+                    <SecHead title="Activity Mix"/>
+                    <ChartWrap>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <RadarChart data={wellnessRadar} margin={{top:10,right:30,left:30,bottom:10}}>
+                          <PolarGrid stroke={C.border}/>
+                          <PolarAngleAxis dataKey="activity" tick={{fontSize:11,fill:C.subLight}}/>
+                          <Radar dataKey="sessions" stroke={C.green} fill={C.green} fillOpacity={0.25} strokeWidth={2.5} dot={{fill:C.green,r:3}}/>
+                        </RadarChart>
+                      </ResponsiveContainer>
+                      <div style={{fontSize:11,color:C.sub,textAlign:"center" as const,marginTop:6}}>Bigger = more sessions of that activity</div>
+                    </ChartWrap>
+                  </>
+                )}
+
+                {/* Wellness weekly frequency — kept the existing rolling-12-week
+                    bar chart since it shows long-term consistency well. */}
+                <SecHead title="Wellness Sessions Per Week (12 Weeks)"/>
+                <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
+                  {(()=>{
+                    const now = new Date();
+                    const weeks: {label:string; count:number}[] = [];
+                    for(let i=11; i>=0; i--) {
+                      const wStart = new Date(now);
+                      wStart.setDate(now.getDate() - now.getDay() - i*7);
+                      wStart.setHours(0,0,0,0);
+                      const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+                      const count = wellnessLogsAll.filter((l:any) => {
+                        const dt = new Date(l.logged_at);
+                        return dt >= wStart && dt < wEnd;
+                      }).length;
+                      weeks.push({ label: `${wStart.toLocaleString("default",{month:"short"})} ${wStart.getDate()}`, count });
+                    }
+                    const maxCount = Math.max(...weeks.map(w=>w.count), 1);
+                    return (
+                      <div>
+                        <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80,marginBottom:8}}>
+                          {weeks.map((w,i)=>(
+                            <div key={i} style={{flex:1,display:"flex",flexDirection:"column" as const,alignItems:"center",gap:3}}>
+                              {w.count>0&&(
+                                <div style={{fontSize:9,fontWeight:700,color:i===11?C.green:C.sub}}>{w.count}</div>
+                              )}
+                              <div style={{
+                                width:"100%",
+                                height:`${Math.max(4, Math.round((w.count/maxCount)*64))}px`,
+                                borderRadius:4,
+                                background: w.count===0
+                                  ? "rgba(255,255,255,0.06)"
+                                  : i===11 ? C.green : `${C.green}99`,
+                              }}/>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.sub}}>
+                          <span>{weeks[0].label}</span>
+                          <span style={{color:C.green,fontWeight:700}}>This week</span>
+                        </div>
+                        <div style={{marginTop:10,display:"flex",gap:16,justifyContent:"center"}}>
+                          <span style={{fontSize:12,color:C.sub}}>
+                            Best week: <strong style={{color:C.text}}>{Math.max(...weeks.map(w=>w.count))} sessions</strong>
+                          </span>
+                          <span style={{fontSize:12,color:C.sub}}>
+                            Avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/week</strong>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Recent wellness logs */}
+                <SecHead title="Recent Wellness Logs"/>
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+                  {[...wellnessLogs].reverse().slice(0,8).map((l:any,i:number)=>(
+                    <div key={i} style={{background:C.card,borderRadius:12,padding:"11px 14px",border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.wellness_type||"Wellness"}</div>
+                        <div style={{fontSize:11,color:C.sub,marginTop:2}}>
+                          {fmtDay(l.logged_at)}
+                          {l.wellness_duration_min&&` · ${l.wellness_duration_min} min`}
+                        </div>
+                      </div>
+                      <div style={{fontSize:20}}>{wellnessEmoji(l.wellness_type||"")}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Body Score — kept at the bottom since it spans wellness +
+                workout + nutrition signals. */}
             <SecHead title="Body Score"/>
             <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
               {[
@@ -1971,25 +2383,6 @@ export default function StatsPage(){
               ))}
               <div style={{fontSize:12,color:C.sub,marginTop:4,textAlign:"center"}}>Based on your logged data in {rangeLabel(range)}</div>
             </div>
-
-            {/* Recent wellness logs */}
-            {wellnessLogs.length>0&&(<>
-              <SecHead title="Recent Wellness Logs"/>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {[...wellnessLogs].reverse().slice(0,8).map((l:any,i:number)=>(
-                  <div key={i} style={{background:C.card,borderRadius:12,padding:"11px 14px",border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.wellness_type||"Wellness"}</div>
-                      <div style={{fontSize:11,color:C.sub,marginTop:2}}>
-                        {fmtDay(l.logged_at)}
-                        {l.wellness_duration_min&&` · ${l.wellness_duration_min} min`}
-                      </div>
-                    </div>
-                    <div style={{fontSize:20}}>🌿</div>
-                  </div>
-                ))}
-              </div>
-            </>)}
           </>)}
 
         </>)}
