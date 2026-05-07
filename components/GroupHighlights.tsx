@@ -65,12 +65,20 @@ const C = {
 const MAX_SLOTS = 27;
 
 // Detect whether a URL points at a video. Most uploads land in supabase
-// storage with predictable extensions. Falls back to photo so we never
-// silently break a known-good image.
+// storage with predictable extensions, but the path may contain a hash
+// or live under a /videos/ folder without an extension at all. We accept:
+//   - explicit video extensions (mp4/mov/webm/m4v/hevc)
+//   - any path segment containing /video or /videos
+//   - any URL with `kind=video` or `type=video` query string
+// Falls back to photo so we never silently break a known-good image.
 export function isVideoUrl(url: string): boolean {
   if (!url) return false;
-  const u = url.toLowerCase().split("?")[0];
-  return /\.(mp4|mov|webm|m4v|hevc)$/.test(u);
+  const lower = url.toLowerCase();
+  const path = lower.split("?")[0];
+  if (/\.(mp4|mov|webm|m4v|hevc)(\b|$)/.test(path)) return true;
+  if (/\/videos?\//.test(path)) return true;
+  if (/[?&](kind|type)=video/.test(lower)) return true;
+  return false;
 }
 
 export type GroupHighlightsProps = {
@@ -119,10 +127,17 @@ export default function GroupHighlights({
       });
       const data = await res.json();
       if (Array.isArray(data.photos)) {
-        // Backend doesn't tag kind explicitly; we infer from URL.
+        // Determine kind. Prefer the API's `media_type` field (which comes
+        // from the source row's media_type column) over URL extension
+        // sniffing — supabase storage URLs don't always include an
+        // extension, so URL-only detection misses uploads. Fall back to
+        // URL extension when media_type is null (legacy rows pre-date
+        // the column).
         const tagged: GroupPhoto[] = data.photos.map((p: any) => ({
           ...p,
-          kind: isVideoUrl(p.url) ? "video" : "photo",
+          kind: p.media_type === 'video' || (p.media_type == null && isVideoUrl(p.url))
+            ? 'video'
+            : 'photo',
         }));
         setAllMedia(tagged);
         setPhotosLoaded(true);
