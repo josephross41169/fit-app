@@ -532,9 +532,24 @@ export default function StatsPage(){
     if(!user) return;
     setSavingGoals(true);
     try{
-      await supabase.from("users").update({nutrition_goals:editGoals}).eq("id",user.id);
-      setGoals(editGoals); setShowGoalEditor(false);
-    }catch(e){console.error(e);}
+      // Capture error response — previously this swallowed failures so a
+      // user with bad data or an RLS issue would think their save worked
+      // when nothing was actually written. Now we surface the error.
+      const { error } = await supabase
+        .from("users")
+        .update({ nutrition_goals: editGoals })
+        .eq("id", user.id);
+      if (error) {
+        alert("Couldn't save goals: " + error.message);
+        setSavingGoals(false);
+        return;
+      }
+      setGoals(editGoals);
+      setShowGoalEditor(false);
+    }catch(e:any){
+      console.error(e);
+      alert("Couldn't save goals: " + (e?.message || "unknown error"));
+    }
     setSavingGoals(false);
   }
 
@@ -870,7 +885,10 @@ export default function StatsPage(){
         avgFat: b.count > 0 ? Math.round(b.totalFat / b.count) : 0,
         totalCal: Math.round(b.totalCal),
       };
-    }).filter(m => m.count > 0);
+    });
+    // ^ no .filter — show all 4 meal types so empty ones surface as
+    // visible "0× logged" cards. Helps users spot which meals they're
+    // not tracking yet.
   })();
 
   // PRs grouped by muscle group
@@ -1049,8 +1067,8 @@ export default function StatsPage(){
     {key:"today",icon:"☀️",label:"Today"},
     {key:"workout",icon:"💪",label:"Workout"},
     {key:"nutrition",icon:"🥗",label:"Nutrition"},
-    {key:"prs",icon:"🏆",label:"PRs"},
     {key:"body",icon:"⚖️",label:"Body"},
+    {key:"prs",icon:"🏆",label:"PRs"},
   ];
 
   return(
@@ -1831,7 +1849,7 @@ export default function StatsPage(){
             <div style={{background:C.card,borderRadius:16,padding:16,border:`1px solid ${showGoalEditor?C.purple:C.border}`,marginBottom:20}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showGoalEditor?16:0}}>
                 <div>
-                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>⚙️ Daily Nutrition Goals</div>
+                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>⚙️ Monthly Nutrition Goals</div>
                   {!showGoalEditor&&goals&&<div style={{fontSize:12,color:C.sub,marginTop:3}}>{goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat</div>}
                   {!showGoalEditor&&!goals&&<div style={{fontSize:12,color:C.red,marginTop:3}}>No goals set — tap Edit to add targets</div>}
                 </div>
@@ -1915,37 +1933,54 @@ export default function StatsPage(){
             {mealTypeStats.length > 0 && (<>
               <SecHead title="Meals Breakdown"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginBottom:20}}>
-                {mealTypeStats.map(m=>(
-                  <div key={m.key} style={{background:C.card,borderRadius:14,padding:14,border:`1px solid ${C.border}`}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:20}}>{m.emoji}</span>
-                        <span style={{fontWeight:800,fontSize:14,color:C.text}}>{m.label}</span>
+                {mealTypeStats.map(m=>{
+                  const empty = m.count === 0;
+                  return (
+                    <div key={m.key} style={{
+                      background:C.card,
+                      borderRadius:14,
+                      padding:14,
+                      border:`1px solid ${C.border}`,
+                      opacity: empty ? 0.55 : 1,
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:empty?0:10}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:20,filter:empty?"grayscale(100%)":"none"}}>{m.emoji}</span>
+                          <span style={{fontWeight:800,fontSize:14,color:C.text}}>{m.label}</span>
+                        </div>
+                        <span style={{
+                          fontSize:12,fontWeight:700,
+                          color: empty ? C.sub : C.gold,
+                          background: empty ? "transparent" : "rgba(251,191,36,0.12)",
+                          padding:"3px 9px",borderRadius:99,
+                          border: empty ? `1px dashed ${C.border}` : "none",
+                        }}>
+                          {empty ? "Not tracked yet" : `${m.count}× logged`}
+                        </span>
                       </div>
-                      <span style={{fontSize:12,fontWeight:700,color:C.gold,background:"rgba(251,191,36,0.12)",padding:"3px 9px",borderRadius:99}}>
-                        {m.count}× logged
-                      </span>
+                      {!empty && (
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,fontSize:11}}>
+                          <div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Cal</div>
+                            <div style={{color:C.gold,fontWeight:800,fontSize:13}}>{m.avgCal>0?m.avgCal.toLocaleString():"—"}</div>
+                          </div>
+                          <div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg P</div>
+                            <div style={{color:C.green,fontWeight:800,fontSize:13}}>{m.avgProt>0?`${m.avgProt}g`:"—"}</div>
+                          </div>
+                          <div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg C</div>
+                            <div style={{color:C.purple,fontWeight:800,fontSize:13}}>{m.avgCarbs>0?`${m.avgCarbs}g`:"—"}</div>
+                          </div>
+                          <div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg F</div>
+                            <div style={{color:C.text,fontWeight:800,fontSize:13}}>{m.avgFat>0?`${m.avgFat}g`:"—"}</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,fontSize:11}}>
-                      <div>
-                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Cal</div>
-                        <div style={{color:C.gold,fontWeight:800,fontSize:13}}>{m.avgCal>0?m.avgCal.toLocaleString():"—"}</div>
-                      </div>
-                      <div>
-                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg P</div>
-                        <div style={{color:C.green,fontWeight:800,fontSize:13}}>{m.avgProt>0?`${m.avgProt}g`:"—"}</div>
-                      </div>
-                      <div>
-                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg C</div>
-                        <div style={{color:C.purple,fontWeight:800,fontSize:13}}>{m.avgCarbs>0?`${m.avgCarbs}g`:"—"}</div>
-                      </div>
-                      <div>
-                        <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg F</div>
-                        <div style={{color:C.text,fontWeight:800,fontSize:13}}>{m.avgFat>0?`${m.avgFat}g`:"—"}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>)}
 
