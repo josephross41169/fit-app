@@ -1280,10 +1280,25 @@ export default function StatsPage(){
 
             {/* ── 🏃 RUNNING DEEP DIVE ─────────────────────────────────────────── */}
             {runStats.sessions>0&&(<>
-              <div style={{marginTop:32,marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
-                <div style={{height:1,flex:1,background:C.border}}/>
-                <div style={{fontWeight:900,fontSize:16,color:C.cyan}}>🏃 Running</div>
-                <div style={{height:1,flex:1,background:C.border}}/>
+              <div style={{marginTop:32,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:120}}>
+                  <div style={{height:1,flex:1,background:C.border}}/>
+                  <div style={{fontWeight:900,fontSize:16,color:C.cyan}}>🏃 Running</div>
+                  <div style={{height:1,flex:1,background:C.border}}/>
+                </div>
+                {/* Inline range pills — same global filter as the top-right
+                    pills but placed here for easy access while reading the
+                    Running section. Updates the same `range` state, so any
+                    pill on the page stays in sync. */}
+                <div style={{display:"flex",gap:4,flexShrink:0}}>
+                  {(["1W","1M","1Y"] as Range[]).map(r=>(
+                    <button key={r} onClick={()=>setRange(r)} style={{
+                      padding:"4px 9px",borderRadius:20,border:`1px solid ${range===r?C.cyan:C.border}`,
+                      background:range===r?C.cyan:"transparent",
+                      color:range===r?"#fff":C.sub,fontWeight:700,fontSize:10,cursor:"pointer",
+                    }}>{r}</button>
+                  ))}
+                </div>
               </div>
 
               {/* Key run stats */}
@@ -1320,10 +1335,21 @@ export default function StatsPage(){
 
             {/* ── 🏋️ LIFTING DEEP DIVE ─────────────────────────────────────────── */}
             {liftStats.sessions>0&&(<>
-              <div style={{marginTop:32,marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
-                <div style={{height:1,flex:1,background:C.border}}/>
-                <div style={{fontWeight:900,fontSize:16,color:C.purple}}>🏋️ Lifting</div>
-                <div style={{height:1,flex:1,background:C.border}}/>
+              <div style={{marginTop:32,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:120}}>
+                  <div style={{height:1,flex:1,background:C.border}}/>
+                  <div style={{fontWeight:900,fontSize:16,color:C.purple}}>🏋️ Lifting</div>
+                  <div style={{height:1,flex:1,background:C.border}}/>
+                </div>
+                <div style={{display:"flex",gap:4,flexShrink:0}}>
+                  {(["1W","1M","1Y"] as Range[]).map(r=>(
+                    <button key={r} onClick={()=>setRange(r)} style={{
+                      padding:"4px 9px",borderRadius:20,border:`1px solid ${range===r?C.purple:C.border}`,
+                      background:range===r?C.purple:"transparent",
+                      color:range===r?"#fff":C.sub,fontWeight:700,fontSize:10,cursor:"pointer",
+                    }}>{r}</button>
+                  ))}
+                </div>
               </div>
 
               {/* Key lift stats */}
