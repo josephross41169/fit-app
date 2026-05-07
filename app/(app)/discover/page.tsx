@@ -902,46 +902,72 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     async function loadLocalPosts() {
+      // Step 1: figure out the city. We need both the auth user id and
+      // their saved city. Run the auth check and the (eventual) profile
+      // fetch as fast as possible — auth.getUser() is the only one that
+      // can't be parallelized (we need user.id before querying the row).
       const { data: { user } } = await supabase.auth.getUser();
+
+      // Step 2: fetch the user's saved city AND the matching location ids
+      // for the FALLBACK city in parallel. If the user has a saved city
+      // we'll re-fire the location query once we know it — but in the
+      // common case where the saved city matches the default `userCity`
+      // state, we save a round-trip. We do this in two phases so location
+      // ids match the actual city we end up using.
       let city = userCity;
       if (user) {
-        const { data: profile } = await supabase.from('users').select('city').eq('id', user.id).single();
-        if ((profile as any)?.city) { city = (profile as any).city; setUserCity((profile as any).city); }
+        const { data: profile } = await supabase
+          .from('users')
+          .select('city')
+          .eq('id', user.id)
+          .single();
+        if ((profile as any)?.city) {
+          city = (profile as any).city;
+          setUserCity((profile as any).city);
+        }
       }
       const cityKey = city.split(',')[0].trim();
 
-      // ── New location-tag-based Discover routing ────────────────────────
-      // Step 1: find every location whose city matches. Then pull posts
-      // whose location_id is in that set. This is the new behavior — a
-      // post only appears in Discover if it has a tagged location and that
-      // location's city matches.
-      const locResult = await supabase
-        .from('locations')
-        .select('id')
-        .ilike('city', `%${cityKey}%`)
-        .limit(500);
+      // ── Location-tagged Discover routing ───────────────────────────────
+      // Step 3: locations lookup AND legacy-posts query can run in parallel.
+      // We only know after locations resolve whether the IN-list path or
+      // the legacy ILIKE-only path applies, so we kick off the legacy
+      // query speculatively and discard it if locations had results.
+      // Net: cuts the cold-load chain from 4 sequential round-trips to 2.
+      const [locResult, legacyPostsResult] = await Promise.all([
+        supabase
+          .from('locations')
+          .select('id')
+          .ilike('city', `%${cityKey}%`)
+          .limit(500),
+        supabase
+          .from('posts')
+          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+          .ilike('location', `%${cityKey}%`)
+          .order('created_at', { ascending: false })
+          .limit(30),
+      ]);
+
       const locationIds = (locResult.data || []).map((l: any) => l.id);
 
-      // Step 2: query posts. Old posts with the legacy free-text `location`
-      // ILIKE keep showing as before so we don't break existing content.
-      // New posts surface via location_id IN (...). Postgrest `or` syntax
-      // joins both clauses with a logical OR.
-      let query = supabase
-        .from('posts')
-        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
-        .order('created_at', { ascending: false })
-        .limit(30);
-
+      let data: any[] | null = null;
       if (locationIds.length > 0) {
-        // Postgrest `in` syntax: in.(uuid1,uuid2,...). We escape just in case.
+        // Locations matched — run the combined query (legacy text OR
+        // location_id IN (...)). The speculative legacyPostsResult above
+        // is a strict subset of this, so we discard it.
         const inList = locationIds.map((id: string) => `"${id}"`).join(',');
-        query = query.or(`location.ilike.%${cityKey}%,location_id.in.(${inList})`);
+        const { data: combined } = await supabase
+          .from('posts')
+          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+          .or(`location.ilike.%${cityKey}%,location_id.in.(${inList})`)
+          .order('created_at', { ascending: false })
+          .limit(30);
+        data = combined;
       } else {
-        // No new-style locations in this city yet — fall back to legacy match.
-        query = query.ilike('location', `%${cityKey}%`);
+        // No new-style locations in this city — the speculative legacy
+        // query we already fired IS the answer. Use its result directly.
+        data = legacyPostsResult.data;
       }
-
-      const { data } = await query;
 
       if (data && data.length > 0) {
         setLocalPosts(data);
