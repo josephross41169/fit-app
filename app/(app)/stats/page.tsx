@@ -1999,7 +1999,24 @@ export default function StatsPage(){
                   ] as {label:string;key:keyof NutritionGoals}[]).map(({label,key})=>(
                     <div key={key}>
                       <div style={{fontSize:11,color:C.sub,marginBottom:5,fontWeight:600}}>{label}</div>
-                      <input type="number" value={editGoals[key]} onChange={e=>setEditGoals(g=>({...g,[key]:Number(e.target.value)}))} style={{width:"100%",background:C.bg,border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"8px 10px",fontSize:15,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={editGoals[key] === 0 ? "" : editGoals[key]}
+                        onChange={e=>{
+                          // Allow empty input by storing an empty string visually.
+                          // Previously this used Number(e.target.value) which turns
+                          // "" into 0, making it impossible to clear the field
+                          // before typing a new number — backspacing would leave
+                          // a stuck "0" that you'd have to manually delete.
+                          // We accept digits only and store the parsed integer
+                          // (or 0 if empty) so save still works correctly.
+                          const v = e.target.value.replace(/[^0-9.]/g, "");
+                          setEditGoals(g => ({ ...g, [key]: v === "" ? 0 : Number(v) }));
+                        }}
+                        onFocus={e=>e.target.select()}
+                        style={{width:"100%",background:C.bg,border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"8px 10px",fontSize:15,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}
+                      />
                     </div>
                   ))}
                 </div>
