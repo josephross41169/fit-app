@@ -867,22 +867,63 @@ export default function StatsPage(){
   })();
 
   // Recent meal photos — pull most recent N nutrition logs that have a photo.
-  // food_items is a free-text array; show first item as the caption when
-  // present, fall back to meal_type otherwise.
+  // photo_url can be one of:
+  //   - a plain URL string (legacy single-photo logs)
+  //   - a JSON-stringified object like {"breakfast":"url","lunch":"url"} when
+  //     the user attached different photos per meal in a single log.
+  // We try JSON.parse first; if it succeeds, pick the URL matching the log's
+  // meal_type (or the first URL as fallback). Otherwise treat as a plain URL.
+  // food_items is an array of objects {name, calories, ...} — use .name for
+  // the caption, NOT the whole object.
   const recentMealPhotos = (() => {
-    return [...nutritionLogs]
+    const sorted = [...nutritionLogs]
       .filter(l => l.photo_url)
-      .sort((a,b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime())
-      .slice(0, 9)
-      .map(l => ({
-        url: l.photo_url as string,
+      .sort((a,b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
+
+    const out: { url: string; date: string; meal: string; firstItem: string | null; cal: number }[] = [];
+
+    for (const l of sorted) {
+      const mealKey = (l.meal_type || "").toLowerCase();
+      let resolvedUrl: string | null = null;
+      const raw = l.photo_url as string;
+
+      // Try parsing as JSON first
+      if (raw.trim().startsWith("{")) {
+        try {
+          const obj = JSON.parse(raw);
+          // Match by meal type, or fall back to first key
+          if (obj && typeof obj === "object") {
+            resolvedUrl = obj[mealKey] || obj[Object.keys(obj)[0]] || null;
+          }
+        } catch {
+          // fall through — treat as plain URL
+        }
+      }
+      if (!resolvedUrl && (raw.startsWith("http") || raw.startsWith("/"))) {
+        resolvedUrl = raw;
+      }
+      if (!resolvedUrl) continue;
+
+      // Extract food item name safely. food_items is an array of objects
+      // — accessing it as a string yields "[object Object]" so we have to
+      // pull the .name field explicitly.
+      let firstItem: string | null = null;
+      if (Array.isArray(l.food_items) && l.food_items.length > 0) {
+        const first = l.food_items[0];
+        if (typeof first === "string") firstItem = first;
+        else if (first && typeof first === "object" && "name" in first) firstItem = String((first as any).name);
+      }
+
+      out.push({
+        url: resolvedUrl,
         date: l.logged_at,
         meal: (l.meal_type || "meal").charAt(0).toUpperCase() + (l.meal_type || "meal").slice(1),
-        firstItem: Array.isArray(l.food_items) && l.food_items.length > 0
-          ? String(l.food_items[0])
-          : null,
+        firstItem,
         cal: l.calories_total || 0,
-      }));
+      });
+      if (out.length >= 9) break;
+    }
+    return out;
   })();
 
   const dailyNutrition=nutritionLogs.map(l=>({
@@ -2093,19 +2134,19 @@ export default function StatsPage(){
                       {!empty && (
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,fontSize:11}}>
                           <div>
-                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Cal</div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Calories</div>
                             <div style={{color:C.gold,fontWeight:800,fontSize:13}}>{m.avgCal>0?m.avgCal.toLocaleString():"—"}</div>
                           </div>
                           <div>
-                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg P</div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Protein</div>
                             <div style={{color:C.green,fontWeight:800,fontSize:13}}>{m.avgProt>0?`${m.avgProt}g`:"—"}</div>
                           </div>
                           <div>
-                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg C</div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Carbs</div>
                             <div style={{color:C.purple,fontWeight:800,fontSize:13}}>{m.avgCarbs>0?`${m.avgCarbs}g`:"—"}</div>
                           </div>
                           <div>
-                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg F</div>
+                            <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Fat</div>
                             <div style={{color:C.text,fontWeight:800,fontSize:13}}>{m.avgFat>0?`${m.avgFat}g`:"—"}</div>
                           </div>
                         </div>
