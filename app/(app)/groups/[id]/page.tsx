@@ -9,6 +9,7 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast } from "@/lib/share";
+import GroupHighlights from "@/components/GroupHighlights";
 
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
@@ -558,6 +559,10 @@ export default function GroupPage() {
   // True when the current user has role='moderator' in this group.
   // Mirrors isOwnerDB pattern. Used everywhere isOwnerOrMod is checked.
   const [isModDB, setIsModDB] = useState(false);
+  // Local mirror of the group's highlights array. Initialized from
+  // dbGroup.highlights once the group loads, then optimistically updated
+  // when the owner/mod saves new highlights via GroupHighlights.
+  const [groupHighlights, setGroupHighlights] = useState<string[]>([]);
   const [joinedChallengeIdsDB, setJoinedChallengeIdsDB] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -689,6 +694,10 @@ export default function GroupPage() {
       if (data.group) {
         setDbGroup(data.group);
         setDbPosts(data.posts || []);
+        // Hydrate highlights array. Newer schemas have a `highlights` jsonb
+        // column on groups; older ones don't, so we treat missing as empty.
+        const rawHighlights = (data.group as any).highlights;
+        setGroupHighlights(Array.isArray(rawHighlights) ? rawHighlights : []);
 
         // Old group_events from API + new events from public.events table.
         // Both are merged so legacy events keep displaying alongside new ones.
@@ -2396,6 +2405,24 @@ export default function GroupPage() {
               </div>
             )}
           </div>
+
+          {/* Group highlights — 27-slot photo grid curated by owners/mods.
+              Photos are pulled from the group's posts, notes, and war
+              media via the group-photos API. Members see read-only.
+              Hidden until we know who's logged in (avoid a flash of
+              empty state for unauthenticated viewers). */}
+          {dbGroup?.id && (
+            <div style={{ marginBottom: 20 }}>
+              <GroupHighlights
+                groupId={dbGroup.id}
+                groupName={group.name}
+                highlights={groupHighlights}
+                role={isOwnerDB ? "owner" : isModDB ? "moderator" : "member"}
+                currentUserId={currentUser?.id || null}
+                onSaved={(urls) => setGroupHighlights(urls)}
+              />
+            </div>
+          )}
 
           {/* Tabs — two-tier. Parent sections collapse the previous flat
               7-tab strip into 3 manageable groups. Sub-tabs render
