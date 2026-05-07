@@ -28,6 +28,12 @@ const admin = createClient(supabaseUrl, supabaseServiceKey, {
 // (e.g. challenge name for war photos).
 type GroupPhoto = {
   url: string;
+  // Explicit kind hint from the source row's media_type column. We pass
+  // this through so the client doesn't have to guess from URL extension
+  // (which can be unreliable for supabase storage URLs that don't always
+  // include an extension). Falls back to undefined for legacy rows that
+  // pre-date the media_type column.
+  media_type?: 'photo' | 'video' | null;
   source: 'post' | 'note' | 'war';
   source_id: string;       // id of the parent row (post id, note id, or media id)
   user_id: string;         // who uploaded it
@@ -85,17 +91,16 @@ export async function POST(req: NextRequest) {
           .limit(500),
       ]);
 
-      // Merge into one array. We treat anything where media_type is
-      // 'photo' OR null/undefined as a photo. Some legacy posts pre-date
-      // the media_type column so we accept null. Videos (media_type ===
-      // 'video') are excluded.
+      // Merge into one array. We accept both photos AND videos so the
+      // group highlights picker can include either. The UI uses URL
+      // extension to render the correct preview (img vs video tag).
       const photos: GroupPhoto[] = [];
 
       for (const row of (postsRes.data || [])) {
-        if (row.media_type === 'video') continue;
         const u: any = row.user;
         photos.push({
           url: row.media_url as string,
+          media_type: (row.media_type as any) || null,
           source: 'post',
           source_id: row.id,
           user_id: row.user_id,
@@ -107,10 +112,10 @@ export async function POST(req: NextRequest) {
       }
 
       for (const row of (notesRes.data || [])) {
-        if (row.media_type === 'video') continue;
         const u: any = row.user;
         photos.push({
           url: row.media_url as string,
+          media_type: (row.media_type as any) || null,
           source: 'note',
           source_id: row.id,
           user_id: row.user_id,
@@ -123,11 +128,11 @@ export async function POST(req: NextRequest) {
       }
 
       for (const row of (warRes.data || [])) {
-        if (row.media_type === 'video') continue;
         const u: any = row.user;
         const c: any = row.challenge;
         photos.push({
           url: row.media_url as string,
+          media_type: (row.media_type as any) || null,
           source: 'war',
           source_id: row.id,
           user_id: row.user_id,
