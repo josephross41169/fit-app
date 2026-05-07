@@ -911,6 +911,11 @@ export default function PostPage() {
     }
     const base = { user_id: user.id, is_public: !isPrivate, logged_at: loggedAtIso };
     let error: any = null;
+    // Track the IDs of every log we successfully insert so we can fire
+    // `update_goals_from_log` for each after save. Without this, a workout
+    // logged from /post would never bump the user's "Run 15 miles" type
+    // goal — only goals updated via profile-page edits would tick.
+    const savedLogIds: string[] = [];
 
     try {
       if (logTab === 'workout') {
@@ -1023,13 +1028,14 @@ export default function PostPage() {
         const taggedIds = workoutTaggedUsers.map(u => u.id);
         const insertWorkoutRow: any = { ...base, log_type: 'workout', ...workoutPayload };
         if (taggedIds.length > 0) insertWorkoutRow.tagged_user_ids = taggedIds;
-        let res = await supabase.from('activity_logs').insert(insertWorkoutRow);
+        let res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
         // Graceful fallback if the migration hasn't been run yet
         if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
           delete insertWorkoutRow.tagged_user_ids;
-          res = await supabase.from('activity_logs').insert(insertWorkoutRow);
+          res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
         }
         error = res.error;
+        if (!error && res.data?.id) savedLogIds.push(res.data.id);
       } else if (logTab === 'nutrition') {
         // Upload per-meal photos
         const uploadedMealPhotos: Record<string, string> = {};
@@ -1069,8 +1075,9 @@ export default function PostPage() {
           water_oz: water ? parseFloat(water) : null,
           notes: nutNotes || null,
           photo_url: photoUrlToStore,
-        });
+        }).select('id').single();
         error = res.error;
+        if (!error && res.data?.id) savedLogIds.push(res.data.id);
       } else if (logTab === 'wellness') {
         // ── Multi-activity wellness save ─────────────────────────────────
         // Each entry in `wellnessActivities` becomes its own activity_logs
@@ -1142,8 +1149,13 @@ export default function PostPage() {
           return row;
         });
 
-        const res = await supabase.from('activity_logs').insert(rows);
+        const res = await supabase.from('activity_logs').insert(rows).select('id');
         error = res.error;
+        if (!error && Array.isArray(res.data)) {
+          for (const row of res.data) {
+            if (row?.id) savedLogIds.push(row.id);
+          }
+        }
       }
     } catch (e: any) {
       error = { message: e?.message || "Network error. Check your connection and try again." };
@@ -1201,6 +1213,27 @@ export default function PostPage() {
       // set (e.g. "workouts" or "miles_run"). Manual challenges with no
       // metric_key are untouched. Best-effort.
       try { await syncMemberChallengeProgressFor(user.id); } catch {}
+
+      // -- Sync PERSONAL goals (Running miles, Workouts/week, etc.) ---------
+      // Hits /api/db?action=update_goals_from_log for each row we just
+      // inserted. The handler recomputes each active goal from full history
+      // so it's safe to call repeatedly. Without this, posts from /post
+      // never bumped goals — only edits made via the profile day card did.
+      // Fired in parallel since they're all independent recomputes.
+      if (savedLogIds.length > 0) {
+        try {
+          await Promise.all(savedLogIds.map(logId =>
+            fetch('/api/db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'update_goals_from_log',
+                payload: { userId: user.id, logId },
+              }),
+            }).catch(() => {})
+          ));
+        } catch {}
+      }
 
       // -- Notify tagged workout partners ----------------------------------
       // Workout tags only fire when this is a workout log AND there are tagged
