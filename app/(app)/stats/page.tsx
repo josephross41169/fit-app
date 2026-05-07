@@ -419,7 +419,7 @@ export default function StatsPage(){
         // hook). Way faster than re-fetching whenever the user toggles
         // 1W/1M/1Y.
         supabase.from("activity_logs")
-          .select("id,log_type,logged_at,workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes,meal_type")
+          .select("id,log_type,logged_at,workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes,meal_type,photo_url,food_items")
           .eq("user_id",user.id).gte("logged_at",yearStart)
           .order("logged_at",{ascending:true}),
         supabase.from("personal_records")
@@ -811,23 +811,90 @@ export default function StatsPage(){
   });
 
   // Nutrition
+  // The user-set goals in `nutrition_goals` are now treated as MONTHLY
+  // targets (per Joey's decision — easier to set realistic monthly numbers
+  // than to nail daily ones). Daily targets are derived as monthly/30 for
+  // any per-day comparison (consistency check, "set a goal" subtitles).
+  const dailyGoal = goals ? {
+    calories: Math.round(goals.calories / 30),
+    protein:  Math.round(goals.protein  / 30),
+    carbs:    Math.round(goals.carbs    / 30),
+    fat:      Math.round(goals.fat      / 30),
+    water_oz: Math.round(goals.water_oz / 30),
+  } : null;
+
   const daysLogged=nutritionLogs.length;
   const avgCal=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.calories_total||0),0)/daysLogged):0;
   const avgProt=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.protein_g||0),0)/daysLogged):0;
   const avgCarbs=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.carbs_g||0),0)/daysLogged):0;
   const avgFat=daysLogged>0?Math.round(nutritionLogs.reduce((s,l)=>s+(l.fat_g||0),0)/daysLogged):0;
-  const proteinHit=goals?nutritionLogs.filter(l=>(l.protein_g||0)>=goals.protein).length:0;
-  const calorieHit=goals?nutritionLogs.filter(l=>Math.abs((l.calories_total||0)-goals.calories)<=goals.calories*0.1).length:0;
+  // Hits are now compared to the daily-equivalent goal (monthly/30) so the
+  // consistency % means "what fraction of logged days hit the equivalent
+  // daily share of the monthly goal."
+  const proteinHit=dailyGoal?nutritionLogs.filter(l=>(l.protein_g||0)>=dailyGoal.protein).length:0;
+  const calorieHit=dailyGoal?nutritionLogs.filter(l=>Math.abs((l.calories_total||0)-dailyGoal.calories)<=dailyGoal.calories*0.1).length:0;
   const proteinPct=daysLogged>0?Math.round((proteinHit/daysLogged)*100):0;
   const caloriePct=daysLogged>0?Math.round((calorieHit/daysLogged)*100):0;
+
+  // Water tracking — many logs may not have water set, so treat null as 0.
+  // Average is across logged days. Days-hit is the count of days whose
+  // total water_oz met or exceeded the daily share of the monthly goal.
+  const totalWater  = nutritionLogs.reduce((s,l)=>s+(l.water_oz||0),0);
+  const avgWater    = daysLogged>0?Math.round(totalWater/daysLogged):0;
+  const waterHit    = dailyGoal?nutritionLogs.filter(l=>(l.water_oz||0)>=dailyGoal.water_oz).length:0;
+  const waterPct    = daysLogged>0?Math.round((waterHit/daysLogged)*100):0;
+  // Last-14-day water sparkline. Bucket logs into the last 14 calendar days
+  // so we get a steady 14-point series even when some days have no logs.
+  const waterSpark = (() => {
+    const out: { day: string; oz: number }[] = [];
+    const today = new Date(); today.setHours(0,0,0,0);
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today); d.setDate(today.getDate() - i);
+      const dStart = d.getTime();
+      const dEnd = dStart + 86400000;
+      const oz = nutritionLogs
+        .filter(l => {
+          const t = new Date(l.logged_at).getTime();
+          return t >= dStart && t < dEnd;
+        })
+        .reduce((s,l) => s + (l.water_oz || 0), 0);
+      out.push({
+        day: d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"}),
+        oz: Math.round(oz),
+      });
+    }
+    return out;
+  })();
+
+  // Recent meal photos — pull most recent N nutrition logs that have a photo.
+  // food_items is a free-text array; show first item as the caption when
+  // present, fall back to meal_type otherwise.
+  const recentMealPhotos = (() => {
+    return [...nutritionLogs]
+      .filter(l => l.photo_url)
+      .sort((a,b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime())
+      .slice(0, 9)
+      .map(l => ({
+        url: l.photo_url as string,
+        date: l.logged_at,
+        meal: (l.meal_type || "meal").charAt(0).toUpperCase() + (l.meal_type || "meal").slice(1),
+        firstItem: Array.isArray(l.food_items) && l.food_items.length > 0
+          ? String(l.food_items[0])
+          : null,
+        cal: l.calories_total || 0,
+      }));
+  })();
+
   const dailyNutrition=nutritionLogs.map(l=>({
     date:fmt(l.logged_at),
     calories:Math.round(l.calories_total||0),
     protein:Math.round(l.protein_g||0),
     carbs:Math.round(l.carbs_g||0),
     fat:Math.round(l.fat_g||0),
-    calGoal:goals?.calories||0,
-    protGoal:goals?.protein||0,
+    // Goals overlaid on the chart are the daily-derived versions so the
+    // line stays meaningful at any zoom level.
+    calGoal: dailyGoal?.calories || 0,
+    protGoal: dailyGoal?.protein || 0,
   }));
   const macroPie=avgCal>0?[
     {name:"Protein",value:Math.round(avgProt*4),color:C.green},
@@ -914,6 +981,39 @@ export default function StatsPage(){
   const firstW=weightLogs[0]?.weight_lbs;
   const lastW=weightLogs[weightLogs.length-1]?.weight_lbs;
   const wDelta=firstW&&lastW?Number((lastW-firstW).toFixed(1)):null;
+
+  // Weight insights — lowest, highest, biggest week-over-week drop, total
+  // change. Pulled from the range-filtered weightLogs so they reflect
+  // whichever 1W/1M/1Y the user has selected.
+  const weightInsights = (() => {
+    if (weightLogs.length === 0) {
+      return { lowest: null, highest: null, biggestDrop: null, totalChange: null, latestDate: null };
+    }
+    const weights = weightLogs.map(w => Number(w.weight_lbs)).filter(n => !isNaN(n));
+    if (weights.length === 0) {
+      return { lowest: null, highest: null, biggestDrop: null, totalChange: null, latestDate: null };
+    }
+    const lowest = Math.min(...weights);
+    const highest = Math.max(...weights);
+    // Biggest drop = max delta between any two consecutive logs (negative).
+    let biggestDrop = 0;
+    let biggestDropDate: string | null = null;
+    for (let i = 1; i < weightLogs.length; i++) {
+      const delta = Number(weightLogs[i].weight_lbs) - Number(weightLogs[i-1].weight_lbs);
+      if (delta < biggestDrop) {
+        biggestDrop = delta;
+        biggestDropDate = weightLogs[i].logged_at;
+      }
+    }
+    return {
+      lowest: Number(lowest.toFixed(1)),
+      highest: Number(highest.toFixed(1)),
+      biggestDrop: biggestDrop < 0 ? Number(biggestDrop.toFixed(1)) : null,
+      biggestDropDate,
+      totalChange: wDelta,
+      latestDate: weightLogs[weightLogs.length-1]?.logged_at || null,
+    };
+  })();
 
   // Per-wellness-discipline stats — same treatment as cardio breakdown.
   // For each activity type tracks: count, total mins, avg mins, longest
@@ -1159,8 +1259,10 @@ export default function StatsPage(){
               <div style={{marginBottom:14,padding:"12px 14px",background:"rgba(255,255,255,0.04)",borderRadius:12}}>
                 <div style={{fontSize:10,fontWeight:800,color:C.subLight,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:10}}>Today</div>
                 {[
-                  {label:"🔥 Calories",current:Math.round(todayNut?.calories||0),goal:goals?.calories||2000,unit:"kcal",color:C.gold},
-                  {label:"🥩 Protein",current:Math.round(todayNut?.protein||0),goal:goals?.protein||150,unit:"g",color:"#34D399"},
+                  // dailyGoal is monthly/30 — the per-day share of the user's
+                  // monthly target. Falls back to a sane default if no goal set.
+                  {label:"🔥 Calories",current:Math.round(todayNut?.calories||0),goal:dailyGoal?.calories||67,unit:"kcal",color:C.gold},
+                  {label:"🥩 Protein",current:Math.round(todayNut?.protein||0),goal:dailyGoal?.protein||5,unit:"g",color:"#34D399"},
                 ].map(({label,current,goal,unit,color})=>{
                   const pct=Math.min(100,Math.round((current/goal)*100));
                   return (
@@ -1181,15 +1283,16 @@ export default function StatsPage(){
                 })}
               </div>
 
-              {/* THIS MONTH */}
+              {/* THIS MONTH — goals are monthly targets directly (no longer
+                  multiplied by days-in-month). Compares this calendar month's
+                  running totals against the user's set monthly goal. */}
               {(()=>{
                 const now=new Date();
-                const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
                 const monthLogs=nutritionLogs.filter((l:any)=>{const d=new Date(l.logged_at);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
                 const monthCals=Math.round(monthLogs.reduce((s:number,l:any)=>s+(l.calories_total||0),0));
                 const monthProt=Math.round(monthLogs.reduce((s:number,l:any)=>s+(l.protein_g||0),0));
-                const calGoal=(goals?.calories||2000)*daysInMonth;
-                const protGoal=(goals?.protein||150)*daysInMonth;
+                const calGoal = goals?.calories || 60000;
+                const protGoal = goals?.protein || 4500;
                 const calPct=Math.min(100,Math.round((monthCals/calGoal)*100));
                 const protPct=Math.min(100,Math.round((monthProt/protGoal)*100));
                 return (
@@ -1312,25 +1415,25 @@ export default function StatsPage(){
 
             {/* Today's nutrition */}
             <SecHead title="Today's Nutrition"/>
-            {!goals?(
+            {!dailyGoal?(
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
-                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:6}}>No goals set yet</div>
-                <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Set your calorie and macro targets to track daily progress.</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:6}}>No monthly goals set yet</div>
+                <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Set your monthly calorie and macro targets to track daily progress (we'll show daily share automatically).</div>
                 <button onClick={()=>{setTab("nutrition");setTimeout(()=>setShowGoalEditor(true),100);}} style={{padding:"8px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚙️ Set Goals</button>
               </div>
             ):(
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
                 {todayNut?(<>
-                  <MacroRow label="🔥 Calories" current={Math.round(todayNut.calories)} goal={goals.calories} color={C.gold} unit=" kcal"/>
-                  <MacroRow label="🥩 Protein"  current={Math.round(todayNut.protein)}  goal={goals.protein}  color={C.green} unit="g"/>
-                  <MacroRow label="🍞 Carbs"    current={Math.round(todayNut.carbs)}    goal={goals.carbs}    color={C.purple} unit="g"/>
-                  <MacroRow label="🥑 Fat"      current={Math.round(todayNut.fat)}      goal={goals.fat}      color={C.gold} unit="g"/>
-                  {goals.water_oz>0&&<MacroRow label="💧 Water" current={Math.round(todayNut.water_oz)} goal={goals.water_oz} color={C.cyan} unit=" oz"/>}
+                  <MacroRow label="🔥 Calories" current={Math.round(todayNut.calories)} goal={dailyGoal.calories} color={C.gold} unit=" kcal"/>
+                  <MacroRow label="🥩 Protein"  current={Math.round(todayNut.protein)}  goal={dailyGoal.protein}  color={C.green} unit="g"/>
+                  <MacroRow label="🍞 Carbs"    current={Math.round(todayNut.carbs)}    goal={dailyGoal.carbs}    color={C.purple} unit="g"/>
+                  <MacroRow label="🥑 Fat"      current={Math.round(todayNut.fat)}      goal={dailyGoal.fat}      color={C.gold} unit="g"/>
+                  {dailyGoal.water_oz>0&&<MacroRow label="💧 Water" current={Math.round(todayNut.water_oz)} goal={dailyGoal.water_oz} color={C.cyan} unit=" oz"/>}
                 </>):(
                   <div style={{textAlign:"center",padding:"12px 0"}}>
                     <div style={{fontSize:24,marginBottom:8}}>🥗</div>
                     <div style={{fontSize:14,color:C.subLight,fontWeight:700,marginBottom:4}}>Nothing logged yet today</div>
-                    <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Goal: {goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat</div>
+                    <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Daily goal: {dailyGoal.calories.toLocaleString()} kcal · {dailyGoal.protein}g protein · {dailyGoal.carbs}g carbs · {dailyGoal.fat}g fat</div>
                     <button onClick={()=>router.push("/post")} style={{padding:"7px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Log Nutrition</button>
                   </div>
                 )}
@@ -1850,19 +1953,19 @@ export default function StatsPage(){
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showGoalEditor?16:0}}>
                 <div>
                   <div style={{fontWeight:800,fontSize:15,color:C.text}}>⚙️ Monthly Nutrition Goals</div>
-                  {!showGoalEditor&&goals&&<div style={{fontSize:12,color:C.sub,marginTop:3}}>{goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat</div>}
-                  {!showGoalEditor&&!goals&&<div style={{fontSize:12,color:C.red,marginTop:3}}>No goals set — tap Edit to add targets</div>}
+                  {!showGoalEditor&&goals&&<div style={{fontSize:12,color:C.sub,marginTop:3}}>{goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat <span style={{opacity:0.7}}>per month</span></div>}
+                  {!showGoalEditor&&!goals&&<div style={{fontSize:12,color:C.red,marginTop:3}}>No monthly goals set — tap Edit to add targets</div>}
                 </div>
                 <button onClick={()=>setShowGoalEditor(g=>!g)} style={{padding:"6px 14px",borderRadius:20,border:`1px solid ${C.borderHi}`,background:showGoalEditor?C.purple:"transparent",color:showGoalEditor?"#fff":C.sub,fontWeight:700,fontSize:12,cursor:"pointer"}}>{showGoalEditor?"Cancel":"✏️ Edit"}</button>
               </div>
               {showGoalEditor&&(<>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
                   {([
-                    {label:"🔥 Calories (kcal)",key:"calories" as keyof NutritionGoals},
-                    {label:"🥩 Protein (g)",key:"protein" as keyof NutritionGoals},
-                    {label:"🍞 Carbs (g)",key:"carbs" as keyof NutritionGoals},
-                    {label:"🥑 Fat (g)",key:"fat" as keyof NutritionGoals},
-                    {label:"💧 Water (oz)",key:"water_oz" as keyof NutritionGoals},
+                    {label:"🔥 Calories / month",key:"calories" as keyof NutritionGoals},
+                    {label:"🥩 Protein (g) / month",key:"protein" as keyof NutritionGoals},
+                    {label:"🍞 Carbs (g) / month",key:"carbs" as keyof NutritionGoals},
+                    {label:"🥑 Fat (g) / month",key:"fat" as keyof NutritionGoals},
+                    {label:"💧 Water (oz) / month",key:"water_oz" as keyof NutritionGoals},
                   ] as {label:string;key:keyof NutritionGoals}[]).map(({label,key})=>(
                     <div key={key}>
                       <div style={{fontSize:11,color:C.sub,marginBottom:5,fontWeight:600}}>{label}</div>
@@ -1897,8 +2000,8 @@ export default function StatsPage(){
             {/* Averages */}
             <SecHead title={`Averages — ${rangeLabel(range)}`}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <BigNum icon="🔥" label="Avg Daily Calories" value={avgCal>0?avgCal.toLocaleString():"—"} sub={goals?`goal: ${goals.calories.toLocaleString()} kcal`:"set a goal"} color={C.gold}/>
-              <BigNum icon="🥩" label="Avg Protein" value={avgProt>0?`${avgProt}g`:"—"} sub={goals?`goal: ${goals.protein}g`:"set a goal"} color={C.green}/>
+              <BigNum icon="🔥" label="Avg Daily Calories" value={avgCal>0?avgCal.toLocaleString():"—"} sub={dailyGoal?`daily share: ${dailyGoal.calories.toLocaleString()} kcal`:"set a monthly goal"} color={C.gold}/>
+              <BigNum icon="🥩" label="Avg Protein" value={avgProt>0?`${avgProt}g`:"—"} sub={dailyGoal?`daily share: ${dailyGoal.protein}g`:"set a monthly goal"} color={C.green}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
               <MiniNum label="Avg Carbs" value={avgCarbs>0?`${avgCarbs}g`:"—"} color={C.purple}/>
@@ -1906,13 +2009,14 @@ export default function StatsPage(){
               <MiniNum label="Days Logged" value={daysLogged} color={C.text}/>
             </div>
 
-            {/* Consistency */}
-            {goals&&daysLogged>0&&(<>
-              <SecHead title="Goal Consistency"/>
+            {/* Consistency — uses the per-day-share (monthly/30) goal so
+                the "hit" check is meaningful at the day level. */}
+            {dailyGoal&&daysLogged>0&&(<>
+              <SecHead title="Daily Goal Consistency"/>
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
                 {[
-                  {label:`🥩 Protein ≥ ${goals.protein}g`,pct:proteinPct,hit:proteinHit,color:C.green},
-                  {label:`🔥 Calories ~${goals.calories.toLocaleString()} (±10%)`,pct:caloriePct,hit:calorieHit,color:C.gold},
+                  {label:`🥩 Protein ≥ ${dailyGoal.protein}g/day`,pct:proteinPct,hit:proteinHit,color:C.green},
+                  {label:`🔥 Calories ~${dailyGoal.calories.toLocaleString()}/day (±10%)`,pct:caloriePct,hit:calorieHit,color:C.gold},
                 ].map(({label,pct,hit,color})=>(
                   <div key={label} style={{marginBottom:16}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -1926,6 +2030,34 @@ export default function StatsPage(){
                   </div>
                 ))}
               </div>
+            </>)}
+
+            {/* Water tracking — quick stats card + 14-day sparkline. Only
+                shown if the user has logged any water in the range. */}
+            {totalWater > 0 && (<>
+              <SecHead title="Hydration"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <BigNum icon="💧" label="Avg Water / Day" value={`${avgWater} oz`} sub={dailyGoal?`daily share: ${dailyGoal.water_oz} oz`:"set a monthly goal"} color="#38BDF8"/>
+                <BigNum icon="✅" label="Days Hit Goal" value={dailyGoal?`${waterHit}/${daysLogged}`:"—"} sub={dailyGoal?`${waterPct}% consistency`:"set a goal"} color={waterPct>=70?C.green:C.text}/>
+              </div>
+              <ChartWrap>
+                <div style={{fontSize:11,fontWeight:800,color:"#38BDF8",padding:"4px 8px 8px",textTransform:"uppercase" as const,letterSpacing:0.8}}>💧 Last 14 Days (oz)</div>
+                <ResponsiveContainer width="100%" height={130}>
+                  <BarChart data={waterSpark} margin={{top:4,right:8,left:-16,bottom:0}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+                    <XAxis dataKey="day" tick={{fontSize:9,fill:C.sub}}/>
+                    <YAxis tick={{fontSize:10,fill:C.sub}} allowDecimals={false}/>
+                    <Tooltip content={<Tip/>}/>
+                    <Bar dataKey="oz" name="Water (oz)" fill="#38BDF8" radius={[4,4,0,0]}/>
+                  </BarChart>
+                </ResponsiveContainer>
+                {dailyGoal && (
+                  <div style={{fontSize:11,color:C.sub,textAlign:"center" as const,marginTop:6}}>
+                    Daily target line: {dailyGoal.water_oz} oz
+                  </div>
+                )}
+              </ChartWrap>
+              <div style={{height:20}}/>
             </>)}
 
             {/* Per-meal-time breakdown — surfaces patterns like "I under-eat
@@ -1981,6 +2113,63 @@ export default function StatsPage(){
                     </div>
                   );
                 })}
+              </div>
+            </>)}
+
+            {/* Recent meal photos — 3x3 grid of the most recent nutrition
+                logs that have a photo attached. Tap any photo (future) to
+                open the original log. */}
+            {recentMealPhotos.length > 0 && (<>
+              <SecHead title="Recent Meals"/>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:20}}>
+                {recentMealPhotos.map((p,i)=>(
+                  <div key={i} style={{
+                    position:"relative" as const,
+                    aspectRatio:"1 / 1",
+                    borderRadius:12,
+                    overflow:"hidden",
+                    border:`1px solid ${C.border}`,
+                    background:C.card,
+                  }}>
+                    <img
+                      src={p.url}
+                      alt={p.firstItem || p.meal}
+                      loading="lazy"
+                      style={{
+                        width:"100%",height:"100%",
+                        objectFit:"cover" as const,
+                        display:"block",
+                      }}
+                    />
+                    {/* Caption overlay — meal type pill top-left, calories
+                        bottom-right, gradient backdrop for legibility. */}
+                    <div style={{
+                      position:"absolute" as const,
+                      inset:0,
+                      background:"linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 30%, transparent 65%, rgba(0,0,0,0.7) 100%)",
+                      pointerEvents:"none" as const,
+                    }}/>
+                    <div style={{
+                      position:"absolute" as const,
+                      top:6,left:6,
+                      fontSize:9,fontWeight:800,
+                      color:"#fff",
+                      background:"rgba(0,0,0,0.55)",
+                      padding:"2px 7px",
+                      borderRadius:99,
+                      textTransform:"uppercase" as const,
+                      letterSpacing:0.6,
+                    }}>{p.meal}</div>
+                    {p.cal > 0 && (
+                      <div style={{
+                        position:"absolute" as const,
+                        bottom:6,right:6,
+                        fontSize:10,fontWeight:800,
+                        color:C.gold,
+                      }}>{p.cal} kcal</div>
+                    )}
+                  </div>
+                ))}
               </div>
             </>)}
 
@@ -2131,39 +2320,81 @@ export default function StatsPage(){
           {/* ═══════════════════════════════════════════════ BODY ══ */}
           {tab==="body"&&(<>
             {/* ── BODY WEIGHT SECTION ──────────────────────────────────── */}
+            {/* Hero: current weight + total change in selected range. Color
+                cues green when trending down, red when up — same convention
+                as the cardio per-discipline cards. */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <BigNum icon="⚖️" label="Current Weight" value={latestWeight?`${latestWeight} lbs`:"—"} sub={wDelta!==null?`${wDelta>=0?"+":""}${wDelta} lbs in ${rangeLabel(range)}`:"no data"} color={wDelta!==null?(wDelta<0?C.green:wDelta>0?C.red:C.text):C.text}/>
-              <BigNum icon="🌿" label="Wellness Sessions" value={wellnessLogs.length} sub={rangeLabel(range)} color={C.green}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
-              <MiniNum label="Wellness Time" value={totalWellnessMins>60?`${(totalWellnessMins/60).toFixed(1)}h`:`${totalWellnessMins}m`} color={C.green}/>
-              <MiniNum label="Unique Activities" value={wellnessByType.length} color={C.text}/>
+              <BigNum
+                icon="⚖️"
+                label="Current Weight"
+                value={latestWeight?`${latestWeight} lbs`:"—"}
+                sub={weightInsights.latestDate?`as of ${fmt(weightInsights.latestDate)}`:"no data"}
+                color={C.text}
+              />
+              <BigNum
+                icon={wDelta!==null?(wDelta<0?"📉":wDelta>0?"📈":"→"):"—"}
+                label={`Change in ${rangeLabel(range)}`}
+                value={wDelta!==null?`${wDelta>=0?"+":""}${wDelta} lbs`:"—"}
+                sub={weightLogs.length>0?`${weightLogs.length} log${weightLogs.length===1?"":"s"}`:"no data"}
+                color={wDelta!==null?(wDelta<0?C.green:wDelta>0?C.red:C.text):C.text}
+              />
             </div>
 
-            {/* Weight chart */}
+            {/* Insight cards — only shown when there are at least 2 weight
+                logs so the comparisons mean something. */}
+            {weightLogs.length >= 2 && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
+                <MiniNum
+                  label="🏆 Lowest"
+                  value={weightInsights.lowest !== null ? `${weightInsights.lowest} lbs` : "—"}
+                  color={C.green}
+                />
+                <MiniNum
+                  label="📈 Highest"
+                  value={weightInsights.highest !== null ? `${weightInsights.highest} lbs` : "—"}
+                  color={C.red}
+                />
+                <MiniNum
+                  label="🔥 Biggest Drop"
+                  value={weightInsights.biggestDrop !== null ? `${weightInsights.biggestDrop} lbs` : "—"}
+                  color={C.gold}
+                />
+              </div>
+            )}
+
+            {/* Weight chart — kept the line chart but moved the +Log Weight
+                CTA to the section header. */}
             <SecHead title="Body Weight Trend" right={
               <button onClick={()=>setShowWeightModal(true)} style={{fontSize:11,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>+ Log Weight</button>
             }/>
             {weightLogs.length>1?(
               <ChartWrap>
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={weightLogs.map(w=>({date:fmt(w.logged_at),weight:Number(w.weight_lbs)}))} margin={{top:4,right:8,left:-16,bottom:0}}>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={weightLogs.map(w=>({date:fmt(w.logged_at),weight:Number(w.weight_lbs)}))} margin={{top:8,right:8,left:-16,bottom:0}}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
                     <XAxis dataKey="date" tick={{fontSize:9,fill:C.sub}}/>
                     <YAxis tick={{fontSize:9,fill:C.sub}} domain={["auto","auto"]}/>
                     <Tooltip content={<Tip/>}/>
-                    <Line dataKey="weight" name="Weight (lbs)" stroke={C.cyan} strokeWidth={2.5} dot={{fill:C.cyan,r:3,strokeWidth:0}}/>
+                    <Line dataKey="weight" name="Weight (lbs)" stroke={C.cyan} strokeWidth={2.5} dot={{fill:C.cyan,r:3,strokeWidth:0}} activeDot={{r:5}}/>
                   </LineChart>
                 </ResponsiveContainer>
               </ChartWrap>
-            ):(
-              <Empty icon="⚖️" text="Log your weight on the Profile page to track trends here"/>
-            )}
-            {wDelta!==null&&(
-              <div style={{textAlign:"center",marginTop:10,fontSize:13,fontWeight:700,color:wDelta<0?C.green:wDelta>0?C.red:C.sub}}>
-                {wDelta<0?"📉":wDelta>0?"📈":"→"} {wDelta>=0?"+":""}{wDelta} lbs over {rangeLabel(range)}
+            ):weightLogs.length === 1 ? (
+              <div style={{background:C.card,borderRadius:14,padding:"24px 20px",border:`1px solid ${C.border}`,textAlign:"center" as const,marginBottom:20}}>
+                <div style={{fontSize:32,marginBottom:6}}>⚖️</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Log a 2nd weight to see trends</div>
+                <div style={{fontSize:12,color:C.sub}}>You've logged once — log again to start tracking changes</div>
               </div>
+            ):(
+              <Empty icon="⚖️" text="Tap + Log Weight above to start tracking"/>
             )}
+
+            {/* Wellness count strip — moved here so the body weight section
+                stands alone as one focused unit. */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:16,marginBottom:20}}>
+              <MiniNum label="🌿 Wellness Sessions" value={wellnessLogs.length} color={C.green}/>
+              <MiniNum label="🧘 Mindful Time" value={totalWellnessMins>60?`${(totalWellnessMins/60).toFixed(1)}h`:`${totalWellnessMins}m`} color={C.green}/>
+            </div>
 
             {/* ── 🌿 WELLNESS DEEP DIVE ──────────────────────────────────── */}
             {/* Section divider with inline 1W/1M/1Y pills, matching the
