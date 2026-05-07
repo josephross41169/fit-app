@@ -153,18 +153,24 @@ function MessagesPageInner() {
     if (!user) return;
     if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/db', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_conversations', payload: { userId: user.id } }),
-      });
-      const json = await res.json();
-      let next: Conversation[] = json.conversations || [];
+      // Run conversations fetch and blocked-users fetch in parallel.
+      // Previously these were sequential (await get_conversations THEN await
+      // loadBlockedUsers), doubling the latency for the first-paint of the
+      // sidebar. Both queries are independent so Promise.all is safe.
+      const [convsRes, blocks] = await Promise.all([
+        fetch('/api/db', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_conversations', payload: { userId: user.id } }),
+        }).then(r => r.json()),
+        loadBlockedUsers(user.id),
+      ]);
+
+      let next: Conversation[] = convsRes.conversations || [];
 
       // Filter out conversations with blocked users in either direction.
       // Apple Guideline 1.2: blocked users must not be able to reach the
       // blocker. Server-side would also be wise long-term but client filter
       // is enough for app-store compliance since blocking happens client-side.
-      const blocks = await loadBlockedUsers(user.id);
       if (blocks.size > 0) {
         next = next.filter(c => c.otherUser?.id && !blocks.has(c.otherUser.id));
       }
@@ -269,12 +275,17 @@ function MessagesPageInner() {
   }, [messages.length]);
 
   // ── Initial load + silent background refresh ───────────────────────────────
-  // Silent polling keeps the conversation list fresh (incoming messages from
-  // other convs, new conversations started by others) without flickering.
+  // Polling at 30s is a fallback for things realtime doesn't cover well:
+  // new conversations started by others, unread count drift, server-side
+  // edits. New messages in the active conversation are handled instantly
+  // by the realtime subscription above, so we don't need an aggressive
+  // poll. 30s strikes a balance between data freshness and not hammering
+  // the API every few seconds (the previous 8s was overkill given realtime
+  // already handles the common case).
   useEffect(() => {
     if (user) {
       loadConversations(false); // initial load shows spinner
-      const poll = setInterval(() => loadConversations(true), 8000); // silent every 8s
+      const poll = setInterval(() => loadConversations(true), 30000); // silent every 30s
       return () => clearInterval(poll);
     }
   }, [user, loadConversations]);
