@@ -821,6 +821,10 @@ function ConnectPageInner() {
           .connect-layout > * { width: 100% !important; }
           .connect-sidebar { width: 100% !important; }
         }
+        @keyframes connectSkeletonShimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
       `}</style>
 
       {showCreateModal && (
@@ -946,12 +950,6 @@ function ConnectPageInner() {
 
           {loadingGroups && tab !== "joined" && (
             <div>
-              <style jsx global>{`
-                @keyframes connectSkeletonShimmer {
-                  0%   { background-position: 200% 0; }
-                  100% { background-position: -200% 0; }
-                }
-              `}</style>
               {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} style={{
                   height: 130,
@@ -968,12 +966,6 @@ function ConnectPageInner() {
           {tab === "joined" && (
             loadingJoined
               ? <div>
-                  <style jsx global>{`
-                    @keyframes connectSkeletonShimmer2 {
-                      0%   { background-position: 200% 0; }
-                      100% { background-position: -200% 0; }
-                    }
-                  `}</style>
                   {[0, 1, 2].map(i => (
                     <div key={i} style={{
                       height: 130,
@@ -981,7 +973,7 @@ function ConnectPageInner() {
                       marginBottom: 12,
                       background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
                       backgroundSize: "200% 100%",
-                      animation: "connectSkeletonShimmer2 1.4s ease-in-out infinite",
+                      animation: "connectSkeletonShimmer 1.4s ease-in-out infinite",
                     }} />
                   ))}
                 </div>
