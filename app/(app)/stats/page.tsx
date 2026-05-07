@@ -45,25 +45,47 @@ function getMuscle(name:string):string {
 }
 
 // Normalize cardio names: "Monday morning run", "neighborhood morning run" → "Morning Run"
+// Canonical cardio category names. Maps any free-text or raw type string
+// (legacy logs may have "morning run", new logs have "running") to one of
+// our top-level discipline buckets. The stats page groups by these so the
+// breakdown shows clean per-discipline cards instead of "Morning Run /
+// Evening Run / Treadmill" all as separate rows.
+//
+// Order matters in CARDIO_TYPES — first match wins. "stair" must come
+// before "Machine" so stair climber gets its own bucket.
 function normalizeCardio(raw:string):string {
-  const s=raw.toLowerCase().trim();
-  // Time of day
-  const time=s.includes("morning")?"Morning":s.includes("afternoon")?"Afternoon":s.includes("evening")||s.includes("night")?"Evening":"";
-  // Activity type
+  const s=(raw||"").toLowerCase().trim();
   const CARDIO_TYPES=[
-    {keys:["treadmill"],label:"Treadmill"},
-    {keys:["run","jog","sprint"],label:"Run"},
-    {keys:["walk"],label:"Walk"},
+    {keys:["run","jog","sprint","treadmill","trail"],label:"Running"},
     {keys:["cycle","bike","cycling","spin"],label:"Cycling"},
-    {keys:["swim"],label:"Swim"},
+    {keys:["swim"],label:"Swimming"},
+    {keys:["row","rowing"],label:"Rowing"},
+    {keys:["elliptical"],label:"Elliptical"},
+    {keys:["stair"],label:"Stair Climber"},
     {keys:["hiit"],label:"HIIT"},
-    {keys:["row","rowing"],label:"Row"},
-    {keys:["elliptical","stair"],label:"Machine"},
+    {keys:["walk"],label:"Walking"},
+    {keys:["hike","hiking"],label:"Hiking"},
   ];
   for(const {keys,label} of CARDIO_TYPES){
-    if(keys.some(k=>s.includes(k))) return time?`${time} ${label}`:label;
+    if(keys.some(k=>s.includes(k))) return label;
   }
-  return time?`${time} Cardio`:"Cardio";
+  return "Other";
+}
+
+// Maps a discipline name to a representative emoji. Used for tile headers.
+function cardioEmoji(label:string):string {
+  switch(label){
+    case "Running": return "🏃";
+    case "Cycling": return "🚴";
+    case "Swimming": return "🏊";
+    case "Rowing": return "🚣";
+    case "Elliptical": return "⚡";
+    case "Stair Climber": return "🪜";
+    case "HIIT": return "🔥";
+    case "Walking": return "🚶";
+    case "Hiking": return "🥾";
+    default: return "💨";
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -339,28 +361,28 @@ export default function StatsPage(){
   const [latestWeight,setLatestWeight]=useState<number|null>(null);
 
   // Range
-  const [workoutLogs,setWorkoutLogs]=useState<any[]>([]);
-  const [nutritionLogs,setNutritionLogs]=useState<any[]>([]);
-  const [wellnessLogs,setWellnessLogs]=useState<any[]>([]);
-  const [weightLogs,setWeightLogs]=useState<any[]>([]);
+  // Raw year-long data fetched once. Filtered versions (workoutLogs etc.)
+  // are derived below via useMemo so range switching is instant — no
+  // network round-trip per click.
+  const [workoutLogsAll,setWorkoutLogsAll]=useState<any[]>([]);
+  const [nutritionLogsAll,setNutritionLogsAll]=useState<any[]>([]);
+  const [wellnessLogsAll,setWellnessLogsAll]=useState<any[]>([]);
+  const [weightLogsAll,setWeightLogsAll]=useState<any[]>([]);
   const [prList,setPrList]=useState<any[]>([]);
   const [allWorkoutDates,setAllWorkoutDates]=useState<string[]>([]);
 
   const load=useCallback(async()=>{
     if(!user) return;
     setLoading(true);
-    const since=rangeToIso(range);
+    // ALWAYS fetch a full year of data regardless of the selected range.
+    // Range switching (1W/1M/1Y) then filters in-memory which is instant
+    // instead of refetching from Supabase. The user only re-fetches when
+    // they navigate to the page; switching ranges is free.
+    const yearStart = startOfYear().toISOString();
     const todayStart=new Date(); todayStart.setHours(0,0,0,0);
     const todayEnd=new Date(); todayEnd.setHours(23,59,59,999);
 
     try{
-      // ── Parallel fan-out ───────────────────────────────────────────────
-      // Previously these 9 queries ran sequentially, taking 9 round-trips
-      // of network latency to finish loading the page. None of them depend
-      // on each other's results, so we run them all in parallel via
-      // Promise.all — collapses the load to a single round-trip's worth
-      // of latency. On a fast connection this drops first-paint from
-      // ~3-4s to ~400ms.
       const [
         userGoalsRes,
         todayWorkoutsRes,
@@ -385,22 +407,24 @@ export default function StatsPage(){
           .select("calories_total,protein_g,carbs_g,fat_g,water_oz")
           .eq("user_id",user.id).eq("log_type","nutrition")
           .gte("logged_at",todayStart.toISOString()).lte("logged_at",todayEnd.toISOString()),
-        // weight_logs may not exist on every deployment — wrap in catch so
-        // the whole Promise.all doesn't fail if this table is missing.
         supabase.from("weight_logs")
           .select("weight_lbs,logged_at").eq("user_id",user.id)
           .order("logged_at",{ascending:false}).limit(1)
           .then(r => r, () => ({ data: null, error: "no table" })),
+        // Pull a full year of activity logs. Range filter is applied in
+        // memory below (see the range-derived state declared after this
+        // hook). Way faster than re-fetching whenever the user toggles
+        // 1W/1M/1Y.
         supabase.from("activity_logs")
           .select("id,log_type,logged_at,workout_category,workout_type,workout_duration_min,workout_calories,exercises,cardio,calories_total,protein_g,carbs_g,fat_g,water_oz,wellness_type,wellness_duration_min,notes")
-          .eq("user_id",user.id).gte("logged_at",since)
+          .eq("user_id",user.id).gte("logged_at",yearStart)
           .order("logged_at",{ascending:true}),
         supabase.from("personal_records")
           .select("exercise_name,weight,reps,volume,logged_at")
           .eq("user_id",user.id).order("weight",{ascending:false}),
         supabase.from("weight_logs")
           .select("weight_lbs,logged_at").eq("user_id",user.id)
-          .gte("logged_at",since).order("logged_at",{ascending:true})
+          .gte("logged_at",yearStart).order("logged_at",{ascending:true})
           .then(r => r, () => ({ data: null, error: "no table" })),
         supabase.from("activity_logs")
           .select("logged_at").eq("user_id",user.id).eq("log_type","workout")
@@ -439,18 +463,18 @@ export default function StatsPage(){
       // Range logs (split by type)
       const logs = (rangeLogsRes as any).data;
       if(logs){
-        setWorkoutLogs(logs.filter((l:any)=>l.log_type==="workout"));
-        setNutritionLogs(logs.filter((l:any)=>l.log_type==="nutrition"));
-        setWellnessLogs(logs.filter((l:any)=>l.log_type==="wellness"));
+        setWorkoutLogsAll(logs.filter((l:any)=>l.log_type==="workout"));
+        setNutritionLogsAll(logs.filter((l:any)=>l.log_type==="nutrition"));
+        setWellnessLogsAll(logs.filter((l:any)=>l.log_type==="wellness"));
       }
 
       // PRs
       const prs = (prsRes as any).data;
       if(prs) setPrList(prs);
 
-      // Weight logs (range)
+      // Weight logs — full year, filtered client-side
       const wl = (weightLogsRes as any).data;
-      if(wl) setWeightLogs(wl);
+      if(wl) setWeightLogsAll(wl);
 
       // All workout dates for streak/heatmap
       const allW = (allWorkoutDatesRes as any).data;
@@ -458,9 +482,25 @@ export default function StatsPage(){
 
     }catch(e){console.error(e);}
     setLoading(false);
-  },[user,range]);
+  },[user]);
 
   useEffect(()=>{load();},[load]);
+
+  // ── Range-filtered views ───────────────────────────────────────────────
+  // The `*All` state holds a full year of data fetched once. These memos
+  // filter to whichever range the user has selected. Filtering in JS is
+  // basically free (millisecond), so the 1W/1M/1Y pills feel instant.
+  // Ref-stable across renders that don't change the inputs, so child
+  // components don't re-compute unnecessarily either.
+  const sinceTs = (() => {
+    if (range === "1W") return startOfWeekMonday().getTime();
+    if (range === "1M") return startOfMonth().getTime();
+    return startOfYear().getTime();
+  })();
+  const workoutLogs = workoutLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
+  const nutritionLogs = nutritionLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
+  const wellnessLogs = wellnessLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
+  const weightLogs = weightLogsAll.filter((l:any)=>new Date(l.logged_at).getTime() >= sinceTs);
 
   async function saveWeight() {
     const lbs = parseFloat(weightInput);
@@ -476,7 +516,7 @@ export default function StatsPage(){
       });
       if (error) { alert("Error saving weight: " + error.message); setWeightSaving(false); return; }
       setLatestWeight(lbs);
-      setWeightLogs((prev:any) => [{ weight_lbs: lbs, logged_at: new Date().toISOString() }, ...prev]);
+      setWeightLogsAll((prev:any) => [{ weight_lbs: lbs, logged_at: new Date().toISOString() }, ...prev]);
       setWeightInput("");
       setWeightNotes("");
       setWeightPublic(false);
@@ -577,26 +617,57 @@ export default function StatsPage(){
   const totalCardioMin=allCardio.reduce((s:number,c:any)=>s+(parseFloat(String(c.duration))||0),0);
   const totalCardioMiles=allCardio.reduce((s:number,c:any)=>s+(parseFloat(String(c.distance))||0),0);
   const cardioTypes=(()=>{
-    const t:Record<string,{count:number;totalDist:number;totalDur:number}>={};
+    type Bucket = {count:number;totalDist:number;totalDur:number;longest:number;};
+    const t:Record<string,Bucket>={};
     allCardio.forEach((c:any)=>{
       const tp=normalizeCardio(c.type||"Cardio");
-      if(!t[tp]) t[tp]={count:0,totalDist:0,totalDur:0};
+      if(!t[tp]) t[tp]={count:0,totalDist:0,totalDur:0,longest:0};
+      const dist = parseFloat(String(c.distance))||0;
+      const dur = parseFloat(String(c.duration))||0;
       t[tp].count++;
-      t[tp].totalDist+=parseFloat(String(c.distance))||0;
-      t[tp].totalDur+=parseFloat(String(c.duration))||0;
+      t[tp].totalDist += dist;
+      t[tp].totalDur  += dur;
+      if (dist > t[tp].longest) t[tp].longest = dist;
     });
-    return Object.entries(t).sort((a,b)=>b[1].count-a[1].count).map(([type,{count,totalDist,totalDur}])=>({
-      type,count,
-      avgDist:count>0?Math.round((totalDist/count)*100)/100:0,
-      avgDur:count>0?Math.round(totalDur/count):0,
-    }));
+    return Object.entries(t).sort((a,b)=>b[1].count-a[1].count).map(([type,b])=>{
+      const avgDist = b.count>0?Math.round((b.totalDist/b.count)*100)/100:0;
+      const avgDur  = b.count>0?Math.round(b.totalDur/b.count):0;
+      // Avg pace only meaningful for distance disciplines.
+      let paceStr = "—";
+      if (b.totalDist > 0 && b.totalDur > 0) {
+        if (type === "Cycling") {
+          const mph = (b.totalDist / b.totalDur) * 60;
+          paceStr = `${mph.toFixed(1)} mph`;
+        } else if (type === "Swimming") {
+          // Swim pace is per 100yd. Distance is stored in yards.
+          const p = (b.totalDur / b.totalDist) * 100;
+          const m = Math.floor(p);
+          const sec = Math.round((p - m) * 60);
+          paceStr = `${m}:${sec.toString().padStart(2,"0")} /100yd`;
+        } else if (type === "Running" || type === "Walking" || type === "Hiking") {
+          const p = b.totalDur / b.totalDist;
+          const m = Math.floor(p);
+          const sec = Math.round((p - m) * 60);
+          paceStr = `${m}:${sec.toString().padStart(2,"0")} /mi`;
+        }
+      }
+      return {
+        type,
+        count: b.count,
+        totalDist: Math.round(b.totalDist*100)/100,
+        totalDur: Math.round(b.totalDur),
+        longest: Math.round(b.longest*100)/100,
+        avgDist, avgDur, paceStr,
+      };
+    });
   })();
 
   // ── Per-activity range stats (running + lifting) ─────────────────────────────
-  // Running stats bucketed by week and month
+  // Running stats bucketed by week and month. Uses the canonical "Running"
+  // label so all run subtypes (outdoor / treadmill / trail / hiit) bucket
+  // together. Walking is its own category so it's kept separate now.
   const runEntries = allCardio.filter((c:any)=>{
-    const t=normalizeCardio(c.type||"");
-    return t.includes("Run")||t.includes("Walk")||t.includes("Treadmill");
+    return normalizeCardio(c.type||"") === "Running";
   });
   const runStats = {
     totalMiles: Math.round(runEntries.reduce((s:number,c:any)=>s+(parseFloat(String(c.distance))||0),0)*100)/100,
@@ -1220,27 +1291,57 @@ export default function StatsPage(){
               </ChartWrap>
             ):<Empty icon="📅" text="Log workouts to see training patterns"/>}
 
-            {/* Cardio breakdown */}
+            {/* Cardio breakdown — one card per discipline. Each card shows
+                sessions, total distance, total time, longest, avg pace. The
+                cards expand horizontally on wider screens. */}
             {cardioSessions>0&&(<>
               <SecHead title="Cardio Breakdown"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
                 <MiniNum label="Sessions" value={cardioSessions} color={C.cyan}/>
                 <MiniNum label="Total Time" value={totalCardioMin>60?`${(totalCardioMin/60).toFixed(1)}h`:`${Math.round(totalCardioMin)}m`} color={C.green}/>
-                <MiniNum label="Total Miles" value={totalCardioMiles>0?`${totalCardioMiles.toFixed(1)} mi`:"—"} color={C.gold}/>
+                <MiniNum label="Total Distance" value={totalCardioMiles>0?`${totalCardioMiles.toFixed(1)} mi`:"—"} color={C.gold}/>
               </div>
-              {cardioTypes.length>0&&(
-                <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-                  {cardioTypes.map(({type,count,avgDist,avgDur})=>(
-                    <div key={type} style={{marginBottom:14}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                        <span style={{fontSize:13,fontWeight:700}}>{type}</span>
-                        <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                          {avgDist>0&&<span style={{fontSize:11,color:C.sub}}>{avgDist.toFixed(2)} mi avg</span>}
-                          {avgDur>0&&<span style={{fontSize:11,color:C.sub}}>{avgDur} min avg</span>}
-                          <span style={{fontSize:12,fontWeight:700,color:C.cyan}}>{count}×</span>
+              {cardioTypes.length>0 && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginBottom:20}}>
+                  {cardioTypes.map(c=>(
+                    <div key={c.type} style={{background:C.card,borderRadius:14,padding:14,border:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:20}}>{cardioEmoji(c.type)}</span>
+                          <span style={{fontWeight:800,fontSize:14,color:C.text}}>{c.type}</span>
+                        </div>
+                        <span style={{fontSize:12,fontWeight:700,color:C.cyan,background:"rgba(34,211,238,0.12)",padding:"3px 9px",borderRadius:99}}>
+                          {c.count}× sessions
+                        </span>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,fontSize:11}}>
+                        <div>
+                          <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Total</div>
+                          <div style={{color:C.text,fontWeight:800,fontSize:13}}>
+                            {c.totalDist > 0 ? `${c.totalDist} mi` : `${c.totalDur}m`}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Avg Pace</div>
+                          <div style={{color:C.green,fontWeight:800,fontSize:13}}>{c.paceStr}</div>
+                        </div>
+                        <div>
+                          <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Longest</div>
+                          <div style={{color:C.gold,fontWeight:800,fontSize:13}}>
+                            {c.longest > 0 ? `${c.longest} mi` : "—"}
+                          </div>
                         </div>
                       </div>
-                      <ProgBar value={count} max={cardioTypes[0].count} color={C.cyan}/>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,fontSize:11,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                        <div>
+                          <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Avg Distance</div>
+                          <div style={{color:C.text,fontWeight:700,fontSize:12}}>{c.avgDist > 0 ? `${c.avgDist} mi` : "—"}</div>
+                        </div>
+                        <div>
+                          <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Avg Duration</div>
+                          <div style={{color:C.text,fontWeight:700,fontSize:12}}>{c.avgDur > 0 ? `${c.avgDur} min` : "—"}</div>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
