@@ -1,2999 +1,553 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { detectStrictPRs, buildHistoricalMaxes, recomputeAllPRs, type ActivityLogRow } from '@/lib/prs';
-import { recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type ActivityLog as GoalActivityLog } from '@/lib/goals';
+// ── Centralized badge definitions ─────────────────────────────────────────────
+// Single source of truth used by profile, public profile, and the badge engine.
+//
+// ## DESIGN MODEL (Apr 2026 rewrite)
+//
+// Badges fall into FOUR buckets:
+//
+//   1. EASY COUNTER LADDER — 8 tiers @ thresholds 1/5/20/50/100/200/500/1000
+//      Auto-awarded based on activity counts (workouts, runs, lifts, yoga,
+//      sauna, posts, followers, etc). User just posts and badges level up.
+//
+//   2. STRENGTH LADDER — 4 tiers @ specific weight thresholds
+//      Bench/Squat/Deadlift = 200/300/400/500 lbs
+//      Total Lift = 800/1000/1300/1500 lbs
+//      Auto-detected from logged exercises if weight is recorded; otherwise
+//      manually claimable.
+//
+//   3. HARD EVENT LADDER — 5 tiers @ thresholds 1/3/5/10/20
+//      Manual claim only (marathon, ironman, spartan, etc.). Each claim
+//      bumps your tier in the family.
+//
+//   4. SINGLE-SHOT CREDENTIAL — 1 tier, no progression
+//      One-and-done achievements (Veteran, Coach, Iron Will, etc.).
+//      Manual claim; never tiers up.
+//
+// ## NAMING
+//
+// Easy ladder badge IDs follow `<thing>-<threshold>` pattern, e.g.
+// `runs-5`, `runs-20`, ... `runs-1000`. The first tier uses threshold 1,
+// e.g. `runs-1` (the user's first run). NO MORE "first-X" naming — this
+// caused duplicate display rows. Tier 1 IS the "first" badge.
+//
+// Hard event IDs: `marathon-1`, `marathon-3`, `marathon-5`, `marathon-10`,
+// `marathon-20`.
+//
+// Strength IDs: `bench-200`, `bench-300`, `bench-400`, `bench-500`, etc.
 
-// Mark as dynamic to avoid static collection at build time
-export const dynamic = 'force-dynamic';
-
-// Service role — bypasses RLS for trusted server-side operations
-// Guard against missing env at build time
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key-for-build';
-const admin = createClient(supabaseUrl, serviceKey);
-
-/** Haversine distance in miles between two lat/lng points. Used by location
- *  search ranking and the find-or-create dedup guard. Approximation is
- *  accurate within a few feet over ~10mi distances which is plenty for our
- *  1-mile dedup radius. */
-function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 3958.8; // Earth radius in miles
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+export interface Badge {
+  id: string;
+  emoji: string;
+  label: string;
+  desc: string;
+  category: string;
 }
 
-// Helper for the For You + Following feeds: takes raw post rows from
-// supabase, sorts each post's nested comments chronologically, and hydrates
-// the "_liked" boolean per viewer. Used by both the ranked For You feed
-// and the simpler followingOnly path so they share consistent shape.
-async function hydrateFeedPosts(rows: any[], viewerId: string | undefined, db: any) {
-  const sorted = rows.map((p: any) => ({
-    ...p,
-    comments: (p.comments || []).sort((a: any, b: any) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+// ── Helper to generate a standard 8-tier easy ladder ──────────────────────
+function easyLadder(opts: {
+  prefix: string;
+  emoji: string;
+  noun: string;
+  nounPlural: string;
+  category: string;
+  tierNames: [string, string, string, string, string, string, string, string];
+}): Badge[] {
+  const thresholds = [1, 5, 20, 50, 100, 200, 500, 1000];
+  return thresholds.map((t, i) => ({
+    id: `${opts.prefix}-${t}`,
+    emoji: opts.emoji,
+    label: opts.tierNames[i],
+    desc: t === 1 ? `Logged your first ${opts.noun}` : `Logged ${t} ${opts.nounPlural}`,
+    category: opts.category,
   }));
-
-  let likedPostIds = new Set<string>();
-  if (viewerId && sorted.length > 0) {
-    const postIds = sorted.map((p: any) => p.id);
-    const { data: likeData } = await db.from('likes')
-      .select('post_id').eq('user_id', viewerId).in('post_id', postIds);
-    if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
-  }
-  return sorted.map((p: any) => ({ ...p, _liked: likedPostIds.has(p.id) }));
 }
 
-function hasFeedPhoto(post: any) {
-  const values = [post?.media_urls, post?.media_url, post?.photo_url];
-  for (const value of values) {
-    if (!value) continue;
-    if (Array.isArray(value) && value.some(Boolean)) return true;
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (!trimmed || trimmed === '[]') continue;
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed) && parsed.some(Boolean)) return true;
-      } catch {
-        return true;
-      }
-    }
-  }
-  return false;
+// Hard event ladder — 5 tiers @ 1/3/5/10/20
+function hardLadder(opts: {
+  prefix: string;
+  category: string;
+  tiers: { threshold: 1|3|5|10|20; emoji: string; label: string; desc: string }[];
+}): Badge[] {
+  return opts.tiers.map(t => ({
+    id: `${opts.prefix}-${t.threshold}`,
+    emoji: t.emoji,
+    label: t.label,
+    desc: t.desc,
+    category: opts.category,
+  }));
 }
 
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const action = searchParams.get('action');
-    const userId = searchParams.get('userId');
+// ── BADGE CATALOG ─────────────────────────────────────────────────────────
+export const BADGES: Badge[] = [
 
-    // ── Get all groups ─────────────────────────────────────────────────────
-    if (action === 'get_groups') {
-      const { data: groups, error } = await admin
-        .from('groups')
-        .select('*')
-        .order('member_count', { ascending: false });
+  // ════════════════════════════════════════════════════════════════════════
+  //  EASY COUNTER LADDERS (8 tiers, auto-awarded from posts)
+  // ════════════════════════════════════════════════════════════════════════
 
-      if (error) return NextResponse.json({ groups: [] });
+  // ─── Tier-name aesthetic guide (for future maintainers) ────────────────────
+  // Tone: evocative single/double words. NOT WoW raid loot. NOT "Starter".
+  // Think: a real adult could earn this without cringing. Categories anchor:
+  //   running   → wilderness / trail / instinct
+  //   walking   → roaming / wandering / pilgrim
+  //   biking    → wind / road / open horizon
+  //   swimming  → water / current / tide
+  //   rowing    → oar / wake / silent water
+  //   lifting   → iron / forge / weight
+  //   hiit      → fire / lungs / fury
+  //   boxing    → fists / canvas / round
+  //   sports    → grit / arena / play
+  //   yoga/etc  → stillness / breath / inner light
+  //   sauna     → heat / glow / coal
+  //   coldplunge→ winter / frost / ice (Joey-approved)
+  //   nutrition → discipline / fuel
+  //   social    → voice / signal / presence
+  //   consistency→ time / patience / weather
+  // ────────────────────────────────────────────────────────────────────────
 
-      // Check membership for current user
-      let memberGroupIds: string[] = [];
-      if (userId) {
-        const { data: memberships } = await admin
-          .from('group_members')
-          .select('group_id')
-          .eq('user_id', userId);
-        memberGroupIds = (memberships || []).map((m: any) => m.group_id);
-      }
+  ...easyLadder({ prefix: "workouts", emoji: "🎉", noun: "workout", nounPlural: "workouts", category: "consistency",
+    tierNames: ["Day One", "Showed Up", "Built Different", "Hundred In", "Centurion", "Two Hundred Strong", "Five Hundred Forged", "Thousand Sessions Deep"] }),
 
-      // Fetch upcoming events for all groups in two batched queries
-      // (one per source table) to avoid N+1. Cutoff is "now minus 24h" to
-      // match the per-group page filter so events that started today still
-      // show as upcoming.
-      const groupIds = (groups || []).map((g: any) => g.id);
-      const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  ...easyLadder({ prefix: "runs", emoji: "👟", noun: "run", nounPlural: "runs", category: "cardio",
+    tierNames: ["First Step", "Trail Found", "Trailblazer", "Pack Runner", "Hundred Mile Heart", "Wildbound", "Trail Reaper", "The Long Way Home"] }),
 
-      // events table (newer schema)
-      const { data: newEvents } = await admin
-        .from('events')
-        .select('id, title, event_date, date_tbd, group_id')
-        .in('group_id', groupIds)
-        .eq('is_public', true)
-        .or(`event_date.gte.${cutoffIso},date_tbd.eq.true`)
-        .order('event_date', { ascending: true });
+  ...easyLadder({ prefix: "lifts", emoji: "🏋️", noun: "lift", nounPlural: "lifts", category: "strength",
+    tierNames: ["First Lift", "Rack Regular", "Iron Patient", "Heavy Hands", "Forged In Reps", "Steel Spine", "Iron Lifer", "Anvil Soul"] }),
 
-      // group_events legacy table — column subset chosen to match what the
-      // UI ultimately renders (name + date + time)
-      const { data: legacyEvents } = await admin
-        .from('group_events')
-        .select('id, name, event_date, group_id')
-        .in('group_id', groupIds)
-        .gte('event_date', cutoffIso)
-        .order('event_date', { ascending: true });
+  ...easyLadder({ prefix: "yoga", emoji: "🧘", noun: "yoga session", nounPlural: "yoga sessions", category: "wellness",
+    tierNames: ["First Breath In", "Mat Found", "Quiet Body", "Steady Mind", "Inner Stillness", "Open Channel", "Living Practice", "Deep Stillness"] }),
 
-      // Bucket the soonest upcoming event per group from either source.
-      const nextEventByGroup: Record<string, any> = {};
-      for (const ev of (newEvents || []) as any[]) {
-        if (nextEventByGroup[ev.group_id]) continue; // already have a sooner one
-        if (ev.date_tbd) {
-          nextEventByGroup[ev.group_id] = { name: ev.title, date: 'TBD', time: '' };
-        } else if (ev.event_date) {
-          const d = new Date(ev.event_date);
-          nextEventByGroup[ev.group_id] = {
-            name: ev.title,
-            date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-          };
-        }
-      }
-      for (const ev of (legacyEvents || []) as any[]) {
-        if (nextEventByGroup[ev.group_id]) continue;
-        const d = new Date(ev.event_date);
-        nextEventByGroup[ev.group_id] = {
-          name: ev.name,
-          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-        };
-      }
+  ...easyLadder({ prefix: "walks", emoji: "🚶", noun: "walk", nounPlural: "walks", category: "cardio",
+    tierNames: ["First Mile", "Wanderer", "Long Walker", "Pavement Pilgrim", "Hundred Miles On", "Quiet Roamer", "Pilgrim's Mile", "Endless Walker"] }),
 
-      const enriched = (groups || []).map((g: any) => ({
-        ...g,
-        is_member: memberGroupIds.includes(g.id),
-        next_event: nextEventByGroup[g.id] || null,
-      }));
+  ...easyLadder({ prefix: "biking", emoji: "🚴", noun: "ride", nounPlural: "rides", category: "cardio",
+    tierNames: ["First Ride", "Wind Caught", "Open Road", "Pedal Heart", "Hundred Miles Out", "Wind Drinker", "Long Hauler", "Horizon Chaser"] }),
 
-      return NextResponse.json({ groups: enriched });
-    }
+  ...easyLadder({ prefix: "swimming", emoji: "🏊", noun: "swim", nounPlural: "swims", category: "cardio",
+    tierNames: ["First Lap", "In the Water", "Smooth Stroke", "Lap Hunter", "Hundred Lengths Down", "Saltbound", "Tide Reader", "Born Wet"] }),
 
-    // ── Get single group with full details ─────────────────────────────────
-    if (action === 'get_group') {
-      const groupId = searchParams.get('groupId');
-      if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 });
+  ...easyLadder({ prefix: "rowing", emoji: "🚣", noun: "row session", nounPlural: "row sessions", category: "cardio",
+    tierNames: ["First Pull", "Steady Oar", "Long Pull", "Wake Maker", "Hundred Pulls In", "Silent Water", "Oar in Hand", "Quiet Wake"] }),
 
-      // Try UUID lookup first, then slug
-      let groupData: any = null;
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(groupId)) {
-        const { data } = await admin.from('groups').select('*').eq('id', groupId).single();
-        groupData = data;
-      }
-      if (!groupData) {
-        const { data } = await admin.from('groups').select('*').eq('slug', groupId).single();
-        groupData = data;
-      }
-      if (!groupData) return NextResponse.json({ group: null });
+  ...easyLadder({ prefix: "hiit", emoji: "🔥", noun: "HIIT session", nounPlural: "HIIT sessions", category: "cardio",
+    tierNames: ["First Burn", "Lungs Lit", "Burn Through", "Heart Pounder", "Hundred Burns Deep", "Fury Tempered", "Engine Run", "Inferno Trained"] }),
 
-      const gid = groupData.id;
+  ...easyLadder({ prefix: "pilates", emoji: "🤸", noun: "pilates session", nounPlural: "pilates sessions", category: "wellness",
+    tierNames: ["First Hundred", "Found the Core", "Quiet Strength", "Spine of Steel", "Hundred Sessions In", "Core Carved", "Hidden Power", "Built Quiet"] }),
 
-      // Single parallel fan-out for everything that depends on group id.
-      // Previously this was split into two sequential blocks (5 queries
-      // for posts/events/etc., THEN 2 more for the user's membership +
-      // joined challenges), which forced a second round-trip on every
-      // group page load. Folding both blocks into one Promise.all cuts
-      // ~50-200ms off the cold load.
-      const [
-        postsRes, eventsRes, challengesRes, notesRes, membersRes,
-        memCheckRes, cpRes,
-      ] = await Promise.all([
-        admin.from('group_posts')
-          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)')
-          .eq('group_id', gid)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        admin.from('group_events')
-          .select('*')
-          .eq('group_id', gid)
-          .order('event_date', { ascending: true }),
-        admin.from('challenges')
-          .select('*, challenge_participants(user_id, score, users(full_name, username, avatar_url))')
-          .eq('group_id', gid)
-          .order('created_at', { ascending: false }),
-        admin.from('community_notes')
-          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)')
-          .eq('group_id', gid)
-          .order('created_at', { ascending: false })
-          .limit(30),
-        admin.from('group_members')
-          .select('*, user:users!group_members_user_id_fkey(id,username,full_name,avatar_url)')
-          .eq('group_id', gid)
-          .order('joined_at', { ascending: true }),
-        // Membership check — only relevant when we have a userId. When
-        // unauthenticated, resolve immediately to a no-op shape.
-        userId
-          ? admin.from('group_members')
-              .select('role')
-              .eq('group_id', gid)
-              .eq('user_id', userId)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-        // User's joined challenges across the whole app — lets the client
-        // mark "joined" state on each challenge. Independent of which
-        // challenges this group has, so safe to run in parallel.
-        userId
-          ? admin.from('challenge_participants')
-              .select('challenge_id')
-              .eq('user_id', userId)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
+  ...easyLadder({ prefix: "boxing", emoji: "🥊", noun: "boxing session", nounPlural: "boxing sessions", category: "cardio",
+    tierNames: ["First Round", "Glove On", "Sharp Hands", "Combo Heavy", "Hundred Rounds Deep", "Canvas Marked", "Round Twelve", "Cornered No More"] }),
 
-      const isMember = !!(memCheckRes as any).data;
-      const joinedChallengeIds: string[] = ((cpRes as any).data || []).map((r: any) => r.challenge_id);
+  ...easyLadder({ prefix: "sports", emoji: "🏀", noun: "sports session", nounPlural: "sports sessions", category: "cardio",
+    tierNames: ["First Game", "In the Arena", "Game Sharp", "Box Score Regular", "Hundred Games In", "Court Vision", "Field Veteran", "Game Lifer"] }),
 
-      // Auto-lock expired challenges. We DON'T await these writes — the
-      // response goes back to the client immediately and the writes run
-      // in the background. We still flip is_active=false on the local
-      // copy so the client sees the correct state right away even though
-      // the DB write is in flight.
-      const nowIso = new Date().toISOString();
-      const expiredChallenges = (challengesRes.data || []).filter((ch: any) =>
-        ch.is_active && ch.deadline && ch.deadline < nowIso
-      );
-      if (expiredChallenges.length > 0) {
-        // Fire-and-forget: collect the promises but don't await them.
-        // Errors get logged and dropped — the next get_group call will
-        // retry the deactivate. This is fine because the local
-        // is_active=false flip below makes the client behave as if it
-        // already happened.
-        Promise.all(expiredChallenges.map((ch: any) =>
-          admin.from('challenges').update({ is_active: false }).eq('id', ch.id)
-        )).catch((e) => console.error('[get_group] auto-lock failed', e));
-        expiredChallenges.forEach((ch: any) => { ch.is_active = false; });
-      }
+  ...easyLadder({ prefix: "sauna", emoji: "🔆", noun: "sauna session", nounPlural: "sauna sessions", category: "wellness",
+    tierNames: ["First Heat", "Warm Bones", "Sweat Out", "Heat Patient", "Hundred Sweats", "Glowed Through", "Coal Walker", "Born of Heat"] }),
 
-      return NextResponse.json({
-        group: groupData,
-        posts: postsRes.data || [],
-        events: eventsRes.data || [],
-        challenges: challengesRes.data || [],
-        notes: notesRes.data || [],
-        members: membersRes.data || [],
-        is_member: isMember,
-        joined_challenge_ids: joinedChallengeIds,
-      });
-    }
+  ...easyLadder({ prefix: "cold-plunge", emoji: "🧊", noun: "cold plunge", nounPlural: "cold plunges", category: "wellness",
+    tierNames: ["First Frost", "Arctic Bliss", "Glacier Born", "Frozen Veins", "Deep Winter", "Cold Blooded", "Iceblood Sovereign", "Envoy of Winter"] }),
 
-    // ── Get leaderboard for a group ────────────────────────────────────────
-    if (action === 'get_leaderboard') {
-      const groupId = searchParams.get('groupId');
-      const challengeId = searchParams.get('challengeId');
-      if (!groupId) return NextResponse.json({ leaderboard: [] });
+  ...easyLadder({ prefix: "meditation", emoji: "🕊️", noun: "meditation", nounPlural: "meditations", category: "wellness",
+    tierNames: ["First Sit", "Settled", "Quiet Hour", "Steady Sitter", "Hundred Sits", "Open Sky Mind", "Empty Bowl", "Stillness Itself"] }),
 
-      let query = admin
-        .from('leaderboard_entries')
-        // Join challenges so we can filter out entries from completed/inactive challenges.
-        // `challenges!inner` enforces that the joined row exists — no orphan entries
-        // (where the challenge was deleted but leaderboard_entries rows lingered).
-        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url), challenge:challenges!inner(id,name,emoji,metric_label,is_active,deadline)')
-        .eq('group_id', groupId)
-        .eq('challenge.is_active', true)  // hide entries from ended/deleted challenges
-        .order('score', { ascending: false })
-        .limit(50);
+  ...easyLadder({ prefix: "breathwork", emoji: "🫁", noun: "breathwork session", nounPlural: "breathwork sessions", category: "wellness",
+    tierNames: ["First Breath", "Slow Inhale", "Long Exhale", "Breath Patient", "Hundred Cycles", "Steady Lungs", "Breath Keeper", "Air Mastered"] }),
 
-      if (challengeId) {
-        query = query.eq('challenge_id', challengeId);
-      }
+  ...easyLadder({ prefix: "stretching", emoji: "🤸", noun: "stretch session", nounPlural: "stretch sessions", category: "wellness",
+    tierNames: ["First Stretch", "Lengthened", "Open Hips", "Mobile Body", "Hundred Sessions Loose", "Free Spine", "Limber Lifer", "Bend Like Water"] }),
 
-      const { data } = await query;
+  // ── Recovery & therapy modalities ────────────────────────────────────────
+  ...easyLadder({ prefix: "infrared-sauna", emoji: "♨️", noun: "infrared sauna session", nounPlural: "infrared sauna sessions", category: "wellness",
+    tierNames: ["First Glow", "Warmed Through", "Deep Heat", "Sweat Lodge", "Hundred Glows", "Cellular Quiet", "Light Cooked", "Slow Burn"] }),
 
-      // Second-pass filter: drop anything whose challenge deadline has passed.
-      // The is_active flag above catches explicit deactivation; this catches
-      // time-based expiry where is_active wasn't updated.
-      const nowIso = new Date().toISOString();
-      const filtered = (data || []).filter((entry: any) =>
-        !entry.challenge?.deadline || entry.challenge.deadline > nowIso
-      );
-      return NextResponse.json({ leaderboard: filtered });
-    }
+  ...easyLadder({ prefix: "red-light", emoji: "🔴", noun: "red light therapy session", nounPlural: "red light therapy sessions", category: "wellness",
+    tierNames: ["First Light", "Photon Caught", "Red Bath", "Light Patient", "Hundred Sessions Lit", "Slow Repair", "Light Worker", "Sun Mimic"] }),
 
-    // ── Get user's joined groups ───────────────────────────────────────────
-    if (action === 'get_user_groups') {
-      const userId = searchParams.get('userId');
-      if (!userId) return NextResponse.json({ groups: [] });
-      const { data: memberships } = await admin
-        .from('group_members')
-        .select('group_id, groups(*)')
-        .eq('user_id', userId);
-      const groups = (memberships || []).map((m: any) => m.groups).filter(Boolean);
-      return NextResponse.json({ groups });
-    }
+  ...easyLadder({ prefix: "massage", emoji: "💆", noun: "massage", nounPlural: "massages", category: "wellness",
+    tierNames: ["First Knead", "Tension Released", "Knot Loosener", "Soft Tissue Patient", "Hundred Sessions Smooth", "Loose Body", "Bodywork Veteran", "Fully Unwound"] }),
 
-    // ── Get event comments ─────────────────────────────────────────────────
-    if (action === 'get_event_comments') {
-      const eventId = searchParams.get('eventId');
-      const { data: comments } = await admin
-        .from('group_event_comments')
-        .select('*, users(full_name, username)')
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: true });
-      return NextResponse.json({
-        comments: (comments || []).map((c: any) => ({
-          user: c.users?.full_name || c.users?.username || 'Anonymous',
-          text: c.content,
-          time: new Date(c.created_at).toLocaleTimeString(),
-        })),
-      });
-    }
+  ...easyLadder({ prefix: "float-tank", emoji: "🌊", noun: "float tank session", nounPlural: "float tank sessions", category: "wellness",
+    tierNames: ["First Float", "Suspended", "Sensory Quiet", "Weightless", "Hundred Floats Deep", "Brine Soaked", "Long Drift", "Inner Sea"] }),
 
-    // ── Get activity comments ──────────────────────────────────────────────
-    if (action === 'get_activity_comments') {
-      const cardId = searchParams.get('cardId');
-      if (!cardId) return NextResponse.json({ comments: [] });
-      const { data } = await admin
-        .from('activity_comments')
-        .select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url)')
-        .eq('activity_card_id', cardId)
-        .order('created_at', { ascending: true });
-      return NextResponse.json({ comments: data || [] });
-    }
+  ...easyLadder({ prefix: "mobility", emoji: "🦵", noun: "mobility session", nounPlural: "mobility sessions", category: "wellness",
+    tierNames: ["First Open", "Joints Awake", "Range Found", "Free Hips", "Hundred Sessions Loose", "Limber Architect", "Mobility Lifer", "Move Like Water"] }),
 
-    // ── Get local posts by city ────────────────────────────────────────────
-    if (action === 'get_local_posts') {
-      const city = searchParams.get('city') || 'Las Vegas';
-      const cityKey = city.split(',')[0].trim();
-      const { data } = await admin
-        .from('posts')
-        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
-        .ilike('location', `%${cityKey}%`)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      return NextResponse.json({ posts: data || [] });
-    }
+  ...easyLadder({ prefix: "journaling", emoji: "📓", noun: "journal entry", nounPlural: "journal entries", category: "wellness",
+    tierNames: ["First Page", "Honest Ink", "Daily Pages", "Reflection Habit", "Hundred Entries In", "Open Pages", "Self-Witness", "Recorded Life"] }),
 
-    // ── MODERATION: Get list of users the current user has blocked ─────────
-    // Returns user profile info for each blocked user so the settings page
-    // can render the list with avatars. Private endpoint — only returns
-    // blocks where the caller is the blocker.
-    if (action === 'get_blocked_users') {
-      if (!userId) return NextResponse.json({ blocked: [] });
-      const { data } = await admin
-        .from('user_blocks')
-        .select('created_at, blocked:users!user_blocks_blocked_id_fkey(id, username, full_name, avatar_url)')
-        .eq('blocker_id', userId)
-        .order('created_at', { ascending: false });
-      return NextResponse.json({ blocked: data || [] });
-    }
+  ...easyLadder({ prefix: "sunlight", emoji: "☀️", noun: "sunlight session", nounPlural: "sunlight sessions", category: "wellness",
+    tierNames: ["First Light", "Sun Caught", "Daily Dose", "Sunwarm", "Hundred Mornings Lit", "Sun Native", "Light Drinker", "Sun Born"] }),
+  // ─────────────────────────────────────────────────────────────────────────
 
-    return NextResponse.json({ error: 'Unknown GET action' }, { status: 400 });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  ...easyLadder({ prefix: "wellness", emoji: "🌱", noun: "wellness activity", nounPlural: "wellness activities", category: "wellness",
+    tierNames: ["First Practice", "Tending", "Inward Habit", "Quiet Discipline", "Hundred Practices In", "Whole-Self Care", "Soul Maintained", "Inner Garden"] }),
+
+  ...easyLadder({ prefix: "nutrition", emoji: "🥗", noun: "nutrition log", nounPlural: "nutrition logs", category: "nutrition",
+    tierNames: ["First Log", "Eating Honest", "Fuel Aware", "Macro Conscious", "Hundred Logs Strong", "Disciplined Plate", "Built From Food", "Lifelong Fueled"] }),
+
+  // Fasting ladder — counts fasts ≥ 12 hours. Hours don't matter beyond
+  // the 12h threshold; every qualifying fast = +1 toward the ladder.
+  // The existing "fasting" credential (24h fast) stays separate.
+  ...easyLadder({ prefix: "fasting-12h", emoji: "⏳", noun: "12+ hour fast", nounPlural: "12+ hour fasts", category: "nutrition",
+    tierNames: ["First Fast", "Hunger Tamed", "Empty Patient", "Discipline Found", "Hundred Fasts Through", "Hollow Strong", "Monk Mode", "Ascetic"] }),
+
+  ...easyLadder({ prefix: "posts", emoji: "📸", noun: "post", nounPlural: "posts", category: "social",
+    tierNames: ["First Post", "Showing Up", "Voice Found", "Regular Signal", "Hundred Posts Deep", "Storyteller", "Always Posting", "Lifelong Sharer"] }),
+
+  ...easyLadder({ prefix: "followers", emoji: "👥", noun: "follower", nounPlural: "followers", category: "social",
+    tierNames: ["First Follower", "Rising", "Got a Crowd", "Voice Heard", "Hundred Following", "Star", "Beacon", "Icon"] }),
+
+  ...easyLadder({ prefix: "likes", emoji: "❤️", noun: "like received", nounPlural: "likes received", category: "social",
+    tierNames: ["First Like", "Liked", "Crowd Pleaser", "Fan Favorite", "Hundred Hearts Strong", "Inspiration", "Idol", "Adored"] }),
+
+  ...easyLadder({ prefix: "comments", emoji: "💬", noun: "comment", nounPlural: "comments", category: "social",
+    tierNames: ["First Word", "Speaking Up", "Conversationalist", "Community Voice", "Hundred Conversations", "Pillar", "Mentor", "Sage"] }),
+
+  ...easyLadder({ prefix: "early-bird", emoji: "🌅", noun: "pre-7am workout", nounPlural: "pre-7am workouts", category: "consistency",
+    tierNames: ["Early Bird", "Up With the Sun", "Dawn Regular", "Sunrise Hunter", "Hundred Mornings Up", "First Light", "Day Earned", "Wakes the Sun"] }),
+
+  // ── Streak (different thresholds: 3/7/14/30/60/90/180/365) ──
+  // Cohesive theme: time / weather / patience. Same vibe as Cold Plunge ladder.
+  { id:"streak-3",   emoji:"🔥", label:"Three Days Lit",   desc:"Logged activity 3 days in a row",   category:"consistency" },
+  { id:"streak-7",   emoji:"🔥", label:"Week Strong",      desc:"Logged activity 7 days in a row",   category:"consistency" },
+  { id:"streak-14",  emoji:"🔥", label:"Fourteen Deep",    desc:"Logged activity 14 days in a row",  category:"consistency" },
+  { id:"streak-30",  emoji:"🔥", label:"Month In",         desc:"Logged activity 30 days in a row",  category:"consistency" },
+  { id:"streak-60",  emoji:"🔥", label:"Two Months Hot",   desc:"Logged activity 60 days in a row",  category:"consistency" },
+  { id:"streak-90",  emoji:"🔥", label:"Quarter Year",     desc:"Logged activity 90 days in a row",  category:"consistency" },
+  { id:"streak-180", emoji:"💎", label:"Half a Year",      desc:"Logged activity 180 days in a row", category:"consistency" },
+  { id:"streak-365", emoji:"🌋", label:"Year Round",       desc:"Logged activity 365 days in a row", category:"consistency" },
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  STRENGTH LADDERS (4 tiers @ weight thresholds)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { id:"bench-200", emoji:"🪨", label:"Bench 200",  desc:"Bench pressed 200 lbs", category:"strength" },
+  { id:"bench-300", emoji:"💪", label:"Bench 300",  desc:"Bench pressed 300 lbs", category:"strength" },
+  { id:"bench-400", emoji:"🏋️", label:"Bench 400",  desc:"Bench pressed 400 lbs", category:"strength" },
+  { id:"bench-500", emoji:"👹", label:"Bench 500",  desc:"Bench pressed 500 lbs", category:"strength" },
+
+  { id:"squat-200", emoji:"🦵", label:"Squat 200",  desc:"Back squatted 200 lbs", category:"strength" },
+  { id:"squat-300", emoji:"💪", label:"Squat 300",  desc:"Back squatted 300 lbs", category:"strength" },
+  { id:"squat-400", emoji:"🏋️", label:"Squat 400",  desc:"Back squatted 400 lbs", category:"strength" },
+  { id:"squat-500", emoji:"👹", label:"Squat 500",  desc:"Back squatted 500 lbs", category:"strength" },
+
+  { id:"deadlift-200", emoji:"⚓", label:"Deadlift 200", desc:"Deadlifted 200 lbs", category:"strength" },
+  { id:"deadlift-300", emoji:"💪", label:"Deadlift 300", desc:"Deadlifted 300 lbs", category:"strength" },
+  { id:"deadlift-400", emoji:"🏋️", label:"Deadlift 400", desc:"Deadlifted 400 lbs", category:"strength" },
+  { id:"deadlift-500", emoji:"👹", label:"Deadlift 500", desc:"Deadlifted 500 lbs", category:"strength" },
+
+  { id:"total-800",  emoji:"🏆", label:"800 lb Club",   desc:"Squat + Bench + Deadlift ≥ 800 lbs",   category:"strength" },
+  { id:"total-1000", emoji:"🏆", label:"1,000 lb Club", desc:"Squat + Bench + Deadlift ≥ 1,000 lbs", category:"strength" },
+  { id:"total-1300", emoji:"👑", label:"1,300 lb Club", desc:"Squat + Bench + Deadlift ≥ 1,300 lbs", category:"strength" },
+  { id:"total-1500", emoji:"🌋", label:"1,500 lb Club", desc:"Squat + Bench + Deadlift ≥ 1,500 lbs", category:"strength" },
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  HARD EVENT LADDERS (5 tiers @ 1/3/5/10/20)
+  // ════════════════════════════════════════════════════════════════════════
+
+  ...hardLadder({ prefix: "marathon", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🏅", label:"Marathoner",       desc:"Completed your first marathon" },
+    { threshold: 3,  emoji:"🔥", label:"Pavement Pounder", desc:"Completed 3 marathons" },
+    { threshold: 5,  emoji:"💀", label:"Asphalt Eater",    desc:"Completed 5 marathons" },
+    { threshold: 10, emoji:"⚡", label:"Mile Devourer",    desc:"Completed 10 marathons" },
+    { threshold: 20, emoji:"👹", label:"Distance Demon",   desc:"Completed 20 marathons" },
+  ]}),
+
+  ...hardLadder({ prefix: "ultra", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🌄", label:"Ultra Animal",     desc:"Completed your first ultra (50K+)" },
+    { threshold: 3,  emoji:"🩸", label:"Trail Reaper",     desc:"Completed 3 ultras" },
+    { threshold: 5,  emoji:"🗡️", label:"Mountain Killer",   desc:"Completed 5 ultras" },
+    { threshold: 10, emoji:"🐺", label:"Wild Born",        desc:"Completed 10 ultras" },
+    { threshold: 20, emoji:"🌋", label:"Untamed",          desc:"Completed 20 ultras" },
+  ]}),
+
+  ...hardLadder({ prefix: "ironman", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🦾", label:"Ironman",         desc:"Completed your first Ironman" },
+    { threshold: 3,  emoji:"⚙️", label:"Tri-Forged",       desc:"Completed 3 Ironmans" },
+    { threshold: 5,  emoji:"💀", label:"Iron Phantom",    desc:"Completed 5 Ironmans" },
+    { threshold: 10, emoji:"⚔️", label:"Iron Shogun",      desc:"Completed 10 Ironmans" },
+    { threshold: 20, emoji:"👑", label:"Iron God",        desc:"Completed 20 Ironmans" },
+  ]}),
+
+  ...hardLadder({ prefix: "half-marathon", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🏃", label:"Half Slayer",         desc:"Completed your first half marathon" },
+    { threshold: 3,  emoji:"🩸", label:"13.1 Killer",         desc:"Completed 3 half marathons" },
+    { threshold: 5,  emoji:"💉", label:"Distance Dealer",     desc:"Completed 5 half marathons" },
+    { threshold: 10, emoji:"👻", label:"Endurance Wraith",    desc:"Completed 10 half marathons" },
+    { threshold: 20, emoji:"⚰️", label:"13.1 Immortal",        desc:"Completed 20 half marathons" },
+  ]}),
+
+  // 5K — moved from hard ladder (1/3/5/10/20) to easy ladder (1/5/20/50/100/200/500/1000)
+  // because hitting a 5K distance is common, not "hard". Auto-detects: counts
+  // any running workout where distance ≥ 3.1 mi. Uses wilderness/trail naming.
+  ...easyLadder({ prefix: "5k", emoji: "🎽", noun: "5K", nounPlural: "5Ks", category: "cardio",
+    tierNames: ["First 5K", "Trail 5K", "5K Regular", "5K Hunter", "Hundred 5Ks Deep", "5K Tracker", "5K Native", "5K Lifer"] }),
+
+  ...hardLadder({ prefix: "10k", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🏁", label:"10K Crusher",          desc:"Completed your first 10K" },
+    { threshold: 3,  emoji:"💣", label:"Double Digit Hitman",  desc:"Completed 3 10Ks" },
+    { threshold: 5,  emoji:"🐂", label:"10K Beast",            desc:"Completed 5 10Ks" },
+    { threshold: 10, emoji:"🦂", label:"10K Tyrant",           desc:"Completed 10 10Ks" },
+    { threshold: 20, emoji:"⚔️", label:"10K Conqueror",         desc:"Completed 20 10Ks" },
+  ]}),
+
+  ...hardLadder({ prefix: "triathlon", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🏊", label:"Triathlete",              desc:"Completed your first triathlon" },
+    { threshold: 3,  emoji:"🌊", label:"Three-Element Killer",    desc:"Completed 3 triathlons" },
+    { threshold: 5,  emoji:"⚡", label:"Tri Hunter",              desc:"Completed 5 triathlons" },
+    { threshold: 10, emoji:"🔱", label:"Iron Triad",              desc:"Completed 10 triathlons" },
+    { threshold: 20, emoji:"👁️", label:"Triathlon Demigod",        desc:"Completed 20 triathlons" },
+  ]}),
+
+  ...hardLadder({ prefix: "century-ride", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🚴", label:"Century Rider",      desc:"Completed your first 100-mile ride" },
+    { threshold: 3,  emoji:"🌀", label:"Pedal Phantom",      desc:"Completed 3 century rides" },
+    { threshold: 5,  emoji:"🦅", label:"Asphalt Hawk",       desc:"Completed 5 century rides" },
+    { threshold: 10, emoji:"⚡", label:"Long Haul Killer",   desc:"Completed 10 century rides" },
+    { threshold: 20, emoji:"🏆", label:"Century Tyrant",     desc:"Completed 20 century rides" },
+  ]}),
+
+  ...hardLadder({ prefix: "swim-mile", category: "cardio", tiers: [
+    { threshold: 1,  emoji:"🌊", label:"Open Water Swimmer",   desc:"Swam 1 mile in open water" },
+    { threshold: 3,  emoji:"🌀", label:"Tide Walker",          desc:"Completed 3 open water miles" },
+    { threshold: 5,  emoji:"🦈", label:"Saltborn",             desc:"Completed 5 open water miles" },
+    { threshold: 10, emoji:"🪼", label:"Deep Water Reaper",    desc:"Completed 10 open water miles" },
+    { threshold: 20, emoji:"🔱", label:"Sea God",              desc:"Completed 20 open water miles" },
+  ]}),
+
+  ...hardLadder({ prefix: "murph", category: "challenges", tiers: [
+    { threshold: 1,  emoji:"🇺🇸", label:"Murph Survivor",     desc:"Completed your first Murph" },
+    { threshold: 3,  emoji:"🎖️", label:"Hero Workout",         desc:"Completed Murph 3 times" },
+    { threshold: 5,  emoji:"💥", label:"Murph Mauler",         desc:"Completed Murph 5 times" },
+    { threshold: 10, emoji:"🦅", label:"Memorial Beast",       desc:"Completed Murph 10 times" },
+    { threshold: 20, emoji:"🛡️", label:"Hero Made Flesh",      desc:"Completed Murph 20 times" },
+  ]}),
+
+  ...hardLadder({ prefix: "75-hard", category: "challenges", tiers: [
+    { threshold: 1,  emoji:"🔩", label:"75 Hard Survivor",   desc:"Completed 75 Hard once" },
+    { threshold: 3,  emoji:"🧊", label:"Mental Steel",       desc:"Completed 75 Hard 3 times" },
+    { threshold: 5,  emoji:"⚙️", label:"Discipline Engine",   desc:"Completed 75 Hard 5 times" },
+    { threshold: 10, emoji:"👹", label:"75 Hard Tyrant",     desc:"Completed 75 Hard 10 times" },
+    { threshold: 20, emoji:"💎", label:"Unbreakable",        desc:"Completed 75 Hard 20 times" },
+  ]}),
+
+  ...hardLadder({ prefix: "spartan", category: "challenges", tiers: [
+    { threshold: 1,  emoji:"🏔️", label:"Spartan",              desc:"Completed your first Spartan Race" },
+    { threshold: 3,  emoji:"🛡️", label:"Phalanx",              desc:"Completed 3 Spartan Races" },
+    { threshold: 5,  emoji:"🩸", label:"300 Bloodline",        desc:"Completed 5 Spartan Races" },
+    { threshold: 10, emoji:"⚔️", label:"Spartan Centurion",     desc:"Completed 10 Spartan Races" },
+    { threshold: 20, emoji:"👑", label:"Spartan King",         desc:"Completed 20 Spartan Races" },
+  ]}),
+
+  ...hardLadder({ prefix: "tough-mudder", category: "challenges", tiers: [
+    { threshold: 1,  emoji:"🪤", label:"Mud Slayer",         desc:"Completed your first Tough Mudder" },
+    { threshold: 3,  emoji:"🩸", label:"Filth Forged",       desc:"Completed 3 Tough Mudders" },
+    { threshold: 5,  emoji:"🪓", label:"Mud Reaper",         desc:"Completed 5 Tough Mudders" },
+    { threshold: 10, emoji:"🌩️", label:"Storm Born",          desc:"Completed 10 Tough Mudders" },
+    { threshold: 20, emoji:"🐗", label:"Mudborn Legend",     desc:"Completed 20 Tough Mudders" },
+  ]}),
+
+  ...hardLadder({ prefix: "crossfit-open", category: "challenges", tiers: [
+    { threshold: 1,  emoji:"🏅", label:"Open Athlete",     desc:"Competed in your first CrossFit Open" },
+    { threshold: 3,  emoji:"🔥", label:"Open Veteran",     desc:"Competed in 3 CrossFit Opens" },
+    { threshold: 5,  emoji:"💀", label:"Box Killer",       desc:"Competed in 5 CrossFit Opens" },
+    { threshold: 10, emoji:"🦍", label:"Open Beast",       desc:"Competed in 10 CrossFit Opens" },
+    { threshold: 20, emoji:"👑", label:"Open Legend",      desc:"Competed in 20 CrossFit Opens" },
+  ]}),
+
+  ...hardLadder({ prefix: "powerlifter", category: "strength", tiers: [
+    { threshold: 1,  emoji:"🏆", label:"Meet Veteran",       desc:"Competed in your first powerlifting meet" },
+    { threshold: 3,  emoji:"🦁", label:"Platform Beast",     desc:"Competed in 3 powerlifting meets" },
+    { threshold: 5,  emoji:"🦾", label:"Iron Champion",      desc:"Competed in 5 powerlifting meets" },
+    { threshold: 10, emoji:"👹", label:"Meet Tyrant",        desc:"Competed in 10 powerlifting meets" },
+    { threshold: 20, emoji:"👑", label:"Platform God",       desc:"Competed in 20 powerlifting meets" },
+  ]}),
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  SINGLE-SHOT CREDENTIALS
+  // ════════════════════════════════════════════════════════════════════════
+
+  // Strength singles
+  { id:"iron-maiden",     emoji:"⚒️", label:"Iron Maiden",      desc:"Deadlifted 2x your bodyweight",          category:"strength" },
+  { id:"overhead-bw",     emoji:"🙌", label:"Overhead Master",  desc:"Overhead pressed your bodyweight",       category:"strength" },
+  { id:"weighted-pullup", emoji:"🧲", label:"Weighted Pull-Up", desc:"Completed a pull-up with added weight",  category:"strength" },
+  { id:"kettlebell-king", emoji:"🔔", label:"Kettlebell King",  desc:"Completed 100 kettlebell swings in a row", category:"strength" },
+  { id:"6min-mile",       emoji:"⚡", label:"6 Minute Mile",     desc:"Ran a mile in under 6 minutes",          category:"cardio" },
+
+  // Single-session feats
+  { id:"plank-5min",  emoji:"⏱️", label:"Plank Legend",  desc:"Held a plank for 5 minutes",           category:"challenges" },
+  { id:"burpee-100",  emoji:"🌀", label:"Burpee Beast",  desc:"Completed 100 burpees in one session", category:"challenges" },
+  { id:"pullup-20",   emoji:"⬆️", label:"Pull-Up Pro",   desc:"Did 20 consecutive pull-ups",          category:"challenges" },
+  { id:"pushup-100",  emoji:"⬇️", label:"100 Push-Ups",  desc:"Did 100 push-ups in one session",      category:"challenges" },
+  { id:"iron-will",   emoji:"🪖", label:"Iron Will",     desc:"Completed a 30-day challenge",         category:"challenges" },
+
+  // Personal credentials
+  { id:"veteran",         emoji:"🎖️", label:"Veteran",          desc:"US Military Service",                       category:"special" },
+  { id:"coach",           emoji:"🎓", label:"Coach",             desc:"Became a certified fitness coach",          category:"special" },
+  { id:"personal-trainer",emoji:"📋", label:"Personal Trainer",  desc:"Earned a personal training certification",  category:"special" },
+  { id:"transformation",  emoji:"🦋", label:"Transformation",    desc:"Completed a 90-day body transformation",    category:"special" },
+  { id:"comeback-story",  emoji:"💫", label:"Comeback Story",    desc:"Returned from injury and hit a new PR",     category:"special" },
+
+  // Lifestyle / event
+  { id:"birthday-workout",  emoji:"🎂", label:"Birthday Grind",      desc:"Worked out on your birthday",                   category:"special" },
+  { id:"new-years",         emoji:"🎆", label:"New Year, New Me",    desc:"Logged a workout on January 1st",               category:"special" },
+  { id:"holiday-hustle",    emoji:"🎄", label:"Holiday Hustle",      desc:"Worked out on a major holiday",                 category:"special" },
+  { id:"outdoor-adventurer",emoji:"🧗", label:"Outdoor Adventurer",  desc:"Completed a hike, climb, or outdoor adventure", category:"special" },
+  { id:"sport-competitor",  emoji:"🏆", label:"Competitor",          desc:"Competed in any athletic event",                category:"special" },
+
+  // Workout Partner — 8-tier ladder. Tagging at least one workout partner on
+  // a logged workout counts toward this. Old single "collab" badge id is kept
+  // as a graceful no-op (still in DB on existing accounts) but no longer
+  // appears in the catalog. Engine awards based on count of workouts where
+  // tagged_user_ids has length >= 1.
+  ...easyLadder({ prefix: "partner", emoji: "🤜", noun: "partner workout", nounPlural: "partner workouts", category: "social",
+    tierNames: ["Lift Buddy", "Squad Up", "Ride or Die", "In Sync", "Inseparable", "Iron Brotherhood", "Two Hearts One Goal", "Forever Twos"] }),
+
+  // Social one-offs
+  { id:"group-member", emoji:"🤝",  label:"Group Member", desc:"Joined your first group", category:"social" },
+  { id:"group-leader", emoji:"🎙️", label:"Group Leader", desc:"Created a group",         category:"social" },
+
+  // Nutrition one-offs
+  { id:"calorie-goals",  emoji:"🎯", label:"On Target",         desc:"Hit calorie goal 7 days in a row",      category:"nutrition" },
+  { id:"protein-streak", emoji:"🥩", label:"Protein Streak",    desc:"Hit protein goal 14 days in a row",     category:"nutrition" },
+  { id:"meal-prep",      emoji:"🍱", label:"Meal Prepper",      desc:"Logged 10 weeks of meal prep",          category:"nutrition" },
+  { id:"plant-week",     emoji:"🌱", label:"Plant Week",        desc:"Ate plant-based for 7 days",            category:"nutrition" },
+  { id:"sugar-free",     emoji:"🚫", label:"Sugar Free",        desc:"Avoided added sugar for 14 days",       category:"nutrition" },
+  { id:"macro-master",   emoji:"⚖️", label:"Macro Master",       desc:"Hit all 3 macro goals in a single day", category:"nutrition" },
+  { id:"fasting",        emoji:"⏳", label:"Fasting Pro",       desc:"Completed a 24-hour fast",              category:"nutrition" },
+  { id:"clean-30",       emoji:"🥦", label:"Clean 30",          desc:"Ate clean for 30 days straight",        category:"nutrition" },
+];
+
+// ── BADGE CLASSIFICATION HELPERS ─────────────────────────────────────────
+
+export const EASY_LADDER_PREFIXES = [
+  "workouts", "runs", "lifts", "yoga", "walks", "biking", "swimming", "rowing",
+  "hiit", "pilates", "boxing", "sports", "sauna", "cold-plunge", "meditation",
+  "breathwork", "stretching",
+  // New wellness modalities (Apr 2026 expansion)
+  "infrared-sauna", "red-light", "massage", "float-tank", "mobility",
+  "journaling", "sunlight",
+  "wellness", "nutrition", "fasting-12h", "posts",
+  "followers", "likes", "comments", "early-bird",
+  // Moved from hard ladder Apr 2026 — 5K is common, not a rare event
+  "5k",
+  // Workout Partner ladder — was missing here, which left every tier
+  // (partner-1 through partner-1000) showing in the manual claim modal.
+  // Users could click "Forever Twos · 200 partner workouts" and self-award
+  // it without ever logging a partner workout. Adding the prefix here
+  // moves the whole family into AUTO_AWARDED_BADGE_IDS, hiding it from
+  // the modal. The post-page engine already calls awardLadder('partner', N)
+  // on workout saves, so progression continues to work correctly.
+  "partner",
+];
+
+export const EASY_LADDER_THRESHOLDS = [1, 5, 20, 50, 100, 200, 500, 1000];
+
+export const STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 90, 180, 365];
+
+export const HARD_LADDER_PREFIXES = [
+  "marathon", "ultra", "ironman", "half-marathon", "10k",
+  "triathlon", "century-ride", "swim-mile", "murph", "75-hard",
+  "spartan", "tough-mudder", "crossfit-open", "powerlifter",
+];
+export const HARD_LADDER_THRESHOLDS = [1, 3, 5, 10, 20];
+
+export const STRENGTH_LADDER_PREFIXES = ["bench", "squat", "deadlift"];
+export const STRENGTH_LADDER_WEIGHTS = [200, 300, 400, 500];
+export const TOTAL_LADDER_WEIGHTS = [800, 1000, 1300, 1500];
+
+const ALL_KNOWN_PREFIXES = [
+  ...EASY_LADDER_PREFIXES,
+  ...HARD_LADDER_PREFIXES,
+  ...STRENGTH_LADDER_PREFIXES,
+  "streak", "total",
+];
+
+/** Get the family prefix from a badge ID, e.g. "yoga-50" → "yoga".
+ *  Uses longest-prefix match so "cold-plunge-5" maps to "cold-plunge". */
+export function getBadgePrefix(badgeId: string): string | null {
+  const parts = badgeId.split("-");
+  if (parts.length < 2) return null;
+  for (let i = parts.length - 1; i > 0; i--) {
+    const candidate = parts.slice(0, i).join("-");
+    if (ALL_KNOWN_PREFIXES.includes(candidate)) return candidate;
   }
+  return null;
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const { action, payload } = await req.json();
-
-    if (action === 'award_xp') {
-      const { userId, category } = payload || {};
-      const allowed = new Set(['workout', 'cardio', 'nutrition', 'wellness', 'feed_post']);
-      if (!userId || !allowed.has(category)) {
-        return NextResponse.json({ error: 'Missing or invalid XP award fields' }, { status: 400 });
-      }
-
-      const xpAmount = 3;
-      const { error: insertError } = await admin
-        .from('user_xp_log')
-        .insert({ user_id: userId, category, xp_amount: xpAmount });
-
-      if (insertError) {
-        if (insertError.code === '23505') {
-          const { data: profile, error: profileError } = await admin
-            .from('users')
-            .select('xp_in_level, current_level')
-            .eq('id', userId)
-            .single();
-          if (profileError) {
-            console.error('[xp] duplicate award lookup failed:', profileError.message);
-            return NextResponse.json({ error: profileError.message }, { status: 500 });
-          }
-          return NextResponse.json({
-            awarded: false,
-            newXp: profile?.xp_in_level ?? 0,
-            currentLevel: profile?.current_level ?? 1,
-            leveledUp: false,
-          });
-        }
-
-        console.error('[xp] service-role insert failed:', insertError.message, { userId, category });
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
-      }
-
-      const { data: profile, error: readError } = await admin
-        .from('users')
-        .select('xp_in_level, current_level')
-        .eq('id', userId)
-        .single();
-      if (readError || !profile) {
-        console.error('[xp] profile read failed after insert:', readError?.message, { userId, category });
-        return NextResponse.json({ error: readError?.message || 'User profile not found after XP insert' }, { status: 500 });
-      }
-
-      const newXp = (profile.xp_in_level ?? 0) + xpAmount;
-      const { error: updateError } = await admin
-        .from('users')
-        .update({ xp_in_level: newXp })
-        .eq('id', userId);
-      if (updateError) {
-        console.error('[xp] xp_in_level update failed:', updateError.message, { userId, category, newXp });
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
-
-      return NextResponse.json({
-        awarded: true,
-        newXp,
-        currentLevel: profile.current_level ?? 1,
-        leveledUp: false,
-      });
-    }
-
-    // ── Create or find conversation between two users ──────────────────────
-    if (action === 'create_conversation') {
-      const { userId, otherUserId } = payload;
-      if (!userId || !otherUserId) return NextResponse.json({ error: 'Missing user IDs' }, { status: 400 });
-
-      // Block check: neither party can start a conversation if a block exists
-      // in either direction. Returns a clean 403 so the UI can show an error.
-      const { data: blockExists } = await admin.from('user_blocks').select('blocker_id')
-        .or(`and(blocker_id.eq.${userId},blocked_id.eq.${otherUserId}),and(blocker_id.eq.${otherUserId},blocked_id.eq.${userId})`)
-        .limit(1);
-      if (blockExists && blockExists.length > 0) {
-        return NextResponse.json({ error: 'Cannot start conversation with this user' }, { status: 403 });
-      }
-
-      // Check existing shared conversation
-      const { data: myConvs } = await admin
-        .from('conversation_participants').select('conversation_id').eq('user_id', userId);
-      const myIds = (myConvs || []).map((c: any) => c.conversation_id);
-
-      if (myIds.length > 0) {
-        const { data: shared } = await admin
-          .from('conversation_participants').select('conversation_id')
-          .eq('user_id', otherUserId).in('conversation_id', myIds);
-        if (shared && shared.length > 0) {
-          return NextResponse.json({ conversationId: shared[0].conversation_id, existing: true });
-        }
-      }
-
-      // Create new
-      const { data: conv, error } = await admin.from('conversations').insert({}).select().single();
-      if (error || !conv) return NextResponse.json({ error: error?.message }, { status: 500 });
-
-      await admin.from('conversation_participants').insert([
-        { conversation_id: conv.id, user_id: userId },
-        { conversation_id: conv.id, user_id: otherUserId },
-      ]);
-
-      return NextResponse.json({ conversationId: conv.id, existing: false });
-    }
-
-    // ── Send message ───────────────────────────────────────────────────────
-    if (action === 'send_message') {
-      const { conversationId, senderId, content } = payload;
-
-      // Block check: find other participants and verify no block in either
-      // direction. Using the server ensures a malicious client can't bypass
-      // the client-side block filter on the messages page.
-      const { data: otherParts } = await admin
-        .from('conversation_participants').select('user_id').eq('conversation_id', conversationId).neq('user_id', senderId);
-      if (otherParts && otherParts.length > 0) {
-        const otherIds = otherParts.map((p: any) => p.user_id);
-        const { data: blockExists } = await admin.from('user_blocks').select('blocker_id')
-          .or(`and(blocker_id.eq.${senderId},blocked_id.in.(${otherIds.join(',')})),and(blocker_id.in.(${otherIds.join(',')}),blocked_id.eq.${senderId})`)
-          .limit(1);
-        if (blockExists && blockExists.length > 0) {
-          return NextResponse.json({ error: 'Cannot send message' }, { status: 403 });
-        }
-      }
-
-      const { data, error } = await admin.from('messages').insert({
-        conversation_id: conversationId,
-        sender_id: senderId,
-        content,
-      }).select().single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Create notification for the other participant
-      const { data: participants } = await admin
-        .from('conversation_participants').select('user_id').eq('conversation_id', conversationId);
-      const others = (participants || []).filter((p: any) => p.user_id !== senderId);
-      if (others.length > 0) {
-        const { data: sender } = await admin.from('users').select('full_name,username').eq('id', senderId).single();
-        await admin.from('notifications').insert(others.map((p: any) => ({
-          user_id: p.user_id,
-          type: 'message',
-          from_user_id: senderId,
-          reference_id: conversationId,
-          body: `${sender?.full_name || sender?.username || 'Someone'} sent you a message`,
-          read: false,
-        }))).select(); // ignore errors if table doesn't exist yet
-      }
-
-      return NextResponse.json({ message: data });
-    }
-
-    // ── Post activity comment ──────────────────────────────────────────────
-    // ── Get feed posts (with comments) ──────────────────────────────────────
-    // Uses the admin client so the nested comments select isn't filtered by
-    // RLS. Without this, the comments come back as empty arrays even when
-    // they exist in the DB.
-    //
-    // When `followingOnly: true` is passed, restrict results to posts from
-    // users the viewer follows. Used by the "Following" feed tab.
-    if (action === 'get_feed_posts') {
-      const { viewerId, page, pageSize, followingOnly } = payload || {};
-      const PAGE_SIZE = pageSize || 10;
-      const PAGE = page || 0;
-
-      // ── Following-only mode (used by the Following tab) ────────────────
-      if (followingOnly) {
-        if (!viewerId) return NextResponse.json({ posts: [] });
-        const { data: follows } = await admin.from('follows')
-          .select('following_id').eq('follower_id', viewerId);
-        if (!follows || follows.length === 0) {
-          return NextResponse.json({ posts: [] });
-        }
-        const followingIds = follows.map((f: any) => f.following_id);
-
-        const { data, error } = await admin
-          .from('posts')
-          .select(`*, users (id, username, full_name, avatar_url, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
-          .eq('is_public', true)
-          .in('user_id', followingIds)
-          .order('created_at', { ascending: false })
-          .range(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE - 1);
-
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        return NextResponse.json({ posts: await hydrateFeedPosts(data || [], viewerId, admin) });
-      }
-
-      // ── For You ranking ─────────────────────────────────────────────────
-      // Three priority buckets, chronological within each:
-      //   1. Posts from users the viewer follows
-      //   2. Posts from users in the viewer's city (excluding follows)
-      //   3. Everyone else
-      // We over-fetch each bucket so pagination still works as we drain them.
-      // Pagination is approximate — at the seams between buckets you may see
-      // a "newer" post sandwiched after older ones because the buckets are
-      // ranked, not strictly time-ordered. Acceptable tradeoff for a v1.
-      let followingIds: string[] = [];
-      let viewerCity: string | null = null;
-      if (viewerId) {
-        const [{ data: follows }, { data: viewer }] = await Promise.all([
-          admin.from('follows').select('following_id').eq('follower_id', viewerId),
-          admin.from('users').select('city').eq('id', viewerId).single(),
-        ]);
-        followingIds = (follows || []).map((f: any) => f.following_id);
-        viewerCity = viewer?.city || null;
-      }
-
-      // Find other users in the same city as the viewer (excluding follows).
-      let cityUserIds: string[] = [];
-      if (viewerCity) {
-        const { data: cityUsers } = await admin
-          .from('users')
-          .select('id')
-          .eq('city', viewerCity)
-          .neq('id', viewerId);
-        cityUserIds = (cityUsers || [])
-          .map((u: any) => u.id)
-          .filter((id: string) => !followingIds.includes(id));
-      }
-
-      const followingSet = new Set(followingIds);
-      const citySet = new Set(cityUserIds);
-
-      // Pull a deep enough window of feed posts to give the bucketing
-      // logic something to work with. We don't filter out non-photo posts
-      // anymore — Joey wants For You to behave as a chronological-but-
-      // ranked feed of EVERYTHING public, not just photo posts.
-      const FETCH_LIMIT = Math.max((PAGE + 1) * PAGE_SIZE * 20, 500);
-      const { data: allPosts, error: feedErr } = await admin
-        .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(FETCH_LIMIT);
-
-      if (feedErr) {
-        console.error('[get_feed_posts] query failed:', feedErr);
-        return NextResponse.json({ posts: [] });
-      }
-
-      // Score each post: lower number = higher priority in the feed.
-      //   0 = the viewer's OWN posts (always at the top of their own For You)
-      //   1 = posts from users you follow
-      //   2 = posts from users in your city (excluding follows)
-      //   3 = everyone else
-      // Within each bucket we keep date-descending order (already sorted by
-      // the SQL query above). Array.prototype.sort is stable in modern JS so
-      // date order within a bucket is preserved.
-      const scored = (allPosts || []).map((p: any) => {
-        let bucket = 3;
-        if (viewerId && p.user_id === viewerId) bucket = 0;
-        else if (followingSet.has(p.user_id)) bucket = 1;
-        else if (citySet.has(p.user_id)) bucket = 2;
-        return { post: p, bucket };
-      });
-
-      scored.sort((a, b) => a.bucket - b.bucket);
-
-      const merged = scored.map(s => s.post);
-      const pageSlice = merged.slice(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE);
-
-      return NextResponse.json({ posts: await hydrateFeedPosts(pageSlice, viewerId, admin) });
-    }
-
-    // ── Post a comment on a feed post ──────────────────────────────────────
-    // Uses the admin client so it bypasses RLS — same pattern as
-    // post_activity_comment / banner uploads, since the policy on the
-    // comments table is what was blocking direct client inserts.
-    // Returns the newly-inserted row AND the full updated comments list for
-    // the post so the client can refresh its UI authoritatively (avoids
-    // optimistic-state drift bugs).
-    if (action === 'post_feed_comment') {
-      const { postId, commenterId, content, postOwnerId } = payload || {};
-      if (!postId || !commenterId || !content || !content.trim()) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      const { data: inserted, error } = await admin.from('comments').insert({
-        post_id: postId,
-        user_id: commenterId,
-        content: content.trim(),
-      }).select('id, content, created_at, user_id').single();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Fetch full updated comments list for this post (with users joined),
-      // using the admin client so RLS doesn't filter rows.
-      const { data: comments } = await admin.from('comments')
-        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true });
-
-      // Notify the post owner (best-effort)
-      if (postOwnerId && postOwnerId !== commenterId) {
-        try {
-          const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
-          const name = commenter?.full_name || commenter?.username || 'Someone';
-          await admin.from('notifications').insert({
-            user_id: postOwnerId,
-            from_user_id: commenterId,
-            type: 'comment',
-            reference_id: postId,
-            body: `${name} commented: "${content.trim().slice(0, 60)}${content.trim().length > 60 ? '...' : ''}"`,
-            read: false,
-          });
-        } catch { /* notifications schema may differ — non-fatal */ }
-      }
-
-      return NextResponse.json({ comment: inserted, comments: comments || [] });
-    }
-
-    // Fetch all comments for a post (admin client bypasses RLS).
-    // Used by /post/[id] detail page and any other detail-style views.
-    if (action === 'get_post_comments') {
-      const { postId } = payload || {};
-      if (!postId) return NextResponse.json({ error: 'Missing postId' }, { status: 400 });
-      const { data: comments, error } = await admin.from('comments')
-        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ comments: comments || [] });
-    }
-
-    // Delete one of your own comments. Server checks ownership before deleting
-    // (defense in depth even though RLS would also block someone else's row).
-    if (action === 'delete_post_comment') {
-      const { commentId, userId } = payload || {};
-      if (!commentId || !userId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      // Verify ownership first
-      const { data: existing } = await admin.from('comments').select('user_id, post_id').eq('id', commentId).single();
-      if (!existing) return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
-      if (existing.user_id !== userId) return NextResponse.json({ error: 'Not your comment' }, { status: 403 });
-      const { error } = await admin.from('comments').delete().eq('id', commentId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true });
-    }
-
-    if (action === 'post_activity_comment') {
-      const { cardId, commenterId, content, cardOwnerId } = payload;
-      if (!cardId || !commenterId || !content) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      const { data, error } = await admin.from('activity_comments').insert({
-        activity_card_id: cardId,
-        commenter_id: commenterId,
-        content,
-      }).select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url)').single();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Notify the card owner if it's someone else's activity
-      if (cardOwnerId && cardOwnerId !== commenterId) {
-        const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
-        const name = commenter?.full_name || commenter?.username || 'Someone';
-        await admin.from('notifications').insert({
-          user_id: cardOwnerId,
-          from_user_id: commenterId,
-          type: 'activity_comment',
-          reference_id: cardId,
-          body: `${name} commented on your activity: "${content.slice(0, 60)}${content.length > 60 ? '...' : ''}"`,
-          read: false,
-        }).catch(() => {}); // don't fail if notifications table isn't ready yet
-      }
-
-      return NextResponse.json({ comment: data });
-    }
-
-    // ── Ensure a group has a chat conversation (create if missing) ─────────
-    // Called by GroupChat component when an older group's chat trigger
-    // didn't fire (groups created before migration-group-chat.sql ran).
-    // Idempotent — finds-or-creates and returns the conversation id.
-    if (action === 'ensure_group_chat') {
-      const { groupId } = payload;
-      if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 });
-      // Find first
-      const { data: existing } = await admin
-        .from('conversations')
-        .select('id')
-        .eq('group_id', groupId)
-        .maybeSingle();
-      if (existing?.id) return NextResponse.json({ conversationId: existing.id });
-      // Create + backfill participants from group_members
-      const { data: created, error: cErr } = await admin
-        .from('conversations')
-        .insert({ group_id: groupId } as any)
-        .select('id')
-        .single();
-      if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
-      const convId = created.id;
-      const { data: members } = await admin
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', groupId);
-      if (Array.isArray(members) && members.length > 0) {
-        const rows = members.map((m: any) => ({ conversation_id: convId, user_id: m.user_id }));
-        await admin.from('conversation_participants').insert(rows);
-      }
-      return NextResponse.json({ conversationId: convId });
-    }
-
-    // ── Create notification ────────────────────────────────────────────────
-    if (action === 'create_notification') {
-      const { userId, fromUserId, type, referenceId, body } = payload;
-      const { error } = await admin.from('notifications').insert({
-        user_id: userId, from_user_id: fromUserId, type, reference_id: referenceId, body, read: false,
-      });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Get notifications ──────────────────────────────────────────────────
-    if (action === 'get_notifications') {
-      const { userId } = payload;
-      const { data, error } = await admin
-        .from('notifications')
-        .select('*, from_user:users!notifications_from_user_id_fkey(id,username,full_name,avatar_url)')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (error) return NextResponse.json({ notifications: [] });
-      return NextResponse.json({ notifications: data || [] });
-    }
-
-    // ── Mark notifications read ────────────────────────────────────────────
-    if (action === 'mark_notifications_read') {
-      const { userId } = payload;
-      await admin.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false);
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Load conversations for a user ─────────────────────────────────────────
-    if (action === 'get_conversations') {
-      const { userId } = payload;
-      const { data: partRows } = await admin
-        .from('conversation_participants').select('conversation_id').eq('user_id', userId);
-      if (!partRows || partRows.length === 0) return NextResponse.json({ conversations: [] });
-      const convIds = partRows.map((p: any) => p.conversation_id);
-
-      // Try the group-aware query first. If the conversations table doesn't
-      // have a group_id column yet (migration not run), Supabase returns an
-      // error and we fall back to the legacy DM-only query.
-      // This keeps the messages page working pre-migration AND gives us
-      // group chats post-migration without any code change.
-      let convRows: any[] | null = null;
-      const groupAware = await admin
-        .from('conversations')
-        .select(`id, created_at, group_id, group:groups!conversations_group_id_fkey(id,name,emoji,slug,banner_url,creator_id), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
-        .in('id', convIds);
-      if (groupAware.error) {
-        // Fall back to legacy schema (no group_id) so DMs still load.
-        const legacy = await admin
-          .from('conversations')
-          .select(`id, created_at, conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
-          .in('id', convIds);
-        convRows = legacy.data || [];
-      } else {
-        convRows = groupAware.data || [];
-      }
-
-      // Pre-fetch the user's role for each group they're in. Used so
-      // the messages UI can show the "change photo" button to owners
-      // and moderators only.
-      const groupConvIds = (convRows || []).filter((r: any) => r.group_id).map((r: any) => r.group_id);
-      const groupRoleByGroupId = new Map<string, string>();
-      if (groupConvIds.length > 0) {
-        const { data: roleRows } = await admin
-          .from('group_members')
-          .select('group_id, role')
-          .eq('user_id', userId)
-          .in('group_id', groupConvIds);
-        for (const r of (roleRows || []) as any[]) {
-          groupRoleByGroupId.set(r.group_id, r.role);
-        }
-      }
-
-      const conversations = (convRows || []).map((row: any) => {
-        const msgs = (row.messages || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        const isGroup = !!row.group_id;
-        let otherUser: any;
-        if (isGroup && row.group) {
-          otherUser = {
-            id: row.group.id,
-            username: row.group.slug || row.group.name,
-            full_name: `${row.group.emoji || '💬'} ${row.group.name}`,
-            // Use the group's banner image as the chat avatar.
-            avatar_url: row.group.banner_url || null,
-          };
-        } else {
-          const other = (row.conversation_participants || []).find((p: any) => p.user_id !== userId);
-          otherUser = other?.users || { id:'', username:'Unknown', full_name:'Unknown', avatar_url: null };
-        }
-        // Member count for groups — useful for the thread header.
-        const memberCount = isGroup ? (row.conversation_participants?.length || 0) : 0;
-        const myRole = isGroup ? (groupRoleByGroupId.get(row.group_id) || 'member') : null;
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          group_id: row.group_id || null,
-          group: row.group || null,
-          isGroup,
-          // Role of the current user on this group (for permission checks
-          // in the UI). Null for DMs.
-          myRole,
-          // Total participant count — surface "5 members" in group chat header.
-          memberCount,
-          otherUser,
-          lastMessage: msgs[0] || null,
-          unread: msgs[0] ? msgs[0].sender_id !== userId : false,
-        };
-      }).sort((a: any, b: any) => {
-        const at = a.lastMessage?.created_at || a.created_at;
-        const bt = b.lastMessage?.created_at || b.created_at;
-        return new Date(bt).getTime() - new Date(at).getTime();
-      });
-      return NextResponse.json({ conversations });
-    }
-
-    // ── Load messages for a conversation ──────────────────────────────────────
-    if (action === 'get_messages') {
-      const { conversationId } = payload;
-      const { data, error } = await admin
-        .from('messages').select('*').eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-      if (error) return NextResponse.json({ messages: [] });
-      return NextResponse.json({ messages: data || [] });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // GROUPS ACTIONS
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // ── Create group ───────────────────────────────────────────────────────
-    if (action === 'create_group') {
-      const { userId, name, description, category, emoji, location, meet_frequency, is_online, tags } = payload;
-      if (!userId || !name) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-      const { data: group, error } = await admin.from('groups').insert({
-        name,
-        description: description || '',
-        category: category || 'General',
-        emoji: emoji || '💪',
-        location: location || null,
-        meet_frequency: meet_frequency || null,
-        is_online: is_online || false,
-        tags: tags || [],
-        member_count: 1,
-        created_by: userId,
-        creator_id: userId,
-        slug,
-      }).select().single();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Add creator as owner
-      await admin.from('group_members').insert({
-        group_id: group.id,
-        user_id: userId,
-        role: 'owner',
-      });
-
-      // ── Auto-award the "group-leader" badge ───────────────────────────
-      // Single-shot: fires the first time the user creates ANY group.
-      // Same idempotency pattern as group-member (read-then-write, no
-      // unique constraint on the badges table). Best-effort — failures
-      // here don't block group creation.
-      try {
-        const { data: alreadyEarned } = await admin
-          .from('badges')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('badge_id', 'group-leader')
-          .limit(1)
-          .maybeSingle();
-        if (!alreadyEarned) {
-          await admin.from('badges').insert({
-            user_id: userId,
-            badge_id: 'group-leader',
-            note: 'auto',
-          });
-        }
-      } catch (e) {
-        console.error('[create_group] group-leader badge award failed', e);
-      }
-
-      return NextResponse.json({ group });
-    }
-
-    // ── Get challenge by invite token (public, no auth required) ──────────
-    // Powers the /challenge/[token] landing page. Returns the challenge
-    // along with the host group's display info so the page can show
-    // "Joey's Crew · Run 50 miles · Started 3 days ago." Returns 404 if
-    // the token doesn't exist or has expired.
-    if (action === 'get_challenge_by_token') {
-      const { token } = payload;
-      if (!token || typeof token !== 'string') {
-        return NextResponse.json({ error: 'Missing token' }, { status: 400 });
-      }
-      const { data: chal, error } = await admin
-        .from('group_challenges')
-        .select(`
-          id, title, description, metric, lift_type, target_value, goal,
-          duration_days, status, is_group_goal, goal_category, stakes,
-          start_date, end_date, created_at, member_count,
-          invite_token_expires_at,
-          creator_group:creator_group_id(id, name, emoji, member_count, avatar_url),
-          group:group_id(id, name, emoji, member_count, avatar_url)
-        `)
-        .eq('invite_token', token)
-        .maybeSingle();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      if (!chal) return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
-      if (chal.invite_token_expires_at) {
-        const exp = new Date(chal.invite_token_expires_at).getTime();
-        if (exp < Date.now()) {
-          return NextResponse.json({ error: 'Challenge invite has expired' }, { status: 404 });
-        }
-      }
-      const { count: participantCount } = await admin
-        .from('group_challenge_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('challenge_id', chal.id);
-      return NextResponse.json({
-        challenge: {
-          ...chal,
-          participant_count: participantCount || 0,
-        },
-      });
-    }
-
-    // ── Join group + challenge via invite token (auth required) ───────────
-    // Two-step join: first add the user to the host group (if not already
-    // a member), then enroll them in the challenge. Idempotent — calling
-    // twice has no effect beyond the first time.
-    if (action === 'join_via_challenge_token') {
-      const { token, userId } = payload;
-      if (!token || !userId) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      const { data: chal, error: chalErr } = await admin
-        .from('group_challenges')
-        .select('id, group_id, creator_group_id, invite_token_expires_at')
-        .eq('invite_token', token)
-        .maybeSingle();
-      if (chalErr) return NextResponse.json({ error: chalErr.message }, { status: 500 });
-      if (!chal) return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
-      if (chal.invite_token_expires_at && new Date(chal.invite_token_expires_at).getTime() < Date.now()) {
-        return NextResponse.json({ error: 'Invite has expired' }, { status: 404 });
-      }
-
-      const hostGroupId = chal.group_id || chal.creator_group_id;
-      if (!hostGroupId) {
-        return NextResponse.json({ error: 'Challenge has no host group' }, { status: 500 });
-      }
-
-      const { data: existingMember } = await admin
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', hostGroupId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      let joinedGroup = false;
-      if (!existingMember) {
-        const { error: memErr } = await admin.from('group_members').insert({
-          group_id: hostGroupId,
-          user_id: userId,
-          role: 'member',
-        });
-        if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 });
-        joinedGroup = true;
-        await admin.rpc('increment_group_member_count', { gid: hostGroupId }).catch(() => {
-          admin.from('groups').select('member_count').eq('id', hostGroupId).single()
-            .then(({ data }) => {
-              if (data) admin.from('groups').update({ member_count: (data.member_count || 0) + 1 }).eq('id', hostGroupId);
-            });
-        });
-      }
-
-      const { data: existingEnroll } = await admin
-        .from('group_challenge_members')
-        .select('user_id')
-        .eq('challenge_id', chal.id)
-        .eq('user_id', userId)
-        .maybeSingle();
-      let joinedChallenge = false;
-      if (!existingEnroll) {
-        const { error: enrollErr } = await admin.from('group_challenge_members').insert({
-          challenge_id: chal.id,
-          user_id: userId,
-          group_id: hostGroupId,
-        });
-        if (enrollErr) return NextResponse.json({ error: enrollErr.message }, { status: 500 });
-        joinedChallenge = true;
-      }
-
-      return NextResponse.json({
-        ok: true,
-        joinedGroup,
-        joinedChallenge,
-        groupId: hostGroupId,
-        challengeId: chal.id,
-      });
-    }
-
-    // ── Update goal progress from a single new activity log ────────────────
-    // Called immediately after logging a workout/nutrition/wellness entry.
-    // Walks all the user's active goals and bumps `current` for each one
-    // the log contributes to. Auto-completes any goal that crosses target,
-    // optionally creating a feed post.
-    if (action === 'update_goals_from_log') {
-      const { userId, logId } = payload || {};
-      if (!userId || !logId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      const { data: newLog } = await admin
-        .from('activity_logs')
-        .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
-        .eq('id', logId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (!newLog) return NextResponse.json({ error: 'Log not found' }, { status: 404 });
-
-      // Pull all active (incomplete) goals for this user
-      const { data: goals } = await admin
-        .from('goals')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('is_completed', false);
-      if (!goals || goals.length === 0) return NextResponse.json({ ok: true, completed: [] });
-
-      const completedGoals: any[] = [];
-
-      // ── Always recompute from full history ───────────────────────────────
-      // Previously we did an incremental delta-add for sum metrics like
-      // cardio_distance and workout_count. That works for fresh inserts but
-      // breaks when editing: every save of an edited log added the log's
-      // CURRENT total to the goal again, so editing a 3 mi run to be 5 mi
-      // pushed the goal from 3 → 8 instead of 3 → 5. It also re-added the
-      // delta on every photo/note edit, even if no goal-relevant field
-      // changed.
-      //
-      // Recomputing from the full activity_logs window for each goal is
-      // self-correcting: the goal's `current` is always exactly what the
-      // logs in its window add up to, regardless of how many times this
-      // endpoint was called or whether logs were edited / deleted. The
-      // extra DB read per goal is cheap; users typically have 1–5 active
-      // goals at a time.
-      for (const goal of goals as GoalType[]) {
-        const { data: windowLogs } = await admin
-          .from('activity_logs')
-          .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
-          .eq('user_id', userId)
-          .gte('logged_at', goal.window_start);
-
-        const newCurrent = recomputeGoalProgress(goal, (windowLogs || []) as GoalActivityLog[]);
-
-        if (newCurrent === goal.current) continue; // no change
-
-        const justCompleted = !goal.is_completed && newCurrent >= goal.target;
-
-        const updateRow: any = { current: newCurrent };
-        if (justCompleted) {
-          updateRow.is_completed = true;
-          updateRow.completed_at = new Date().toISOString();
-        }
-
-        await admin.from('goals').update(updateRow).eq('id', goal.id);
-
-        if (justCompleted) {
-          completedGoals.push({ ...goal, ...updateRow });
-          // Auto-post to feed announcing completion. Caption is short and
-          // celebratory; no media. The post is public so followers see it.
-          try {
-            const caption = `🎯 Goal hit: ${goal.title} — ${newCurrent.toFixed(0)} ${goal.unit}!`;
-            const { data: postRow } = await admin.from('posts').insert({
-              user_id: userId,
-              caption,
-              post_type: 'general',
-              is_public: true,
-            }).select('id').single();
-            if (postRow?.id) {
-              await admin.from('goals').update({ feed_post_id: postRow.id }).eq('id', goal.id);
-            }
-          } catch (e) {
-            console.error('[goals] auto-post failed', e);
-          }
-        }
-      }
-
-      return NextResponse.json({ ok: true, completed: completedGoals });
-    }
-
-    // ── Recompute a single goal's current value from full history ──────────
-    // Used when creating a goal (some past logs may already count) or
-    // when the user deletes a contributing log.
-    if (action === 'recompute_goal') {
-      const { goalId } = payload || {};
-      if (!goalId) return NextResponse.json({ error: 'Missing goalId' }, { status: 400 });
-
-      const { data: goal } = await admin.from('goals').select('*').eq('id', goalId).maybeSingle();
-      if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
-
-      const { data: logs } = await admin
-        .from('activity_logs')
-        .select('id, user_id, log_type, logged_at, workout_category, workout_type, exercises, cardio, protein_g, carbs_g, fat_g, calories_total')
-        .eq('user_id', goal.user_id)
-        .gte('logged_at', goal.window_start);
-
-      const newCurrent = recomputeGoalProgress(goal as GoalType, (logs || []) as GoalActivityLog[]);
-      const justCompleted = !goal.is_completed && newCurrent >= goal.target;
-      const updateRow: any = { current: newCurrent };
-      if (justCompleted) {
-        updateRow.is_completed = true;
-        updateRow.completed_at = new Date().toISOString();
-      }
-      await admin.from('goals').update(updateRow).eq('id', goalId);
-
-      return NextResponse.json({ ok: true, current: newCurrent, completed: justCompleted });
-    }
-
-    // ── Pin / unpin a badge ────────────────────────────────────────────────
-    // pinSlot: 1-5 to pin, null to unpin. UI enforces the 5-pin cap.
-    if (action === 'pin_badge') {
-      const { userId, badgeRowId, pinSlot } = payload || {};
-      if (!userId || !badgeRowId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // If pinning to a slot, kick out any other badge in that slot first.
-      // This lets the user "swap" pinned badges by re-pinning to an
-      // occupied slot, which feels right — explicit "unpin first" is clunky.
-      if (pinSlot != null) {
-        await admin
-          .from('badges')
-          .update({ pin_slot: null })
-          .eq('user_id', userId)
-          .eq('pin_slot', pinSlot)
-          .neq('id', badgeRowId);
-      }
-
-      const { error } = await admin
-        .from('badges')
-        .update({ pin_slot: pinSlot })
-        .eq('id', badgeRowId)
-        .eq('user_id', userId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Workout buddy: request a match ─────────────────────────────────────
-    // Either pops the oldest waiting user with the same (category, tier)
-    // and creates a buddy_matches row, OR puts the requester in the queue.
-    //
-    // tierTargets defines the total to compete on. Two-week window.
-    if (action === 'buddy_request_match') {
-      const { userId, category, tier } = payload || {};
-      if (!userId || !category || !tier) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // Already in an active match for this category? Don't double-match.
-      const { data: existingMatch } = await admin
-        .from('buddy_matches')
-        .select('id')
-        .eq('category', category)
-        .eq('status', 'active')
-        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-        .maybeSingle();
-      if (existingMatch) {
-        return NextResponse.json({ ok: true, status: 'already_matched', matchId: existingMatch.id });
-      }
-
-      // Look for a waiting user with same category+tier (excluding self).
-      const { data: waiter } = await admin
-        .from('buddy_queue')
-        .select('id, user_id')
-        .eq('category', category)
-        .eq('tier', tier)
-        .neq('user_id', userId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      // Target metric/value lookup. Mirrors the rivals tier idea but
-      // expressed as a 2-week shared total. Keep flat to avoid more DB
-      // tables — duplicate of UI table is OK at this size.
-      const TARGETS: Record<string, Record<string, { metric: string; value: number; unit: string }>> = {
-        running:  { beginner: { metric: 'distance', value: 10,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 25,  unit: 'miles' }, elite: { metric: 'distance', value: 50,  unit: 'miles' } },
-        walking:  { beginner: { metric: 'distance', value: 20,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 50,  unit: 'miles' }, elite: { metric: 'distance', value: 100, unit: 'miles' } },
-        biking:   { beginner: { metric: 'distance', value: 30,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 100, unit: 'miles' }, elite: { metric: 'distance', value: 200, unit: 'miles' } },
-        lifting:  { beginner: { metric: 'count',    value: 6,   unit: 'workouts' }, intermediate: { metric: 'count',    value: 10,  unit: 'workouts' }, elite: { metric: 'count',    value: 14,  unit: 'workouts' } },
-        swimming: { beginner: { metric: 'duration', value: 60,  unit: 'min'      }, intermediate: { metric: 'duration', value: 180, unit: 'min'   }, elite: { metric: 'duration', value: 360, unit: 'min'   } },
-        combat:   { beginner: { metric: 'count',    value: 4,   unit: 'sessions'}, intermediate: { metric: 'count',    value: 8,   unit: 'sessions'}, elite: { metric: 'count',    value: 12,  unit: 'sessions'} },
-      };
-      const tierConfig = TARGETS[category]?.[tier];
-      if (!tierConfig) return NextResponse.json({ error: 'Invalid category/tier' }, { status: 400 });
-
-      if (waiter) {
-        // Match found! Create the match and remove the waiter from queue.
-        const startsAt = new Date();
-        const endsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-        const { data: match, error: matchErr } = await admin
-          .from('buddy_matches')
-          .insert({
-            user_a: waiter.user_id, // they were here first
-            user_b: userId,
-            category,
-            tier,
-            target_metric: tierConfig.metric,
-            target_value: tierConfig.value,
-            target_unit: tierConfig.unit,
-            starts_at: startsAt.toISOString(),
-            ends_at: endsAt.toISOString(),
-            status: 'active',
-          })
-          .select()
-          .single();
-        if (matchErr) return NextResponse.json({ error: matchErr.message }, { status: 500 });
-
-        // Remove waiter from queue
-        await admin.from('buddy_queue').delete().eq('id', waiter.id);
-
-        // Notify the waiter that they got matched
-        try {
-          await admin.from('notifications').insert({
-            user_id: waiter.user_id,
-            from_user_id: userId,
-            type: 'buddy_matched',
-            reference_id: match.id,
-            body: `You've been matched with a workout buddy!`,
-          });
-        } catch { /* notifications table may not have all fields */ }
-
-        return NextResponse.json({ ok: true, status: 'matched', match });
-      } else {
-        // No match — add to queue.
-        // Upsert because a user may have re-clicked Find Match.
-        await admin
-          .from('buddy_queue')
-          .upsert({ user_id: userId, category, tier }, { onConflict: 'user_id,category,tier' });
-        return NextResponse.json({ ok: true, status: 'queued' });
-      }
-    }
-
-    // ── Workout buddy: cancel queue entry ──────────────────────────────────
-    if (action === 'buddy_cancel_queue') {
-      const { userId, category, tier } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      let q = admin.from('buddy_queue').delete().eq('user_id', userId);
-      if (category) q = q.eq('category', category);
-      if (tier) q = q.eq('tier', tier);
-      await q;
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Workout buddy: load all active matches + queue entry ──────────────
-    // Returns whatever state the user is in. With multi-buddy support,
-    // this now returns ALL active matches the user is in (across different
-    // categories — same-category dual matches are still blocked at the
-    // matchmaking step).
-    //
-    // Response shape:
-    //   { matches: HydratedMatch[], queue: QueueRow | null }
-    //
-    // HydratedMatch = a buddy_matches row with user_a/user_b expanded from
-    // user IDs to full user objects (id, username, full_name, avatar_url).
-    //
-    // WHY THIS GOES THROUGH THE ADMIN CLIENT: the ad-hoc buddy_matches
-    // table was created without a registered foreign-key relationship to
-    // users, which means a Postgrest embedded join silently returns null
-    // when fetched from a normal client. The admin client bypasses the
-    // FK requirement AND any RLS, then we hydrate users via a separate
-    // `.in()` query.
-    if (action === 'buddy_get_active_match') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      // 1. Pull every active match this user is in
-      const { data: matches } = await admin
-        .from('buddy_matches')
-        .select('*')
-        .eq('status', 'active')
-        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-        .order('starts_at', { ascending: false });
-
-      // 2. Hydrate users for ALL matches in one query. Collect every
-      //    distinct user ID across all matches (will include the current
-      //    user plus every buddy), fetch them once, then attach.
-      const allUserIds = new Set<string>();
-      (matches || []).forEach((m: any) => {
-        if (m.user_a) allUserIds.add(m.user_a);
-        if (m.user_b) allUserIds.add(m.user_b);
-      });
-
-      let userMap: Record<string, any> = {};
-      if (allUserIds.size > 0) {
-        const { data: users } = await admin
-          .from('users')
-          .select('id, username, full_name, avatar_url')
-          .in('id', Array.from(allUserIds));
-        (users || []).forEach((u: any) => { userMap[u.id] = u; });
-      }
-
-      const hydratedMatches = (matches || []).map((m: any) => ({
-        ...m,
-        user_a: userMap[m.user_a] || null,
-        user_b: userMap[m.user_b] || null,
-      }));
-
-      // 3. Queue entry (only one active queue at a time per user is
-      //    enforced by the matchmaking step).
-      const { data: queueRow } = await admin
-        .from('buddy_queue')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      // 4. Pull the requesting user's own intake fields. The client uses
-      //    these to decide whether to gate the matchmaking flow behind
-      //    the intake step. If city, immediate_goal, OR hobbies are
-      //    missing, the user must complete the intake before they can
-      //    queue for a buddy. Same select shape as get_buddy_profile_card
-      //    so the rendering paths can share types.
-      const { data: meRow } = await admin
-        .from('users')
-        .select('id, username, full_name, avatar_url, city, bio, current_level, immediate_goal, hobbies')
-        .eq('id', userId)
-        .maybeSingle();
-
-      // BACKWARD COMPAT: also expose `match` (the most recent one) so
-      // any older client code expecting the old single-match shape keeps
-      // working during the rollout. Will remove this once all clients
-      // are on the new shape.
-      return NextResponse.json({
-        matches: hydratedMatches,
-        match: hydratedMatches[0] || null,
-        queue: queueRow || null,
-        me: meRow || null,
-      });
-    }
-
-    // ── Workout buddy: leave (forfeit) an active match ─────────────────────
-    // Sets the match status to "ended" so neither user sees it anymore.
-    // We don't delete the row — we want the historical record for stats
-    // and we may want to add a "past buddies" view later.
-    //
-    // SAFETY: only the participants can end the match. Non-participants
-    // get a 403 even though it'd otherwise just be a no-op.
-    if (action === 'buddy_leave_match') {
-      const { userId, matchId } = payload || {};
-      if (!userId || !matchId) return NextResponse.json({ error: 'Missing userId or matchId' }, { status: 400 });
-
-      const { data: match } = await admin
-        .from('buddy_matches')
-        .select('id, user_a, user_b, status')
-        .eq('id', matchId)
-        .maybeSingle();
-      if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-      if (match.user_a !== userId && match.user_b !== userId) {
-        return NextResponse.json({ error: 'Not a participant' }, { status: 403 });
-      }
-      if (match.status !== 'active') {
-        // Idempotent — already inactive, nothing to do
-        return NextResponse.json({ ok: true, status: match.status });
-      }
-
-      const { error: upErr } = await admin
-        .from('buddy_matches')
-        .update({ status: 'ended', ends_at: new Date().toISOString() })
-        .eq('id', matchId);
-      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-
-      return NextResponse.json({ ok: true, status: 'ended' });
-    }
-
-    // ── Workout buddy: update progress from a new log ──────────────────────
-    // Called alongside update_goals_from_log. Bumps either user_a_progress
-    // or user_b_progress on every active match the user is in.
-    if (action === 'buddy_update_from_log') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // ── Recompute every active match's progress from full history ─────────
-      // The previous implementation added the new log's contribution to the
-      // existing user_a_progress / user_b_progress. That double-counted on
-      // edit (e.g. logging 3 mi then editing to 5 → progress went 3 → 8
-      // instead of 3 → 5). It also re-added on every photo/note save.
-      //
-      // Now we ignore the specific logId and instead pull every workout in
-      // the match window matching the match's category/metric, sum them
-      // fresh, and write the result. Self-correcting: edits, deletes, and
-      // repeat saves all land on the right number.
-      const { data: matches } = await admin
-        .from('buddy_matches')
-        .select('*')
-        .eq('status', 'active')
-        .or(`user_a.eq.${userId},user_b.eq.${userId}`);
-
-      if (!matches || matches.length === 0) return NextResponse.json({ ok: true });
-
-      const completedMatches: any[] = [];
-      for (const match of matches as any[]) {
-        // Pull all the user's workout logs in the match window matching the
-        // category. We do this once per match — typically there are 1–3
-        // active matches per user, so the cost is bounded.
-        const { data: logs } = await admin
-          .from('activity_logs')
-          .select('id, log_type, logged_at, workout_category, workout_duration_min, cardio')
-          .eq('user_id', userId)
-          .eq('log_type', 'workout')
-          .eq('workout_category', match.category)
-          .gte('logged_at', match.starts_at)
-          .lte('logged_at', match.ends_at);
-
-        let newProgress = 0;
-        for (const log of (logs || []) as any[]) {
-          if (match.target_metric === 'count') {
-            newProgress += 1;
-          } else if (match.target_metric === 'distance') {
-            const cardio = Array.isArray(log.cardio) ? log.cardio : [];
-            for (const c of cardio) {
-              const m = parseFloat(String(c?.miles ?? c?.distance ?? 0));
-              if (!isNaN(m)) newProgress += m;
-            }
-          } else if (match.target_metric === 'duration') {
-            const cardio = Array.isArray(log.cardio) ? log.cardio : [];
-            for (const c of cardio) newProgress += parseFloat(String(c?.duration || 0)) || 0;
-            // Fall back to workout-level duration if cardio entries don't
-            // carry per-entry duration. Avoids zero-progress on logs that
-            // only set workout_duration_min.
-            if (!cardio.some((c: any) => c?.duration != null)) {
-              newProgress += parseFloat(String(log.workout_duration_min || 0)) || 0;
-            }
-          }
-        }
-
-        const isUserA = match.user_a === userId;
-        const currentProgress = isUserA ? match.user_a_progress : match.user_b_progress;
-        if (newProgress === currentProgress) continue; // no change
-
-        const updateRow: any = isUserA ? { user_a_progress: newProgress } : { user_b_progress: newProgress };
-
-        // Both users hit target = match completes (both win)
-        const otherProgress = isUserA ? match.user_b_progress : match.user_a_progress;
-        if (newProgress >= match.target_value && otherProgress >= match.target_value) {
-          updateRow.status = 'completed';
-          updateRow.completed_at = new Date().toISOString();
-          completedMatches.push({ ...match, ...updateRow });
-        }
-
-        await admin.from('buddy_matches').update(updateRow).eq('id', match.id);
-      }
-
-      return NextResponse.json({ ok: true, completed: completedMatches });
-    }
-
-    // ── Recompute all PRs for a user (admin / backfill) ────────────────────
-    // Walks the user's complete workout history and rebuilds personal_records
-    // from scratch using strict-PR logic. Used by:
-    //   1. Backfill migration when this feature first ships
-    //   2. Admin tooling if PRs ever get out of sync
-    //   3. After a user deletes a workout (TODO — not yet wired in)
-    //
-    // Idempotent: safe to call multiple times. Replaces all existing PRs.
-    if (action === 'recompute_user_prs') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      // Pull the user's complete workout history. We only need exercises +
-      // logged_at since strict PR logic doesn't care about other fields.
-      const { data: logs, error: logsErr } = await admin
-        .from('activity_logs')
-        .select('id, log_type, logged_at, created_at, workout_category, exercises')
-        .eq('user_id', userId)
-        .eq('log_type', 'workout');
-      if (logsErr) return NextResponse.json({ error: logsErr.message }, { status: 500 });
-
-      const records = recomputeAllPRs((logs || []) as ActivityLogRow[]);
-
-      // Wipe existing PRs and replace. Single atomic-ish swap — there's a
-      // brief window where the user has zero PRs visible, but that's fine
-      // since this only runs from admin tooling or backfill.
-      const { error: delErr } = await admin
-        .from('personal_records')
-        .delete()
-        .eq('user_id', userId);
-      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
-
-      if (records.length > 0) {
-        const rowsToInsert = records.map(r => ({
-          user_id: userId,
-          exercise_name: r.exercise_name,
-          weight: r.weight,
-          reps: r.reps,
-          volume: r.volume,
-          logged_at: r.logged_at,
-        }));
-        const { error: insErr } = await admin
-          .from('personal_records')
-          .insert(rowsToInsert);
-        if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        prsRecorded: records.length,
-        message: records.length === 0 ? 'No PRs found in history' : `Recorded ${records.length} PRs`,
-      });
-    }
-
-    // ── Detect + record PRs from a single new workout log ──────────────────
-    // ── Unlock rivalry badges from a new workout log ──────────────────────
-    // After a workout is logged, check if this log triggers any badge
-    // unlocks for any of the user's active rivalries. Idempotent — won't
-    // re-award a badge that already exists for that (rivalry, user, badge)
-    // combo because rivalry_badges has a unique constraint.
-    //
-    // Currently handles:
-    //   - first_blood  → first log of the rivalry (by either side)
-    //   - dominant     → ahead by 3+ in score, and we're past midweek
-    //
-    // TODO future: early_bird (2 consecutive morning workouts during the
-    // rivalry), comeback (was behind, now ahead — needs progress history
-    // tracking), untouchable (only awarded at rivalry end, not from a log).
-    if (action === 'unlock_rivalry_badges') {
-      const { userId, logId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      // ── TWO MODES ──────────────────────────────────────────────────────────
-      // 1. Single-log mode (logId provided): check if THIS specific log
-      //    earns any badges. Used by fireTrackers right after a save.
-      // 2. Scan-all mode (logId omitted): walk every active rivalry the
-      //    user is in, scan every log in the rivalry's window, award any
-      //    badges that should have been earned but weren't. Used by the
-      //    "force sync all progress" path on page-load to heal stale
-      //    state — e.g. badges that didn't unlock because fireTrackers
-      //    failed to fire (offline save, JS error, ad blocker, etc).
-      //
-      // Both modes use the same award logic; scan-all just iterates over
-      // all the user's logs in each rivalry instead of one specific log.
-      const isScanAll = !logId;
-
-      // 2a. Fetch all active rivalries the user is in
-      const { data: rivalries } = await admin
-        .from('rivalries')
-        .select('id, user_a_id, user_b_id, category, competition_type, started_at, ends_at, status')
-        .eq('status', 'active')
-        .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
-
-      if (!rivalries || rivalries.length === 0) {
-        return NextResponse.json({ ok: true, awarded: [] });
-      }
-
-      // 2b. In single-log mode, also pull the specific log we're checking
-      let thisLog: any = null;
-      if (!isScanAll) {
-        const { data } = await admin
-          .from('activity_logs')
-          .select('id, user_id, log_type, workout_category, logged_at')
-          .eq('id', logId)
-          .maybeSingle();
-        thisLog = data;
-        if (!thisLog || thisLog.log_type !== 'workout' || !thisLog.workout_category) {
-          return NextResponse.json({ ok: true, awarded: [] });
-        }
-      }
-
-      const awarded: Array<{ rivalryId: string; badge: string }> = [];
-
-      // Helper: try to insert a badge row. Idempotent — unique constraint
-      // on (rivalry_id, user_id, badge_key) silently rejects duplicates.
-      const tryAward = async (rivalryId: string, badgeUserId: string, badgeKey: string) => {
-        const { error } = await admin
-          .from('rivalry_badges')
-          .insert({
-            rivalry_id: rivalryId,
-            user_id: badgeUserId,
-            badge_key: badgeKey,
-            earned_at: new Date().toISOString(),
-          });
-        if (!error) {
-          awarded.push({ rivalryId, badge: badgeKey });
-          return true;
-        }
-        return false;
-      };
-
-      for (const rivalry of rivalries as any[]) {
-        // Filter to category-matching rivalries only. In single-log mode
-        // we already know thisLog.workout_category; in scan-all we iterate
-        // every category-matching rivalry.
-        if (!isScanAll && thisLog.workout_category !== rivalry.category) continue;
-
-        const startedTime = new Date(rivalry.started_at).getTime();
-        const endsTime = new Date(rivalry.ends_at).getTime();
-
-        // Skip rivalries whose window doesn't include the single log
-        if (!isScanAll) {
-          const logTime = new Date(thisLog.logged_at).getTime();
-          if (logTime < startedTime || logTime > endsTime) continue;
-        }
-
-        const opponentId = rivalry.user_a_id === userId ? rivalry.user_b_id : rivalry.user_a_id;
-
-        // Pull what badges already exist for this rivalry so we can skip
-        // the work for ones that are already awarded — it's idempotent
-        // anyway but this avoids unnecessary RPC calls.
-        const { data: existingBadges } = await admin
-          .from('rivalry_badges')
-          .select('user_id, badge_key')
-          .eq('rivalry_id', rivalry.id);
-        const ownsBadge = (badgeKey: string) =>
-          (existingBadges || []).some((b: any) => b.user_id === userId && b.badge_key === badgeKey);
-
-        // ── BADGE: first_blood ────────────────────────────────────────────
-        // Earliest workout log in the rivalry window by either side. The
-        // user who owns that log gets the badge.
-        if (!ownsBadge('first_blood')) {
-          const { data: earlierLogs } = await admin
-            .from('activity_logs')
-            .select('id, user_id, logged_at')
-            .in('user_id', [rivalry.user_a_id, rivalry.user_b_id])
-            .eq('log_type', 'workout')
-            .eq('workout_category', rivalry.category)
-            .gte('logged_at', rivalry.started_at)
-            .lte('logged_at', rivalry.ends_at)
-            .order('logged_at', { ascending: true })
-            .limit(1);
-
-          const firstLog = earlierLogs?.[0];
-          // In single-log mode: only award if the first log IS thisLog
-          // (this user is the one who logged first). In scan-all: award
-          // if the first log belongs to this user.
-          if (firstLog && firstLog.user_id === userId) {
-            await tryAward(rivalry.id, userId, 'first_blood');
-          }
-        }
-
-        // ── BADGE: dominant ───────────────────────────────────────────────
-        // Past midweek (more than half the rivalry duration elapsed) AND
-        // ahead by 3+ in score. Reuses compute_rivalry_score so the count
-        // matches what shows on the rivalry page.
-        if (!ownsBadge('dominant')) {
-          const totalMs = endsTime - startedTime;
-          // Pivot on "now" in scan-all mode; on the log's timestamp in
-          // single-log mode. Either is a moment-in-time check.
-          const pivotTime = isScanAll ? Date.now() : new Date(thisLog.logged_at).getTime();
-          const elapsedMs = pivotTime - startedTime;
-          const isMidweekOrLater = elapsedMs > totalMs / 2;
-          if (isMidweekOrLater) {
-            const [{ data: myScoreRaw }, { data: theirScoreRaw }] = await Promise.all([
-              admin.rpc('compute_rivalry_score', {
-                uid: userId,
-                p_category: rivalry.category,
-                p_metric: rivalry.competition_type,
-                p_from: rivalry.started_at,
-                p_to: rivalry.ends_at,
-              }),
-              admin.rpc('compute_rivalry_score', {
-                uid: opponentId,
-                p_category: rivalry.category,
-                p_metric: rivalry.competition_type,
-                p_from: rivalry.started_at,
-                p_to: rivalry.ends_at,
-              }),
-            ]);
-            const myScore = Number(myScoreRaw ?? 0);
-            const theirScore = Number(theirScoreRaw ?? 0);
-            if (myScore - theirScore >= 3) {
-              await tryAward(rivalry.id, userId, 'dominant');
-            }
-          }
-        }
-
-        // ── BADGE: early_bird ─────────────────────────────────────────────
-        // Two consecutive calendar days with at least one workout logged
-        // before 11am local time (we use UTC since logged_at is in UTC).
-        // Only checks the user's own logs within the rivalry window.
-        if (!ownsBadge('early_bird')) {
-          const { data: userLogs } = await admin
-            .from('activity_logs')
-            .select('logged_at')
-            .eq('user_id', userId)
-            .eq('log_type', 'workout')
-            .gte('logged_at', rivalry.started_at)
-            .lte('logged_at', rivalry.ends_at)
-            .order('logged_at', { ascending: true });
-
-          // Build a sorted list of unique days the user logged a morning
-          // workout. A workout counts as "morning" if it's before 11am
-          // UTC on its calendar day.
-          const morningDays = new Set<string>();
-          for (const log of (userLogs || []) as any[]) {
-            const d = new Date(log.logged_at);
-            if (d.getUTCHours() < 11) {
-              morningDays.add(`${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`);
-            }
-          }
-          const sortedKeys = Array.from(morningDays).sort();
-          // Look for two consecutive days
-          let foundConsecutive = false;
-          for (let i = 1; i < sortedKeys.length; i++) {
-            const a = sortedKeys[i - 1].split('-').map(Number);
-            const b = sortedKeys[i].split('-').map(Number);
-            const dateA = new Date(Date.UTC(a[0], a[1], a[2]));
-            const dateB = new Date(Date.UTC(b[0], b[1], b[2]));
-            if (Math.round((dateB.getTime() - dateA.getTime()) / 86400000) === 1) {
-              foundConsecutive = true;
-              break;
-            }
-          }
-          if (foundConsecutive) {
-            await tryAward(rivalry.id, userId, 'early_bird');
-          }
-        }
-
-        // ── BADGE: comeback ───────────────────────────────────────────────
-        // User was behind at some point, then later took the lead. Computed
-        // by replaying the score after each of the user's logs in time
-        // order — at each point we ask the RPC for both scores up to that
-        // log's timestamp. Tracks `everBehind` then watches for the lead
-        // flip.
-        //
-        // Cost: O(N) RPC calls where N = user's logs in this rivalry.
-        // For a 7-day rivalry that's typically <10 calls, fine.
-        if (!ownsBadge('comeback')) {
-          const { data: userLogsForComeback } = await admin
-            .from('activity_logs')
-            .select('id, logged_at')
-            .eq('user_id', userId)
-            .eq('log_type', 'workout')
-            .eq('workout_category', rivalry.category)
-            .gte('logged_at', rivalry.started_at)
-            .lte('logged_at', rivalry.ends_at)
-            .order('logged_at', { ascending: true });
-
-          let everBehind = false;
-          let comebackEarned = false;
-          for (const log of (userLogsForComeback || []) as any[]) {
-            const [{ data: myAtT }, { data: theirAtT }] = await Promise.all([
-              admin.rpc('compute_rivalry_score', {
-                uid: userId,
-                p_category: rivalry.category,
-                p_metric: rivalry.competition_type,
-                p_from: rivalry.started_at,
-                p_to: log.logged_at,
-              }),
-              admin.rpc('compute_rivalry_score', {
-                uid: opponentId,
-                p_category: rivalry.category,
-                p_metric: rivalry.competition_type,
-                p_from: rivalry.started_at,
-                p_to: log.logged_at,
-              }),
-            ]);
-            const m = Number(myAtT ?? 0);
-            const t = Number(theirAtT ?? 0);
-            if (m < t) everBehind = true;
-            if (everBehind && m > t) { comebackEarned = true; break; }
-          }
-          if (comebackEarned) {
-            await tryAward(rivalry.id, userId, 'comeback');
-          }
-        }
-      }
-
-      return NextResponse.json({ ok: true, awarded });
-    }
-
-    // ── Buddy: get enriched profile card data ─────────────────────────────
-    // Used by the workout buddy detail view to render a "meeting a new
-    // friend" card alongside the progress bars. Pulls everything needed
-    // to make the buddy feel like a real person rather than just a name:
-    // city, bio, current level, their pinned badges, their most recent
-    // badge, and their most recently created active personal goal.
-    //
-    // Single endpoint returning the union so the client only takes one
-    // round-trip when opening a detail view. Best-effort — any sub-query
-    // that fails returns null/empty for that field rather than failing
-    // the whole call.
-    if (action === 'get_buddy_profile_card') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      // Fan out the four reads in parallel — they're independent.
-      const [userRes, badgesRes, recentRes, goalsRes] = await Promise.all([
-        admin.from('users')
-          .select('id, username, full_name, avatar_url, city, bio, current_level, immediate_goal, hobbies')
-          .eq('id', userId)
-          .maybeSingle(),
-        // Pinned badges — pin_slot != null means it's pinned to the
-        // user's profile. Sort by pin_slot ascending (slot 0 first).
-        admin.from('badges')
-          .select('badge_id, year, id, pin_slot, earned_at')
-          .eq('user_id', userId)
-          .not('pin_slot', 'is', null)
-          .order('pin_slot', { ascending: true })
-          .limit(6),
-        // Most recently earned badge (any badge, pinned or not). Used
-        // to surface "Just earned: <badge>" as a conversation starter.
-        admin.from('badges')
-          .select('badge_id, year, id, earned_at')
-          .eq('user_id', userId)
-          .order('earned_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        // Top active personal goal — most recently created one that
-        // isn't completed and whose window hasn't expired.
-        admin.from('goals')
-          .select('id, title, emoji, metric, filter, unit, target, current, window_start, window_end')
-          .eq('user_id', userId)
-          .eq('is_completed', false)
-          .order('created_at', { ascending: false })
-          .limit(3),
-      ]);
-
-      // Filter goals to those still in their window (optimistic on null
-      // window_end which means open-ended)
-      const nowMs = Date.now();
-      const activeGoals = (goalsRes.data || []).filter((g: any) =>
-        !g.window_end || new Date(g.window_end).getTime() > nowMs
-      );
-
-      return NextResponse.json({
-        user: userRes.data || null,
-        pinned_badges: badgesRes.data || [],
-        recent_badge: recentRes.data || null,
-        current_goal: activeGoals[0] || null,
-      });
-    }
-
-    // ── Backfill workout_category for old logs ─────────────────────────────
-    // Older app versions saved cardio entries to activity_logs without
-    // setting workout_category. Anything that depends on that column —
-    // most notably compute_rivalry_score, which filters on
-    // workout_category = 'running' / 'walking' / etc — silently misses
-    // those logs. The 4-week stats panel still picks them up because it
-    // reads cardio.type directly, which is why users see things like
-    // "2.7 mi LONGEST RUN" displayed in the side panel but a 0-0 rivalry
-    // score from the same log.
-    //
-    // This action scans all of a user's workout logs that DON'T have a
-    // workout_category, infers it from the log's cardio array (or
-    // exercises array as a fallback), and writes the corrected value.
-    // Idempotent — only touches rows where the field is currently empty.
-    if (action === 'backfill_workout_category') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      const { data: logs } = await admin
-        .from('activity_logs')
-        .select('id, cardio, exercises, workout_category')
-        .eq('user_id', userId)
-        .eq('log_type', 'workout')
-        .or('workout_category.is.null,workout_category.eq.');
-
-      if (!logs || logs.length === 0) {
-        return NextResponse.json({ ok: true, updated: 0 });
-      }
-
-      // Same dictionary inferCategory uses on the client. Kept inline to
-      // avoid coupling a server action to a client-side module.
-      const cardioCatMap: Record<string, string> = {
-        run: 'running', running: 'running', jog: 'running', jogging: 'running',
-        walk: 'walking', walking: 'walking', hike: 'walking', hiking: 'walking',
-        bike: 'biking', biking: 'biking', cycle: 'biking', cycling: 'biking', ride: 'biking',
-        swim: 'swimming', swimming: 'swimming',
-        row: 'rowing', rowing: 'rowing', erg: 'rowing',
-        box: 'combat', boxing: 'combat', mma: 'combat', combat: 'combat',
-      };
-
-      const inferFromLog = (log: any): string | null => {
-        const cardio = Array.isArray(log.cardio) ? log.cardio : [];
-        const firstCardio = cardio[0];
-        const cType = (firstCardio?.type || '').toLowerCase().trim();
-        if (cType) {
-          if (cardioCatMap[cType]) return cardioCatMap[cType];
-          for (const k of Object.keys(cardioCatMap)) {
-            if (cType.includes(k)) return cardioCatMap[k];
-          }
-          return 'other';
-        }
-        const exercises = Array.isArray(log.exercises) ? log.exercises : [];
-        if (exercises.length > 0) return 'lifting';
-        return null;
-      };
-
-      let updated = 0;
-      for (const log of logs as any[]) {
-        const inferred = inferFromLog(log);
-        if (!inferred) continue;
-        const { error } = await admin
-          .from('activity_logs')
-          .update({ workout_category: inferred })
-          .eq('id', log.id);
-        if (!error) updated++;
-      }
-
-      return NextResponse.json({ ok: true, updated, total_scanned: logs.length });
-    }
-
-    // ── Backfill logged_at for today's midnight-timestamp logs ─────────────
-    // The profile-page editor used to set logged_at to midnight UTC of the
-    // chosen day. For TODAY's workouts that meant 00:00:00 even though
-    // the user logged at 3pm. Rivalries / wars filter
-    // `WHERE logged_at >= started_at`, and a rivalry started at 2pm
-    // would silently exclude the workout because 00:00 < 14:00.
-    //
-    // Going forward, the editor uses NOW for today (see computeLoggedAt
-    // helper in DayCard). For existing rows that already shipped with
-    // midnight timestamps, this backfill bumps logged_at up to created_at
-    // (the actual save time) when both are on the same calendar day —
-    // recovering the original save-time signal without inventing it.
-    //
-    // Conservative rules to avoid touching legitimately-old logs:
-    //   1. logged_at must be exactly 00:00:00 UTC (within the second)
-    //   2. created_at and logged_at must be on the SAME calendar day in UTC
-    //   3. created_at must be strictly LATER than logged_at
-    // Anything that fails (1) was probably set by a different code path
-    // and shouldn't be touched. (2) and (3) together mean "this row was
-    // logged for today and saved later that same day."
-    if (action === 'backfill_today_logged_at') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      const { data: logs } = await admin
-        .from('activity_logs')
-        .select('id, logged_at, created_at')
-        .eq('user_id', userId);
-
-      if (!logs || logs.length === 0) {
-        return NextResponse.json({ ok: true, updated: 0 });
-      }
-
-      let updated = 0;
-      for (const log of logs as any[]) {
-        if (!log.created_at || !log.logged_at) continue;
-        const logged = new Date(log.logged_at);
-        const created = new Date(log.created_at);
-
-        const isMidnight =
-          logged.getUTCHours() === 0 &&
-          logged.getUTCMinutes() === 0 &&
-          logged.getUTCSeconds() === 0;
-        const sameDay =
-          logged.getUTCFullYear() === created.getUTCFullYear() &&
-          logged.getUTCMonth() === created.getUTCMonth() &&
-          logged.getUTCDate() === created.getUTCDate();
-        const createdLater = created.getTime() > logged.getTime();
-
-        if (isMidnight && sameDay && createdLater) {
-          const { error } = await admin
-            .from('activity_logs')
-            .update({ logged_at: log.created_at })
-            .eq('id', log.id);
-          if (!error) updated++;
-        }
-      }
-
-      return NextResponse.json({ ok: true, updated, total_scanned: logs.length });
-    }
-
-
-    // ── Detect PRs from a new workout log ─────────────────────────────────
-    // Called after the client submits a new workout. We re-fetch the user's
-    // history (since the client doesn't have it) and run strict detection.
-    // Returns the list of PRs detected so the client can show a "🏆 New PR!"
-    // celebration.
-    if (action === 'detect_prs_from_log') {
-      const { userId, logId } = payload || {};
-      if (!userId || !logId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // Fetch the new log we're checking
-      const { data: newLog, error: newErr } = await admin
-        .from('activity_logs')
-        .select('id, log_type, logged_at, created_at, workout_category, exercises')
-        .eq('id', logId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (newErr) return NextResponse.json({ error: newErr.message }, { status: 500 });
-      if (!newLog) return NextResponse.json({ error: 'Log not found' }, { status: 404 });
-
-      // Fetch all OTHER workout logs (everything before this one). We'd
-      // ideally filter by logged_at < newLog.logged_at but that's fragile
-      // when timestamps tie — exclude by id instead.
-      const { data: history, error: histErr } = await admin
-        .from('activity_logs')
-        .select('id, log_type, logged_at, created_at, workout_category, exercises')
-        .eq('user_id', userId)
-        .eq('log_type', 'workout')
-        .neq('id', logId);
-      if (histErr) return NextResponse.json({ error: histErr.message }, { status: 500 });
-
-      const historicalMaxes = buildHistoricalMaxes((history || []) as ActivityLogRow[]);
-      const detected = detectStrictPRs(newLog as ActivityLogRow, historicalMaxes);
-
-      // Persist any new PRs to personal_records. We also need to delete
-      // any prior record for the same exercise — there should only be ONE
-      // current PR per (user, exercise). Older PR rows are kept as history
-      // by /prs page if needed.
-      //
-      // Actually — the /prs page reads the FULL history table and groups
-      // by exercise client-side, so multiple rows per exercise are fine
-      // and represent the user's progression. Just append.
-      if (detected.length > 0) {
-        const rowsToInsert = detected.map(d => ({
-          user_id: userId,
-          exercise_name: d.exercise_name,
-          weight: d.weight,
-          reps: d.reps,
-          volume: d.volume,
-          logged_at: d.logged_at,
-        }));
-        const { error: insErr } = await admin
-          .from('personal_records')
-          .insert(rowsToInsert);
-        if (insErr) {
-          console.error('[prs] insert failed', insErr);
-          // Don't fail the request — PRs are a nice-to-have, the workout
-          // log itself was already saved before we got here.
-        }
-        // Also flag the originating log so the feed/profile badge it. We
-        // ignore errors here too — worst case the log doesn't get badged
-        // but the PR record itself is in place.
-        await admin
-          .from('activity_logs')
-          .update({ is_pr: true })
-          .eq('id', logId)
-          .catch((e: any) => { console.error('[prs] mark log failed', e); });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        prs: detected,
-      });
-    }
-
-    // ── Join group ─────────────────────────────────────────────────────────
-    if (action === 'join_group') {
-      const { userId, groupId } = payload;
-      if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // Check if already a member
-      const { data: existing } = await admin
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', groupId)
-        .eq('user_id', userId)
-        .single();
-
-      if (existing) return NextResponse.json({ ok: true, already: true });
-
-      const { error } = await admin.from('group_members').insert({
-        group_id: groupId,
-        user_id: userId,
-        role: 'member',
-      });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // ── Auto-award the "group-member" badge ───────────────────────────
-      // Single-shot: fires the first time the user joins ANY group. Idempotent
-      // by checking for an existing row before inserting (we don't have a
-      // unique constraint on (user_id, badge_id) since the user's other
-      // badges with the same badge_id can exist for ladder progress, but
-      // group-member isn't part of a ladder so a single row is enough).
-      // Best-effort — failures here don't block the join.
-      try {
-        const { data: alreadyEarned } = await admin
-          .from('badges')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('badge_id', 'group-member')
-          .limit(1)
-          .maybeSingle();
-        if (!alreadyEarned) {
-          await admin.from('badges').insert({
-            user_id: userId,
-            badge_id: 'group-member',
-            note: 'auto',
-          });
-        }
-      } catch (e) {
-        console.error('[join_group] group-member badge award failed', e);
-      }
-
-      // Increment member_count
-      await admin.rpc('increment_group_member_count', { gid: groupId }).catch(() => {
-        // Fallback: manual increment
-        admin.from('groups')
-          .select('member_count')
-          .eq('id', groupId)
-          .single()
-          .then(({ data }) => {
-            if (data) {
-              admin.from('groups').update({ member_count: (data.member_count || 0) + 1 }).eq('id', groupId);
-            }
-          });
-      });
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Leave group ────────────────────────────────────────────────────────
-    if (action === 'leave_group') {
-      const { userId, groupId } = payload;
-      if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      await admin.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
-
-      // Decrement member_count
-      const { data: g } = await admin.from('groups').select('member_count').eq('id', groupId).single();
-      if (g && g.member_count > 0) {
-        await admin.from('groups').update({ member_count: g.member_count - 1 }).eq('id', groupId);
-      }
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Set member role (promote/demote) ───────────────────────────────────
-    // Owner OR moderator can change roles, with these constraints:
-    //   - Cannot set anyone to 'owner' (only one owner, set at create time)
-    //   - Cannot change the owner's role (the owner is untouchable)
-    //   - newRole must be 'moderator' or 'member'
-    // Moderators can promote/demote because the spec says they have most of the
-    // owner's powers except deleting the group and removing the owner.
-    if (action === 'set_member_role') {
-      const { actorId, groupId, targetUserId, newRole } = payload;
-      if (!actorId || !groupId || !targetUserId || !newRole) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      if (newRole !== 'moderator' && newRole !== 'member') {
-        return NextResponse.json({ error: 'Invalid role. Must be moderator or member.' }, { status: 400 });
-      }
-
-      // Look up actor's role in this group
-      const { data: actorMembership } = await admin
-        .from('group_members')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', actorId)
-        .maybeSingle();
-
-      if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'moderator')) {
-        return NextResponse.json({ error: 'Only owners and moderators can change roles.' }, { status: 403 });
-      }
-
-      // Look up target's current role — needed to enforce "owner is untouchable"
-      const { data: targetMembership } = await admin
-        .from('group_members')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', targetUserId)
-        .maybeSingle();
-
-      if (!targetMembership) {
-        return NextResponse.json({ error: 'Target user is not a member of this group.' }, { status: 404 });
-      }
-      if (targetMembership.role === 'owner') {
-        return NextResponse.json({ error: "The group owner's role cannot be changed." }, { status: 403 });
-      }
-      if (targetMembership.role === newRole) {
-        // No-op — already this role. Return ok so the UI doesn't show an error.
-        return NextResponse.json({ ok: true, unchanged: true });
-      }
-
-      const { error } = await admin
-        .from('group_members')
-        .update({ role: newRole })
-        .eq('group_id', groupId)
-        .eq('user_id', targetUserId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Kick member from group ─────────────────────────────────────────────
-    // Owner OR moderator can kick. Constraints:
-    //   - Cannot kick the owner (owner is untouchable)
-    //   - Cannot kick yourself via this endpoint — use leave_group instead
-    if (action === 'kick_member') {
-      const { actorId, groupId, targetUserId } = payload;
-      if (!actorId || !groupId || !targetUserId) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      if (actorId === targetUserId) {
-        return NextResponse.json({ error: 'Use leave_group to remove yourself.' }, { status: 400 });
-      }
-
-      const { data: actorMembership } = await admin
-        .from('group_members')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', actorId)
-        .maybeSingle();
-
-      if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'moderator')) {
-        return NextResponse.json({ error: 'Only owners and moderators can remove members.' }, { status: 403 });
-      }
-
-      const { data: targetMembership } = await admin
-        .from('group_members')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', targetUserId)
-        .maybeSingle();
-
-      if (!targetMembership) {
-        return NextResponse.json({ error: 'User is not a member of this group.' }, { status: 404 });
-      }
-      if (targetMembership.role === 'owner') {
-        return NextResponse.json({ error: 'The group owner cannot be removed.' }, { status: 403 });
-      }
-
-      const { error: delErr } = await admin
-        .from('group_members')
-        .delete()
-        .eq('group_id', groupId)
-        .eq('user_id', targetUserId);
-      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
-
-      // Decrement member_count to keep the displayed count honest.
-      const { data: g } = await admin.from('groups').select('member_count').eq('id', groupId).single();
-      if (g && g.member_count > 0) {
-        await admin.from('groups').update({ member_count: g.member_count - 1 }).eq('id', groupId);
-      }
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Search locations by name (for the picker) ──────────────────────────
-    // Returns a small ranked list. Order: business locations first (verified),
-    // then user-pinned spots. Optional `nearLat`/`nearLng` boosts ranking for
-    // geographically nearby pins. Limited to 12 results.
-    if (action === 'search_locations') {
-      const q = (payload?.query || '').trim();
-      const nearLat = typeof payload?.nearLat === 'number' ? payload.nearLat : null;
-      const nearLng = typeof payload?.nearLng === 'number' ? payload.nearLng : null;
-      if (!q) return NextResponse.json({ locations: [] });
-
-      const { data, error } = await admin
-        .from('locations')
-        .select('id, name, lat, lng, city, kind, business_user_id')
-        .ilike('name', `%${q}%`)
-        .limit(40);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Client-side ranking: business kind beats user_pin, then by proximity
-      // if user's coords were passed. We compute a rough km distance from
-      // (lat,lng) — Haversine isn't necessary at this scale.
-      let ranked = (data || []) as any[];
-      if (nearLat !== null && nearLng !== null) {
-        ranked = ranked.map(loc => ({
-          ...loc,
-          _dist: distanceMiles(loc.lat, loc.lng, nearLat, nearLng),
-        }));
-        ranked.sort((a, b) => {
-          if (a.kind === 'business' && b.kind !== 'business') return -1;
-          if (b.kind === 'business' && a.kind !== 'business') return 1;
-          return (a._dist ?? 999) - (b._dist ?? 999);
-        });
-      } else {
-        ranked.sort((a, b) => (a.kind === 'business' && b.kind !== 'business') ? -1 : 0);
-      }
-
-      return NextResponse.json({ locations: ranked.slice(0, 12) });
-    }
-
-    // ── Find or create a user-pinned location ──────────────────────────────
-    // Server-side dedup guard. The client also dedups but a race condition
-    // between two simultaneous "create" taps could create two pins within
-    // the same 1-mile radius — server checks once more before insert.
-    if (action === 'find_or_create_location') {
-      const { name, lat, lng, city, userId } = payload || {};
-      if (!name || typeof lat !== 'number' || typeof lng !== 'number' || !city || !userId) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      const cleanName = String(name).trim().slice(0, 200);
-      if (!cleanName) return NextResponse.json({ error: 'Name required' }, { status: 400 });
-
-      // Bounding-box pre-filter: ~1mi at most latitudes is ~0.0145 degrees.
-      // We use 0.02 to be safe on diagonal corners, then exact-check in app.
-      const DEG_BOX = 0.02;
-      const { data: candidates } = await admin
-        .from('locations')
-        .select('id, name, lat, lng, city, kind, business_user_id')
-        .gte('lat', lat - DEG_BOX)
-        .lte('lat', lat + DEG_BOX)
-        .gte('lng', lng - DEG_BOX)
-        .lte('lng', lng + DEG_BOX);
-
-      const existing = (candidates || []).find((c: any) => distanceMiles(c.lat, c.lng, lat, lng) <= 1.0);
-      if (existing) {
-        return NextResponse.json({ location: existing, reused: true });
-      }
-
-      const { data: created, error } = await admin
-        .from('locations')
-        .insert({ name: cleanName, lat, lng, city: String(city).trim(), kind: 'user_pin', created_by: userId })
-        .select('id, name, lat, lng, city, kind, business_user_id')
-        .single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ location: created, reused: false });
-    }
-
-    // ── Get a single location by id (for rendering chips on feed cards) ────
-    if (action === 'get_location') {
-      const id = payload?.id || searchParams.get('id');
-      if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
-      const { data, error } = await admin
-        .from('locations')
-        .select('id, name, lat, lng, city, kind')
-        .eq('id', id)
-        .maybeSingle();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ location: data });
-    }
-
-    // ── Get posts where a user is tagged ──────────────────────────────────
-    // Returns posts whose tagged_user_ids array contains the given userId.
-    // Used by the "Tagged in" tab on profile pages. We use Postgres array
-    // contains operator (cs) to find rows where the array contains the uuid.
-    if (action === 'get_tagged_posts') {
-      const userId = payload?.userId || searchParams.get('userId');
-      const limit = Math.min(parseInt(payload?.limit || searchParams.get('limit') || '30', 10) || 30, 60);
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      // PostgREST contains-array filter syntax: column=cs.{value}
-      // For uuid[] columns we wrap the uuid in braces to denote a literal array.
-      const { data, error } = await admin
-        .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, created_at, likes_count, tagged_user_ids, users:user_id(id, username, full_name, avatar_url, city)')
-        .contains('tagged_user_ids', [userId])
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ posts: data || [] });
-    }
-
-    // ── Create group post ──────────────────────────────────────────────────
-    if (action === 'create_group_post') {
-      const { userId, groupId, content, media_url, media_type } = payload;
-      // Allow media-only posts: require either text OR media. Old check
-      // (`!content`) rejected empty-string content even when a photo was
-      // attached, which broke photo-only posts.
-      if (!userId || !groupId || (!content && !media_url)) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      const insertRow: Record<string, any> = {
-        group_id: groupId,
-        user_id: userId,
-        content: content || '',
-        media_url: media_url || null,
-      };
-      // Only set media_type if it's actually one of the allowed values. Older
-      // databases without this column will return a schema cache error — we
-      // catch that below and retry without the column.
-      if (media_type === 'photo' || media_type === 'video') insertRow.media_type = media_type;
-
-      let { data, error } = await admin.from('group_posts').insert(insertRow)
-        .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
-
-      // Graceful fallback: if `media_type` column doesn't exist yet, retry
-      // without it so deploys don't break before the SQL migration runs.
-      if (error && /media_type/i.test(error.message || '')) {
-        delete insertRow.media_type;
-        const retry = await admin.from('group_posts').insert(insertRow)
-          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
-        data = retry.data; error = retry.error;
-      }
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ post: data });
-    }
-
-    // ── Create group event ─────────────────────────────────────────────────
-    if (action === 'create_group_event') {
-      const { userId, groupId, name, description, event_date, location, price, emoji } = payload;
-      if (!userId || !groupId || !name) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // Only the group owner can create events. Defense in depth — the UI
-      // hides this button for non-owners but a curious user could POST directly.
-      const { data: groupRow } = await admin.from('groups').select('created_by').eq('id', groupId).single();
-      if (!groupRow) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
-      if (groupRow.created_by !== userId) {
-        return NextResponse.json({ error: 'Only the group owner can create events' }, { status: 403 });
-      }
-
-      const { data, error } = await admin.from('group_events').insert({
-        group_id: groupId,
-        creator_id: userId,
-        name,
-        description: description || null,
-        event_date: event_date || null,
-        location: location || null,
-        price: price || 'Free',
-        emoji: emoji || '📅',
-      }).select().single();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ event: data });
-    }
-
-    // ── RSVP event ─────────────────────────────────────────────────────────
-    if (action === 'rsvp_event') {
-      const { userId, eventId } = payload;
-      if (!userId || !eventId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      const { error } = await admin.from('group_event_rsvps').insert({
-        event_id: eventId,
-        user_id: userId,
-      });
-      if (error && !error.message.includes('duplicate')) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      // Increment rsvp_count
-      const { data: ev } = await admin.from('group_events').select('rsvp_count').eq('id', eventId).single();
-      if (ev) {
-        await admin.from('group_events').update({ rsvp_count: (ev.rsvp_count || 0) + 1 }).eq('id', eventId);
-      }
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Create challenge ───────────────────────────────────────────────────
-    if (action === 'create_challenge') {
-      const { userId, groupId, name, description, emoji, metric_key, metric_label, metric_unit, difficulty, deadline } = payload;
-      if (!userId || !groupId || !name || !metric_label) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      const { data, error } = await admin.from('challenges').insert({
-        group_id: groupId,
-        creator_id: userId,
-        name,
-        description: description || null,
-        emoji: emoji || '🏆',
-        metric_key: metric_key || null,   // null = custom manual; set = auto-tracked
-        metric_label,
-        metric_unit: metric_unit || null,
-        difficulty: difficulty || 'Medium',
-        deadline: deadline || null,
-        is_active: true,
-        participant_count: 0,
-      }).select().single();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ challenge: data });
-    }
-
-    // ── Join challenge ─────────────────────────────────────────────────────
-    if (action === 'join_challenge') {
-      const { userId, challengeId, groupId } = payload;
-      if (!userId || !challengeId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      const { error } = await admin.from('challenge_participants').insert({
-        challenge_id: challengeId,
-        user_id: userId,
-        score: 0,
-        log_entries: [],
-      });
-      if (error && !error.message.includes('duplicate')) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      // Increment participant_count
-      const { data: ch } = await admin.from('challenges').select('participant_count,metric_label').eq('id', challengeId).single();
-      if (ch) {
-        await admin.from('challenges').update({ participant_count: (ch.participant_count || 0) + 1 }).eq('id', challengeId);
-      }
-
-      // Create or update leaderboard entry
-      if (groupId) {
-        await admin.from('leaderboard_entries').upsert({
-          group_id: groupId,
-          user_id: userId,
-          challenge_id: challengeId,
-          score: 0,
-          metric_label: ch?.metric_label || '',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'group_id,user_id,challenge_id' });
-      }
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Log challenge progress ─────────────────────────────────────────────
-    if (action === 'log_challenge_progress') {
-      const { userId, challengeId, groupId, value, note } = payload;
-      if (!userId || !challengeId || value === undefined) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      // Get existing participant record
-      const { data: cp } = await admin.from('challenge_participants')
-        .select('score,log_entries')
-        .eq('challenge_id', challengeId)
-        .eq('user_id', userId)
-        .single();
-
-      if (!cp) return NextResponse.json({ error: 'Not a participant' }, { status: 400 });
-
-      const newEntry = { value: Number(value), note: note || '', logged_at: new Date().toISOString() };
-      const newEntries = [...(cp.log_entries || []), newEntry];
-      const newScore = (cp.score || 0) + Number(value);
-
-      await admin.from('challenge_participants').update({
-        score: newScore,
-        log_entries: newEntries,
-      }).eq('challenge_id', challengeId).eq('user_id', userId);
-
-      // Update leaderboard
-      if (groupId) {
-        const { data: ch } = await admin.from('challenges').select('metric_label').eq('id', challengeId).single();
-        await admin.from('leaderboard_entries').upsert({
-          group_id: groupId,
-          user_id: userId,
-          challenge_id: challengeId,
-          score: newScore,
-          metric_label: ch?.metric_label || '',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'group_id,user_id,challenge_id' });
-      }
-
-      return NextResponse.json({ ok: true, newScore });
-    }
-
-    // ── Create community note ──────────────────────────────────────────────
-    if (action === 'create_community_note') {
-      const { userId, groupId, content, category, media_url, media_type } = payload;
-      // Allow notes with only media (no text). Either text OR media is required.
-      if (!userId || !groupId || (!content && !media_url)) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-      const insertRow: Record<string, any> = {
-        group_id: groupId,
-        user_id: userId,
-        content: content || '',
-        category: category || 'General',
-        likes_count: 0,
-      };
-      if (media_url) insertRow.media_url = media_url;
-      if (media_type === 'photo' || media_type === 'video') insertRow.media_type = media_type;
-
-      let { data, error } = await admin.from('community_notes').insert(insertRow)
-        .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
-
-      // Graceful fallback if media columns don't exist yet — strip them and retry.
-      // Lets deploys ship before the migration runs without 500ing every note save.
-      if (error && /(media_url|media_type)/i.test(error.message || '')) {
-        delete insertRow.media_url;
-        delete insertRow.media_type;
-        const retry = await admin.from('community_notes').insert(insertRow)
-          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
-        data = retry.data; error = retry.error;
-      }
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ note: data });
-    }
-
-    // ── Seed groups data (for setup) ───────────────────────────────────────
-    if (action === 'seed_groups') {
-      const { creatorId, memberIds } = payload;
-
-      // Create "FIT Beta Testers" group
-      const slug = 'fit-beta-testers';
-
-      // Check if it already exists
-      const { data: existing } = await admin.from('groups').select('id').eq('slug', slug).single();
-      if (existing) {
-        return NextResponse.json({ ok: true, message: 'Already seeded', groupId: existing.id });
-      }
-
-      const { data: group, error: gErr } = await admin.from('groups').insert({
-        name: 'FIT Beta Testers',
-        description: 'The official group for FIT app beta testers. Share feedback, report bugs, and be part of building something great.',
-        category: 'Wellness',
-        emoji: '🚀',
-        is_online: true,
-        tags: ['#BetaTesting', '#FITapp', '#Community'],
-        member_count: 1,
-        created_by: creatorId,
-        slug,
-      }).select().single();
-
-      if (gErr || !group) return NextResponse.json({ error: gErr?.message }, { status: 500 });
-
-      const gid = group.id;
-
-      // Add creator as owner
-      await admin.from('group_members').insert({ group_id: gid, user_id: creatorId, role: 'owner' });
-
-      // Add additional members
-      if (memberIds && memberIds.length > 0) {
-        await admin.from('group_members').insert(
-          memberIds.map((uid: string) => ({ group_id: gid, user_id: uid, role: 'member' }))
-        );
-        await admin.from('groups').update({ member_count: 1 + memberIds.length }).eq('id', gid);
-      }
-
-      // Add challenge
-      const { data: challenge } = await admin.from('challenges').insert({
-        group_id: gid,
-        creator_id: creatorId,
-        name: '30 Day Workout Streak',
-        description: 'Work out every day for 30 days. Log each session to track your progress on the leaderboard.',
-        emoji: '🔥',
-        metric_label: 'Workouts Completed',
-        metric_unit: 'sessions',
-        difficulty: 'Hard',
-        deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        is_active: true,
-        participant_count: 1,
-      }).select().single();
-
-      if (challenge) {
-        // Add creator as participant
-        await admin.from('challenge_participants').insert({
-          challenge_id: challenge.id,
-          user_id: creatorId,
-          score: 0,
-          log_entries: [],
-        });
-
-        // Add leaderboard entry
-        await admin.from('leaderboard_entries').insert({
-          group_id: gid,
-          user_id: creatorId,
-          challenge_id: challenge.id,
-          score: 0,
-          metric_label: 'Workouts Completed',
-        });
-      }
-
-      // Add event
-      await admin.from('group_events').insert({
-        group_id: gid,
-        creator_id: creatorId,
-        name: 'First Beta Testing Session',
-        description: 'Our first official beta testing session! We\'ll go through the app together, test all features, and collect feedback.',
-        event_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        location: 'Online via Discord',
-        price: 'Free',
-        emoji: '🚀',
-      });
-
-      return NextResponse.json({ ok: true, groupId: gid });
-    }
-
-    // ── Delete group ───────────────────────────────────────────────────────
-    if (action === 'delete_group') {
-      const { userId, groupId } = payload;
-      if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      const { data: grp } = await admin.from('groups').select('created_by, creator_id').eq('id', groupId).single();
-      if (!grp || (grp.created_by !== userId && grp.creator_id !== userId)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
-      await admin.from('groups').delete().eq('id', groupId);
-      return NextResponse.json({ success: true });
-    }
-
-    // ── Add event comment ──────────────────────────────────────────────────
-    if (action === 'add_event_comment') {
-      const { eventId, userId, text } = payload;
-      if (!eventId || !text) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      const { data: user } = await admin.from('users').select('full_name, username').eq('id', userId).single();
-      const userName = user?.full_name || user?.username || 'You';
-      const { error } = await admin.from('group_event_comments').insert({
-        event_id: eventId,
-        user_id: userId || null,
-        content: text,
-      });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true, comment: { user: userName, text, time: 'Just now' } });
-    }
-
-    // ── Update group banner ────────────────────────────────────────────────
-    if (action === 'update_group_banner') {
-      const { groupId, bannerUrl, userId } = payload;
-      if (!groupId || !bannerUrl) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      await admin.from('groups').update({ banner_url: bannerUrl }).eq('id', groupId);
-      return NextResponse.json({ success: true });
-    }
-
-    // ── Delete group challenge (bypasses RLS as service role) ────────────
-    if (action === 'delete_group_challenge') {
-      const { challengeId } = payload;
-      if (!challengeId) return NextResponse.json({ error: 'Missing challengeId' }, { status: 400 });
-
-      // Try group_challenges table first (wars + group goals)
-      const { data: gcRow } = await admin.from('group_challenges').select('id').eq('id', challengeId).single();
-      if (gcRow) {
-        // Delete members (ignore errors if table doesn't exist)
-        try { await admin.from('group_challenge_members').delete().eq('challenge_id', challengeId); } catch(e) {}
-        // Delete media (ignore errors if table doesn't exist)
-        try { await admin.from('group_challenge_media').delete().eq('challenge_id', challengeId); } catch(e) {}
-        // Delete the challenge itself
-        const { error: delErr } = await admin.from('group_challenges').delete().eq('id', challengeId);
-        if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
-        return NextResponse.json({ success: true });
-      }
-
-      // Try challenges table (member challenges)
-      const { data: cRow } = await admin.from('challenges').select('id').eq('id', challengeId).single();
-      if (cRow) {
-        await admin.from('challenge_participants').delete().eq('challenge_id', challengeId);
-        const { error } = await admin.from('challenges').delete().eq('id', challengeId);
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        return NextResponse.json({ success: true });
-      }
-
-      return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
-    }
-
-    // ── MODERATION: Report content or user ─────────────────────────────────
-    // Creates a row in the reports table. Duplicate reports (same reporter →
-    // same target) are treated as success (idempotent) so clicking report
-    // twice doesn't error. The actual content stays visible until a human
-    // reviews — reports just flag for moderation queue.
-    if (action === 'report_content') {
-      const { reporterId, targetType, targetId, reason, details } = payload;
-      if (!reporterId || !targetType || !targetId || !reason) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-
-      const { error } = await admin.from('reports').upsert({
-        reporter_id: reporterId,
-        target_type: targetType,
-        target_id: targetId,
-        reason,
-        details: details || null,
-      }, { onConflict: 'reporter_id,target_type,target_id' });
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true });
-    }
-
-    // ── MODERATION: Block a user ─────────────────────────────────────────
-    // Upserts a block row. Idempotent so blocking twice is harmless.
-    // Also auto-unfollows in both directions — blocked users shouldn't
-    // stay in follow relationships since they're effectively invisible.
-    if (action === 'block_user') {
-      const { blockerId, blockedId, reason } = payload;
-      if (!blockerId || !blockedId) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      if (blockerId === blockedId) {
-        return NextResponse.json({ error: 'Cannot block yourself' }, { status: 400 });
-      }
-
-      const { error } = await admin.from('user_blocks').upsert({
-        blocker_id: blockerId,
-        blocked_id: blockedId,
-        reason: reason || null,
-      }, { onConflict: 'blocker_id,blocked_id' });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Unfollow in both directions. Safe to fail — the block is what matters.
-      await admin.from('follows')
-        .delete()
-        .or(`and(follower_id.eq.${blockerId},following_id.eq.${blockedId}),and(follower_id.eq.${blockedId},following_id.eq.${blockerId})`);
-
-      return NextResponse.json({ success: true });
-    }
-
-    // ── MODERATION: Unblock a user ───────────────────────────────────────
-    if (action === 'unblock_user') {
-      const { blockerId, blockedId } = payload;
-      if (!blockerId || !blockedId) {
-        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-      }
-      const { error } = await admin.from('user_blocks')
-        .delete()
-        .eq('blocker_id', blockerId)
-        .eq('blocked_id', blockedId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true });
-    }
-
-    // ── Delete account (soft delete) ──────────────────────────────────────────
-    // Apple requires in-app account deletion. We anonymize PII but keep the
-    // user row so foreign keys (posts, badges, messages they sent) don't
-    // cascade-delete. After 30 days a scheduled purge can hard-delete if
-    // desired. Username is also added to reserved_usernames so nobody can
-    // re-register the handle and impersonate.
-    //
-    // Important: public.users.id FKs auth.users ON DELETE CASCADE. If we
-    // delete the auth user here, the cascade wipes our just-anonymized row.
-    // Instead we ban the auth user (sets banned_until = far future) which
-    // prevents login while preserving the auth row. The frontend's signOut
-    // clears the session cookie.
-    if (action === 'delete_account') {
-      const { userId, reason } = payload;
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-
-      // 1. Grab the user's current handle so we can reserve it
-      const { data: u, error: uErr } = await admin
-        .from('users')
-        .select('username')
-        .eq('id', userId)
-        .single();
-      if (uErr || !u) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-
-      // 2. Reserve the username permanently so nobody can impersonate
-      await admin.from('reserved_usernames').upsert({
-        username: u.username,
-        original_user_id: userId,
-        reason: 'account_deleted',
-      }, { onConflict: 'username' });
-
-      // 3. Anonymize PII on the user row. The user stays in the table
-      //    (so FKs hold) but identifying info is wiped. Display name becomes
-      //    "Deleted User" everywhere their posts/comments appear.
-      const anonHandle = `deleted_${userId.slice(0, 8)}`;
-      const { error: updErr } = await admin
-        .from('users')
-        .update({
-          username: anonHandle,
-          full_name: 'Deleted User',
-          bio: null,
-          avatar_url: null,
-          banner_url: null,
-          is_private: true,
-          deleted_at: new Date().toISOString(),
-          deleted_reason: reason || null,
-        })
-        .eq('id', userId);
-      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
-
-      // 4. Free up the original email for re-registration. We swap the auth
-      //    user's email to a placeholder so the original is reusable, then
-      //    ban the auth row to prevent the deleted account from logging in.
-      //    This way: original email can sign up again as a fresh account,
-      //    old data stays (anonymized) for content integrity.
-      try {
-        const placeholderEmail = `deleted+${userId}@deleted.fit`;
-        await admin.auth.admin.updateUserById(userId, {
-          email: placeholderEmail,
-          ban_duration: '876000h', // 100 years — defense in depth
-        });
-      } catch (authErr: any) {
-        console.error('[delete_account] auth update failed (non-fatal):', authErr);
-      }
-
-      return NextResponse.json({ success: true });
-    }
-
-    // ── Stories ────────────────────────────────────────────────────────────
-    // Get all active stories (last 24h) — returns 1 row per user with their
-    // most recent story. The feed rail shows one ring per user; tap to see
-    // their newest story.
-    if (action === 'get_active_stories') {
-      const { viewerId } = payload || {};
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: rows, error } = await admin
-        .from('stories')
-        .select('id, user_id, media_url, media_type, caption, created_at')
-        .gte('created_at', since)
-        .order('created_at', { ascending: false });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // Dedupe to most recent per user
-      const seen = new Set<string>();
-      const latestPerUser: any[] = [];
-      for (const r of rows || []) {
-        if (seen.has(r.user_id)) continue;
-        seen.add(r.user_id);
-        latestPerUser.push(r);
-      }
-
-      // Hydrate with user info (username, avatar, full_name)
-      const userIds = latestPerUser.map(s => s.user_id);
-      const { data: users } = userIds.length
-        ? await admin.from('users').select('id, username, full_name, avatar_url').in('id', userIds)
-        : { data: [] };
-      const userMap = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
-
-      // Move the viewer's own story to the front so it shows up first in the rail
-      const enriched = latestPerUser.map(s => ({
-        ...s,
-        username: userMap[s.user_id]?.username ?? 'unknown',
-        full_name: userMap[s.user_id]?.full_name ?? null,
-        avatar_url: userMap[s.user_id]?.avatar_url ?? null,
-        is_you: s.user_id === viewerId,
-      }));
-      enriched.sort((a, b) => {
-        if (a.is_you && !b.is_you) return -1;
-        if (!a.is_you && b.is_you) return 1;
-        return 0;
-      });
-
-      return NextResponse.json({ stories: enriched });
-    }
-
-    // Get all stories from a single user (last 24h) — used for the viewer
-    // when a user has multiple stories queued up.
-    if (action === 'get_user_stories') {
-      const { userId } = payload || {};
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await admin
-        .from('stories')
-        .select('id, user_id, media_url, media_type, caption, created_at')
-        .eq('user_id', userId)
-        .gte('created_at', since)
-        .order('created_at', { ascending: true });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ stories: data || [] });
-    }
-
-    // Post a new story. The client uploads the photo first via uploadPhoto
-    // helper and passes the public URL in here.
-    if (action === 'post_story') {
-      const { userId, mediaUrl, mediaType, caption } = payload || {};
-      if (!userId || !mediaUrl) return NextResponse.json({ error: 'Missing userId or mediaUrl' }, { status: 400 });
-      const { data, error } = await admin.from('stories').insert({
-        user_id: userId,
-        media_url: mediaUrl,
-        media_type: mediaType || 'image',
-        caption: caption || null,
-      }).select().single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ story: data });
-    }
-
-    // Delete one of your own stories
-    if (action === 'delete_my_story') {
-      const { userId, storyId } = payload || {};
-      if (!userId || !storyId) return NextResponse.json({ error: 'Missing userId or storyId' }, { status: 400 });
-      const { error } = await admin.from('stories').delete()
-        .eq('id', storyId).eq('user_id', userId); // user_id check enforces ownership
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true });
-    }
-
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+/** Single-shot badges (not part of a ladder) that the server auto-awards on
+ *  the triggering action — e.g. group-member fires when join_group runs.
+ *  Keep this in sync with the actual auto-award sites in app/api/db/route.ts.
+ *  Hidden from the manual claim modal so users can't self-award. */
+const AUTO_AWARDED_SINGLE_BADGE_LIST = [
+  "group-member",  // join_group action: first time a user joins any group
+  "group-leader",  // create_group action: first time a user creates a group
+];
+export const AUTO_AWARDED_SINGLE_BADGE_IDS = new Set<string>(AUTO_AWARDED_SINGLE_BADGE_LIST);
+
+/** All easy-ladder + streak + auto-singletons (auto-awarded by post-page engine
+ *  or by specific server actions). Used by isManualBadge to hide these from
+ *  the claim modal. */
+export const AUTO_AWARDED_BADGE_IDS = new Set<string>([
+  ...BADGES.filter(b => {
+    const prefix = getBadgePrefix(b.id);
+    return prefix !== null && (
+      EASY_LADDER_PREFIXES.includes(prefix) || prefix === "streak"
+    );
+  }).map(b => b.id),
+  ...AUTO_AWARDED_SINGLE_BADGE_LIST,
+]);
+
+/** All hard-event ladder badge IDs (manually claimable, level up). */
+export const MANUAL_LADDER_BADGE_IDS = new Set<string>(
+  BADGES.filter(b => {
+    const prefix = getBadgePrefix(b.id);
+    return prefix !== null && HARD_LADDER_PREFIXES.includes(prefix);
+  }).map(b => b.id)
+);
+
+/** Just the tier-1 entry IDs of each manual ladder (what shows in modal). */
+export const MANUAL_LADDER_ENTRY_IDS = new Set<string>(
+  HARD_LADDER_PREFIXES.map(prefix => `${prefix}-1`)
+);
+
+/** Strength ladder + total ladder badge IDs (auto-detectable from logged exercises with weight). */
+export const STRENGTH_LADDER_BADGE_IDS = new Set<string>(
+  BADGES.filter(b => {
+    const prefix = getBadgePrefix(b.id);
+    return prefix !== null && (STRENGTH_LADDER_PREFIXES.includes(prefix) || prefix === "total");
+  }).map(b => b.id)
+);
+
+// ── Manual badge family interface (for ladder claim flow) ─────────────────
+export interface ManualBadgeFamily {
+  key: string;
+  entryBadgeId: string;
+  tiers: [string, string, string, string, string];
+  thresholds: [1, 3, 5, 10, 20];
+}
+
+export const MANUAL_BADGE_FAMILIES: ManualBadgeFamily[] = HARD_LADDER_PREFIXES.map(prefix => ({
+  key: prefix,
+  entryBadgeId: `${prefix}-1`,
+  tiers: [`${prefix}-1`, `${prefix}-3`, `${prefix}-5`, `${prefix}-10`, `${prefix}-20`] as [string, string, string, string, string],
+  thresholds: [1, 3, 5, 10, 20] as [1, 3, 5, 10, 20],
+}));
+
+export function findManualBadgeFamily(badgeId: string): ManualBadgeFamily | null {
+  return MANUAL_BADGE_FAMILIES.find(f => f.tiers.includes(badgeId)) ?? null;
+}
+
+export function getTierForCount(family: ManualBadgeFamily, count: number): string {
+  for (let i = family.thresholds.length - 1; i >= 0; i--) {
+    if (count >= family.thresholds[i]) return family.tiers[i];
   }
+  return family.tiers[0];
+}
+
+/** True if this badge should appear in the "Report Achievement" modal. */
+export function isManualBadge(badgeId: string): boolean {
+  if (AUTO_AWARDED_BADGE_IDS.has(badgeId)) return false;
+  if (STRENGTH_LADDER_BADGE_IDS.has(badgeId)) return false;
+  if (MANUAL_LADDER_BADGE_IDS.has(badgeId) && !MANUAL_LADDER_ENTRY_IDS.has(badgeId)) return false;
+  return true;
 }
