@@ -344,8 +344,8 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
 }
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; earnedBadges?: string[]; userLevel?: number };
-function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, earnedBadges = [], userLevel = 1}:DayCardProps) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; onLogSaved?: ()=>void; earnedBadges?: string[]; userLevel?: number };
+function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, onLogSaved, earnedBadges = [], userLevel = 1}:DayCardProps) {
   const { user } = useAuth();
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
@@ -411,6 +411,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   // background trackers (PR detection, goal progress, group goals, member
   // challenges, buddy matches). Each is best-effort — errors are swallowed
   // so the user always sees their save succeed even if a tracker fails.
+  //
+  // After every tracker resolves we call onLogSaved() so the parent
+  // ProfilePage can refresh its goal panel from the now-updated DB.
+  // Without this, server-side `update_goals_from_log` would correctly
+  // tick up the stored goal but the on-screen profile would still show
+  // the cached pre-edit value until the user navigated away and back.
+  // (Reported symptom: "I edited my workout, added a run, my running
+  // goal didn't move.")
   async function fireTrackers(logId: string, kind: 'workout' | 'nutrition' | 'wellness') {
     if (!user || !logId) return;
     try {
@@ -443,6 +451,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         }).catch(() => {}));
       }
       await Promise.all(triggers);
+      // Notify parent — triggers a goals refetch on ProfilePage so the UI
+      // shows the new `current` values right away. Best-effort: swallow if
+      // the parent didn't pass a callback.
+      try { onLogSaved?.(); } catch { /* noop */ }
     } catch { /* best-effort */ }
   }
 
@@ -4354,6 +4366,11 @@ export default function ProfilePage() {
                       wellnessLogIds={(day as any)._wellnessLogIds}
                       earnedBadges={earnedBadges.map(b => b.badge_id)}
                       userLevel={progressInfo?.level ?? 1}
+                      // Refresh the profile's goal panel after a save so the
+                      // user sees their goals tick up immediately. Without
+                      // this the server recomputes correctly but the UI
+                      // shows the stale cached values until next page nav.
+                      onLogSaved={reloadProfileGoals}
                       onDelete={isReal ? async () => {
                         // Delete every log row tied to this card. With multi-
                         // workout merging, _workoutLogIds may contain >1 entry.
