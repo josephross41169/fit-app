@@ -921,7 +921,19 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
                     <span style={{ fontWeight:800,fontSize:12,color:"#E2E8F0" }}>{meal.key}</span>
                     <span style={{ fontWeight:900,fontSize:12,color:C.gold }}>{meal.cal} kcal</span>
                   </div>
-                  <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{meal.name}</div>
+                  {/* Meal description (the comma-separated food list).
+                      Previously truncated with text-overflow: ellipsis +
+                      white-space: nowrap so anything beyond ~30 chars got
+                      cut off ("6 eggs w Mozzarella cheese, Bluebe…"). 
+                      We let it wrap naturally now — line-height kept tight
+                      so the card doesn't balloon, and word-break: break-word
+                      handles edge cases like one really long ingredient
+                      name without spaces. */}
+                  <div style={{
+                    fontSize:11, color:C.darkSub, marginTop:1,
+                    lineHeight:1.4,
+                    wordBreak:"break-word",
+                  }}>{meal.name}</div>
                 </div>
               </div>
             ))}
@@ -1054,16 +1066,32 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
   const displayBadges = Array.from(new Set(userBadges));
   return (
     <div style={{ background:C.darkCard, borderRadius:18, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:16 }}>
-      {/* User header */}
+      {/* User header — avatar + name + username are all clickable and
+          navigate to the user's profile page. Mirrors the behavior of
+          the main feed post header so users have a consistent way to
+          tap a poster's name from anywhere. window.location for parity
+          with the rest of the file's profile-link pattern (no router
+          dependency injected here). */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-        <TierFrame tier={(post as any).tier || "default"} size={44}>
-          <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
-            {(post as any).avatarUrl
-              ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-              : post.avatar}
-          </div>
-        </TierFrame>
-        <div style={{ flex:1,minWidth:0 }}>
+        <div
+          onClick={() => window.location.href = `/profile/${post.username}`}
+          style={{ cursor:"pointer", flexShrink:0 }}
+          aria-label={`Open ${post.user}'s profile`}
+          role="link"
+        >
+          <TierFrame tier={(post as any).tier || "default"} size={44}>
+            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+              {(post as any).avatarUrl
+                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+                : post.avatar}
+            </div>
+          </TierFrame>
+        </div>
+        <div
+          onClick={() => window.location.href = `/profile/${post.username}`}
+          style={{ flex:1, minWidth:0, cursor:"pointer" }}
+          role="link"
+        >
           <div style={{ display:"flex",alignItems:"center",gap:5,flexWrap:"wrap" }}>
             <span style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{post.user}</span>
             <TierBadgeChip tier={(post as any).tier || "default"} small />
