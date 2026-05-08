@@ -449,6 +449,18 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'buddy_update_from_log', payload: { userId: user.id, logId } }),
         }).catch(() => {}));
+        // Rivalry badges — workout-only. Server detects whether this log
+        // earns first_blood (first log of the rivalry by either side) or
+        // dominant (ahead by 3+ past midweek) and inserts the badge row.
+        // Idempotent on retry. There WAS no badge unlock pipeline before
+        // this — rivalry_badges was a read-only table that never got
+        // written to from anywhere in the codebase, which is why no one
+        // was ever earning the First Blood badge despite logging.
+        triggers.push(fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'unlock_rivalry_badges', payload: { userId: user.id, logId } }),
+        }).catch(() => {}));
       }
       await Promise.all(triggers);
       // Notify parent — triggers a goals refetch on ProfilePage so the UI
