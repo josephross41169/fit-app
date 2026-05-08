@@ -1292,62 +1292,111 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // ── Workout buddy: load active match + queue entry ─────────────────────
-    // Returns whatever state the user is in: { match: {...} } if matched,
-    // { queue: {...} } if waiting, or { match: null, queue: null } otherwise.
+    // ── Workout buddy: load all active matches + queue entry ──────────────
+    // Returns whatever state the user is in. With multi-buddy support,
+    // this now returns ALL active matches the user is in (across different
+    // categories — same-category dual matches are still blocked at the
+    // matchmaking step).
     //
-    // WHY THIS EXISTS: The rivals page used to do this read client-side via
-    // a Postgrest embedded join (`select("*, user_a:user_a(id,username,...)`).
-    // That requires a foreign-key relationship from buddy_matches.user_a →
-    // users.id to be registered in Postgres. The buddy_matches table was
-    // created ad-hoc in Supabase without that FK, so the embedded join
-    // silently returned null — meaning users would queue up successfully
-    // server-side but never see the match appear on either client.
+    // Response shape:
+    //   { matches: HydratedMatch[], queue: QueueRow | null }
     //
-    // Doing the read here via the admin client bypasses both the FK
-    // requirement AND any RLS policies that might be blocking client reads.
-    // We do the user lookup as a separate query and stitch it together.
+    // HydratedMatch = a buddy_matches row with user_a/user_b expanded from
+    // user IDs to full user objects (id, username, full_name, avatar_url).
+    //
+    // WHY THIS GOES THROUGH THE ADMIN CLIENT: the ad-hoc buddy_matches
+    // table was created without a registered foreign-key relationship to
+    // users, which means a Postgrest embedded join silently returns null
+    // when fetched from a normal client. The admin client bypasses the
+    // FK requirement AND any RLS, then we hydrate users via a separate
+    // `.in()` query.
     if (action === 'buddy_get_active_match') {
       const { userId } = payload || {};
       if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
 
-      // 1. Look for an active match where this user is either side
-      const { data: match } = await admin
+      // 1. Pull every active match this user is in
+      const { data: matches } = await admin
         .from('buddy_matches')
         .select('*')
         .eq('status', 'active')
         .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-        .order('starts_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('starts_at', { ascending: false });
 
-      if (match) {
-        // 2. Hydrate user_a + user_b in a single users query
+      // 2. Hydrate users for ALL matches in one query. Collect every
+      //    distinct user ID across all matches (will include the current
+      //    user plus every buddy), fetch them once, then attach.
+      const allUserIds = new Set<string>();
+      (matches || []).forEach((m: any) => {
+        if (m.user_a) allUserIds.add(m.user_a);
+        if (m.user_b) allUserIds.add(m.user_b);
+      });
+
+      let userMap: Record<string, any> = {};
+      if (allUserIds.size > 0) {
         const { data: users } = await admin
           .from('users')
           .select('id, username, full_name, avatar_url')
-          .in('id', [match.user_a, match.user_b]);
-        const userA = users?.find((u: any) => u.id === match.user_a) || null;
-        const userB = users?.find((u: any) => u.id === match.user_b) || null;
-
-        // Return in the shape the client expects: user_a / user_b are
-        // hydrated user objects, not just IDs. Rest of the match row
-        // (category, tier, target_*, starts_at, ends_at, status,
-        // user_a_progress, user_b_progress) is passed through unchanged.
-        return NextResponse.json({
-          match: { ...match, user_a: userA, user_b: userB },
-          queue: null,
-        });
+          .in('id', Array.from(allUserIds));
+        (users || []).forEach((u: any) => { userMap[u.id] = u; });
       }
 
-      // 3. No active match — check if the user is queued
+      const hydratedMatches = (matches || []).map((m: any) => ({
+        ...m,
+        user_a: userMap[m.user_a] || null,
+        user_b: userMap[m.user_b] || null,
+      }));
+
+      // 3. Queue entry (only one active queue at a time per user is
+      //    enforced by the matchmaking step).
       const { data: queueRow } = await admin
         .from('buddy_queue')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
-      return NextResponse.json({ match: null, queue: queueRow || null });
+      // BACKWARD COMPAT: also expose `match` (the most recent one) so
+      // any older client code expecting the old single-match shape keeps
+      // working during the rollout. Will remove this once all clients
+      // are on the new shape.
+      return NextResponse.json({
+        matches: hydratedMatches,
+        match: hydratedMatches[0] || null,
+        queue: queueRow || null,
+      });
+    }
+
+    // ── Workout buddy: leave (forfeit) an active match ─────────────────────
+    // Sets the match status to "ended" so neither user sees it anymore.
+    // We don't delete the row — we want the historical record for stats
+    // and we may want to add a "past buddies" view later.
+    //
+    // SAFETY: only the participants can end the match. Non-participants
+    // get a 403 even though it'd otherwise just be a no-op.
+    if (action === 'buddy_leave_match') {
+      const { userId, matchId } = payload || {};
+      if (!userId || !matchId) return NextResponse.json({ error: 'Missing userId or matchId' }, { status: 400 });
+
+      const { data: match } = await admin
+        .from('buddy_matches')
+        .select('id, user_a, user_b, status')
+        .eq('id', matchId)
+        .maybeSingle();
+      if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+      if (match.user_a !== userId && match.user_b !== userId) {
+        return NextResponse.json({ error: 'Not a participant' }, { status: 403 });
+      }
+      if (match.status !== 'active') {
+        // Idempotent — already inactive, nothing to do
+        return NextResponse.json({ ok: true, status: match.status });
+      }
+
+      const { error: upErr } = await admin
+        .from('buddy_matches')
+        .update({ status: 'ended', ends_at: new Date().toISOString() })
+        .eq('id', matchId);
+      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+
+      return NextResponse.json({ ok: true, status: 'ended' });
     }
 
     // ── Workout buddy: update progress from a new log ──────────────────────
