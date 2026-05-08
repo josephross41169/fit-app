@@ -729,6 +729,46 @@ export async function POST(req: NextRequest) {
         }).catch(() => {}); // don't fail if notifications table isn't ready yet
       }
 
+      // ── @mention notifications in activity comments ─────────────────
+      // Parse @usernames out of the comment, look them up, and fire
+      // a notification each. Skips:
+      //   • the commenter themselves (no self-pings)
+      //   • the card owner (already got the activity_comment notif above)
+      //   • duplicates within the same comment
+      // This was previously only wired up for post comments via the
+      // feed page's client-side parser. Activity comments had a plain
+      // <input> and no @mention support at all — now they do.
+      try {
+        const re = /(?:^|\s)@([a-zA-Z0-9_]{2,32})/g;
+        const mentioned = new Set<string>();
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(content)) !== null) {
+          mentioned.add(m[1].toLowerCase());
+        }
+        if (mentioned.size > 0) {
+          const { data: foundUsers } = await admin
+            .from('users')
+            .select('id, username')
+            .in('username', Array.from(mentioned));
+          const { data: commenter2 } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
+          const senderName = commenter2?.full_name || commenter2?.username || 'Someone';
+          for (const fu of (foundUsers || []) as any[]) {
+            // Skip self-mention and skip the card owner (they already got
+            // an activity_comment notif — double-notifying is noisy).
+            if (fu.id === commenterId) continue;
+            if (fu.id === cardOwnerId) continue;
+            await admin.from('notifications').insert({
+              user_id: fu.id,
+              from_user_id: commenterId,
+              type: 'mention',
+              reference_id: cardId,
+              body: `${senderName} mentioned you in a comment`,
+              read: false,
+            }).catch(() => {});
+          }
+        }
+      } catch { /* best-effort */ }
+
       return NextResponse.json({ comment: data });
     }
 
@@ -2463,6 +2503,63 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ event: data });
     }
 
+    // ── Approve a pending group event ──────────────────────────────────────
+    // Owner-only action that flips events.approved=true on a pending event
+    // submitted by a group member and notifies the submitter that their
+    // event is live. Replaces a direct supabase.from('events').update(...)
+    // on the group page so we can notify atomically server-side and so
+    // all permission checks live in one place.
+    //
+    // Authorization: caller must be the owner (created_by) of the event's
+    // group. Defense in depth — RLS already restricts updates to owner,
+    // but we want a clean error message and the notification to fire
+    // even when a row-level update would have been a no-op.
+    if (action === 'approve_event') {
+      const { userId, eventId } = payload || {};
+      if (!userId || !eventId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+      // Load the event to know who submitted it + which group
+      const { data: ev } = await admin
+        .from('events')
+        .select('id, creator_id, group_id, title, approved')
+        .eq('id', eventId)
+        .maybeSingle();
+      if (!ev) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+
+      // Verify the caller is the group owner
+      if ((ev as any).group_id) {
+        const { data: g } = await admin.from('groups').select('created_by').eq('id', (ev as any).group_id).single();
+        if (!g || (g as any).created_by !== userId) {
+          return NextResponse.json({ error: 'Only the group owner can approve events' }, { status: 403 });
+        }
+      }
+
+      // Idempotent — re-approving an already-approved event is a no-op
+      // for the row but still safe to skip the notification spam.
+      const wasAlreadyApproved = (ev as any).approved === true;
+      if (!wasAlreadyApproved) {
+        const { error } = await admin.from('events').update({ approved: true }).eq('id', eventId);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      // Notify the submitter (only if newly approved + not the owner)
+      if (!wasAlreadyApproved && (ev as any).creator_id && (ev as any).creator_id !== userId) {
+        try {
+          const titleSnip = (ev as any).title ? `"${String((ev as any).title).slice(0, 40)}${String((ev as any).title).length > 40 ? '…' : ''}"` : 'your event';
+          await admin.from('notifications').insert({
+            user_id: (ev as any).creator_id,
+            from_user_id: userId,
+            type: 'event_approved',
+            reference_id: eventId,
+            body: `Your event ${titleSnip} was approved and is now live`,
+            read: false,
+          }).catch(() => {});
+        } catch { /* non-fatal */ }
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     // ── RSVP event ─────────────────────────────────────────────────────────
     if (action === 'rsvp_event') {
       const { userId, eventId } = payload;
@@ -2481,6 +2578,49 @@ export async function POST(req: NextRequest) {
       if (ev) {
         await admin.from('group_events').update({ rsvp_count: (ev.rsvp_count || 0) + 1 }).eq('id', eventId);
       }
+
+      // ── Notify event creator ─────────────────────────────────────────
+      // Looks up the event's creator and pings them so they see RSVPs
+      // accumulating in real time. Skips if the creator IS the rsvp-er
+      // (some flows allow self-RSVP). Best-effort — errors don't fail
+      // the RSVP itself.
+      try {
+        // Try the new events table first; fall back to legacy group_events.
+        let creatorId: string | null = null;
+        let eventTitle: string | null = null;
+        const { data: newEv } = await admin
+          .from('events')
+          .select('creator_id, title')
+          .eq('id', eventId)
+          .maybeSingle();
+        if (newEv) {
+          creatorId = (newEv as any).creator_id;
+          eventTitle = (newEv as any).title;
+        } else {
+          const { data: legacyEv } = await admin
+            .from('group_events')
+            .select('creator_id, name')
+            .eq('id', eventId)
+            .maybeSingle();
+          if (legacyEv) {
+            creatorId = (legacyEv as any).creator_id;
+            eventTitle = (legacyEv as any).name;
+          }
+        }
+        if (creatorId && creatorId !== userId) {
+          const { data: rsvper } = await admin.from('users').select('full_name,username').eq('id', userId).single();
+          const name = rsvper?.full_name || rsvper?.username || 'Someone';
+          const titleSnip = eventTitle ? `"${eventTitle.slice(0, 40)}${eventTitle.length > 40 ? '…' : ''}"` : 'your event';
+          await admin.from('notifications').insert({
+            user_id: creatorId,
+            from_user_id: userId,
+            type: 'event_rsvp',
+            reference_id: eventId,
+            body: `${name} RSVP'd to ${titleSnip}`,
+            read: false,
+          }).catch(() => {});
+        }
+      } catch { /* notifications schema may differ — non-fatal */ }
 
       return NextResponse.json({ ok: true });
     }
@@ -2541,6 +2681,31 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'group_id,user_id,challenge_id' });
       }
+
+      // ── Notify challenge creator ─────────────────────────────────────
+      // Looks up the challenge to find creator + name. Skips if the
+      // joiner IS the creator. Fire-and-forget — a missed notification
+      // shouldn't fail the join.
+      try {
+        const { data: chRow } = await admin
+          .from('challenges')
+          .select('creator_id, name')
+          .eq('id', challengeId)
+          .single();
+        if (chRow && (chRow as any).creator_id && (chRow as any).creator_id !== userId) {
+          const { data: joiner } = await admin.from('users').select('full_name,username').eq('id', userId).single();
+          const name = joiner?.full_name || joiner?.username || 'Someone';
+          const chName = (chRow as any).name || 'your challenge';
+          await admin.from('notifications').insert({
+            user_id: (chRow as any).creator_id,
+            from_user_id: userId,
+            type: 'challenge_join',
+            reference_id: challengeId,
+            body: `${name} joined ${chName}`,
+            read: false,
+          }).catch(() => {});
+        }
+      } catch { /* non-fatal */ }
 
       return NextResponse.json({ ok: true });
     }
