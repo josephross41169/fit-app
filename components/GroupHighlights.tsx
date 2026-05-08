@@ -683,18 +683,32 @@ function HighlightTile({ url }: { url: string }) {
         {isVid && (
           <button
             onClick={onMuteClick}
+            // Mobile browsers sometimes fire pointer/touch events before
+            // React's onClick, and stopping propagation only on click can
+            // let a phantom touchstart leak through to the parent tile,
+            // popping the lightbox. Stopping at pointerdown too closes
+            // that gap.
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             aria-label={muted ? "Unmute" : "Mute"}
             style={{
-              position: "absolute", bottom: 6, right: 6,
-              background: "rgba(0,0,0,0.7)",
+              position: "absolute", bottom: 8, right: 8,
+              // 40x40 is large enough to hit reliably on mobile (Apple HIG
+              // recommends 44x44 minimum for tap targets; we're close
+              // while staying visually unobtrusive on the tile).
+              width: 40, height: 40, borderRadius: "50%",
+              background: "rgba(0,0,0,0.75)",
               color: "#fff",
-              fontSize: 14, fontWeight: 800,
-              padding: "4px 10px", borderRadius: 99,
+              fontSize: 18,
+              padding: 0,
               border: "none",
-              display: "flex", alignItems: "center", gap: 4,
+              display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer",
-              // Slight z-bump to make sure it sits above the video element
-              zIndex: 2,
+              // Keep above the video element so taps land on the button,
+              // not on the video.
+              zIndex: 3,
+              // Subtle shadow for visibility against bright video frames
+              boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
             }}
           >
             {muted ? "🔇" : "🔊"}
