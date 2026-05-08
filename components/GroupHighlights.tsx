@@ -611,19 +611,33 @@ function HighlightTile({ url }: { url: string }) {
   }, [isVid]);
 
   // Tap behavior:
-  //   photos → open lightbox
-  //   videos → first tap unmutes, second tap opens lightbox with controls
+  //   photos          → open lightbox
+  //   videos (tile)   → open lightbox (full controls + audio)
+  //   videos (mute btn) → toggle mute in-place; click is stopped from
+  //                       bubbling so it doesn't ALSO open the lightbox
+  //
+  // Previously the mute toggle was bolted onto the tile click via a
+  // "first tap unmutes, second tap opens" pattern, with the visual
+  // mute indicator set to pointerEvents:none. That's confusing — users
+  // intuitively want the speaker icon to BE the mute control. Splitting
+  // it gives a clear contract: tap the icon for mute, tap the video for
+  // fullscreen.
   function onTileClick() {
-    if (isVid) {
-      if (muted) {
-        setMuted(false);
-        if (videoRef.current) videoRef.current.muted = false;
-      } else {
-        setShowFull(true);
-      }
-    } else {
-      setShowFull(true);
-    }
+    setShowFull(true);
+  }
+
+  function onMuteClick(e: React.MouseEvent) {
+    // Stop bubbling so the parent tile doesn't ALSO fire and open the
+    // lightbox. Without this, every mute tap would also pop fullscreen.
+    e.stopPropagation();
+    const next = !muted;
+    setMuted(next);
+    // Mirror the change directly onto the DOM video so playback reflects
+    // it within the same user-gesture frame. Browsers (especially iOS)
+    // require the unmute to happen synchronously inside the click event;
+    // waiting for the next React render is too late and the unmute gets
+    // silently rejected.
+    if (videoRef.current) videoRef.current.muted = next;
   }
 
   // Tile size: ~200px on desktop, scales down to 42vw on mobile so 2-3
@@ -667,17 +681,24 @@ function HighlightTile({ url }: { url: string }) {
           />
         )}
         {isVid && (
-          <div style={{
-            position: "absolute", bottom: 6, right: 6,
-            background: "rgba(0,0,0,0.65)",
-            color: "#fff",
-            fontSize: 11, fontWeight: 800,
-            padding: "3px 8px", borderRadius: 99,
-            display: "flex", alignItems: "center", gap: 4,
-            pointerEvents: "none" as const,
-          }}>
+          <button
+            onClick={onMuteClick}
+            aria-label={muted ? "Unmute" : "Mute"}
+            style={{
+              position: "absolute", bottom: 6, right: 6,
+              background: "rgba(0,0,0,0.7)",
+              color: "#fff",
+              fontSize: 14, fontWeight: 800,
+              padding: "4px 10px", borderRadius: 99,
+              border: "none",
+              display: "flex", alignItems: "center", gap: 4,
+              cursor: "pointer",
+              // Slight z-bump to make sure it sits above the video element
+              zIndex: 2,
+            }}
+          >
             {muted ? "🔇" : "🔊"}
-          </div>
+          </button>
         )}
       </div>
 
