@@ -40,14 +40,32 @@ export async function forceSyncAllProgress(userId: string): Promise<void> {
     // being correct. Cheap on subsequent calls — only scans rows where
     // workout_category IS NULL, so once it's caught up there's nothing
     // to do.
-    await fetch("/api/db", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "backfill_workout_category",
-        payload: { userId },
-      }),
-    }).catch(() => {});
+    //
+    // Step 1b: backfill logged_at for today's midnight-timestamp rows.
+    // The old profile editor saved logged_at as midnight UTC, which
+    // caused rivalries started later the same day to silently exclude
+    // the user's workouts (logged_at < started_at). The backfill bumps
+    // those rows up to their created_at timestamp. Run alongside the
+    // category backfill since both are prerequisites for the badge
+    // scanner and rivalry score RPC seeing the user's logs correctly.
+    await Promise.all([
+      fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "backfill_workout_category",
+          payload: { userId },
+        }),
+      }).catch(() => {}),
+      fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "backfill_today_logged_at",
+          payload: { userId },
+        }),
+      }).catch(() => {}),
+    ]);
 
     // Step 2-5: every recompute fires in parallel. None of them depend
     // on each other's output — each reads activity_logs and writes to
