@@ -1115,14 +1115,18 @@ function BuddyPanel({ userId }: { userId: string }) {
             );
           }
 
-          // Don't render the card at all if we got back nothing — this
-          // is a graceful degradation case (e.g., the endpoint failed).
-          if (!profileUser) return null;
+          // Fall back to the buddy data we have on the match itself if
+          // the profile-card endpoint didn't return enriched data (e.g.,
+          // network blip, or the new endpoint hasn't deployed yet).
+          // Better to render a basic identity card than nothing.
+          const u = profileUser || buddy;
+          if (!u) return null;
 
-          const initials = ((profileUser.full_name || profileUser.username || "?").trim()[0] || "?").toUpperCase();
-          const hasAnyData = profileUser.city || profileUser.bio || profileUser.current_level
-            || pinnedDisplay.length > 0 || recent || goal;
-          if (!hasAnyData) return null;
+          const initials = ((u.full_name || u.username || "?").trim()[0] || "?").toUpperCase();
+          // Whether we have any "personality" data — bio, goal, badges,
+          // city, level. Drives whether we show the icebreaker prompt
+          // instead of the rich sub-sections.
+          const hasPersonality = !!(u.city || u.bio || u.current_level || pinnedDisplay.length > 0 || recent || goal);
 
           return (
             <div style={{
@@ -1145,12 +1149,14 @@ function BuddyPanel({ userId }: { userId: string }) {
                 </span>
               </div>
 
-              {/* Identity row — big avatar, name, username, level, city */}
+              {/* Identity row — big avatar, name, username, level, city.
+                  Always renders. The sub-rows below it (bio, goal, badges)
+                  hide individually when empty. */}
               <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "center", gap: 14 }}>
-                {profileUser.avatar_url ? (
+                {u.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={profileUser.avatar_url}
+                    src={u.avatar_url}
                     alt=""
                     style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid #7C3AED55", flexShrink: 0 }}
                   />
@@ -1165,38 +1171,40 @@ function BuddyPanel({ userId }: { userId: string }) {
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 900, fontSize: 17, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {profileUser.full_name || profileUser.username}
+                    {u.full_name || u.username}
                   </div>
-                  {profileUser.username && profileUser.full_name && (
-                    <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 6 }}>@{profileUser.username}</div>
+                  {u.username && u.full_name && (
+                    <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: u.current_level != null || u.city ? 6 : 0 }}>@{u.username}</div>
                   )}
-                  <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
-                    {profileUser.current_level != null && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 99,
-                        background: "rgba(245,166,35,0.15)", border: "1px solid rgba(245,166,35,0.4)",
-                        color: "#F5A623",
-                      }}>⚡ Lvl {profileUser.current_level}</span>
-                    )}
-                    {profileUser.city && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99,
-                        background: "#0D0D0D", border: "1px solid #2D1B69",
-                        color: "#9CA3AF",
-                      }}>📍 {profileUser.city}</span>
-                    )}
-                  </div>
+                  {(u.current_level != null || u.city) && (
+                    <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+                      {u.current_level != null && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 99,
+                          background: "rgba(245,166,35,0.15)", border: "1px solid rgba(245,166,35,0.4)",
+                          color: "#F5A623",
+                        }}>⚡ Lvl {u.current_level}</span>
+                      )}
+                      {u.city && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99,
+                          background: "#0D0D0D", border: "1px solid #2D1B69",
+                          color: "#9CA3AF",
+                        }}>📍 {u.city}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Bio — italic quote-style. Only renders when set so we
                   don't show empty quotes for users who skipped this. */}
-              {profileUser.bio && (
+              {u.bio && (
                 <div style={{ padding: "0 18px 12px" }}>
                   <div style={{
                     fontSize: 13, color: "#D1D5DB", fontStyle: "italic" as const,
                     lineHeight: 1.5, paddingLeft: 10, borderLeft: "2px solid #7C3AED55",
-                  }}>"{profileUser.bio}"</div>
+                  }}>"{u.bio}"</div>
                 </div>
               )}
 
@@ -1282,6 +1290,32 @@ function BuddyPanel({ userId }: { userId: string }) {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Icebreaker prompt — shown when the buddy hasn't filled
+                  in any personality data (no bio, goal, badges, etc).
+                  Without this the card would look weirdly empty after
+                  the identity row, and users couldn't tell whether the
+                  feature was even working. The prompt does double duty:
+                  fills the visual space, and tees up a real reason to
+                  message the buddy. */}
+              {!hasPersonality && (
+                <div style={{
+                  margin: "0 14px 14px",
+                  padding: "12px 14px",
+                  background: "#0D0D0D",
+                  border: "1px dashed #2D1B69",
+                  borderRadius: 12,
+                  textAlign: "center" as const,
+                }}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>💬</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#F0F0F0", marginBottom: 3 }}>
+                    Break the ice
+                  </div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", lineHeight: 1.5 }}>
+                    {(u.full_name?.split(" ")[0] || u.username || "Your buddy")} hasn't filled in their profile yet. Say hi and find out what they're training for.
+                  </div>
                 </div>
               )}
             </div>
