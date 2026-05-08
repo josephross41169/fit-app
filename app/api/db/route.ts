@@ -1354,6 +1354,18 @@ export async function POST(req: NextRequest) {
         .eq('user_id', userId)
         .maybeSingle();
 
+      // 4. Pull the requesting user's own intake fields. The client uses
+      //    these to decide whether to gate the matchmaking flow behind
+      //    the intake step. If city, immediate_goal, OR hobbies are
+      //    missing, the user must complete the intake before they can
+      //    queue for a buddy. Same select shape as get_buddy_profile_card
+      //    so the rendering paths can share types.
+      const { data: meRow } = await admin
+        .from('users')
+        .select('id, username, full_name, avatar_url, city, bio, current_level, immediate_goal, hobbies')
+        .eq('id', userId)
+        .maybeSingle();
+
       // BACKWARD COMPAT: also expose `match` (the most recent one) so
       // any older client code expecting the old single-match shape keeps
       // working during the rollout. Will remove this once all clients
@@ -1362,6 +1374,7 @@ export async function POST(req: NextRequest) {
         matches: hydratedMatches,
         match: hydratedMatches[0] || null,
         queue: queueRow || null,
+        me: meRow || null,
       });
     }
 
@@ -1811,7 +1824,7 @@ export async function POST(req: NextRequest) {
       // Fan out the four reads in parallel — they're independent.
       const [userRes, badgesRes, recentRes, goalsRes] = await Promise.all([
         admin.from('users')
-          .select('id, username, full_name, avatar_url, city, bio, current_level')
+          .select('id, username, full_name, avatar_url, city, bio, current_level, immediate_goal, hobbies')
           .eq('id', userId)
           .maybeSingle(),
         // Pinned badges — pin_slot != null means it's pinned to the
