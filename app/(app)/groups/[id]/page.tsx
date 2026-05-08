@@ -11,6 +11,76 @@ import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast } from "@/lib/share";
 import GroupHighlights from "@/components/GroupHighlights";
 
+// ── UserAvatar ─────────────────────────────────────────────────────────────
+// Robust avatar with initials fallback. The previous inline implementation
+// rendered initials BEHIND the image so a successfully-loaded blank/
+// transparent image (which Supabase placeholder URLs sometimes serve)
+// would cover the initials and produce a "blank circle" — exactly what
+// users were reporting in the war scoreboard. This version flips the
+// logic: initials show by default, image only renders after `onLoad`
+// confirms it actually has dimensions. If the image fails to load OR
+// loads as a tiny placeholder (< 16px in either axis), we treat it as
+// missing and stick with initials. Either way, you always see SOMETHING.
+function UserAvatar({
+  user, size, color, fontSize,
+}: {
+  user: { full_name?: string | null; username?: string | null; avatar_url?: string | null } | null | undefined;
+  size: number;
+  color: string;
+  fontSize?: number;
+}) {
+  const [imgOk, setImgOk] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const initials = ((user?.full_name || user?.username || "?").trim()[0] || "?").toUpperCase();
+  const avatarUrl = (user?.avatar_url || "").trim();
+  const showImg = !!avatarUrl && imgOk && !imgFailed;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%", flexShrink: 0,
+      overflow: "hidden",
+      background: `linear-gradient(135deg, ${color}, ${color}99)`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: fontSize ?? Math.round(size * 0.42),
+      fontWeight: 900, color: "#fff",
+      position: "relative" as const,
+    }}>
+      {/* Initials always rendered. Hidden via opacity (not display) when
+          a real image overlays them, so layout doesn't shift. */}
+      <span style={{ opacity: showImg ? 0 : 1, lineHeight: 1 }}>{initials}</span>
+      {avatarUrl && !imgFailed && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={ImagePresets.avatarSm(avatarUrl)}
+          loading="lazy"
+          decoding="async"
+          alt=""
+          onLoad={(e) => {
+            const img = e.currentTarget as HTMLImageElement;
+            // Reject tiny / placeholder images. naturalWidth of 0 means
+            // the image errored at the protocol level despite no error
+            // event firing (rare but happens with bad Supabase MIME
+            // types). Anything under 16px in either dimension is almost
+            // certainly a placeholder, not a real avatar.
+            if (img.naturalWidth >= 16 && img.naturalHeight >= 16) {
+              setImgOk(true);
+            } else {
+              setImgFailed(true);
+            }
+          }}
+          onError={() => setImgFailed(true)}
+          style={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%", objectFit: "cover",
+            // Hide until verified — prevents the brief flash of a half-
+            // loaded image covering the initials.
+            opacity: imgOk ? 1 : 0,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 const C = {
   blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
   gold:"#F5A623", text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
@@ -3759,37 +3829,13 @@ export default function GroupPage() {
                               const val = m.contribution || 0;
                               const pct = Math.round((val/maxVal)*100);
                               const medals = ["🥇","🥈","🥉"];
-                              const initials = ((u?.full_name||u?.username||"?").trim()[0]||"?").toUpperCase();
                               return (
                                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",
                                   borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
                                   <span style={{width:20,fontSize:13,textAlign:"center" as const,flexShrink:0}}>
                                     {rank<=3 ? medals[rank-1] : <span style={{fontSize:11,color:"#6B7280"}}>#{rank}</span>}
                                   </span>
-                                  {/* Avatar — image when available, initials
-                                      gradient when not. The img stays inside
-                                      the gradient circle so a load failure
-                                      shows the initial behind it instead of a
-                                      broken-image icon. We trigger the
-                                      fallback explicitly via onError so even
-                                      404s look clean. */}
-                                  <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,overflow:"hidden",
-                                    background:`linear-gradient(135deg,${color},${color}99)`,
-                                    display:"flex",alignItems:"center",justifyContent:"center",
-                                    fontSize:12,fontWeight:900,color:"#fff",position:"relative" as const}}>
-                                    <span>{initials}</span>
-                                    {u?.avatar_url && (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={ImagePresets.avatarSm(u.avatar_url)}
-                                        loading="lazy"
-                                        decoding="async"
-                                        alt=""
-                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                                        style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}
-                                      />
-                                    )}
-                                  </div>
+                                  <UserAvatar user={u} size={32} color={color} />
                                   <div style={{flex:1,minWidth:0}}>
                                     <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0",
                                       overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -3810,6 +3856,79 @@ export default function GroupPage() {
 
                             return (
                               <div style={{borderTop:"1px solid #2D1F52"}}>
+                                {/* War stats strip — prominent at-a-glance
+                                    info inside the expanded card. Was just
+                                    a scoreboard + photos before; users had
+                                    to do mental math to figure out how the
+                                    war was actually going. Each tile shows
+                                    one piece of useful context: where we
+                                    are in the timeline, total work done,
+                                    and lead size. Tiles auto-hide their
+                                    rows when no useful value exists. */}
+                                {(() => {
+                                  const startDate = chal.created_at ? new Date(chal.created_at) : null;
+                                  const daysRunning = startDate ? Math.max(0, Math.floor((Date.now() - startDate.getTime()) / 86400000)) : null;
+                                  const totalCombined = (myScore || 0) + (theirScore || 0);
+                                  // Find the single highest contributor across both teams.
+                                  const topMember = [...allMembers].sort((a:any,b:any) => (b.contribution||0) - (a.contribution||0))[0];
+                                  const topUser = topMember?.users;
+                                  const topVal = topMember?.contribution || 0;
+                                  const topGroupColor = topMember?.group_id === dbId ? "#7C3AED" : "#06B6D4";
+                                  const goalRemaining = chal.goal > 0 ? Math.max(0, chal.goal - totalCombined) : null;
+
+                                  return (
+                                    <div style={{
+                                      display: "grid",
+                                      gridTemplateColumns: "repeat(4, 1fr)",
+                                      gap: 1,
+                                      background: "#2D1F52",
+                                      padding: 1,
+                                    }}>
+                                      {/* Started X days ago */}
+                                      <div style={{background:"#0D0820",padding:"10px 6px",textAlign:"center" as const}}>
+                                        <div style={{fontSize:16,marginBottom:2}}>📅</div>
+                                        <div style={{fontWeight:900,fontSize:15,color:"#F0F0F0",lineHeight:1}}>
+                                          {daysRunning !== null ? `${daysRunning}d` : "—"}
+                                        </div>
+                                        <div style={{fontSize:9,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:0.5,marginTop:4}}>
+                                          Running
+                                        </div>
+                                      </div>
+                                      {/* Days left */}
+                                      <div style={{background:"#0D0820",padding:"10px 6px",textAlign:"center" as const}}>
+                                        <div style={{fontSize:16,marginBottom:2}}>⏱</div>
+                                        <div style={{fontWeight:900,fontSize:15,color:daysLeft !== null && daysLeft <= 1 ? "#F5A623" : "#F0F0F0",lineHeight:1}}>
+                                          {daysLeft !== null ? `${daysLeft}d` : "—"}
+                                        </div>
+                                        <div style={{fontSize:9,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:0.5,marginTop:4}}>
+                                          Left
+                                        </div>
+                                      </div>
+                                      {/* Combined total */}
+                                      <div style={{background:"#0D0820",padding:"10px 6px",textAlign:"center" as const}}>
+                                        <div style={{fontSize:16,marginBottom:2}}>{meta.icon}</div>
+                                        <div style={{fontWeight:900,fontSize:15,color:"#F0F0F0",lineHeight:1}}>
+                                          {totalCombined}<span style={{fontSize:10,fontWeight:700,color:"#9CA3AF",marginLeft:1}}>{meta.unit}</span>
+                                        </div>
+                                        <div style={{fontSize:9,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:0.5,marginTop:4}}>
+                                          {goalRemaining !== null ? `${goalRemaining}${meta.unit} to goal` : "Total"}
+                                        </div>
+                                      </div>
+                                      {/* Top contributor */}
+                                      <div style={{background:"#0D0820",padding:"10px 6px",textAlign:"center" as const}}>
+                                        <div style={{fontSize:16,marginBottom:2}}>🔥</div>
+                                        <div style={{fontWeight:900,fontSize:13,color:topGroupColor,lineHeight:1.1,
+                                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                          {topUser ? (topUser.full_name?.split(" ")[0] || topUser.username || "—") : "—"}
+                                        </div>
+                                        <div style={{fontSize:9,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:0.5,marginTop:4}}>
+                                          {topVal > 0 ? `Leads · ${topVal}${meta.unit}` : "Top"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
                                 {/* Two-column scoreboard */}
                                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
                                   {/* My team */}
