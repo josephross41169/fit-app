@@ -18,6 +18,7 @@ import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
 import MentionInput from "@/components/MentionInput";
+import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
 
 const C = {
   blue: "#7C3AED",
@@ -55,7 +56,20 @@ type DailyTotals = { calories: number; protein: number; carbs: number; fat: numb
 type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
 type PostType = "Workout" | "Nutrition" | "Wellness" | "Achievement" | "Other";
-type WorkoutTemplate = { id: string; name: string; exercises: Exercise[] };
+// V2 template shape — the Builder writes `days` (multi-day) but legacy
+// templates may only have `exercises` (single-day). Loaders below pick
+// whichever is populated. See migration-template-builder.sql for the
+// full column list.
+type WorkoutTemplate = {
+  id: string;
+  name: string;
+  description?: string | null;
+  cover_emoji?: string | null;
+  is_public?: boolean;
+  use_count?: number;
+  days?: Array<{ day_name: string; exercises: Exercise[] }>;
+  exercises: Exercise[]; // legacy single-day fallback (always populated)
+};
 type PRResult = {
   exercise: string;
   weight: number;
@@ -417,6 +431,15 @@ export default function PostPage() {
   const [templateName, setTemplateName] = useState("");
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+  // V2 Template Builder — full-screen modal for multi-day templates
+  // with description + cover emoji. The legacy showSaveTemplate inline
+  // input above still ships for back-compat (if migration hasn't run)
+  // but the Builder is the new authoring path.
+  const [builderOpen, setBuilderOpen] = useState(false);
+  // When the user taps "Save current as Template" we pre-fill Day 1
+  // with their current workout-form exercises. When they tap "Build
+  // Template" from a blank slate we leave this empty.
+  const [builderInitialDay1, setBuilderInitialDay1] = useState<TemplateExercise[] | undefined>(undefined);
 
   // Today's workout resume state
   const [todayLog, setTodayLog] = useState<{ id: string; type: string } | null>(null);
@@ -2563,55 +2586,99 @@ export default function PostPage() {
                       style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                     >
                       <span>📋 Load Template</span>
-                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "?" : "?"}</span>
+                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
                     </button>
                     {templateDropdownOpen && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#1A1228", border: "1.5px solid #7C3AED", borderRadius: 12, boxShadow: "0 8px 32px rgba(124,58,237,0.25)", overflow: "hidden", marginTop: 4 }}>
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#1A1228", border: "1.5px solid #7C3AED", borderRadius: 12, boxShadow: "0 8px 32px rgba(124,58,237,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
                         {templates.length === 0 ? (
-                          <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Save your first workout below!</div>
-                        ) : templates.map((tpl, i) => (
-                          <div key={tpl.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: i < templates.length - 1 ? "1px solid #2D1B69" : "none" }}>
-                            <button
-                              onMouseDown={() => loadTemplate(tpl)}
-                              style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
-                            >
-                              <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0" }}>{tpl.name}</div>
-                              <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>
-                                {tpl.exercises.length} exercise{tpl.exercises.length !== 1 ? "s" : ""}
-                              </div>
-                            </button>
-                            <button
-                              onMouseDown={() => deleteTemplate(tpl.id)}
-                              style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 12, cursor: "pointer", flexShrink: 0, marginLeft: 8 }}
-                            >·</button>
-                          </div>
-                        ))}
+                          <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Tap "🔨 Build Template" to create one.</div>
+                        ) : templates.map((tpl, i) => {
+                          // V2 templates carry `days` (multi-day) + `cover_emoji`
+                          // + `description`. Legacy templates only have
+                          // `exercises`. Surface whichever is richer so a
+                          // user upgrading mid-flight gets a sensible label.
+                          const dayCount = Array.isArray(tpl.days) ? tpl.days.length : 0;
+                          const totalExs = Array.isArray(tpl.days) && dayCount > 0
+                            ? tpl.days.reduce((sum: number, d: any) => sum + (d.exercises?.length || 0), 0)
+                            : tpl.exercises.length;
+                          const subtitle = dayCount > 1
+                            ? `${dayCount} days · ${totalExs} exercises`
+                            : `${totalExs} exercise${totalExs !== 1 ? "s" : ""}`;
+                          return (
+                            <div key={tpl.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: i < templates.length - 1 ? "1px solid #2D1B69" : "none", gap: 10 }}>
+                              <button
+                                onMouseDown={() => loadTemplate(tpl)}
+                                style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}
+                              >
+                                {/* Cover emoji — falls back to the file-folder
+                                    glyph for legacy templates that didn't have
+                                    a cover_emoji column at save time. */}
+                                <div style={{
+                                  width: 32, height: 32, borderRadius: 8,
+                                  background: "rgba(124,58,237,0.18)",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: 16, flexShrink: 0,
+                                }}>
+                                  {tpl.cover_emoji || "📋"}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tpl.name}</div>
+                                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {subtitle}
+                                    {tpl.description ? ` · ${tpl.description.slice(0, 40)}${tpl.description.length > 40 ? "…" : ""}` : ""}
+                                  </div>
+                                </div>
+                              </button>
+                              <button
+                                onMouseDown={() => deleteTemplate(tpl.id)}
+                                title="Delete template"
+                                style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(255,68,68,0.15)", color: "#FF6666", fontSize: 14, fontWeight: 800, cursor: "pointer", flexShrink: 0, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                              >×</button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-                  {/* Save as template button */}
+                  {/* "Build a Template" — opens an empty Builder modal so
+                      the user can construct a multi-day template from
+                      scratch (Push/Pull/Legs etc.). The richer flow
+                      Joey asked for, with name + description + cover
+                      emoji + multi-day. */}
                   <button
-                    onClick={() => setShowSaveTemplate(s => !s)}
-                    style={{ padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: C.sub, fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
-                  >💾 Save as Template</button>
+                    onClick={() => { setBuilderInitialDay1(undefined); setBuilderOpen(true); }}
+                    style={{ padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.blue, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >🔨 Build Template</button>
+                  {/* "Save current as Template" — pre-fills Day 1 with the
+                      exercises in the current workout form. Convenience
+                      shortcut so users don't have to retype. */}
+                  <button
+                    onClick={() => {
+                      // Snapshot current form exercises into the Builder's
+                      // initial Day 1. The Builder treats them as editable
+                      // — user can rename, add days, set description.
+                      const seed: TemplateExercise[] = exercises.map(ex => ({
+                        name: ex.name,
+                        sets: ex.sets,
+                        reps: ex.reps,
+                        ...(ex.weight ? { weight: ex.weight } : {}),
+                        ...(ex.notes ? { notes: ex.notes } : {}),
+                      }));
+                      setBuilderInitialDay1(seed.length > 0 ? seed : undefined);
+                      setBuilderOpen(true);
+                    }}
+                    disabled={exercises.length === 0}
+                    style={{
+                      padding: "10px 14px", borderRadius: 12,
+                      border: `1.5px solid ${C.greenMid}`,
+                      background: C.greenLight, color: C.sub,
+                      fontWeight: 700, fontSize: 13,
+                      cursor: exercises.length === 0 ? "not-allowed" : "pointer",
+                      opacity: exercises.length === 0 ? 0.5 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >💾 Save Current</button>
                 </div>
-                {/* Template name input (shown when saving) */}
-                {showSaveTemplate && (
-                  <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      style={{ ...iStyle, flex: 1 }}
-                      placeholder="Template name (e.g. Push Day A)"
-                      value={templateName}
-                      onChange={e => setTemplateName(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && saveTemplate()}
-                    />
-                    <button
-                      onClick={saveTemplate}
-                      disabled={templateSaving || !templateName.trim() || exercises.length === 0}
-                      style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: templateSaving ? C.greenMid : C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", flexShrink: 0 }}
-                    >{templateSaving ? "..." : "Save"}</button>
-                  </div>
-                )}
               </div>
 
               {/* Exercises table · with search autocomplete, increment buttons, prev session */}
@@ -3503,6 +3570,38 @@ export default function PostPage() {
             // Photo becomes the nutrition log's photo. Only set if not
             // already set — don't overwrite if user already picked one.
             if (!nutPhoto) setNutPhoto(photoDataUrl);
+          }}
+        />
+      )}
+
+      {/* Template Builder modal — full-screen, controlled by builderOpen.
+          Mounting here keeps it overlaid above all other UI. Pre-fills
+          Day 1 from the current workout form when launched via "Save
+          Current as Template"; empty otherwise. */}
+      {user && (
+        <TemplateBuilder
+          open={builderOpen}
+          onClose={() => { setBuilderOpen(false); setBuilderInitialDay1(undefined); }}
+          userId={user.id}
+          initialDay1={builderInitialDay1}
+          onSaved={(saved) => {
+            // Insert at the top of the templates list so the user sees
+            // their fresh template right away in the existing dropdown
+            // (Session 4 will replace this dropdown with a richer Browse
+            // Templates flow). Cast back to the local type — Builder
+            // returns the V2 shape with `days`; legacy callers expect
+            // `exercises` so we surface day-1 there too.
+            const local: WorkoutTemplate = {
+              id: saved.id,
+              name: saved.name,
+              description: saved.description,
+              cover_emoji: saved.cover_emoji,
+              is_public: saved.is_public,
+              use_count: saved.use_count,
+              days: saved.days as any,
+              exercises: (saved.days?.[0]?.exercises as any) || (saved as any).exercises || [],
+            };
+            setTemplates(t => [local, ...t]);
           }}
         />
       )}
