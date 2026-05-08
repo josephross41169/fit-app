@@ -1793,6 +1793,68 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, awarded });
     }
 
+    // ── Buddy: get enriched profile card data ─────────────────────────────
+    // Used by the workout buddy detail view to render a "meeting a new
+    // friend" card alongside the progress bars. Pulls everything needed
+    // to make the buddy feel like a real person rather than just a name:
+    // city, bio, current level, their pinned badges, their most recent
+    // badge, and their most recently created active personal goal.
+    //
+    // Single endpoint returning the union so the client only takes one
+    // round-trip when opening a detail view. Best-effort — any sub-query
+    // that fails returns null/empty for that field rather than failing
+    // the whole call.
+    if (action === 'get_buddy_profile_card') {
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      // Fan out the four reads in parallel — they're independent.
+      const [userRes, badgesRes, recentRes, goalsRes] = await Promise.all([
+        admin.from('users')
+          .select('id, username, full_name, avatar_url, city, bio, current_level')
+          .eq('id', userId)
+          .maybeSingle(),
+        // Pinned badges — pin_slot != null means it's pinned to the
+        // user's profile. Sort by pin_slot ascending (slot 0 first).
+        admin.from('badges')
+          .select('badge_id, year, id, pin_slot, earned_at')
+          .eq('user_id', userId)
+          .not('pin_slot', 'is', null)
+          .order('pin_slot', { ascending: true })
+          .limit(6),
+        // Most recently earned badge (any badge, pinned or not). Used
+        // to surface "Just earned: <badge>" as a conversation starter.
+        admin.from('badges')
+          .select('badge_id, year, id, earned_at')
+          .eq('user_id', userId)
+          .order('earned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        // Top active personal goal — most recently created one that
+        // isn't completed and whose window hasn't expired.
+        admin.from('goals')
+          .select('id, title, emoji, metric, filter, unit, target, current, window_start, window_end')
+          .eq('user_id', userId)
+          .eq('is_completed', false)
+          .order('created_at', { ascending: false })
+          .limit(3),
+      ]);
+
+      // Filter goals to those still in their window (optimistic on null
+      // window_end which means open-ended)
+      const nowMs = Date.now();
+      const activeGoals = (goalsRes.data || []).filter((g: any) =>
+        !g.window_end || new Date(g.window_end).getTime() > nowMs
+      );
+
+      return NextResponse.json({
+        user: userRes.data || null,
+        pinned_badges: badgesRes.data || [],
+        recent_badge: recentRes.data || null,
+        current_goal: activeGoals[0] || null,
+      });
+    }
+
     // ── Backfill workout_category for old logs ─────────────────────────────
     // Older app versions saved cardio entries to activity_logs without
     // setting workout_category. Anything that depends on that column —
