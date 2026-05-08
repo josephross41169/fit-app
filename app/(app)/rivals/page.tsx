@@ -1,1285 +1,623 @@
-"use client";
+// ── lib/rivalries.ts ────────────────────────────────────────────────────────
+// All rivalry-system queries live here. Page components should never call
+// supabase directly for rivalry data — always go through this module so types
+// and error handling are consistent.
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
-import { useAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
-import {
-  joinQueue, leaveQueue, getQueueEntry,
-  getActiveRivalry, getLiveScores, getUserRecord,
-  getMessages, sendTextMessage, sendPhotoMessage,
-  unblurPhoto, subscribeToMessages,
-  getRivalryBadges,
-  getRivalryActivityStats,
-  formatTimeLeft, formatScore,
-  COMPETITIONS,
-  type RivalCategory, type RivalTier,
-  type RivalryWithOpponent, type RivalMessage,
-  type UserRivalryRecord, type RivalryBadge,
-  type RivalryStat,
-} from "@/lib/rivalries";
+import { supabase } from "./supabase";
+import { uploadPhoto } from "./uploadPhoto";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATIC CONFIG (unchanged from original — just the visual catalog)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── TYPES ───────────────────────────────────────────────────────────────────
 
-type MatchStep = "category" | "competition" | "tier" | "matching" | "active";
+export type RivalCategory =
+  | "running" | "walking" | "biking" | "lifting"
+  | "swimming" | "combat" | "wellness";
 
-const CATEGORIES: { id: RivalCategory; emoji: string; name: string; desc: string }[] = [
-  { id: "running",   emoji: "🏃", name: "Running",       desc: "Miles, pace, and endurance"     },
-  { id: "walking",   emoji: "🚶", name: "Walking",       desc: "Steps, distance, consistency"    },
-  { id: "biking",    emoji: "🚴", name: "Biking",        desc: "Miles, climbs, and speed"        },
-  { id: "lifting",   emoji: "🏋️", name: "Lifting",       desc: "Volume, PRs, and raw strength"  },
-  { id: "swimming",  emoji: "🏊", name: "Swimming",      desc: "Laps, distance, and stroke"      },
-  { id: "combat",    emoji: "🥊", name: "Combat Sports", desc: "Rounds, sessions, and intensity" },
-  { id: "wellness",  emoji: "🧘", name: "Wellness",      desc: "Meditation, mobility, recovery"  },
-];
+export type RivalTier = "beginner" | "intermediate" | "mayhem";
 
-const TIERS: {
-  id: RivalTier;
-  emoji: string;
-  name: string;
-  desc: string;
-  color: string;
-  bg: string;
-  border: string;
-  glow: string;
-}[] = [
-  { id: "beginner",     emoji: "🌱", name: "Beginner",     desc: "Just getting started — building the habit",
-    color: "#7C3AED", bg: "linear-gradient(135deg, #064E3B, #065F46)", border: "#7C3AED55", glow: "#7C3AED33" },
-  { id: "intermediate", emoji: "⚡", name: "Intermediate", desc: "Consistent and climbing — real competition",
-    color: "#7C3AED", bg: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "#7C3AED88", glow: "#7C3AED44" },
-  { id: "mayhem",       emoji: "💀", name: "Mayhem",       desc: "No days off. Absolute grind. Not for everyone.",
-    color: "#EF4444", bg: "linear-gradient(135deg, #1A0000, #3B0A0A, #1A0000)", border: "#EF444488", glow: "#EF444455" },
-];
+export type RivalryStatus = "active" | "completed" | "cancelled";
 
-// Rivalry-specific badges (separate from app-wide badge catalog).
-// These are the ones you can earn inside a single 7-day rivalry.
-const RIVALRY_BADGE_CATALOG: { key: string; emoji: string; name: string; desc: string;
-  gradient: string; border: string; glow: string; label: string }[] = [
-  { key: "first_blood",  emoji: "⚔️", name: "First Blood",  desc: "First log of the rivalry",
-    gradient: "linear-gradient(135deg,#9CA3AF,#E5E7EB)", border: "#9CA3AF", glow: "#9CA3AF44", label: "SILVER" },
-  { key: "early_bird",   emoji: "🌅", name: "Early Bird",   desc: "Logged a morning workout 2 days in a row",
-    gradient: "linear-gradient(135deg,#F5A623,#F59E0B)", border: "#F5A623", glow: "#F5A62344", label: "GOLD" },
-  { key: "dominant",     emoji: "😤", name: "Dominant",     desc: "Ahead by 3+ sessions by midweek",
-    gradient: "linear-gradient(135deg,#B91C1C,#EF4444)", border: "#B91C1C", glow: "#B91C1C44", label: "CRIMSON" },
-  { key: "comeback",     emoji: "🔄", name: "Comeback",     desc: "Flipped a deficit to a lead",
-    gradient: "linear-gradient(135deg,#7C3AED,#A855F7)", border: "#7C3AED", glow: "#7C3AED44", label: "ELECTRIC" },
-  { key: "untouchable",  emoji: "💀", name: "Untouchable",  desc: "Won without ever being behind",
-    gradient: "linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)", border: "#4338CA", glow: "#4338CA44", label: "COSMIC" },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getInitials(name: string) {
-  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-}
-function getCategoryLabel(cat: RivalCategory) { return CATEGORIES.find((c) => c.id === cat)!; }
-function getTierLabel(tier: RivalTier)         { return TIERS.find((t) => t.id === tier)!; }
-function getCompetitionLabel(cat: RivalCategory, id: string) {
-  return COMPETITIONS[cat].find((c) => c.id === id)?.label ?? id;
-}
-
-// Draft picks are stored in localStorage so users don't lose progress when they
-// navigate away mid-selection. Cleared when they actually enter the queue.
-const DRAFT_KEY = "rivals:draft";
-type Draft = {
-  step: MatchStep;
-  category: RivalCategory | null;
-  competition: string | null;
+// Metrics each category supports. Keep this in sync with compute_rivalry_score()
+// in migration-rivalries.sql — if you add a new metric in one place, add it here.
+export const COMPETITIONS: Record<RivalCategory, { id: string; label: string }[]> = {
+  running:  [
+    { id: "most_miles",    label: "Most miles"      },
+    { id: "fastest_mile",  label: "Fastest mile"    },
+    { id: "longest_run",   label: "Longest run"     },
+    { id: "most_runs",     label: "Most runs"       },
+  ],
+  walking:  [
+    { id: "most_steps",    label: "Most steps"      },
+    { id: "most_miles",    label: "Most miles"      },
+    { id: "most_sessions", label: "Most walks"      },
+  ],
+  biking:   [
+    { id: "most_miles",    label: "Most miles"      },
+    { id: "most_sessions", label: "Most rides"      },
+  ],
+  lifting:  [
+    { id: "most_volume",   label: "Most volume"     },
+    { id: "most_sessions", label: "Most sessions"   },
+    { id: "1rm_bench",     label: "Top bench"       },
+    { id: "1rm_squat",     label: "Top squat"       },
+    { id: "1rm_deadlift",  label: "Top deadlift"    },
+  ],
+  swimming: [
+    { id: "most_distance", label: "Most distance"   },
+    { id: "most_sessions", label: "Most sessions"   },
+  ],
+  combat:   [
+    { id: "most_rounds",   label: "Most rounds"     },
+    { id: "most_sessions", label: "Most sessions"   },
+    { id: "most_minutes",  label: "Most minutes"    },
+  ],
+  wellness: [
+    { id: "most_sessions",   label: "Most sessions"     },
+    { id: "most_minutes",    label: "Most minutes"      },
+    { id: "longest_session", label: "Longest session"   },
+  ],
 };
-function saveDraft(d: Draft) {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {}
-}
-function loadDraft(): Draft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? JSON.parse(raw) as Draft : null;
-  } catch { return null; }
-}
-function clearDraft() {
-  try { localStorage.removeItem(DRAFT_KEY); } catch {}
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CATEGORY SELECT
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CategorySelect({ onSelect }: { onSelect: (c: RivalCategory) => void }) {
-  const [hovered, setHovered] = useState<RivalCategory | null>(null);
-  return (
-    <div>
-      <style>{`
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes scanLine { 0% { transform: translateY(-100%); } 100% { transform: translateY(600%); } }
-      `}</style>
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 32, border: "1px solid #7C3AED55", position: "relative", overflow: "hidden", boxShadow: "0 8px 40px rgba(124,58,237,0.2)" }}>
-        <div style={{ position: "absolute", left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, transparent, #7C3AED66, transparent)", animation: "scanLine 3s ease-in-out infinite", pointerEvents: "none" }} />
-        <div style={{ textAlign: "center", position: "relative", zIndex: 1 }}>
-          <div style={{ fontSize: 52, marginBottom: 12 }}>⚔️</div>
-          <div style={{ fontWeight: 900, fontSize: 26, color: "#fff", marginBottom: 8, letterSpacing: -0.5 }}>Choose Your Battleground</div>
-          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>Pick your sport. Then pick how you want to compete.</div>
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        {CATEGORIES.map((cat, i) => {
-          const isHov = hovered === cat.id;
-          return (
-            <button key={cat.id} onClick={() => onSelect(cat.id)}
-              onMouseEnter={() => setHovered(cat.id)} onMouseLeave={() => setHovered(null)}
-              style={{ background: isHov ? "linear-gradient(135deg, #1A0D3E, #2D1B69)" : "#1A1A1A", border: `2px solid ${isHov ? "#7C3AED" : "#2D1B69"}`, borderRadius: 20, padding: "22px 16px", cursor: "pointer", textAlign: "center", animation: `fadeUp 0.4s ease ${i * 0.06}s both`, transition: "all 0.2s", boxShadow: isHov ? "0 0 24px rgba(124,58,237,0.35)" : "none", outline: "none" }}>
-              <div style={{ fontSize: 36, marginBottom: 10 }}>{cat.emoji}</div>
-              <div style={{ fontWeight: 900, fontSize: 15, color: "#F0F0F0", marginBottom: 4 }}>{cat.name}</div>
-              <div style={{ fontSize: 11, color: "#9CA3AF", lineHeight: 1.4 }}>{cat.desc}</div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+export interface Rivalry {
+  id: string;
+  user_a_id: string;
+  user_b_id: string;
+  category: RivalCategory;
+  competition_type: string;
+  tier: RivalTier;
+  status: RivalryStatus;
+  started_at: string;
+  ends_at: string;
+  resolved_at: string | null;
+  user_a_score: number | null;
+  user_b_score: number | null;
+  winner_id: string | null;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPETITION SELECT (new step — picks the metric)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CompetitionSelect({ category, onBack, onSelect }: {
-  category: RivalCategory; onBack: () => void; onSelect: (id: string) => void;
-}) {
-  const cat = getCategoryLabel(category);
-  const options = COMPETITIONS[category];
-  return (
-    <div>
-      <style>{`@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={onBack} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 12, width: 40, height: 40, color: "#9CA3AF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: 20, color: "#F0F0F0" }}>{cat.emoji} {cat.name}</div>
-          <div style={{ fontSize: 12, color: "#9CA3AF" }}>Pick your competition</div>
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {options.map((opt, i) => (
-          <button key={opt.id} onClick={() => onSelect(opt.id)}
-            style={{ background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 16, padding: "18px 20px", cursor: "pointer", textAlign: "left", animation: `fadeUp 0.35s ease ${i * 0.06}s both`, transition: "border-color 0.2s, box-shadow 0.2s", outline: "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#7C3AED"; e.currentTarget.style.boxShadow = "0 0 20px rgba(124,58,237,0.2)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2D1B69"; e.currentTarget.style.boxShadow = "none"; }}>
-            <div style={{ fontWeight: 900, fontSize: 16, color: "#F0F0F0" }}>{opt.label}</div>
-            <div style={{ color: "#7C3AED", fontSize: 18, fontWeight: 900 }}>→</div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TIER SELECT
-// ─────────────────────────────────────────────────────────────────────────────
-
-function TierSelect({ category, competition, onBack, onSelect }: {
-  category: RivalCategory; competition: string; onBack: () => void; onSelect: (t: RivalTier) => void;
-}) {
-  const cat = getCategoryLabel(category);
-  const [hovered, setHovered] = useState<RivalTier | null>(null);
-  return (
-    <div>
-      <style>{`
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes mayhemFlicker { 0%,100% { opacity: 1; } 92% { opacity: 1; } 93% { opacity: 0.7; } 94% { opacity: 1; } 96% { opacity: 0.85; } 97% { opacity: 1; } }
-      `}</style>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={onBack} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 12, width: 40, height: 40, color: "#9CA3AF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: 20, color: "#F0F0F0" }}>{cat.emoji} {cat.name} · {getCompetitionLabel(category, competition)}</div>
-          <div style={{ fontSize: 12, color: "#9CA3AF" }}>Choose your tier</div>
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {TIERS.map((tier, i) => {
-          const isHov = hovered === tier.id;
-          const isMayhem = tier.id === "mayhem";
-          return (
-            <button key={tier.id} onClick={() => onSelect(tier.id)} onMouseEnter={() => setHovered(tier.id)} onMouseLeave={() => setHovered(null)}
-              style={{ background: isHov || isMayhem ? tier.bg : "#1A1A1A", border: `2px solid ${isHov ? tier.color : tier.border}`, borderRadius: 20, padding: "24px 22px", cursor: "pointer", textAlign: "left", animation: `fadeUp 0.35s ease ${i * 0.1}s both${isMayhem ? ", mayhemFlicker 6s ease-in-out infinite" : ""}`, transition: "border-color 0.2s, box-shadow 0.2s", boxShadow: isHov ? `0 0 28px ${tier.glow}` : isMayhem ? `0 4px 24px ${tier.glow}` : "none", outline: "none", position: "relative", overflow: "hidden" }}>
-              {isMayhem && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(239,68,68,0.03) 2px, rgba(239,68,68,0.03) 4px)" }} />}
-              <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-                <div style={{ width: 56, height: 56, borderRadius: 16, flexShrink: 0, background: `${tier.color}18`, border: `2px solid ${tier.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, boxShadow: isMayhem ? `0 0 16px ${tier.glow}` : "none" }}>{tier.emoji}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 900, fontSize: isMayhem ? 20 : 18, color: tier.color, marginBottom: 4, textShadow: isMayhem ? `0 0 12px ${tier.color}88` : "none", letterSpacing: isMayhem ? 0.5 : 0 }}>{tier.name}</div>
-                  <div style={{ fontSize: 13, color: isMayhem ? "#FCA5A5" : "#9CA3AF", lineHeight: 1.5 }}>{tier.desc}</div>
-                </div>
-                <div style={{ color: tier.color, fontSize: 20, fontWeight: 900, opacity: isHov ? 1 : 0.4, transition: "opacity 0.2s" }}>→</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MATCHING SCREEN (now real — polls for a match or times out gracefully)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function MatchingScreen({ category, tier, onMatched, onCancel }: {
-  category: RivalCategory; tier: RivalTier;
-  onMatched: () => void; onCancel: () => void;
-}) {
-  const cat = getCategoryLabel(category);
-  const t = getTierLabel(tier);
-  const [elapsed, setElapsed] = useState(0);
-
-  // Poll for active rivalry every 8 seconds (someone else might match with us).
-  // Was 3s; the user is staring at a "searching..." spinner so they cannot
-  // perceive a difference between 3s and 8s, but the DB query frequency
-  // matters at scale.
-  useEffect(() => {
-    const startedAt = Date.now();
-    const interval = setInterval(async () => {
-      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-      const rivalry = await getActiveRivalry();
-      if (rivalry) {
-        clearInterval(interval);
-        onMatched();
-      }
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [onMatched]);
-
-  async function handleCancel() {
-    await leaveQueue();
-    onCancel();
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 32, textAlign: "center" }}>
-      <style>{`
-        @keyframes radarPing { 0% { transform: scale(0.5); opacity: 0.8; } 100% { transform: scale(2.4); opacity: 0; } }
-        @keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes dotBounce { 0%,80%,100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
-      `}</style>
-      <div style={{ position: "relative", width: 120, height: 120 }}>
-        {[0, 0.4, 0.8].map((delay) => (
-          <div key={delay} style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${t.color}`, animation: `radarPing 1.8s ease-out ${delay}s infinite` }} />
-        ))}
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: `${t.color}18`, border: `2px solid ${t.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, animation: "spinSlow 4s linear infinite" }}>
-          {cat.emoji}
-        </div>
-      </div>
-      <div>
-        <div style={{ fontWeight: 900, fontSize: 22, color: "#F0F0F0", marginBottom: 8 }}>Searching for your rival...</div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${t.color}18`, border: `1px solid ${t.color}44`, borderRadius: 99, padding: "6px 16px", fontSize: 13, color: t.color, fontWeight: 700 }}>
-          {cat.emoji} {cat.name} · {t.emoji} {t.name}
-        </div>
-        {elapsed > 15 && (
-          <div style={{ marginTop: 16, fontSize: 12, color: "#9CA3AF", maxWidth: 320 }}>
-            Still looking. No one else is queued for your exact pick yet — leave the queue and try a different metric, or keep waiting.
-          </div>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {[0, 0.2, 0.4].map((delay) => (
-          <div key={delay} style={{ width: 10, height: 10, borderRadius: "50%", background: t.color, animation: `dotBounce 1.2s ease-in-out ${delay}s infinite` }} />
-        ))}
-      </div>
-      <button onClick={handleCancel} style={{ background: "transparent", border: "1px solid #2D1B69", borderRadius: 12, padding: "10px 24px", color: "#9CA3AF", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-        Cancel search
-      </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HEAD-TO-HEAD PANEL (real data) — redesigned with profile face-off cards
-// + per-category recent activity comparison
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Avatar with photo or initials fallback. Used by both profile cards.
-// `accent` is the user's side-color (purple for me, red for opponent) which
-// drives the border + glow. `glow` toggles the highlight when this side is
-// currently winning the rivalry.
-function RivalAvatar({ name, url, accent, glow, size = 88 }: {
-  name: string;
-  url: string | null;
-  accent: string;
-  glow: boolean;
-  size?: number;
-}) {
-  const initials = (name || "?").split(" ").map(p => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
-  const baseStyle: React.CSSProperties = {
-    width: size, height: size, borderRadius: "50%", margin: "0 auto",
-    border: `3px solid ${glow ? accent : `${accent}55`}`,
-    boxShadow: glow ? `0 0 24px ${accent}66` : "none",
-    transition: "box-shadow 0.3s, border-color 0.3s",
-    objectFit: "cover" as const,
-    background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    color: "#fff", fontWeight: 900, fontSize: size * 0.32,
-    overflow: "hidden",
-  };
-  if (url) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={name} style={baseStyle} />;
-  }
-  return <div style={baseStyle}>{initials}</div>;
-}
-
-// Per-user profile column inside the face-off card. Compact, info-dense:
-// avatar → name + @handle → city pill → record pill → bio.
-// Bio is clamped to 2 lines so a long bio doesn't push the layout around.
-function RivalProfileCard({
-  name, username, avatarUrl, city, bio,
-  record, accent, glow, scoreLabel, score,
-}: {
-  name: string;
+export interface RivalUser {
+  id: string;
   username: string;
-  avatarUrl: string | null;
+  full_name: string;
+  avatar_url: string | null;
   city: string | null;
   bio: string | null;
-  record: { wins: number; losses: number };
-  accent: string;
-  glow: boolean;
-  scoreLabel: string;
-  score: string;
-}) {
-  const total = record.wins + record.losses;
-  const winRate = total > 0 ? Math.round((record.wins / total) * 100) : 0;
-  return (
-    <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-      <RivalAvatar name={name} url={avatarUrl} accent={accent} glow={glow} />
-      <div style={{ marginTop: 12, fontWeight: 900, fontSize: 16, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {name}
-      </div>
-      <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>@{username}</div>
-
-      {/* City + record pills — wrap on narrow screens */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 10 }}>
-        {city && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "#0D0D0D", border: `1px solid ${accent}33`, borderRadius: 99, padding: "3px 9px", fontSize: 10, color: "#D1D5DB", fontWeight: 700 }}>
-            📍 {city.split(",")[0].trim()}
-          </span>
-        )}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: `${accent}18`, border: `1px solid ${accent}44`, borderRadius: 99, padding: "3px 9px", fontSize: 10, color: accent, fontWeight: 800 }}>
-          {record.wins}-{record.losses} · {winRate}%
-        </span>
-      </div>
-
-      {/* Bio — italicized so it reads like a tagline. Two-line clamp. */}
-      {bio && bio.trim().length > 0 && (
-        <div style={{
-          fontSize: 11, color: "#9CA3AF", fontStyle: "italic",
-          lineHeight: 1.4, marginBottom: 12, padding: "0 4px",
-          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}>
-          “{bio.trim()}”
-        </div>
-      )}
-
-      {/* Live score for this side */}
-      <div style={{ background: "#0D0D0D", borderRadius: 12, padding: "10px 8px", border: `1px solid ${accent}33` }}>
-        <div style={{ fontSize: 9, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{scoreLabel}</div>
-        <div style={{ fontWeight: 900, fontSize: 22, color: accent }}>{score}</div>
-      </div>
-    </div>
-  );
 }
 
-// Side-by-side recent-activity comparison. Three rows of stats per side,
-// labels in the middle column. Stats come from getRivalryActivityStats —
-// label set is determined by category (running gets miles/runs/longest,
-// lifting gets sessions/volume/duration, etc).
-function RivalStatsCompare({ myStats, theirStats, opponentName }: {
-  myStats: RivalryStat[];
-  theirStats: RivalryStat[];
-  opponentName: string;
-}) {
-  // Both arrays should be the same length (same category) but defensively
-  // pad to the longer one so the grid doesn't get lopsided if one user
-  // somehow has fewer stats.
-  const maxLen = Math.max(myStats.length, theirStats.length);
-  if (maxLen === 0) return null;
-
-  return (
-    <div style={{ background: "#1A0D3E33", borderRadius: 18, border: "1px solid #2D1B69", padding: "16px 18px", marginBottom: 20 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 14, textAlign: "center" }}>
-        📊 Last 4 weeks at a glance
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {Array.from({ length: maxLen }).map((_, i) => {
-          const mine  = myStats[i]    || { label: "", value: "—" };
-          const theirs = theirStats[i] || { label: "", value: "—" };
-          const label = mine.label || theirs.label;
-          return (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 800, fontSize: 16, color: "#7C3AED", textAlign: "right" }}>{mine.value}</div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5, minWidth: 100 }}>{label}</div>
-              <div style={{ fontWeight: 800, fontSize: 16, color: "#EF4444", textAlign: "left" }}>{theirs.value}</div>
-            </div>
-          );
-        })}
-      </div>
-      {/* Footer hint so users know whose number is whose */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", marginTop: 12, paddingTop: 10, borderTop: "1px solid #2D1B69", fontSize: 10, fontWeight: 700, color: "#6B7280" }}>
-        <div style={{ textAlign: "right", color: "#7C3AED" }}>YOU</div>
-        <div style={{ minWidth: 100 }}></div>
-        <div style={{ textAlign: "left", color: "#EF4444" }}>{opponentName.toUpperCase()}</div>
-      </div>
-    </div>
-  );
+export interface RivalryWithOpponent extends Rivalry {
+  // "opponent" is whichever participant isn't the currently logged-in user
+  opponent: RivalUser;
+  my_score: number;
+  their_score: number;
+  i_am_winner: boolean | null; // null if tie / unresolved / cancelled
 }
 
-function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
-  rivalry: RivalryWithOpponent;
-  myRecord: UserRivalryRecord;
-  theirRecord: UserRivalryRecord;
-}) {
-  const { user } = useAuth();
-  const cat = getCategoryLabel(rivalry.category);
-  const t = getTierLabel(rivalry.tier);
-  const [liveScores, setLiveScores] = useState({ my_score: rivalry.my_score, their_score: rivalry.their_score });
-  const [timeLeft, setTimeLeft] = useState(formatTimeLeft(rivalry.ends_at));
-  const [myStats, setMyStats] = useState<RivalryStat[]>([]);
-  const [theirStats, setTheirStats] = useState<RivalryStat[]>([]);
-
-  // Refresh live scores every 30 seconds
-  useEffect(() => {
-    let cancelled = false;
-    async function tick() {
-      const scores = await getLiveScores(rivalry);
-      if (!cancelled) setLiveScores(scores);
-    }
-    tick();
-    const interval = setInterval(tick, 30_000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [rivalry]);
-
-  // Update countdown every minute
-  useEffect(() => {
-    const interval = setInterval(() => setTimeLeft(formatTimeLeft(rivalry.ends_at)), 60_000);
-    return () => clearInterval(interval);
-  }, [rivalry.ends_at]);
-
-  // Load 4-week activity stats for both users in parallel. Runs once on
-  // mount + when category changes (which would only happen if the user
-  // started a new rivalry, in which case the whole panel remounts anyway).
-  // Stats don't need to refresh while the rivalry is live — the live
-  // SCORE above already reflects in-rivalry progress; this panel is about
-  // historical context for who you're up against.
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    Promise.all([
-      getRivalryActivityStats(user.id, rivalry.category),
-      getRivalryActivityStats(rivalry.opponent.id, rivalry.category),
-    ]).then(([mine, theirs]) => {
-      if (cancelled) return;
-      setMyStats(mine);
-      setTheirStats(theirs);
-    });
-    return () => { cancelled = true; };
-  }, [user, rivalry.category, rivalry.opponent.id]);
-
-  const iAhead = liveScores.my_score > liveScores.their_score;
-  const rivalAhead = liveScores.their_score > liveScores.my_score;
-
-  // My profile values — pulled from the auth context. `city` isn't in the
-  // typed AuthUser interface but is selected by the `*` query in fetchProfile,
-  // so we cast through any to read it. Falls back gracefully if missing.
-  const myProfile = (user?.profile as any) || {};
-  const myName = myProfile.full_name || "You";
-  const myUsername = myProfile.username || "you";
-  const myAvatar = myProfile.avatar_url || null;
-  const myCity = myProfile.city || null;
-  const myBio = myProfile.bio || null;
-  const opponentFirstName = rivalry.opponent.full_name.split(" ")[0];
-
-  return (
-    <div>
-      <style>{`
-        @keyframes h2hGlow { 0% { box-shadow: 0 0 20px 4px #EF444433, 0 0 40px 10px #7C3AED22; } 50% { box-shadow: 0 0 30px 8px #EF444455, 0 0 60px 18px #7C3AED33; } 100% { box-shadow: 0 0 20px 4px #EF444433, 0 0 40px 10px #7C3AED22; } }
-        @keyframes vsFloat { 0% { transform: scale(1) rotate(-3deg); } 50% { transform: scale(1.08) rotate(3deg); } 100% { transform: scale(1) rotate(-3deg); } }
-      `}</style>
-
-      {/* Category + competition + tier + countdown badges */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
-          {cat.emoji} {cat.name}
-        </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
-          🎯 {getCompetitionLabel(rivalry.category, rivalry.competition_type)}
-        </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${t.color}18`, border: `1px solid ${t.color}44`, borderRadius: 99, padding: "6px 14px", fontSize: 13, color: t.color, fontWeight: 800, boxShadow: `0 0 10px ${t.glow}` }}>
-          {t.emoji} {t.name}
-        </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#EF444418", border: "1px solid #EF444444", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#EF4444", fontWeight: 800 }}>
-          ⏱ {timeLeft}
-        </div>
-      </div>
-
-      <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-        ⚔️ Head-to-Head
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", background: "#EF444422", padding: "2px 8px", borderRadius: 99, border: "1px solid #EF444444" }}>LIVE</span>
-      </div>
-
-      {/* ── Profile face-off card ────────────────────────────────────────── */}
-      {/* Two-column flex with VS divider in the middle. The columns auto-collapse
-          on narrow screens (mobile flex behavior keeps things readable). */}
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1A1A1A, #1A0A0A)", borderRadius: 24, border: "2px solid #EF444455", padding: "24px 16px", marginBottom: 20, animation: "h2hGlow 3s ease-in-out infinite", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at 30% 50%, #7C3AED14 0%, transparent 60%), radial-gradient(ellipse at 70% 50%, #EF444414 0%, transparent 60%)" }} />
-
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, position: "relative", zIndex: 1 }}>
-          <RivalProfileCard
-            name={myName}
-            username={myUsername}
-            avatarUrl={myAvatar}
-            city={myCity}
-            bio={myBio}
-            record={{ wins: myRecord.wins, losses: myRecord.losses }}
-            accent="#7C3AED"
-            glow={iAhead}
-            scoreLabel="You"
-            score={formatScore(rivalry.category, rivalry.competition_type, liveScores.my_score)}
-          />
-
-          {/* VS divider — sits at the top so it stays even with the avatars
-              regardless of how tall each side's bio/city block grows */}
-          <div style={{ flexShrink: 0, paddingTop: 28 }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #1A1A1A, #2D1B69)", border: "2px solid #7C3AED66", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#7C3AED", animation: "vsFloat 3s ease-in-out infinite", boxShadow: "0 0 20px #7C3AED33" }}>VS</div>
-          </div>
-
-          <RivalProfileCard
-            name={rivalry.opponent.full_name}
-            username={rivalry.opponent.username}
-            avatarUrl={rivalry.opponent.avatar_url}
-            city={rivalry.opponent.city}
-            bio={rivalry.opponent.bio}
-            record={{ wins: theirRecord.wins, losses: theirRecord.losses }}
-            accent="#EF4444"
-            glow={rivalAhead}
-            scoreLabel={opponentFirstName}
-            score={formatScore(rivalry.category, rivalry.competition_type, liveScores.their_score)}
-          />
-        </div>
-      </div>
-
-      {/* ── Last 4 weeks comparison ──────────────────────────────────────── */}
-      <RivalStatsCompare myStats={myStats} theirStats={theirStats} opponentName={opponentFirstName} />
-    </div>
-  );
+export interface RivalMessage {
+  id: string;
+  rivalry_id: string;
+  sender_id: string;
+  content: string | null;
+  photo_url: string | null;
+  is_blurred: boolean;
+  created_at: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BADGES PANEL (real — reads from rivalry_badges table)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function BadgesPanel({ rivalryId, myId, opponentFirstName }: {
-  rivalryId: string; myId: string; opponentFirstName: string;
-}) {
-  const [earned, setEarned] = useState<RivalryBadge[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const badges = await getRivalryBadges(rivalryId);
-      if (!cancelled) setEarned(badges);
-    }
-    load();
-    const interval = setInterval(load, 60_000); // poll every minute
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [rivalryId]);
-
-  const earnedMap = new Map(earned.map((b) => [b.badge_key, b]));
-
-  return (
-    <div>
-      <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6 }}>🏅 Rival Badges</div>
-      <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 20 }}>
-        One person per badge per rivalry. First to earn it locks it.
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 14 }}>
-        {RIVALRY_BADGE_CATALOG.map((badge) => {
-          const earnedBy = earnedMap.get(badge.key);
-          const earnedByMe = earnedBy?.user_id === myId;
-          const earnedByThem = earnedBy && earnedBy.user_id !== myId;
-
-          return (
-            <div key={badge.key} style={{
-              borderRadius: 18, padding: "18px 14px",
-              background: earnedBy ? badge.gradient : "#1A1A1A",
-              border: `2px solid ${earnedBy ? badge.border : "#2D2D2D"}`,
-              textAlign: "center", position: "relative", overflow: "hidden",
-              boxShadow: earnedBy ? `0 4px 20px ${badge.glow}` : "none",
-              opacity: earnedBy ? 1 : 0.55,
-            }}>
-              {!earnedBy && (
-                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 16, zIndex: 2 }}>
-                  <div style={{ fontSize: 22, filter: "grayscale(1)" }}>🔒</div>
-                </div>
-              )}
-              <div style={{ fontSize: 32, marginBottom: 8, filter: earnedBy ? "none" : "grayscale(1)" }}>{badge.emoji}</div>
-              <div style={{ fontWeight: 900, fontSize: 13, color: earnedBy ? "#fff" : "#6B7280", marginBottom: 4, textShadow: earnedBy ? "0 1px 4px rgba(0,0,0,0.4)" : "none" }}>
-                {badge.name}
-              </div>
-              <div style={{ fontSize: 10, color: earnedBy ? "rgba(255,255,255,0.85)" : "#4B5563", lineHeight: 1.4, marginBottom: 8 }}>
-                {badge.desc}
-              </div>
-              {earnedBy && (
-                <div style={{ display: "inline-block", background: "rgba(0,0,0,0.45)", borderRadius: 99, padding: "2px 8px", fontSize: 9, fontWeight: 900, color: "#fff", letterSpacing: 0.5 }}>
-                  {earnedByMe ? "🏆 YOU" : `${opponentFirstName.toUpperCase()} LOCKED`}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+export interface RivalryBadge {
+  id: string;
+  rivalry_id: string;
+  user_id: string;
+  badge_key: string;
+  earned_at: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CHAT PANEL (real — Supabase + realtime + photo blur)
-// ─────────────────────────────────────────────────────────────────────────────
+export interface UserRivalryRecord {
+  wins: number;
+  losses: number;
+  ties: number;
+  cancelled: number;
+  active: number;
+}
 
-function ChatPanel({ rivalryId, myId, rivalFirstName }: {
-  rivalryId: string; myId: string; rivalFirstName: string;
-}) {
-  const [messages, setMessages] = useState<RivalMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+// ── QUEUE / MATCHMAKING ─────────────────────────────────────────────────────
 
-  // Initial load + realtime subscription
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const msgs = await getMessages(rivalryId);
-      if (!cancelled) setMessages(msgs);
-    }
-    load();
+/** Join the matchmaking queue. Returns an active rivalry if matched instantly,
+ *  otherwise null (user is now waiting). Throws if already in an active rivalry. */
+export async function joinQueue(params: {
+  category: RivalCategory;
+  competition_type: string;
+  tier: RivalTier;
+}): Promise<RivalryWithOpponent | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
 
-    const unsub = subscribeToMessages(
-      rivalryId,
-      (newMsg) => setMessages((prev) => {
-        if (prev.find((m) => m.id === newMsg.id)) return prev; // dedupe
-        return [...prev, newMsg];
-      }),
-      (updated) => setMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m)),
-    );
+  // The DB trigger creates the rivalry + deletes queue rows atomically if a
+  // match exists. Either way, we insert then check for a fresh active rivalry.
+  const { error } = await supabase
+    .from("rivalry_queue")
+    .insert({ user_id: user.id, ...params });
 
-    return () => { cancelled = true; unsub(); };
-  }, [rivalryId]);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  async function handleSendText() {
-    const trimmed = input.trim();
-    if (!trimmed || sending) return;
-    setSending(true);
-    try {
-      await sendTextMessage(rivalryId, trimmed);
-      setInput("");
-    } catch (e) {
-      console.error("Send failed:", e);
-    } finally {
-      setSending(false);
-    }
+  // The trigger returns NULL to cancel the insert when it made a match; that
+  // surfaces as an error with code "P0002" or similar. Either way we check
+  // below — don't throw on insert errors that might be legitimate match wins.
+  if (error && !error.message.includes("already has an active rivalry")) {
+    // Silently continue — match may have been made
+  }
+  if (error?.message.includes("already has an active rivalry")) {
+    throw new Error("You already have an active rivalry.");
   }
 
-  async function handlePhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || sending) return;
-    setSending(true);
-    try {
-      await sendPhotoMessage(rivalryId, file);
-    } catch (err) {
-      console.error("Photo send failed:", err);
-    } finally {
-      setSending(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
-  async function handleUnblur(messageId: string) {
-    // Optimistic update
-    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, is_blurred: false } : m));
-    try {
-      await unblurPhoto(messageId);
-    } catch (e) {
-      // Revert on failure
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, is_blurred: true } : m));
-      console.error("Unblur failed:", e);
-    }
-  }
-
-  return (
-    <div>
-      <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6 }}>💬 Rival Chat</div>
-      <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Talk your trash. Back it up.</div>
-      <div style={{ background: "#1A1A1A", borderRadius: 20, border: "1px solid #2D1B69", overflow: "hidden" }}>
-        <div style={{ padding: "16px", height: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          {messages.length === 0 && (
-            <div style={{ margin: "auto", color: "#6B7280", fontSize: 13, textAlign: "center" }}>
-              No messages yet. Start the trash talk.
-            </div>
-          )}
-          {messages.map((msg) => {
-            const isMe = msg.sender_id === myId;
-            const isBlurredForMe = msg.is_blurred && !isMe; // sender always sees their own photo clearly
-            return (
-              <div key={msg.id} style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", alignItems: "flex-end", gap: 8 }}>
-                {!isMe && (
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg,#EF4444,#EF444488)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: "#fff" }}>
-                    {rivalFirstName.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ maxWidth: "72%" }}>
-                  {msg.photo_url ? (
-                    <div onClick={isBlurredForMe ? () => handleUnblur(msg.id) : undefined} style={{ borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", overflow: "hidden", position: "relative", cursor: isBlurredForMe ? "pointer" : "default", border: isMe ? "2px solid #7C3AED66" : "2px solid #2D2D2D", minWidth: 180 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={msg.photo_url} alt="" style={{ display: "block", width: "100%", maxWidth: 240, filter: isBlurredForMe ? "blur(30px)" : "none", transition: "filter 0.3s" }} />
-                      {isBlurredForMe && (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)", color: "#fff", fontWeight: 800, fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
-                          <div style={{ fontSize: 24, marginBottom: 4 }}>👁</div>
-                          Tap to reveal
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ padding: "10px 14px", borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isMe ? "linear-gradient(135deg,#7C3AED,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 13, lineHeight: 1.5, boxShadow: isMe ? "0 4px 12px #7C3AED44" : "none" }}>
-                      {msg.content}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 10, color: "#6B7280", marginTop: 4, textAlign: isMe ? "right" : "left" }}>
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div ref={bottomRef} />
-        </div>
-        <div style={{ padding: "12px 16px", borderTop: "1px solid #2D1B69", display: "flex", gap: 10, alignItems: "center" }}>
-          <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handlePhotoPick} />
-          <button onClick={() => fileInputRef.current?.click()} disabled={sending} style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid #2D1B69", background: "#0D0D0D", color: "#9CA3AF", fontSize: 18, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            📷
-          </button>
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendText()}
-            placeholder="Say something... 😤" disabled={sending}
-            style={{ flex: 1, background: "#0D0D0D", border: "1px solid #2D1B69", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
-          <button onClick={handleSendText} disabled={sending || !input.trim()} style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: input.trim() ? "linear-gradient(135deg,#7C3AED,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 16, cursor: sending || !input.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 4px 12px #7C3AED55" : "none" }}>
-            ↑
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return getActiveRivalry();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
+/** Leave the matchmaking queue. Safe to call if not queued. */
+export async function leaveQueue(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("rivalry_queue").delete().eq("user_id", user.id);
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WORKOUT BUDDY PANEL
-// ─────────────────────────────────────────────────────────────────────────────
+export interface QueueEntry {
+  user_id: string;
+  category: RivalCategory;
+  competition_type: string;
+  tier: RivalTier;
+  queued_at: string;
+}
+
+/** Get the current user's queue entry if they're waiting for a match, else null.
+ *  Used to restore matchmaking state when the user navigates back to the page. */
+export async function getQueueEntry(): Promise<QueueEntry | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("rivalry_queue")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return (data as QueueEntry) || null;
+}
+
+/** Is the current user currently queued (not yet matched)? */
+export async function isQueued(): Promise<boolean> {
+  const entry = await getQueueEntry();
+  return !!entry;
+}
+
+// ── ACTIVE RIVALRY ──────────────────────────────────────────────────────────
+
+/** Get the current user's active rivalry (or null). */
+export async function getActiveRivalry(): Promise<RivalryWithOpponent | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("rivalries")
+    .select("*")
+    .eq("status", "active")
+    .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return hydrateRivalry(data as Rivalry, user.id);
+}
+
+/** Attach opponent profile + orient scores from the current user's POV. */
+async function hydrateRivalry(r: Rivalry, myId: string): Promise<RivalryWithOpponent> {
+  const opponentId = r.user_a_id === myId ? r.user_b_id : r.user_a_id;
+
+  const { data: opp } = await supabase
+    .from("users")
+    .select("id, username, full_name, avatar_url, city, bio")
+    .eq("id", opponentId)
+    .single();
+
+  const iAmA = r.user_a_id === myId;
+  const my_score    = (iAmA ? r.user_a_score : r.user_b_score) ?? 0;
+  const their_score = (iAmA ? r.user_b_score : r.user_a_score) ?? 0;
+
+  let i_am_winner: boolean | null = null;
+  if (r.status === "completed") {
+    if (r.winner_id === myId) i_am_winner = true;
+    else if (r.winner_id && r.winner_id !== myId) i_am_winner = false;
+    // winner_id null on completed = tie → leave as null
+  }
+
+  return {
+    ...r,
+    opponent: opp || { id: opponentId, username: "?", full_name: "Unknown", avatar_url: null, city: null, bio: null },
+    my_score,
+    their_score,
+    i_am_winner,
+  };
+}
+
+// ── LIVE SCORE (pre-resolution) ─────────────────────────────────────────────
+
+/** Current score snapshot for an active rivalry. Calls the same DB function
+ *  the resolver uses, so what you see here is exactly what gets stamped at
+ *  the end of the week. */
+export async function getLiveScores(rivalry: Rivalry): Promise<{ my_score: number; their_score: number }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { my_score: 0, their_score: 0 };
+
+  const myId = user.id;
+  const oppId = rivalry.user_a_id === myId ? rivalry.user_b_id : rivalry.user_a_id;
+
+  const [{ data: mine }, { data: theirs }] = await Promise.all([
+    supabase.rpc("compute_rivalry_score", {
+      uid: myId,
+      p_category: rivalry.category,
+      p_metric: rivalry.competition_type,
+      p_from: rivalry.started_at,
+      p_to: rivalry.ends_at,
+    }),
+    supabase.rpc("compute_rivalry_score", {
+      uid: oppId,
+      p_category: rivalry.category,
+      p_metric: rivalry.competition_type,
+      p_from: rivalry.started_at,
+      p_to: rivalry.ends_at,
+    }),
+  ]);
+
+  return {
+    my_score:    Number(mine ?? 0),
+    their_score: Number(theirs ?? 0),
+  };
+}
+
+// ── ALL-TIME RECORD ─────────────────────────────────────────────────────────
+
+export async function getUserRecord(userId: string): Promise<UserRivalryRecord> {
+  const { data } = await supabase
+    .from("user_rivalry_records")
+    .select("wins, losses, ties, cancelled, active")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data ?? { wins: 0, losses: 0, ties: 0, cancelled: 0, active: 0 };
+}
+
+// ── RECENT ACTIVITY STATS (per-category, last 4 weeks) ──────────────────────
 //
-// Cooperative 2-week challenge. Same matchmaking shape as rivals (pick
-// category, pick tier, queue) but the result is shared progress —  both
-// users hit the target = both win. No head-to-head competition.
+// Powers the "at a glance" panel on the rivalry view. For each category, we
+// surface 3 stats that give the user a feel for how strong their opponent is
+// — e.g. "they run 12mi/week on avg" or "they hit the gym 4 days/week".
 //
-// Categories supported: running, walking, biking, lifting, swimming, combat.
-// Targets defined server-side in /api/db buddy_request_match.
+// Window is fixed at 28 days. Same query for both users; we run it twice
+// (once for me, once for opponent) and compare side by side in the UI.
+//
+// Number formatting:
+// - Distances: 1 decimal, "mi" suffix
+// - Per-week counts: 1 decimal so "3.5 runs/week" reads sensibly
+// - Long values: rounded with comma separators
+// - "—" placeholder when there's no relevant data so empty cards look clean
 
-const BUDDY_CATEGORIES: Array<{ id: string; emoji: string; name: string; desc: string }> = [
-  { id: "running",  emoji: "🏃", name: "Running",  desc: "Miles together over 14 days" },
-  { id: "walking",  emoji: "🚶", name: "Walking",  desc: "Steps & miles, low intensity" },
-  { id: "biking",   emoji: "🚴", name: "Biking",   desc: "Cycling miles total" },
-  { id: "lifting",  emoji: "🏋️", name: "Lifting",  desc: "Workout sessions" },
-  { id: "swimming", emoji: "🏊", name: "Swimming", desc: "Pool time" },
-  { id: "combat",   emoji: "🥊", name: "Combat",   desc: "Boxing / MMA sessions" },
-];
-
-const BUDDY_TIERS: Array<{ id: string; label: string; desc: string }> = [
-  { id: "beginner",     label: "🌱 Beginner",     desc: "Lower target, more forgiving" },
-  { id: "intermediate", label: "🔥 Intermediate", desc: "Mid-tier · standard difficulty" },
-  { id: "elite",        label: "💎 Elite",        desc: "High target · only the committed" },
-];
-
-function BuddyPanel({ userId }: { userId: string }) {
-  // Step machine: pick category → pick tier → queued → matched
-  const [step, setStep] = useState<"category" | "tier" | "queued" | "matched">("category");
-  const [category, setCategory] = useState<string | null>(null);
-  const [tier, setTier] = useState<string | null>(null);
-  const [activeMatch, setActiveMatch] = useState<any | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [polling, setPolling] = useState(false);
-
-  // Check for an existing active match or queue entry on mount.
-  //
-  // WHY THIS GOES THROUGH /api/db: this used to do a direct supabase query
-  // with a Postgrest embedded join (`user_a:user_a(id,username,...)`) to
-  // hydrate the buddy users. That requires a foreign-key relationship from
-  // buddy_matches.user_a → users.id to be registered in Postgres. The
-  // buddy_matches table was created ad-hoc in Supabase without that FK,
-  // so the embedded join silently returned null — meaning users could
-  // queue up and the server would create the match row, but neither
-  // client could read it back. Both stayed stuck on "Searching..." forever.
-  //
-  // The server endpoint uses the admin client (service role) which bypasses
-  // the FK requirement AND any RLS policies, then hydrates the user objects
-  // via a separate users query before returning.
-  async function loadState() {
-    try {
-      const res = await fetch("/api/db", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "buddy_get_active_match", payload: { userId } }),
-      });
-      const data = await res.json();
-      if (data.match) {
-        setActiveMatch(data.match);
-        setStep("matched");
-        return;
-      }
-      if (data.queue) {
-        setCategory(data.queue.category);
-        setTier(data.queue.tier);
-        setStep("queued");
-      } else {
-        setStep("category");
-      }
-    } catch (e) { console.error(e); }
-  }
-  useEffect(() => { loadState(); /* eslint-disable-next-line */ }, [userId]);
-
-  // While queued, poll every 8s to see if we got matched. Was 4s; the
-  // matchmaking flow doesn't need sub-5s freshness — we're showing a spinner.
-  useEffect(() => {
-    if (step !== "queued") return;
-    setPolling(true);
-    const id = setInterval(loadState, 8000);
-    return () => { clearInterval(id); setPolling(false); };
-    // eslint-disable-next-line
-  }, [step]);
-
-  async function findMatch(tierOverride?: string) {
-    // tierOverride lets the caller pass the tier directly so we don't
-    // race React's setState — the on-click handler fires findMatch right
-    // after setTier, and the closure captures the OLD tier value. Passing
-    // it as an argument avoids the "have to double-click" bug.
-    const useTier = tierOverride || tier;
-    if (!category || !useTier) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/db", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "buddy_request_match", payload: { userId, category, tier: useTier } }),
-      });
-      const data = await res.json();
-      if (data.status === "matched" || data.status === "already_matched") {
-        await loadState();
-      } else {
-        setStep("queued");
-      }
-    } catch (e) { console.error(e); }
-    setSubmitting(false);
-  }
-
-  async function cancelQueue() {
-    if (!confirm("Cancel matchmaking?")) return;
-    await fetch("/api/db", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "buddy_cancel_queue", payload: { userId, category, tier } }),
-    });
-    setStep("category");
-    setCategory(null);
-    setTier(null);
-  }
-
-  // ── ACTIVE MATCH VIEW ──────────────────────────────────────────────────
-  if (step === "matched" && activeMatch) {
-    const isUserA = activeMatch.user_a?.id === userId;
-    const me      = isUserA ? activeMatch.user_a : activeMatch.user_b;
-    const buddy   = isUserA ? activeMatch.user_b : activeMatch.user_a;
-    const myProgress     = isUserA ? activeMatch.user_a_progress : activeMatch.user_b_progress;
-    const buddyProgress  = isUserA ? activeMatch.user_b_progress : activeMatch.user_a_progress;
-    const target  = activeMatch.target_value;
-    const unit    = activeMatch.target_unit;
-    const myPct    = Math.min(100, (myProgress / target) * 100);
-    const buddyPct = Math.min(100, (buddyProgress / target) * 100);
-    const endsLabel = new Date(activeMatch.ends_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "24px 22px", textAlign: "center" }}>
-          <div style={{ fontSize: 36, marginBottom: 6 }}>🤝</div>
-          <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 4 }}>You're paired up</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-            {(BUDDY_CATEGORIES.find(c => c.id === activeMatch.category)?.name) || activeMatch.category}
-            {" · "}
-            Hit <strong>{target} {unit}</strong> each by {endsLabel}
-          </div>
-        </div>
-
-        {/* Two progress cards stacked — me + buddy */}
-        {[
-          { user: me, progress: myProgress, pct: myPct, isMe: true },
-          { user: buddy, progress: buddyProgress, pct: buddyPct, isMe: false },
-        ].map((row, i) => (
-          <div key={i} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              {row.user?.avatar_url ? (
-                <img src={row.user.avatar_url} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
-              ) : (
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900 }}>
-                  {(row.user?.full_name || row.user?.username || "?")[0]?.toUpperCase()}
-                </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0" }}>
-                  {row.isMe ? "You" : (row.user?.full_name || `@${row.user?.username || "buddy"}`)}
-                </div>
-                <div style={{ fontSize: 11, color: "#9CA3AF" }}>
-                  {Math.round(row.progress * 10) / 10} / {target} {unit}
-                </div>
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#A78BFA" }}>
-                {row.pct >= 100 ? "✓" : `${Math.round(row.pct)}%`}
-              </div>
-            </div>
-            <div style={{ height: 8, background: "#0D0D0D", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{
-                height: "100%",
-                width: `${row.pct}%`,
-                background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #7C3AED, #A78BFA)",
-                borderRadius: 99,
-                transition: "width 0.4s",
-              }} />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // ── QUEUED VIEW ────────────────────────────────────────────────────────
-  if (step === "queued") {
-    return (
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "32px 24px", textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 10 }}>🔍</div>
-        <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 6 }}>Looking for a buddy…</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 24 }}>
-          {(BUDDY_CATEGORIES.find(c => c.id === category)?.name) || category} · {(BUDDY_TIERS.find(t => t.id === tier)?.label || tier)?.replace(/^\S+\s/, "")}
-        </div>
-        <div style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 99, overflow: "hidden", marginBottom: 20 }}>
-          <div style={{ height: "100%", width: "40%", background: "#A78BFA", borderRadius: 99, animation: "buddyPulse 1.5s ease-in-out infinite" }} />
-        </div>
-        <style>{`@keyframes buddyPulse { 0%,100% { transform: translateX(-50%); } 50% { transform: translateX(150%); } }`}</style>
-        <button onClick={cancelQueue} style={{
-          background: "transparent", border: "1.5px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.85)",
-          padding: "10px 22px", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer",
-        }}>Cancel</button>
-      </div>
-    );
-  }
-
-  // ── PICK CATEGORY ──────────────────────────────────────────────────────
-  if (step === "category") {
-    return (
-      <div>
-        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 24, border: "1px solid #7C3AED55", textAlign: "center" }}>
-          <div style={{ fontSize: 52, marginBottom: 10 }}>🤝</div>
-          <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>Find a Workout Buddy</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
-            Pick a category. We'll match you with someone going for the same goal — you both win when you both hit the target.
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {BUDDY_CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => { setCategory(cat.id); setStep("tier"); }} style={{
-              background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 18, padding: "20px 14px",
-              cursor: "pointer", textAlign: "center", color: "#F0F0F0",
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>{cat.emoji}</div>
-              <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 3 }}>{cat.name}</div>
-              <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>{cat.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // ── PICK TIER ──────────────────────────────────────────────────────────
-  return (
-    <div>
-      <button onClick={() => { setStep("category"); setCategory(null); }} style={{
-        background: "transparent", border: "none", color: "#9CA3AF", fontSize: 13, fontWeight: 700,
-        cursor: "pointer", marginBottom: 16, padding: 0,
-      }}>← Back</button>
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", borderRadius: 22, padding: "24px 22px", marginBottom: 20, border: "1px solid #7C3AED55", textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>{BUDDY_CATEGORIES.find(c => c.id === category)?.emoji}</div>
-        <div style={{ fontWeight: 900, fontSize: 18, color: "#fff" }}>{BUDDY_CATEGORIES.find(c => c.id === category)?.name}</div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>Choose how hard you want to push</div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {BUDDY_TIERS.map(t => (
-          <button key={t.id} onClick={() => { setTier(t.id); findMatch(t.id); }} disabled={submitting} style={{
-            background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 16, padding: "18px 20px",
-            cursor: submitting ? "not-allowed" : "pointer", textAlign: "left", color: "#F0F0F0", opacity: submitting ? 0.6 : 1,
-          }}>
-            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 3 }}>{t.label}</div>
-            <div style={{ fontSize: 12, color: "#9CA3AF" }}>{t.desc}</div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+export interface RivalryStat {
+  label: string;
+  value: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-export default function RivalsPage() {
-  const { user, loading: authLoading } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [activeRivalry, setActiveRivalry] = useState<RivalryWithOpponent | null>(null);
-  const [myRecord, setMyRecord] = useState<UserRivalryRecord>({ wins: 0, losses: 0, ties: 0, cancelled: 0, active: 0 });
-  const [theirRecord, setTheirRecord] = useState<UserRivalryRecord>({ wins: 0, losses: 0, ties: 0, cancelled: 0, active: 0 });
-  const [queuedAlready, setQueuedAlready] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
 
-  // Matchmaking flow state
-  const [matchStep, setMatchStep] = useState<MatchStep>("category");
-  const [rivalCategory, setRivalCategory] = useState<RivalCategory | null>(null);
-  const [rivalCompetition, setRivalCompetition] = useState<string | null>(null);
-  const [rivalTier, setRivalTier] = useState<RivalTier | null>(null);
+function fmtDist(miles: number): string {
+  if (miles <= 0) return "—";
+  return `${miles.toFixed(1)} mi`;
+}
 
-  // Top-level page tab — Rivals (1v1 matchmaking, 7 days) vs
-  // Workout Buddy (cooperative 2-week shared challenge). Same matchmaking
-  // skeleton but the buddy outcome is win-together rather than head-to-head.
-  const [pageTab, setPageTab] = useState<"rivals" | "buddy">("rivals");
+function fmtPerWeek(total: number): string {
+  if (total <= 0) return "—";
+  return (total / 4).toFixed(1);
+}
 
-  // Load initial state: do I have an active rivalry? Am I already queued?
-  const loadState = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const [rivalry, queueEntry] = await Promise.all([getActiveRivalry(), getQueueEntry()]);
-      if (rivalry) {
-        setActiveRivalry(rivalry);
-        setMatchStep("active");
-        const [mine, theirs] = await Promise.all([
-          getUserRecord(user.id),
-          getUserRecord(rivalry.opponent.id),
-        ]);
-        setMyRecord(mine);
-        setTheirRecord(theirs);
-        clearDraft();
-      } else if (queueEntry) {
-        // User is waiting in the queue — restore their picks so the UI is consistent
-        setActiveRivalry(null);
-        setQueuedAlready(true);
-        setRivalCategory(queueEntry.category);
-        setRivalCompetition(queueEntry.competition_type);
-        setRivalTier(queueEntry.tier);
-        setMatchStep("matching");
-        clearDraft();
-      } else {
-        // Not in queue — check for a saved in-progress draft
-        setActiveRivalry(null);
-        setQueuedAlready(false);
-        const draft = loadDraft();
-        if (draft && (draft.step === "competition" || draft.step === "tier")) {
-          setRivalCategory(draft.category);
-          setRivalCompetition(draft.competition);
-          setMatchStep(draft.step);
-        } else {
-          setMatchStep("category");
+export async function getRivalryActivityStats(
+  userId: string,
+  category: RivalCategory,
+): Promise<RivalryStat[]> {
+  const since = new Date(Date.now() - FOUR_WEEKS_MS).toISOString();
+
+  // Pull the broadest set of fields once and slice up in JS. Doing one query
+  // and aggregating client-side is cheaper than 4 RPCs and easier to keep
+  // consistent across categories.
+  const { data: logs } = await supabase
+    .from("activity_logs")
+    .select("log_type, workout_category, workout_type, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, logged_at")
+    .eq("user_id", userId)
+    .gte("logged_at", since);
+
+  const rows: any[] = logs || [];
+
+  // Cardio entries (running/walking/biking/swimming) live in a JSONB array
+  // on workout-type logs. Each entry is { type, distance, duration, ... }.
+  // Different log entries can have multiple cardio sessions (e.g. brick
+  // workouts) so we flatten across all logs.
+  const allCardio: any[] = rows.flatMap(l =>
+    Array.isArray(l.cardio) ? l.cardio : []
+  );
+
+  switch (category) {
+    case "running": {
+      // Running includes all run subtypes (outdoor / treadmill / trail / hiit)
+      // — match by case-insensitive substring on `type`.
+      const runs = allCardio.filter(c => /run/i.test(c.type || ""));
+      const totalMiles = runs.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      const longest = runs.reduce((m, c) => Math.max(m, parseFloat(String(c.distance)) || 0), 0);
+      return [
+        { label: "Avg mi/week", value: totalMiles > 0 ? (totalMiles / 4).toFixed(1) : "—" },
+        { label: "Runs/week",   value: fmtPerWeek(runs.length) },
+        { label: "Longest run", value: fmtDist(longest) },
+      ];
+    }
+
+    case "walking": {
+      const walks = allCardio.filter(c => /walk|hik/i.test(c.type || ""));
+      const totalMiles = walks.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      const totalMin = walks.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0);
+      return [
+        { label: "Avg mi/week",    value: totalMiles > 0 ? (totalMiles / 4).toFixed(1) : "—" },
+        { label: "Walks/week",     value: fmtPerWeek(walks.length) },
+        { label: "Avg min/walk",   value: walks.length > 0 ? Math.round(totalMin / walks.length).toString() : "—" },
+      ];
+    }
+
+    case "biking": {
+      const rides = allCardio.filter(c => /bik|cycl/i.test(c.type || ""));
+      const totalMiles = rides.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      const totalMin = rides.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0);
+      return [
+        { label: "Avg mi/week",  value: totalMiles > 0 ? (totalMiles / 4).toFixed(1) : "—" },
+        { label: "Hours/week",   value: totalMin > 0 ? (totalMin / 60 / 4).toFixed(1) : "—" },
+        { label: "Rides/week",   value: fmtPerWeek(rides.length) },
+      ];
+    }
+
+    case "swimming": {
+      const swims = allCardio.filter(c => /swim/i.test(c.type || ""));
+      const totalMin = swims.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0);
+      const totalDist = swims.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(swims.length) },
+        { label: "Total dist",    value: totalDist > 0 ? `${totalDist.toFixed(1)} mi` : "—" },
+        { label: "Hours total",   value: totalMin > 0 ? (totalMin / 60).toFixed(1) : "—" },
+      ];
+    }
+
+    case "lifting": {
+      // Lifting = workout logs with a non-empty exercises array. Volume is
+      // sum of (weight * reps * sets) across all exercises in all sessions.
+      const liftSessions = rows.filter(
+        l => l.log_type === "workout" && Array.isArray(l.exercises) && l.exercises.length > 0
+      );
+      let totalVolume = 0;
+      let totalMin = 0;
+      liftSessions.forEach(l => {
+        if (Array.isArray(l.exercises)) {
+          l.exercises.forEach((ex: any) => {
+            const sets = parseFloat(String(ex.sets)) || 0;
+            const reps = parseFloat(String(ex.reps)) || 0;
+            const weight = parseFloat(String(ex.weight)) || 0;
+            totalVolume += sets * reps * weight;
+          });
         }
-      }
-    } catch (e) {
-      console.error("Failed to load rivals state:", e);
-      setError("Failed to load your rival data. Try refreshing.");
-    } finally {
-      setLoading(false);
+        totalMin += parseFloat(String(l.workout_duration_min)) || 0;
+      });
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(liftSessions.length) },
+        { label: "Avg volume",    value: liftSessions.length > 0 ? `${Math.round(totalVolume / liftSessions.length).toLocaleString()} lb` : "—" },
+        { label: "Avg duration",  value: liftSessions.length > 0 ? `${Math.round(totalMin / liftSessions.length)} min` : "—" },
+      ];
     }
-  }, [user]);
 
-  useEffect(() => { if (!authLoading) loadState(); }, [authLoading, loadState]);
-
-  async function handleSelectTier(t: RivalTier) {
-    if (!rivalCategory || !rivalCompetition) return;
-    setRivalTier(t);
-    setMatchStep("matching");
-    setError(null);
-    clearDraft(); // they're in the queue now, no need for a draft
-    try {
-      const matched = await joinQueue({ category: rivalCategory, competition_type: rivalCompetition, tier: t });
-      if (matched) {
-        // Instant match — skip straight to active view
-        await loadState();
-      }
-      // Otherwise the matching screen's poller will catch the match
-    } catch (e: any) {
-      setError(e.message || "Failed to join queue");
-      setMatchStep("tier");
+    case "combat": {
+      // Combat sessions show up either as cardio with type="combat"/"boxing"
+      // or as workout logs with workout_category="combat". Combine both.
+      const combatCardio = allCardio.filter(c => /box|mma|combat|martial|kick/i.test(c.type || ""));
+      const combatLogs = rows.filter(l => l.workout_category === "combat" || l.workout_category === "martial_arts");
+      const totalSessions = combatCardio.length + combatLogs.length;
+      const totalMin =
+        combatCardio.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0) +
+        combatLogs.reduce((s, l) => s + (parseFloat(String(l.workout_duration_min)) || 0), 0);
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(totalSessions) },
+        { label: "Hours total",   value: totalMin > 0 ? (totalMin / 60).toFixed(1) : "—" },
+        { label: "Avg session",   value: totalSessions > 0 ? `${Math.round(totalMin / totalSessions)} min` : "—" },
+      ];
     }
+
+    case "wellness": {
+      // Wellness logs are their own log_type, with wellness_type being
+      // the activity (meditation / sauna / cold plunge / yoga / etc).
+      const wellness = rows.filter(l => l.log_type === "wellness");
+      const totalMin = wellness.reduce((s, l) => s + (parseFloat(String(l.wellness_duration_min)) || 0), 0);
+      // Count distinct types for "variety" stat — shows whether they go deep
+      // on one thing or sample everything.
+      const types = new Set(wellness.map(l => l.wellness_type).filter(Boolean));
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(wellness.length) },
+        { label: "Hours total",   value: totalMin > 0 ? (totalMin / 60).toFixed(1) : "—" },
+        { label: "Variety",       value: types.size > 0 ? `${types.size} type${types.size > 1 ? "s" : ""}` : "—" },
+      ];
+    }
+
+    default:
+      return [];
   }
+}
 
-  function handleCancelMatching() {
-    setMatchStep("category");
-    setRivalCategory(null);
-    setRivalCompetition(null);
-    setRivalTier(null);
-    setQueuedAlready(false);
-    clearDraft();
+// ── CHAT ────────────────────────────────────────────────────────────────────
+
+/** All messages in a rivalry's chat, ordered oldest-first. */
+export async function getMessages(rivalryId: string): Promise<RivalMessage[]> {
+  const { data } = await supabase
+    .from("rival_messages")
+    .select("*")
+    .eq("rivalry_id", rivalryId)
+    .order("created_at", { ascending: true });
+  return (data as RivalMessage[]) || [];
+}
+
+/** Send a text-only message. */
+export async function sendTextMessage(rivalryId: string, content: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  const trimmed = content.trim();
+  if (!trimmed) return;
+
+  const { error } = await supabase.from("rival_messages").insert({
+    rivalry_id: rivalryId,
+    sender_id: user.id,
+    content: trimmed,
+    photo_url: null,
+    is_blurred: false, // text isn't blurred
+  });
+  if (error) throw error;
+}
+
+/** Send a photo message. Photo is stored blurred until receiver taps to reveal.
+ *  Accepts base64 data URL or File. */
+export async function sendPhotoMessage(
+  rivalryId: string,
+  source: string | File,
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const path = `rivals/${rivalryId}/${user.id}-${Date.now()}.jpg`;
+  const url = await uploadPhoto(source, "activity", path);
+  if (!url) throw new Error("Photo upload failed");
+
+  const { error } = await supabase.from("rival_messages").insert({
+    rivalry_id: rivalryId,
+    sender_id: user.id,
+    content: null,
+    photo_url: url,
+    is_blurred: true, // receiver sees blurred until they tap
+  });
+  if (error) throw error;
+}
+
+/** Receiver taps a blurred photo to reveal it. RLS only allows the non-sender. */
+export async function unblurPhoto(messageId: string): Promise<void> {
+  const { error } = await supabase
+    .from("rival_messages")
+    .update({ is_blurred: false })
+    .eq("id", messageId);
+  if (error) throw error;
+}
+
+/** Subscribe to new messages in a rivalry. Returns an unsubscribe function. */
+export function subscribeToMessages(
+  rivalryId: string,
+  onInsert: (msg: RivalMessage) => void,
+  onUpdate?: (msg: RivalMessage) => void,
+): () => void {
+  const channel = supabase
+    .channel(`rival_messages:${rivalryId}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "rival_messages", filter: `rivalry_id=eq.${rivalryId}` },
+      (payload) => onInsert(payload.new as RivalMessage),
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "rival_messages", filter: `rivalry_id=eq.${rivalryId}` },
+      (payload) => onUpdate?.(payload.new as RivalMessage),
+    )
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
+}
+
+// ── BADGES ──────────────────────────────────────────────────────────────────
+
+/** Badges earned within a specific rivalry, by either participant. */
+export async function getRivalryBadges(rivalryId: string): Promise<RivalryBadge[]> {
+  const { data } = await supabase
+    .from("rivalry_badges")
+    .select("*")
+    .eq("rivalry_id", rivalryId)
+    .order("earned_at", { ascending: true });
+  return (data as RivalryBadge[]) || [];
+}
+
+/** All rivalry badges a user has ever earned, across every rivalry they've been in.
+ *  Includes the rivalry context (opponent name, category) for display. */
+export interface RivalryBadgeWithContext extends RivalryBadge {
+  opponent_name: string;
+  category: string;
+  rivalry_ended_at: string | null;
+}
+
+export async function getAllUserRivalryBadges(userId: string): Promise<RivalryBadgeWithContext[]> {
+  // Fetch all badge rows for the user, joining the rivalry for context
+  const { data: badges } = await supabase
+    .from("rivalry_badges")
+    .select("*")
+    .eq("user_id", userId)
+    .order("earned_at", { ascending: false });
+
+  if (!badges || badges.length === 0) return [];
+
+  // Pull the unique rivalry IDs and fetch their metadata in one batch
+  const rivalryIds = [...new Set(badges.map((b) => b.rivalry_id))];
+  const { data: rivalries } = await supabase
+    .from("rivalries")
+    .select("id, user_a_id, user_b_id, category, resolved_at")
+    .in("id", rivalryIds);
+
+  const rivalryMap = new Map((rivalries || []).map((r) => [r.id, r]));
+
+  // Collect all opponent IDs so we can resolve names in one query
+  const opponentIds = [...new Set(
+    (rivalries || []).map((r) => r.user_a_id === userId ? r.user_b_id : r.user_a_id)
+  )];
+  const { data: opponents } = await supabase
+    .from("users")
+    .select("id, full_name")
+    .in("id", opponentIds);
+
+  const opponentMap = new Map((opponents || []).map((u) => [u.id, u.full_name]));
+
+  return badges.map((b) => {
+    const r = rivalryMap.get(b.rivalry_id);
+    const oppId = r ? (r.user_a_id === userId ? r.user_b_id : r.user_a_id) : null;
+    return {
+      ...b,
+      opponent_name: oppId ? (opponentMap.get(oppId) || "Unknown") : "Unknown",
+      category: r?.category || "unknown",
+      rivalry_ended_at: r?.resolved_at || null,
+    } as RivalryBadgeWithContext;
+  });
+}
+
+// ── UTILITIES ───────────────────────────────────────────────────────────────
+
+/** Human-readable time remaining string for an active rivalry. */
+export function formatTimeLeft(endsAt: string): string {
+  const ms = new Date(endsAt).getTime() - Date.now();
+  if (ms <= 0) return "Ended";
+  const days  = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const mins  = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+  if (days >= 1) return `${days}d ${hours}h left`;
+  if (hours >= 1) return `${hours}h ${mins}m left`;
+  return `${mins}m left`;
+}
+
+/** Format score for display — some metrics want a unit. */
+export function formatScore(category: RivalCategory, competition_type: string, value: number): string {
+  if (value === 0) return "—";
+  if (competition_type === "fastest_mile") {
+    // stored as (1000 - pace); invert back
+    const pace = 1000 - value;
+    const min = Math.floor(pace);
+    const sec = Math.round((pace - min) * 60);
+    return `${min}:${String(sec).padStart(2, "0")}/mi`;
   }
-
-  const isActive = matchStep === "active" && activeRivalry && user;
-
-  // ── AUTH / LOADING GUARDS ──
-  if (authLoading || loading) {
-    return (
-      <div style={{ background: "#0D0D0D", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "#9CA3AF", fontSize: 14 }}>Loading your rival...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div style={{ background: "#0D0D0D", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
-        <div style={{ color: "#F0F0F0", fontSize: 18, fontWeight: 800 }}>Sign in to find a rival</div>
-        <Link href="/login" style={{ background: "#7C3AED", color: "#fff", padding: "10px 24px", borderRadius: 12, fontWeight: 800, textDecoration: "none" }}>Log in</Link>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ background: "#0D0D0D", minHeight: "100vh" }}>
-      <style>{`
-        @keyframes headerPulse { 0% { box-shadow: 0 0 0 0 rgba(124,58,237,0.3); } 70% { box-shadow: 0 0 0 12px rgba(124,58,237,0); } 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0); } }
-      `}</style>
-
-      {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #0D0D0D)", borderBottom: "1px solid #2D1B69", padding: "20px 24px 0", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 680, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
-            <Link href="/connect" style={{ color: "#9CA3AF", fontSize: 20, textDecoration: "none", display: "flex", alignItems: "center" }}>←</Link>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 900, fontSize: 22, color: "#F0F0F0", letterSpacing: -0.5 }}>⚔️ Rivals</div>
-              <div style={{ fontSize: 12, color: "#9CA3AF" }}>
-                {isActive ? `You vs ${activeRivalry!.opponent.full_name}` :
-                 matchStep === "matching" ? "Finding your match..." :
-                 matchStep === "tier" ? "Pick your tier" :
-                 matchStep === "competition" ? "Pick your competition" :
-                 "7-day rivalry. No quitting."}
-              </div>
-            </div>
-            {isActive && (
-              <div style={{ background: "#EF444422", border: "1px solid #EF444444", borderRadius: 99, padding: "4px 12px", fontSize: 11, fontWeight: 800, color: "#EF4444", animation: "headerPulse 2s infinite" }}>
-                🔴 ACTIVE
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "28px 20px 120px" }}>
-        {/* Top-level tab switch — Rivals (head-to-head) vs Workout Buddy
-            (cooperative 2-week challenge). Mirrors the Connect page tab
-            pattern so users feel at home. */}
-        <div style={{ display: "flex", gap: 6, padding: 5, background: "#1A1A1A", borderRadius: 14, border: "1px solid #2D1B69", marginBottom: 24 }}>
-          {([
-            { k: "rivals", label: "⚔️ Rivals", desc: "1v1 · 7 days" },
-            { k: "buddy",  label: "🤝 Workout Buddy", desc: "Team · 14 days" },
-          ] as const).map(t => (
-            <button
-              key={t.k}
-              onClick={() => setPageTab(t.k as any)}
-              style={{
-                flex: 1, padding: "11px 0", borderRadius: 10, border: "none",
-                background: pageTab === t.k ? "linear-gradient(135deg, #1A0D3E, #2D1B69)" : "transparent",
-                color: pageTab === t.k ? "#fff" : "#9CA3AF",
-                fontWeight: 800, fontSize: 13, cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              {t.label}
-              <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.7, marginTop: 2 }}>{t.desc}</div>
-            </button>
-          ))}
-        </div>
-
-        {error && (
-          <div style={{ background: "#EF444422", border: "1px solid #EF444444", color: "#FCA5A5", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13 }}>
-            {error}
-          </div>
-        )}
-
-        {pageTab === "buddy" ? (
-          <BuddyPanel userId={user.id} />
-        ) : (<>
-        {matchStep === "category" && (
-          <CategorySelect onSelect={(c) => {
-            setRivalCategory(c);
-            setMatchStep("competition");
-            saveDraft({ step: "competition", category: c, competition: null });
-          }} />
-        )}
-
-        {matchStep === "competition" && rivalCategory && (
-          <CompetitionSelect category={rivalCategory}
-            onBack={() => {
-              setMatchStep("category");
-              setRivalCategory(null);
-              clearDraft();
-            }}
-            onSelect={(id) => {
-              setRivalCompetition(id);
-              setMatchStep("tier");
-              saveDraft({ step: "tier", category: rivalCategory, competition: id });
-            }} />
-        )}
-
-        {matchStep === "tier" && rivalCategory && rivalCompetition && (
-          <TierSelect category={rivalCategory} competition={rivalCompetition}
-            onBack={() => {
-              setMatchStep("competition");
-              setRivalCompetition(null);
-              saveDraft({ step: "competition", category: rivalCategory, competition: null });
-            }}
-            onSelect={handleSelectTier} />
-        )}
-
-        {matchStep === "matching" && (
-          <MatchingScreen
-            category={rivalCategory ?? "running"}
-            tier={rivalTier ?? "beginner"}
-            onMatched={loadState}
-            onCancel={handleCancelMatching}
-          />
-        )}
-
-        {isActive && activeRivalry && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
-            <HeadToHeadPanel rivalry={activeRivalry} myRecord={myRecord} theirRecord={theirRecord} />
-            <BadgesPanel rivalryId={activeRivalry.id} myId={user.id} opponentFirstName={activeRivalry.opponent.full_name.split(" ")[0]} />
-            <ChatPanel rivalryId={activeRivalry.id} myId={user.id} rivalFirstName={activeRivalry.opponent.full_name.split(" ")[0]} />
-
-            {/* No-cancel reminder */}
-            <div style={{ background: "#1A1A1A", borderRadius: 14, border: "1px solid #2D1B69", padding: "14px 18px", fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>
-              🔒 No cancels. Rivalry auto-resolves {formatTimeLeft(activeRivalry.ends_at).toLowerCase()}.
-            </div>
-          </div>
-        )}
-        </>)}
-      </div>
-    </div>
-  );
+  if (competition_type.startsWith("1rm_"))      return `${Math.round(value)} lbs`;
+  if (competition_type === "most_volume")       return `${Math.round(value).toLocaleString()} lbs`;
+  if (competition_type === "most_steps")        return `${Math.round(value).toLocaleString()}`;
+  if (competition_type === "most_miles" ||
+      competition_type === "most_distance" ||
+      competition_type === "longest_run")       return `${value.toFixed(1)} mi`;
+  if (competition_type === "most_minutes" ||
+      competition_type === "longest_session")   return `${Math.round(value)} min`;
+  return `${Math.round(value)}`;
 }
