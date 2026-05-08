@@ -431,6 +431,11 @@ export default function PostPage() {
   const [templateName, setTemplateName] = useState("");
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+  // Inside the Load Template dropdown, multi-day templates expand
+  // inline to show a Day 1 / Day 2 / Day 3 picker (mirroring Joey's
+  // "browse → pick a day" spec). Tracks which template id is currently
+  // expanded; only one expanded at a time.
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
   // V2 Template Builder — full-screen modal for multi-day templates
   // with description + cover emoji. The legacy showSaveTemplate inline
   // input above still ships for back-compat (if migration hasn't run)
@@ -772,6 +777,59 @@ export default function PostPage() {
     if (user) fetchTodayWorkout();
   }, [user, fetchTodayWorkout]);
 
+  // ── Auto-open builder when arriving via /post?openBuilder=1 ──────────
+  // The profile page's "+ New" button on the Templates card routes
+  // here with this flag so the user lands directly in the Build
+  // Template modal instead of having to scroll + tap. Cleared from the
+  // URL after open so a refresh doesn't re-open the modal.
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("openBuilder") === "1") {
+        setBuilderInitialDay1(undefined);
+        setBuilderOpen(true);
+        // Strip the flag from the URL without reloading
+        params.delete("openBuilder");
+        const newQs = params.toString();
+        const newUrl = window.location.pathname + (newQs ? `?${newQs}` : "");
+        window.history.replaceState({}, "", newUrl);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // ── Template hand-off from profile pages ──────────────────────────────
+  // When TemplateGallery's "Use this day →" routes the user here, it
+  // stashes { templateId, dayIndex } in sessionStorage and bounces to
+  // /post?useTemplate=1. We pull it on mount (once user is loaded so
+  // the row's ownership/RLS check passes), fetch the row, and call
+  // loadTemplate with the chosen day. Wrapped in a try so a malformed
+  // payload doesn't crash the post page — worst case the user lands
+  // on an empty workout form.
+  useEffect(() => {
+    if (!user) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("__template_pick"); } catch { return; }
+    if (!raw) return;
+    try { sessionStorage.removeItem("__template_pick"); } catch {}
+    let pick: { templateId?: string; dayIndex?: number } = {};
+    try { pick = JSON.parse(raw); } catch { return; }
+    if (!pick.templateId) return;
+    (async () => {
+      const { data } = await supabase
+        .from('workout_templates')
+        .select('*')
+        .eq('id', pick.templateId!)
+        .maybeSingle();
+      if (data) loadTemplate(data as WorkoutTemplate, pick.dayIndex ?? 0);
+    })();
+    // We intentionally only run this on mount — re-running would re-load
+    // the template if the user navigates within the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   // -- Fetch macro goals + today's nutrition totals --------------------------
   const fetchMacroGoalsAndTotals = useCallback(async () => {
     if (!user || goalsLoaded) return;
@@ -821,8 +879,20 @@ export default function PostPage() {
   }
 
   // Load template into workout form
-  function loadTemplate(tpl: WorkoutTemplate) {
-    setExercises(tpl.exercises.map(ex => {
+  // Loads a template's exercises into the workout form. For V2 multi-
+  // day templates, dayIndex picks which day to import (0-based). Falls
+  // back to legacy single-day shape (`exercises`) when `days` isn't
+  // populated. Also fires the use_count RPC so popular templates rise
+  // to the top of the gallery.
+  function loadTemplate(tpl: WorkoutTemplate, dayIndex?: number) {
+    // Resolve which exercises to load. Multi-day templates have `days`;
+    // legacy templates only have `exercises`. The picker on the gallery
+    // passes a dayIndex; the legacy dropdown calls without one and
+    // gets day 0.
+    const days = Array.isArray(tpl.days) ? tpl.days : [];
+    const targetDay = days.length > 0 ? days[dayIndex ?? 0] : null;
+    const exList: Exercise[] = (targetDay ? targetDay.exercises : tpl.exercises) as Exercise[];
+    setExercises((exList || []).map(ex => {
       const setCount = parseInt(ex.sets) || 3;
       return {
         ...ex,
@@ -834,7 +904,19 @@ export default function PostPage() {
           : Array(setCount).fill(String(ex.reps || '')),
       };
     }));
+    // If the day has a label, surface it as the workout type so the
+    // user sees "Push Day" instead of a blank field. Only when the
+    // current type is empty — don't clobber a user's typed value.
+    if (targetDay?.day_name && !woType) setWoType(targetDay.day_name);
+    setIncludeLifting(true);
+    setWoCategory("lifting");
+    setLoadedPlanLabel(targetDay?.day_name || tpl.name);
     setTemplateDropdownOpen(false);
+    // Fire-and-forget — incrementing use_count is non-essential. The
+    // RPC was created in migration-template-builder.sql.
+    try {
+      (supabase as any).rpc('increment_template_use_count', { tpl_id: tpl.id }).catch(() => {});
+    } catch {}
   }
 
   // Save current workout as template
@@ -2604,36 +2686,87 @@ export default function PostPage() {
                           const subtitle = dayCount > 1
                             ? `${dayCount} days · ${totalExs} exercises`
                             : `${totalExs} exercise${totalExs !== 1 ? "s" : ""}`;
+                          // Multi-day templates expand inline to show
+                          // Day 1 / Day 2 / Day 3 buttons. Single-day
+                          // ones tap-to-load (no extra step).
+                          const isMultiDay = dayCount > 1;
+                          const isExpanded = expandedTemplateId === tpl.id;
                           return (
-                            <div key={tpl.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: i < templates.length - 1 ? "1px solid #2D1B69" : "none", gap: 10 }}>
-                              <button
-                                onMouseDown={() => loadTemplate(tpl)}
-                                style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}
-                              >
-                                {/* Cover emoji — falls back to the file-folder
-                                    glyph for legacy templates that didn't have
-                                    a cover_emoji column at save time. */}
-                                <div style={{
-                                  width: 32, height: 32, borderRadius: 8,
-                                  background: "rgba(124,58,237,0.18)",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  fontSize: 16, flexShrink: 0,
-                                }}>
-                                  {tpl.cover_emoji || "📋"}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tpl.name}</div>
-                                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {subtitle}
-                                    {tpl.description ? ` · ${tpl.description.slice(0, 40)}${tpl.description.length > 40 ? "…" : ""}` : ""}
+                            <div key={tpl.id} style={{ borderBottom: i < templates.length - 1 ? "1px solid #2D1B69" : "none" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", gap: 10 }}>
+                                <button
+                                  onMouseDown={() => {
+                                    if (isMultiDay) {
+                                      // Toggle the inline day picker. Don't
+                                      // load anything yet — the user picks
+                                      // which day they want.
+                                      setExpandedTemplateId(isExpanded ? null : tpl.id);
+                                    } else {
+                                      loadTemplate(tpl);
+                                    }
+                                  }}
+                                  style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}
+                                >
+                                  <div style={{
+                                    width: 32, height: 32, borderRadius: 8,
+                                    background: "rgba(124,58,237,0.18)",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: 16, flexShrink: 0,
+                                  }}>
+                                    {tpl.cover_emoji || "📋"}
                                   </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tpl.name}</div>
+                                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {subtitle}
+                                      {tpl.description ? ` · ${tpl.description.slice(0, 40)}${tpl.description.length > 40 ? "…" : ""}` : ""}
+                                    </div>
+                                  </div>
+                                  {isMultiDay && (
+                                    <span style={{ color: "#A78BFA", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                      {isExpanded ? "▲" : "Pick day ▼"}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  onMouseDown={() => deleteTemplate(tpl.id)}
+                                  title="Delete template"
+                                  style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(255,68,68,0.15)", color: "#FF6666", fontSize: 14, fontWeight: 800, cursor: "pointer", flexShrink: 0, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >×</button>
+                              </div>
+                              {isMultiDay && isExpanded && (
+                                // Inline day picker. Each button shows
+                                // the day's name + exercise count and
+                                // calls loadTemplate with the right
+                                // index. Clicking closes the dropdown.
+                                <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {(tpl.days || []).map((day: any, di: number) => (
+                                    <button
+                                      key={di}
+                                      onMouseDown={() => loadTemplate(tpl, di)}
+                                      style={{
+                                        textAlign: "left", padding: "10px 12px",
+                                        borderRadius: 10,
+                                        background: "rgba(124,58,237,0.12)",
+                                        border: "1px solid rgba(124,58,237,0.4)",
+                                        color: "#F0F0F0", cursor: "pointer",
+                                        display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+                                      }}
+                                    >
+                                      <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 800 }}>
+                                          {day.day_name || `Day ${di + 1}`}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                          {(day.exercises || []).length} exercise{(day.exercises || []).length !== 1 ? "s" : ""}
+                                          {(day.exercises || []).slice(0, 3).length > 0 && ` · ${(day.exercises || []).slice(0, 3).map((e: any) => e.name).filter(Boolean).join(", ")}${(day.exercises || []).length > 3 ? "…" : ""}`}
+                                        </div>
+                                      </div>
+                                      <span style={{ fontSize: 11, color: "#A78BFA", fontWeight: 700, flexShrink: 0 }}>Use →</span>
+                                    </button>
+                                  ))}
                                 </div>
-                              </button>
-                              <button
-                                onMouseDown={() => deleteTemplate(tpl.id)}
-                                title="Delete template"
-                                style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(255,68,68,0.15)", color: "#FF6666", fontSize: 14, fontWeight: 800, cursor: "pointer", flexShrink: 0, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                              >×</button>
+                              )}
                             </div>
                           );
                         })}
