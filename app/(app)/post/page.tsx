@@ -56,7 +56,14 @@ type LogTab = "workout" | "nutrition" | "wellness";
 type MainMode = "log" | "feed";
 type PostType = "Workout" | "Nutrition" | "Wellness" | "Achievement" | "Other";
 type WorkoutTemplate = { id: string; name: string; exercises: Exercise[] };
-type PRResult = { exercise: string; weight: number; reps: number; isNew: boolean };
+type PRResult = {
+  exercise: string;
+  weight: number;
+  reps: number;
+  isNew: boolean;            // true = first-ever PR for this exercise
+  previousWeight?: number;   // for the auto-generated feed post: deltas read clearer
+  previousReps?: number;     // when we know what they beat
+};
 
 // -- Exercise Search Autocomplete Component ----------------------------------
 function ExerciseSearchInput({
@@ -875,7 +882,17 @@ export default function PostPage() {
           volume: newVolume,
           logged_at: new Date().toISOString(),
         });
-        prs.push({ exercise: ex.name, weight: bestWeight, reps, isNew: !existing });
+        prs.push({
+          exercise: ex.name,
+          weight: bestWeight,
+          reps,
+          isNew: !existing,
+          // Carry the previous max so the feed-post composer can render
+          // a delta ("+15 lb"). null/undefined when this is the user's
+          // first ever entry for this lift.
+          previousWeight: existing ? (existing as any).weight : undefined,
+          previousReps: existing ? (existing as any).reps : undefined,
+        });
       }
     }
     return prs;
@@ -1335,7 +1352,72 @@ export default function PostPage() {
       if (logTab === 'workout' && exercises.length > 0) {
         try {
           const detectedPRs = await detectPRs(user.id, exercises);
-          if (detectedPRs.length > 0) setNewPRs(detectedPRs);
+          if (detectedPRs.length > 0) {
+            setNewPRs(detectedPRs);
+            // ── PR ticker · auto-post to the feed ─────────────────────
+            // When a workout produces one or more PRs we drop a single
+            // 'achievement' post into the feed so followers see the
+            // milestone. We consolidate multiple PRs from the same
+            // workout into one post (rather than spamming N posts) and
+            // include the delta vs the user's previous best so it
+            // reads like:  "🏆 New PR — Bench 245×5 (+10 lb)" or for a
+            // first-ever lift:  "🏆 First Bench PR — 185×8".
+            //
+            // Best-effort fire-and-forget. Failure here doesn't block
+            // the workout save or the in-app PR celebration screen.
+            try {
+              const lines = detectedPRs.map(pr => {
+                const head = `${pr.exercise} ${pr.weight}×${pr.reps}`;
+                if (pr.isNew || pr.previousWeight === undefined) {
+                  // First-ever entry for this exercise — no delta to show.
+                  return `🏆 First ${head}`;
+                }
+                const delta = pr.weight - (pr.previousWeight || 0);
+                if (delta > 0) {
+                  return `🏆 ${head} (+${delta} lb)`;
+                }
+                // Volume PR (more reps at same/lower weight) — describe
+                // the rep gain instead of a weight delta so the post
+                // doesn't say "+0 lb" which reads like a bug.
+                const repDelta = pr.reps - (pr.previousReps || 0);
+                if (repDelta > 0) return `🏆 ${head} (+${repDelta} reps)`;
+                return `🏆 ${head}`;
+              });
+              const caption = detectedPRs.length === 1
+                ? lines[0]
+                : `${detectedPRs.length} New PRs!\n${lines.join('\n')}`;
+              const prPostRow: any = {
+                user_id: user.id,
+                caption,
+                media_url: null,
+                media_urls: null,
+                media_type: null,
+                post_type: 'achievement',
+                location: null,
+                location_id: null,
+                is_public: true,
+                tagged_user_ids: [],
+              };
+              let { error: prPostErr } = await supabase.from('posts').insert(prPostRow);
+              // Same back-compat fallbacks the regular post-create flow uses
+              // (older DBs may lack tagged_user_ids / location_id columns).
+              if (prPostErr && /tagged_user_ids/i.test(prPostErr.message || '')) {
+                delete prPostRow.tagged_user_ids;
+                ({ error: prPostErr } = await supabase.from('posts').insert(prPostRow));
+              }
+              if (prPostErr && /location_id/i.test(prPostErr.message || '')) {
+                delete prPostRow.location_id;
+                ({ error: prPostErr } = await supabase.from('posts').insert(prPostRow));
+              }
+              // If the post still failed (e.g. post_type enum doesn't have
+              // 'achievement' yet on this DB), retry once as 'general' so
+              // the achievement still ships even on un-migrated schemas.
+              if (prPostErr && /post_type/i.test(prPostErr.message || '')) {
+                prPostRow.post_type = 'general';
+                await supabase.from('posts').insert(prPostRow);
+              }
+            } catch { /* feed-post creation is non-fatal */ }
+          }
         } catch {}
       }
       setSaved(true);
