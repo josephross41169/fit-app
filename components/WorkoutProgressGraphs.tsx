@@ -256,27 +256,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   const cardioExercises = allExercises.filter(e => e.isCardio);
   const totalWorkouts = filteredWorkouts.length;
 
-  // Session counts — number of workouts (not exercise types) that include
-  // any lifting / any cardio. The tab labels used to show
-  // `liftingExercises.length` which is the number of distinct lift names
-  // (Bench, Squat, Deadlift, …) — so a user with 5 logged workouts and
-  // 13 distinct exercises across them saw "Lifting (13)" and read it as
-  // "13 lifting sessions." This is the count Joey expected.
-  const liftingSessionCount = useMemo(
-    () => filteredWorkouts.filter((w: any) => {
-      const ex: any[] = w.exercises || w.workout?.exercises || [];
-      return ex.length > 0;
-    }).length,
-    [filteredWorkouts]
-  );
-  const cardioSessionCount = useMemo(
-    () => filteredWorkouts.filter((w: any) => {
-      const c: any[] = w.cardio || w.workout?.cardio || [];
-      return c.length > 0;
-    }).length,
-    [filteredWorkouts]
-  );
-
+  // ── Headline counts: Lifts + Cardio ───────────────────────────────────
   // ── Avg/Week — divide by weeks elapsed within the actual window ─────────
   // For current month: weeks elapsed since the 1st (capped at the window).
   // For past months: full weeks in that month.
@@ -362,6 +342,28 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
 
     return { liftingChips: sortChips(liftBuckets), cardioChips: sortChips(cardioBuckets) };
   }, [filteredWorkouts]);
+
+  // ── Headline counts: Lifts + Cardio ───────────────────────────────────
+  // These tally the chips above so users can verify by adding the chip
+  // counts. Earlier the count was "distinct workout sessions containing
+  // a lift" which led to confusing math: a user who saw chips for
+  // Biceps ×1, Chest ×1, Legs ×1 expected Lifts: 3 but got Lifts: 2
+  // because two of those happened in a single session. Joey's note:
+  // "How does it say ive worked out chest, legs, and biceps but Im at
+  // 2 lifts?" Reading the chip-sum makes the number match what's on
+  // screen — every muscle-group ×1 is a +1 to Lifts. Same for Cardio.
+  //
+  // Note: a single workout containing biceps + chest contributes 2 to
+  // the Lifts count, since the chip cloud shows two separate ×1
+  // entries. That's the user's mental model; we follow it.
+  const liftingSessionCount = useMemo(
+    () => liftingChips.reduce((sum, c) => sum + c.count, 0),
+    [liftingChips]
+  );
+  const cardioSessionCount = useMemo(
+    () => cardioChips.reduce((sum, c) => sum + c.count, 0),
+    [cardioChips]
+  );
 
   // ── Sessions per week (lifting) ─────────────────────────────────────────
   const liftingFreqData = useMemo(() => {
