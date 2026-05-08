@@ -9,6 +9,7 @@ import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
 import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
+import TemplateGallery from "@/components/TemplateGallery";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
 import WeightTracker from "@/components/WeightTracker";
@@ -4356,6 +4357,42 @@ export default function ProfilePage() {
                   </div>
                 );
               })()}
+            </div>
+
+            {/* Templates card — Halo-3-file-share-style gallery of the
+                user's saved workout templates. Same visual rhythm as
+                Goals + Highlights. The TemplateGallery component owns
+                the card grid + preview modal; this wrapper just adds
+                the card chrome. + New routes to the post page where
+                the Build Template modal lives. */}
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontWeight:900,fontSize:17,color:C.text}}>💪 Templates</div>
+                <button
+                  onClick={() => router.push("/post?openBuilder=1")}
+                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",border:"none",cursor:"pointer"}}
+                >+ New</button>
+              </div>
+              {user && (
+                <TemplateGallery
+                  ownerId={user.id}
+                  isOwner={true}
+                  onCreateNew={() => router.push("/post?openBuilder=1")}
+                  onUseDay={(template, dayIndex) => {
+                    // Stash the picked day in sessionStorage and bounce
+                    // to /post — the post page reads it on mount and
+                    // pre-fills the workout form. Easier than
+                    // serializing all the exercises into the URL.
+                    try {
+                      sessionStorage.setItem("__template_pick", JSON.stringify({
+                        templateId: template.id,
+                        dayIndex,
+                      }));
+                    } catch {}
+                    router.push("/post?useTemplate=1");
+                  }}
+                />
+              )}
             </div>
           </div>
 
