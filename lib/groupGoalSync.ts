@@ -227,38 +227,66 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
     console.log("[groupGoalSync] user is in", groupIds.length, "groups:", groupIds);
     if (groupIds.length === 0) return;
 
-    // 2. Find every active group goal in those groups
+    // 2. Find every active challenge involving this user's groups —
+    //    either as creator (group goals + creator-side wars) OR as
+    //    opponent (opponent-side wars). Previously this only checked
+    //    creator_group_id, so a member of a group that was challenged
+    //    to a war would never see their workouts auto-tracked. Run the
+    //    two queries in parallel and dedupe.
     const nowIso = new Date().toISOString();
-    const { data: goals, error: gErr } = await supabase
-      .from("group_challenges")
-      .select("id, creator_group_id, metric, status, start_date, end_date, created_at, is_group_goal, title")
-      .in("creator_group_id", groupIds)
-      .eq("status", "active");
+    const [creatorRes, opponentRes] = await Promise.all([
+      supabase
+        .from("group_challenges")
+        .select("id, creator_group_id, opponent_group_id, metric, status, start_date, end_date, created_at, is_group_goal, title")
+        .in("creator_group_id", groupIds)
+        .eq("status", "active"),
+      supabase
+        .from("group_challenges")
+        .select("id, creator_group_id, opponent_group_id, metric, status, start_date, end_date, created_at, is_group_goal, title")
+        .in("opponent_group_id", groupIds)
+        .eq("status", "active"),
+    ]);
 
-    if (gErr) {
-      console.error("[groupGoalSync] group_challenges query error:", gErr);
-      return;
+    if (creatorRes.error) {
+      console.error("[groupGoalSync] creator-side query error:", creatorRes.error);
+    }
+    if (opponentRes.error) {
+      console.error("[groupGoalSync] opponent-side query error:", opponentRes.error);
     }
 
-    console.log("[groupGoalSync] found", goals?.length ?? 0, "active challenges");
-    if (!goals?.length) return;
+    // Dedupe by id — a challenge could only ever be in one bucket but
+    // belt-and-suspenders this in case of self-vs-self test wars.
+    const seen = new Set<string>();
+    const goals = [...(creatorRes.data || []), ...(opponentRes.data || [])].filter((c: any) => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+
+    console.log("[groupGoalSync] found", goals.length, "active challenges (creator + opponent side)");
+    if (!goals.length) return;
 
     // 3. For each goal, upsert the user's contribution
     for (const ch of goals as any[]) {
       console.log("[groupGoalSync] → challenge:", ch.title, "| metric:", ch.metric, "| is_group_goal:", ch.is_group_goal);
 
-      // Skip non-goal challenges (wars, member challenges) — they use manual logging
-      if (!ch.is_group_goal) {
-        console.log("[groupGoalSync]   skipped (not a group goal)");
-        continue;
-      }
       if (ch.end_date && ch.end_date < nowIso) {
         console.log("[groupGoalSync]   skipped (expired)");
         continue;
       }
 
+      // Wars (is_group_goal = false) used to be skipped entirely with the
+      // comment "they use manual logging." That meant logged workouts
+      // never showed up on a war's scoreboard — the only way to get a
+      // score was to upload a photo and have someone tally it manually.
+      // We now process wars too, with one key difference: wars are
+      // invitation-only (creator picks members), so we ONLY update
+      // contributions for members already enrolled. No auto-enroll on
+      // first log, unlike group goals where any member who logs joins.
+      const isWar = !ch.is_group_goal;
+
       const contribution = await computeContribution(userId, ch);
-      console.log("[groupGoalSync]   computed contribution:", contribution);
+      console.log("[groupGoalSync]   computed contribution:", contribution, isWar ? "(war)" : "(goal)");
 
       // Check if enrollment row already exists. Using a read-then-write pattern
       // instead of a raw upsert because group_challenge_members may not have
@@ -272,6 +300,14 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
 
       if (exErr) {
         console.error("[groupGoalSync]   existing-row check failed:", exErr);
+        continue;
+      }
+
+      // For wars: skip silently if the user wasn't picked. Auto-enrolling
+      // every group member who happens to log a workout would let
+      // randoms accidentally join the war and score for it.
+      if (isWar && !existing) {
+        console.log("[groupGoalSync]   skipped (war, user not enrolled)");
         continue;
       }
 
