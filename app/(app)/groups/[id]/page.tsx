@@ -678,14 +678,22 @@ export default function GroupPage() {
 
   // ── Load data on mount ──
   useEffect(() => {
+    // loadGroupData already fetches the current user inline via
+    // supabase.auth.getUser(). Calling it a second time here was firing
+    // a duplicate auth check on every page mount. We instead set
+    // currentUser from inside loadGroupData itself.
     loadGroupData();
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
   }, [id]);
 
   async function loadGroupData() {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      // Mirror auth user into local state so the rest of the page (which
+      // reads `currentUser`) stays consistent. Used to be a separate
+      // getUser() call in the mounting useEffect — combined here to
+      // avoid duplicate auth round-trips.
+      setCurrentUser(user);
       const params = new URLSearchParams({ action: 'get_group', groupId: id as string });
       if (user) params.append('userId', user.id);
       const res = await fetch(`/api/db?${params}`);
@@ -2391,20 +2399,125 @@ export default function GroupPage() {
             </div>
           </div>
 
-          {/* About card */}
-          <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"18px 22px", marginBottom:20 }}>
-            <div style={{ fontWeight:800, fontSize:15, color:C.text, marginBottom:8 }}>About this group</div>
-            <p style={{ fontSize:14, color:C.sub, lineHeight:1.7, marginBottom:10 }}>{group.description}</p>
-            {group.meetFrequency && <div style={{ display:"flex", gap:8, fontSize:13, color:C.sub, marginBottom:5 }}><span>🗓️</span><span><strong style={{ color:C.text }}>Meets:</strong> {group.meetFrequency}</span></div>}
-            {group.location && <div style={{ display:"flex", gap:8, fontSize:13, color:C.sub, marginBottom:10 }}><span>📍</span><span><strong style={{ color:C.text }}>Location:</strong> {group.location}</span></div>}
-            {group.tags && group.tags.length > 0 && (
-              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                {group.tags.map((t:string) => (
-                  <span key={t} style={{ background:C.blueLight, color:C.blue, fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:99, border:`1px solid ${C.blueMid}` }}>{t}</span>
-                ))}
+          {/* About card — redesigned to feel less like a wall of text and
+              more like a profile page for the group. Hero header up top
+              with the group's emoji + category + founded-date pill, then
+              the description, then a 4-up live stats row, then the meta
+              info (location / meet schedule / tags) only when set. */}
+          {(() => {
+            // Stats are computed inline so they refresh when posts/events
+            // change without us needing dedicated state. Cheap — these
+            // are tiny arrays.
+            const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+            const postsThisMonth = (dbPosts || []).filter((p: any) => {
+              const t = new Date(p.created_at).getTime();
+              return !isNaN(t) && t >= monthAgo;
+            }).length;
+            const activeChallenges = (dbChallenges || []).filter((c: any) => c.is_active).length;
+            const upcomingEvents = (dbEvents || []).length; // already filtered upstream
+            const founded = (dbGroup as any)?.created_at
+              ? new Date((dbGroup as any).created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+              : null;
+
+            return (
+              <div style={{
+                background: C.white,
+                borderRadius: 20,
+                border: `2px solid ${C.blueMid}`,
+                padding: 0, // padding handled by inner sections so the gradient header runs edge-to-edge
+                marginBottom: 20,
+                overflow: 'hidden',
+              }}>
+                {/* Hero band — group emoji, category, founded date */}
+                <div style={{
+                  background: `linear-gradient(135deg, ${catColor}22, ${catColor}05)`,
+                  borderBottom: `1px solid ${C.blueMid}`,
+                  padding: '16px 22px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 14,
+                    background: `${catColor}22`, border: `1px solid ${catColor}55`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 28, flexShrink: 0,
+                  }}>{group.emoji || '💪'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: catColor, background: `${catColor}18`, border: `1px solid ${catColor}33`, padding: '2px 8px', borderRadius: 99 }}>
+                        {group.category || 'General'}
+                      </span>
+                      {founded && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: C.sub, background: C.blueLight, border: `1px solid ${C.blueMid}`, padding: '2px 8px', borderRadius: 99 }}>
+                          📅 Since {founded}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>About this group</div>
+                  </div>
+                </div>
+
+                {/* Description prose */}
+                {group.description && (
+                  <div style={{ padding: '16px 22px 4px' }}>
+                    <p style={{ fontSize: 14, color: C.sub, lineHeight: 1.7, margin: 0 }}>{group.description}</p>
+                  </div>
+                )}
+
+                {/* 4-up live stats row. Each tile is a snapshot of how
+                    active the group is right now — encourages members to
+                    contribute and shows newcomers it's not a dead group. */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 1,
+                  background: C.blueMid,
+                  margin: '12px 0 0',
+                  borderTop: `1px solid ${C.blueMid}`,
+                  borderBottom: ((group.location || group.meetFrequency || (group.tags && group.tags.length > 0))) ? `1px solid ${C.blueMid}` : 'none',
+                }}>
+                  {[
+                    { v: group.members ?? 0,        label: 'Members',    icon: '👥' },
+                    { v: postsThisMonth,            label: 'Posts/mo',   icon: '💬' },
+                    { v: activeChallenges,          label: 'Challenges', icon: '🏆' },
+                    { v: upcomingEvents,            label: 'Events',     icon: '📅' },
+                  ].map((s, i) => (
+                    <div key={i} style={{ background: C.white, padding: '12px 6px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
+                      <div style={{ fontWeight: 900, fontSize: 18, color: C.text, lineHeight: 1 }}>{s.v}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Meta info — only renders sections that have data so we
+                    don't show "Meets: " with an empty value. The whole
+                    block is hidden if NOTHING below has a value. */}
+                {(group.location || group.meetFrequency || (group.tags && group.tags.length > 0)) && (
+                  <div style={{ padding: '14px 22px 16px' }}>
+                    {group.meetFrequency && (
+                      <div style={{ display: 'flex', gap: 8, fontSize: 13, color: C.sub, marginBottom: 6 }}>
+                        <span>🗓️</span><span><strong style={{ color: C.text, fontWeight: 700 }}>Meets:</strong> {group.meetFrequency}</span>
+                      </div>
+                    )}
+                    {group.location && (
+                      <div style={{ display: 'flex', gap: 8, fontSize: 13, color: C.sub, marginBottom: group.tags && group.tags.length > 0 ? 10 : 0 }}>
+                        <span>📍</span><span><strong style={{ color: C.text, fontWeight: 700 }}>Location:</strong> {group.location}</span>
+                      </div>
+                    )}
+                    {group.tags && group.tags.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {group.tags.map((t: string) => (
+                          <span key={t} style={{ background: C.blueLight, color: C.blue, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, border: `1px solid ${C.blueMid}` }}>{t}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Group highlights — 27-slot photo grid curated by owners/mods.
               Photos are pulled from the group's posts, notes, and war
