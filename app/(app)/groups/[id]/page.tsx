@@ -285,7 +285,32 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:44, height:44, borderRadius:12, background:`linear-gradient(135deg,${catColor},${catColor}CC)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{event.emoji || '📅'}</div>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{event.name}</div>
+            <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{event.name}</div>
+              {/* Visibility chip — only renders for events from the new
+                  events table (legacy group_events doesn't track is_public).
+                  🌎 = "open event" surfaced on the city discovery feed.
+                  🔒 = group only. Lets the owner verify their toggle
+                  choice without opening the event detail page. */}
+              {event._isNewEvent && (
+                <span
+                  title={event.is_public ? "Open event — also on city discovery" : "Group only"}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "2px 7px",
+                    borderRadius: 99,
+                    background: event.is_public ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.08)",
+                    color: event.is_public ? "#A78BFA" : darkSub,
+                    border: `1px solid ${event.is_public ? "#7C3AED55" : darkBorder}`,
+                    whiteSpace: "nowrap" as const,
+                    flexShrink: 0,
+                  }}
+                >
+                  {event.is_public ? "🌎 Open" : "🔒 Group"}
+                </span>
+              )}
+            </div>
             <div style={{ fontSize:11, color:darkSub, marginTop:2 }}>📅 {dateDisplay} · ⏰ {timeDisplay}</div>
             <div style={{ fontSize:11, fontWeight:700, color:gold, marginTop:1 }}>{event.price || 'Free'}</div>
           </div>
@@ -804,12 +829,16 @@ export default function GroupPage() {
         // collapses them to a single round-trip's worth of latency.
         const isOwner = !!(user && data.group.created_by === user.id);
         const [newEventsResult, pendingResult, lbDataResult] = await Promise.all([
-          // Approved events from the new events table
+          // Approved events for this group — pulls BOTH public + private
+          // events. The group page is the canonical place members go to
+          // see what's coming up, so the is_public column shouldn't gate
+          // visibility here. is_public's only job is whether the event
+          // ALSO appears on the city-wide /discover feed; it isn't a
+          // member-vs-non-member access gate.
           supabase
             .from("events_with_counts")
-            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved")
+            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved, is_public")
             .eq("group_id", data.group.id)
-            .eq("is_public", true)
             .or("approved.is.null,approved.eq.true")
             .order("event_date", { ascending: true }),
           // Pending events (only fetched if user is owner — non-owners get [])
@@ -843,6 +872,10 @@ export default function GroupPage() {
             emoji: "📅",
             rsvp_count: e.going_count,
             image_url: e.image_url,
+            // Pass through so the card can show 🌎 / 🔒 — members can
+            // tell at a glance whether the event is also on the city
+            // discovery feed.
+            is_public: e.is_public,
             _isNewEvent: true, // flag so card knows to link to /events/[id]
           }));
         setDbEvents([...adapted, ...legacyEvents]);
@@ -1077,9 +1110,23 @@ export default function GroupPage() {
   // queue + reloads the page's event list.
   const approvePendingEvent = async (eventId: string) => {
     if (!isOwnerDB) return;
+    if (!currentUser) return;
     try {
-      const { error } = await supabase.from("events").update({ approved: true }).eq("id", eventId);
-      if (error) throw error;
+      // Route through the server action so the submitter gets a
+      // notification atomically. The server validates ownership too;
+      // RLS would block a direct update from a non-owner, but going
+      // through the action gives us one place to do the notify +
+      // permission check.
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve_event',
+          payload: { userId: currentUser.id, eventId },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'Approval failed');
       // Optimistic: pull from pending list, will refresh on next nav
       setPendingEvents(prev => prev.filter(e => e.id !== eventId));
       // Reload the page-level events list so the approved one appears immediately
