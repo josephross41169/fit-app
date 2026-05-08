@@ -1237,6 +1237,19 @@ function BuddyPanel({ userId }: { userId: string }) {
     const takenCategories = new Set(matches.map((m: any) => m.category));
     const hasExistingBuddies = matches.length > 0;
 
+    // Per-category accent colors. Used for the card border + emoji halo.
+    // Picks a hue that vibes with the activity (green for outdoor,
+    // blue for water, red for combat, etc) so the picker reads as a
+    // proper menu rather than a wall of identical tiles.
+    const CAT_COLORS: Record<string, string> = {
+      running: "#16A34A",
+      walking: "#0EA5E9",
+      biking:  "#F59E0B",
+      lifting: "#EF4444",
+      swimming:"#06B6D4",
+      combat:  "#DC2626",
+    };
+
     return (
       <div>
         {/* Back to list — only when there are existing buddies. Reuses
@@ -1251,18 +1264,57 @@ function BuddyPanel({ userId }: { userId: string }) {
             }}
           >← All buddies ({matches.length})</button>
         )}
-        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 24, border: "1px solid #7C3AED55", textAlign: "center" }}>
+
+        {/* Hero — big intro with a visible "you BOTH win" framing so
+            users get the cooperative angle (vs Rivals which is 1v1). */}
+        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 16, border: "1px solid #7C3AED55", textAlign: "center" }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>🤝</div>
           <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>
             {hasExistingBuddies ? "Find another buddy" : "Find a Workout Buddy"}
           </div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
-            Pick a category. We'll match you with someone going for the same goal — you both win when you both hit the target.
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
+            Get matched with someone chasing the same goal. <strong style={{ color: "#A78BFA" }}>Both of you hit the target → both of you win.</strong>
           </div>
         </div>
+
+        {/* "How it works" 3-step strip. Hidden once the user has buddies
+            since they already know — the strip is for first-timers. */}
+        {!hasExistingBuddies && (
+          <div style={{
+            background: "#1A1A1A",
+            border: "1px solid #2D1B69",
+            borderRadius: 16,
+            padding: "14px 16px",
+            marginBottom: 20,
+            display: "flex",
+            gap: 12,
+            alignItems: "stretch",
+          }}>
+            {[
+              { n: "1", emoji: "🎯", title: "Pick category + tier", desc: "Running, lifting, swimming, etc. Tier sets the target." },
+              { n: "2", emoji: "🔍", title: "Get matched", desc: "Paired with someone at the same level usually within minutes." },
+              { n: "3", emoji: "🏆", title: "Both hit target", desc: "14 days to reach the goal. You both win together." },
+            ].map((s, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? "1px solid #2D1B6955" : "none", paddingRight: i < 2 ? 8 : 0 }}>
+                <div style={{ fontSize: 20, marginBottom: 4 }}>{s.emoji}</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "#A78BFA", letterSpacing: 0.5, marginBottom: 2 }}>STEP {s.n}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#F0F0F0", marginBottom: 3, lineHeight: 1.2 }}>{s.title}</div>
+                <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Section heading right above the grid so the picker reads
+            as a list of choices and not just a wall of tiles. */}
+        <div style={{ fontSize: 11, fontWeight: 800, color: "#9CA3AF", letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 10, padding: "0 4px" }}>
+          Pick a category
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {BUDDY_CATEGORIES.map(cat => {
             const taken = takenCategories.has(cat.id);
+            const accent = CAT_COLORS[cat.id] || "#7C3AED";
             return (
               <button
                 key={cat.id}
@@ -1270,50 +1322,140 @@ function BuddyPanel({ userId }: { userId: string }) {
                 disabled={taken}
                 title={taken ? `You already have a ${cat.name} buddy` : undefined}
                 style={{
-                  background: "#1A1A1A",
-                  border: taken ? "2px dashed #2D1B69" : "2px solid #2D1B69",
-                  borderRadius: 18, padding: "20px 14px",
+                  background: taken
+                    ? "#1A1A1A"
+                    : `linear-gradient(135deg, #1A1A1A, ${accent}11)`,
+                  border: taken ? "2px dashed #2D1B69" : `2px solid ${accent}55`,
+                  borderRadius: 18, padding: "18px 14px",
                   cursor: taken ? "not-allowed" : "pointer",
                   textAlign: "center", color: "#F0F0F0",
                   opacity: taken ? 0.45 : 1,
                   position: "relative" as const,
+                  transition: "transform 0.15s, border-color 0.15s",
                 }}
               >
-                <div style={{ fontSize: 32, marginBottom: 8 }}>{cat.emoji}</div>
-                <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 3 }}>{cat.name}</div>
-                <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: "50%",
+                  background: taken ? "transparent" : `${accent}22`,
+                  border: taken ? "none" : `1px solid ${accent}44`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 28, margin: "0 auto 10px",
+                }}>
+                  {cat.emoji}
+                </div>
+                <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 3, color: taken ? "#9CA3AF" : "#F0F0F0" }}>{cat.name}</div>
+                <div style={{ fontSize: 10, color: taken ? "#6B7280" : "#9CA3AF", lineHeight: 1.4 }}>
                   {taken ? "✓ Already paired" : cat.desc}
                 </div>
               </button>
             );
           })}
         </div>
+
+        {/* Footnote — quick reminder about what tier you'll pick next */}
+        {!hasExistingBuddies && (
+          <div style={{ fontSize: 11, color: "#6B7280", textAlign: "center", marginTop: 16, lineHeight: 1.5 }}>
+            Next you'll pick a difficulty tier — beginner, intermediate, or elite — which sets the 14-day target.
+          </div>
+        )}
       </div>
     );
   }
 
   // ── PICK TIER ──────────────────────────────────────────────────────────
+  // Mirrors the server-side TARGETS map in /api/db buddy_request_match
+  // so we can show the actual goal target on each tier card. Keep these
+  // in sync with the server — if you add a category, add it here too.
+  const BUDDY_TARGETS: Record<string, Record<string, { value: number; unit: string }>> = {
+    running:  { beginner: { value: 10,  unit: "mi"       }, intermediate: { value: 25,  unit: "mi" },       elite: { value: 50,  unit: "mi" } },
+    walking:  { beginner: { value: 20,  unit: "mi"       }, intermediate: { value: 50,  unit: "mi" },       elite: { value: 100, unit: "mi" } },
+    biking:   { beginner: { value: 30,  unit: "mi"       }, intermediate: { value: 100, unit: "mi" },       elite: { value: 200, unit: "mi" } },
+    lifting:  { beginner: { value: 6,   unit: "workouts" }, intermediate: { value: 10,  unit: "workouts" }, elite: { value: 14,  unit: "workouts" } },
+    swimming: { beginner: { value: 60,  unit: "min"      }, intermediate: { value: 180, unit: "min" },      elite: { value: 360, unit: "min" } },
+    combat:   { beginner: { value: 4,   unit: "sessions" }, intermediate: { value: 8,   unit: "sessions" }, elite: { value: 12,  unit: "sessions" } },
+  };
+  const tierAccent: Record<string, string> = {
+    beginner:     "#10B981",
+    intermediate: "#F59E0B",
+    elite:        "#A855F7",
+  };
+  const catData = BUDDY_CATEGORIES.find(c => c.id === category);
+  const targets = category ? BUDDY_TARGETS[category] : null;
+
   return (
     <div>
-      <button onClick={() => { setStep("category"); setCategory(null); }} style={{
+      <button onClick={() => { setStep(matches.length > 0 ? "list" : "category"); setCategory(null); }} style={{
         background: "transparent", border: "none", color: "#9CA3AF", fontSize: 13, fontWeight: 700,
-        cursor: "pointer", marginBottom: 16, padding: 0,
+        cursor: "pointer", marginBottom: 12, padding: 0,
       }}>← Back</button>
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", borderRadius: 22, padding: "24px 22px", marginBottom: 20, border: "1px solid #7C3AED55", textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>{BUDDY_CATEGORIES.find(c => c.id === category)?.emoji}</div>
-        <div style={{ fontWeight: 900, fontSize: 18, color: "#fff" }}>{BUDDY_CATEGORIES.find(c => c.id === category)?.name}</div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>Choose how hard you want to push</div>
+
+      {/* Hero — restated category so the user remembers what they picked */}
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", borderRadius: 22, padding: "24px 22px", marginBottom: 18, border: "1px solid #7C3AED55", textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>{catData?.emoji}</div>
+        <div style={{ fontWeight: 900, fontSize: 18, color: "#fff", marginBottom: 4 }}>{catData?.name} buddy</div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>How hard do you want to push? You and your buddy will share a 14-day target.</div>
       </div>
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: "#9CA3AF", letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 10, padding: "0 4px" }}>
+        Pick a tier
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {BUDDY_TIERS.map(t => (
-          <button key={t.id} onClick={() => { setTier(t.id); findMatch(t.id); }} disabled={submitting} style={{
-            background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 16, padding: "18px 20px",
-            cursor: submitting ? "not-allowed" : "pointer", textAlign: "left", color: "#F0F0F0", opacity: submitting ? 0.6 : 1,
-          }}>
-            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 3 }}>{t.label}</div>
-            <div style={{ fontSize: 12, color: "#9CA3AF" }}>{t.desc}</div>
-          </button>
-        ))}
+        {BUDDY_TIERS.map(t => {
+          const tgt = targets?.[t.id];
+          const accent = tierAccent[t.id] || "#7C3AED";
+          return (
+            <button
+              key={t.id}
+              onClick={() => { setTier(t.id); findMatch(t.id); }}
+              disabled={submitting}
+              style={{
+                background: `linear-gradient(135deg, #1A1A1A, ${accent}11)`,
+                border: `2px solid ${accent}55`,
+                borderRadius: 16,
+                padding: "16px 18px",
+                cursor: submitting ? "not-allowed" : "pointer",
+                textAlign: "left",
+                color: "#F0F0F0",
+                opacity: submitting ? 0.6 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+              }}
+            >
+              {/* Tier badge — accent-colored circle with the emoji from
+                  the label string. The tier labels include their emoji
+                  prefix (e.g. "🌱 Beginner") so we split on space. */}
+              <div style={{
+                width: 50, height: 50, borderRadius: 14,
+                background: `${accent}22`, border: `1px solid ${accent}55`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 24, flexShrink: 0,
+              }}>
+                {t.label.split(" ")[0]}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 900, fontSize: 15, marginBottom: 3, color: "#F0F0F0" }}>
+                  {t.label.split(" ").slice(1).join(" ")}
+                </div>
+                <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: tgt ? 4 : 0 }}>{t.desc}</div>
+                {/* The actual target — what the user is signing up for.
+                    Was the missing piece on the old picker: users had no
+                    idea Beginner running was 10mi vs Elite at 50. */}
+                {tgt && (
+                  <div style={{ fontSize: 12, fontWeight: 800, color: accent }}>
+                    🎯 {tgt.value} {tgt.unit} together · 14 days
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 18, color: "#6B7280", flexShrink: 0 }}>›</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 11, color: "#6B7280", textAlign: "center", marginTop: 16, lineHeight: 1.5 }}>
+        After you pick, we'll match you with another user at the same tier. Usually under a minute.
       </div>
     </div>
   );
