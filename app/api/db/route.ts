@@ -1535,6 +1535,140 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Detect + record PRs from a single new workout log ──────────────────
+    // ── Unlock rivalry badges from a new workout log ──────────────────────
+    // After a workout is logged, check if this log triggers any badge
+    // unlocks for any of the user's active rivalries. Idempotent — won't
+    // re-award a badge that already exists for that (rivalry, user, badge)
+    // combo because rivalry_badges has a unique constraint.
+    //
+    // Currently handles:
+    //   - first_blood  → first log of the rivalry (by either side)
+    //   - dominant     → ahead by 3+ in score, and we're past midweek
+    //
+    // TODO future: early_bird (2 consecutive morning workouts during the
+    // rivalry), comeback (was behind, now ahead — needs progress history
+    // tracking), untouchable (only awarded at rivalry end, not from a log).
+    if (action === 'unlock_rivalry_badges') {
+      const { userId, logId } = payload || {};
+      if (!userId || !logId) return NextResponse.json({ error: 'Missing userId or logId' }, { status: 400 });
+
+      // 1. Pull the log we're checking
+      const { data: thisLog } = await admin
+        .from('activity_logs')
+        .select('id, user_id, log_type, workout_category, logged_at')
+        .eq('id', logId)
+        .maybeSingle();
+      if (!thisLog || thisLog.log_type !== 'workout' || !thisLog.workout_category) {
+        return NextResponse.json({ ok: true, awarded: [] });
+      }
+
+      // 2. Find all active rivalries the user is in where the category
+      //    matches this log. Only rivalries whose window includes this
+      //    log are candidates.
+      const { data: rivalries } = await admin
+        .from('rivalries')
+        .select('id, user_a_id, user_b_id, category, competition_type, started_at, ends_at, status')
+        .eq('status', 'active')
+        .eq('category', thisLog.workout_category)
+        .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+
+      if (!rivalries || rivalries.length === 0) {
+        return NextResponse.json({ ok: true, awarded: [] });
+      }
+
+      const awarded: Array<{ rivalryId: string; badge: string }> = [];
+
+      for (const rivalry of rivalries as any[]) {
+        const logTime = new Date(thisLog.logged_at).getTime();
+        const startedTime = new Date(rivalry.started_at).getTime();
+        const endsTime = new Date(rivalry.ends_at).getTime();
+        // Skip rivalries whose window doesn't include this log
+        if (logTime < startedTime || logTime > endsTime) continue;
+
+        // ── BADGE: first_blood ────────────────────────────────────────────
+        // Check if this log is the EARLIEST workout in the rivalry window
+        // by either participant. If so, award first_blood to this user.
+        // Tie-break: if logged_at ties exactly, the user_id stored in the
+        // badge row wins (whoever's log we got asked about first).
+        const { data: earlierLogs } = await admin
+          .from('activity_logs')
+          .select('id, user_id, logged_at')
+          .in('user_id', [rivalry.user_a_id, rivalry.user_b_id])
+          .eq('log_type', 'workout')
+          .eq('workout_category', rivalry.category)
+          .gte('logged_at', rivalry.started_at)
+          .lte('logged_at', rivalry.ends_at)
+          .order('logged_at', { ascending: true })
+          .limit(1);
+
+        const firstLog = earlierLogs?.[0];
+        if (firstLog && firstLog.id === thisLog.id) {
+          // This log IS the first. Try to award the badge — the unique
+          // constraint will silently no-op if it's already been awarded
+          // (e.g., this endpoint runs twice on retry).
+          const { error: insErr } = await admin
+            .from('rivalry_badges')
+            .insert({
+              rivalry_id: rivalry.id,
+              user_id: userId,
+              badge_key: 'first_blood',
+              earned_at: new Date().toISOString(),
+            });
+          if (!insErr) {
+            awarded.push({ rivalryId: rivalry.id, badge: 'first_blood' });
+          }
+          // Errors here include unique-constraint violations on retry —
+          // fine to swallow, that's the idempotent behavior we want.
+        }
+
+        // ── BADGE: dominant ───────────────────────────────────────────────
+        // Past midweek (more than half the rivalry duration elapsed) AND
+        // the user is ahead by 3+ in score. Uses the same compute_rivalry_score
+        // RPC the rivalry page uses, so the count is consistent.
+        const totalMs = endsTime - startedTime;
+        const elapsedMs = logTime - startedTime;
+        const isMidweekOrLater = elapsedMs > totalMs / 2;
+        if (isMidweekOrLater) {
+          const opponentId = rivalry.user_a_id === userId ? rivalry.user_b_id : rivalry.user_a_id;
+          const [{ data: myScoreRaw }, { data: theirScoreRaw }] = await Promise.all([
+            admin.rpc('compute_rivalry_score', {
+              uid: userId,
+              p_category: rivalry.category,
+              p_metric: rivalry.competition_type,
+              p_from: rivalry.started_at,
+              p_to: rivalry.ends_at,
+            }),
+            admin.rpc('compute_rivalry_score', {
+              uid: opponentId,
+              p_category: rivalry.category,
+              p_metric: rivalry.competition_type,
+              p_from: rivalry.started_at,
+              p_to: rivalry.ends_at,
+            }),
+          ]);
+          const myScore = Number(myScoreRaw ?? 0);
+          const theirScore = Number(theirScoreRaw ?? 0);
+          if (myScore - theirScore >= 3) {
+            const { error: insErr } = await admin
+              .from('rivalry_badges')
+              .insert({
+                rivalry_id: rivalry.id,
+                user_id: userId,
+                badge_key: 'dominant',
+                earned_at: new Date().toISOString(),
+              });
+            if (!insErr) {
+              awarded.push({ rivalryId: rivalry.id, badge: 'dominant' });
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({ ok: true, awarded });
+    }
+
+
+    // ── Detect PRs from a new workout log ─────────────────────────────────
     // Called after the client submits a new workout. We re-fetch the user's
     // history (since the client doesn't have it) and run strict detection.
     // Returns the list of PRs detected so the client can show a "🏆 New PR!"
