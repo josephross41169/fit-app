@@ -256,6 +256,27 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   const cardioExercises = allExercises.filter(e => e.isCardio);
   const totalWorkouts = filteredWorkouts.length;
 
+  // Session counts — number of workouts (not exercise types) that include
+  // any lifting / any cardio. The tab labels used to show
+  // `liftingExercises.length` which is the number of distinct lift names
+  // (Bench, Squat, Deadlift, …) — so a user with 5 logged workouts and
+  // 13 distinct exercises across them saw "Lifting (13)" and read it as
+  // "13 lifting sessions." This is the count Joey expected.
+  const liftingSessionCount = useMemo(
+    () => filteredWorkouts.filter((w: any) => {
+      const ex: any[] = w.exercises || w.workout?.exercises || [];
+      return ex.length > 0;
+    }).length,
+    [filteredWorkouts]
+  );
+  const cardioSessionCount = useMemo(
+    () => filteredWorkouts.filter((w: any) => {
+      const c: any[] = w.cardio || w.workout?.cardio || [];
+      return c.length > 0;
+    }).length,
+    [filteredWorkouts]
+  );
+
   // ── Avg/Week — divide by weeks elapsed within the actual window ─────────
   // For current month: weeks elapsed since the 1st (capped at the window).
   // For past months: full weeks in that month.
@@ -287,18 +308,21 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   // from the actual exercise data:
   //   • lifting exercises → look up category in EXERCISES (Chest, Back, …)
   //   • cardio entries     → use cardio.type directly (Run, Cycling, …)
-  // We track session count + last-trained date per category so the chip can
-  // show e.g. "Chest · 3 · last May 9".
-  const periodCategories = useMemo(() => {
-    type Bucket = { count: number; lastDate: number; isCardio: boolean };
-    const buckets = new Map<string, Bucket>();
+  //
+  // The chip used to also show the most-recent date trained ("Running ×4 · May 7"),
+  // but Joey reported users misread that as "did 4 runs ON May 7" rather than
+  // "last ran May 7". Dates are dropped — count is the only number on the chip.
+  // Lifting and cardio chips are returned as separate arrays so the render
+  // can section them under their own headers.
+  const { liftingChips, cardioChips } = useMemo(() => {
+    type Bucket = { count: number };
+    const liftBuckets = new Map<string, Bucket>();
+    const cardioBuckets = new Map<string, Bucket>();
 
     // Per-workout dedupe — a single workout containing 5 chest exercises
     // should count as ONE Chest session, not 5. We collect all categories
     // hit per workout into a Set, then bump each bucket once.
     filteredWorkouts.forEach((w: any) => {
-      const dateMs = new Date(w.logged_at || w.created_at || w.id || 0).getTime();
-      const validDate = !isNaN(dateMs);
       const hitCategories = new Set<string>();
       const hitCardio = new Set<string>();
 
@@ -319,32 +343,24 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
       });
 
       hitCategories.forEach(cat => {
-        const b = buckets.get(cat) || { count: 0, lastDate: 0, isCardio: false };
+        const b = liftBuckets.get(cat) || { count: 0 };
         b.count += 1;
-        if (validDate && dateMs > b.lastDate) b.lastDate = dateMs;
-        buckets.set(cat, b);
+        liftBuckets.set(cat, b);
       });
       hitCardio.forEach(t => {
-        const b = buckets.get(t) || { count: 0, lastDate: 0, isCardio: true };
+        const b = cardioBuckets.get(t) || { count: 0 };
         b.count += 1;
-        if (validDate && dateMs > b.lastDate) b.lastDate = dateMs;
-        buckets.set(t, b);
+        cardioBuckets.set(t, b);
       });
     });
 
-    // Sort by sessions desc, then most-recent first, then alphabetical.
-    return Array.from(buckets.entries())
-      .sort((a, b) => {
-        if (b[1].count !== a[1].count) return b[1].count - a[1].count;
-        if (b[1].lastDate !== a[1].lastDate) return b[1].lastDate - a[1].lastDate;
-        return a[0].localeCompare(b[0]);
-      })
-      .map(([name, b]) => ({
-        name,
-        count: b.count,
-        lastDate: b.lastDate ? fmtDate(new Date(b.lastDate).toISOString()) : '',
-        isCardio: b.isCardio,
-      }));
+    // Sort by sessions desc, then alphabetical.
+    const sortChips = (m: Map<string, Bucket>) =>
+      Array.from(m.entries())
+        .sort((a, b) => b[1].count !== a[1].count ? b[1].count - a[1].count : a[0].localeCompare(b[0]))
+        .map(([name, b]) => ({ name, count: b.count }));
+
+    return { liftingChips: sortChips(liftBuckets), cardioChips: sortChips(cardioBuckets) };
   }, [filteredWorkouts]);
 
   // ── Sessions per week (lifting) ─────────────────────────────────────────
@@ -413,7 +429,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Muscle Groups</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{periodCategories.length || "—"}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{liftingChips.length || "—"}</div>
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Avg/Week</div>
@@ -422,39 +438,84 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
       </div>
 
       {/* Chip cloud — derived from real exercise + cardio data, NOT the user's
-          freeform workout title. Each chip shows the muscle group / cardio
-          type, the session count, and the most recent date trained. */}
-      {periodCategories.length > 0 && (
+          freeform workout title. Splits into two rows: Lifting (per muscle
+          group) and Cardio (per type). Each chip shows just the count —
+          dates were removed because users were reading "×4 · May 7" as
+          "4 sessions on May 7" rather than "4 sessions, last on May 7".
+          Per-cardio-type emoji (🏊 Swimming, 🚴 Cycling, …) replaces the
+          generic 🏃 so swimming doesn't show with a runner icon. */}
+      {(liftingChips.length > 0 || cardioChips.length > 0) && (
         <div style={{
           background: C.purpleDark, border: `1px solid ${C.purpleBorder}`,
           borderRadius: 12, padding: "12px 14px", marginBottom: 14,
+          display: "flex", flexDirection: "column", gap: 12,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1.2 }}>
             What you trained
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {periodCategories.map(({ name, count, lastDate, isCardio }) => (
-              <span key={name} style={{
-                background: C.purpleMid,
-                color: isCardio ? C.cyan : C.gold,
-                fontSize: 12, fontWeight: 700,
-                padding: "5px 10px", borderRadius: 999,
-                border: `1px solid ${C.purpleBorder}`,
-                whiteSpace: "nowrap",
-                display: "inline-flex", alignItems: "center", gap: 6,
-              }}>
-                <span>{isCardio ? "🏃 " : "💪 "}{name}</span>
-                <span style={{ color: C.sub, fontWeight: 600 }}>
-                  ×{count}
-                </span>
-                {lastDate && (
-                  <span style={{ color: C.sub, fontWeight: 500, fontSize: 11 }}>
-                    · {lastDate}
+
+          {liftingChips.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+                💪 Lifting
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {liftingChips.map(({ name, count }) => (
+                  <span key={name} style={{
+                    background: C.purpleMid,
+                    color: C.gold,
+                    fontSize: 12, fontWeight: 700,
+                    padding: "5px 10px", borderRadius: 999,
+                    border: `1px solid ${C.purpleBorder}`,
+                    whiteSpace: "nowrap",
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                  }}>
+                    <span>{name}</span>
+                    <span style={{ color: C.sub, fontWeight: 600 }}>×{count}</span>
                   </span>
-                )}
-              </span>
-            ))}
-          </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {cardioChips.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+                🏃 Cardio
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {cardioChips.map(({ name, count }) => {
+                  // Per-discipline emoji so the chip reads clearly. Falls
+                  // back to a generic 🏃 for unknown types.
+                  const emoji =
+                    name === "Running"      ? "🏃" :
+                    name === "Walking"      ? "🚶" :
+                    name === "Cycling"      ? "🚴" :
+                    name === "Swimming"     ? "🏊" :
+                    name === "Rowing"       ? "🚣" :
+                    name === "Hiking"       ? "🥾" :
+                    name === "Elliptical"   ? "🌀" :
+                    name === "Stair Climber"? "🪜" :
+                    name === "HIIT"         ? "⚡" :
+                                              "🏃";
+                  return (
+                    <span key={name} style={{
+                      background: C.purpleMid,
+                      color: C.cyan,
+                      fontSize: 12, fontWeight: 700,
+                      padding: "5px 10px", borderRadius: 999,
+                      border: `1px solid ${C.purpleBorder}`,
+                      whiteSpace: "nowrap",
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                    }}>
+                      <span>{emoji} {name}</span>
+                      <span style={{ color: C.sub, fontWeight: 600 }}>×{count}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -500,8 +561,8 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
       {/* Lifting/Cardio toggle */}
       <div style={{ display: "flex", gap: 0, marginBottom: 16, background: C.purpleDark, borderRadius: 12, padding: 4, border: `1px solid ${C.purpleBorder}` }}>
         {[
-          { key: "lifting" as const, icon: "💪", label: `Lifting${hasLifting ? ` (${liftingExercises.length})` : ""}` },
-          { key: "cardio"  as const, icon: "🏃", label: `Cardio${hasCardio   ? ` (${cardioExercises.length})` : ""}`  },
+          { key: "lifting" as const, icon: "💪", label: `Lifting${liftingSessionCount > 0 ? ` (${liftingSessionCount})` : ""}` },
+          { key: "cardio"  as const, icon: "🏃", label: `Cardio${cardioSessionCount > 0  ? ` (${cardioSessionCount})` : ""}`  },
         ].map(({ key, icon, label }) => (
           <button key={key} onClick={() => setActiveGraph(key)} style={{
             flex: 1, padding: "8px 0", border: "none", cursor: "pointer", borderRadius: 9,
