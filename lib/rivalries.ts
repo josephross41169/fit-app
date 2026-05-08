@@ -144,7 +144,53 @@ export async function joinQueue(params: {
     throw new Error("You already have an active rivalry.");
   }
 
-  return getActiveRivalry();
+  // ── Match notification ──────────────────────────────────────────────
+  // The DB trigger atomically creates the rivalry + clears both queue
+  // rows when it finds an opponent. We can't tell from the insert
+  // result alone whether a match happened, so we read back the active
+  // rivalry. If we got matched, both users need to know — the user
+  // who joined first has been waiting (could be hours/days) and the
+  // user who joined second is also told their match is live so they
+  // can jump straight in. Best-effort: a missed notification doesn't
+  // invalidate the rivalry itself.
+  const matched = await getActiveRivalry();
+  if (matched) {
+    try {
+      const opponentId = matched.user_a_id === user.id ? matched.user_b_id : matched.user_a_id;
+      // Notify ME — the user who triggered the match completion
+      fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_notification',
+          payload: {
+            userId: user.id,
+            fromUserId: opponentId,
+            type: 'rivalry_matched',
+            referenceId: matched.id,
+            body: `You've been matched with a rival! Time to compete 🥊`,
+          },
+        }),
+      }).catch(() => {});
+      // Notify OPPONENT — the user who joined the queue first
+      fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_notification',
+          payload: {
+            userId: opponentId,
+            fromUserId: user.id,
+            type: 'rivalry_matched',
+            referenceId: matched.id,
+            body: `Your rival just joined! Game on 🥊`,
+          },
+        }),
+      }).catch(() => {});
+    } catch { /* best-effort */ }
+  }
+
+  return matched;
 }
 
 /** Leave the matchmaking queue. Safe to call if not queued. */
