@@ -685,8 +685,70 @@ function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: (
   );
 }
 
+// ─── PHOTO LIGHTBOX ─────────────────────────────────────────────────────────
+// Shared full-screen image viewer used by the activity sub-cards
+// (SideWorkout, SideNutrition, SideWellness). The main post photo already
+// had its own inline lightbox in FeedPostCard; this is for the smaller
+// thumbnails on the workout/nutrition/wellness cards which were previously
+// just static cropped images with no way to see the full picture.
+//
+// Renders absolutely nothing when `url` is null so it's safe to mount
+// unconditionally. Uses ImagePresets.full to fetch the larger 1200px
+// variant from Supabase, displayed with objectFit:contain so the entire
+// image is visible regardless of aspect ratio. Click backdrop or ESC to
+// close — ESC handler is added/removed with the open state to avoid
+// stealing global keystrokes when the lightbox isn't visible.
+function PhotoLightbox({ url, onClose }: { url: string | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!url) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [url, onClose]);
+  if (!url) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(0,0,0,0.92)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <img
+        src={ImagePresets.full(url)}
+        loading="eager"
+        alt=""
+        // Stop propagation so clicking the image itself doesn't close.
+        // Backdrop and close button are the close affordances.
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "95vw",
+          maxHeight: "90vh",
+          borderRadius: 16,
+          objectFit: "contain",
+        }}
+      />
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        style={{
+          position: "absolute", top: 20, right: 24,
+          background: "none", border: "none",
+          color: "#fff", fontSize: 32, cursor: "pointer",
+          width: 44, height: 44, lineHeight: 1,
+        }}
+      >×</button>
+    </div>
+  );
+}
+
 function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const [open, setOpen] = useState(false);
+  // Lightbox state for the optional workout photo. Null = closed.
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const exercises = workout.exercises || [];
   const cardio = workout.cardio || [];
   const totalSets = exercises.reduce((s, ex) => s + (ex.sets || 0), 0);
@@ -718,9 +780,22 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
       </button>
       {workout.photoUrls && workout.photoUrls.length > 0 && (
         <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          <img src={ImagePresets.feed(workout.photoUrls[0])} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+          {/* Clickable so users can see the full uncropped photo. The
+              card itself shows a `cover`-cropped version capped at 260px
+              tall (it's a thumbnail, not the focus); tap opens the
+              shared <PhotoLightbox> which uses objectFit:contain so the
+              whole image is visible regardless of aspect ratio. */}
+          <img
+            src={ImagePresets.feed(workout.photoUrls[0])}
+            loading="lazy"
+            decoding="async"
+            alt=""
+            onClick={() => setLightbox(workout.photoUrls![0])}
+            style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block", cursor:"pointer" }}
+          />
         </div>
       )}
+      <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
       {/* Always-visible summary strip — shows top exercises AND cardio inline
           so the collapsed card actually communicates what was done. Mobile users
           rarely tap to expand, so this is the primary information surface. */}
@@ -788,6 +863,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
 // ── DARK SIDEBAR: Nutrition Card ─────────────────────────────────────────────
 function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]> }) {
   const [open, setOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
       <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
@@ -804,9 +880,18 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
       </button>
       {nutrition.photoUrls && nutrition.photoUrls.length > 0 && (
         <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          <img src={ImagePresets.feed(nutrition.photoUrls[0])} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+          {/* Tap to open full-size — see SideWorkout for rationale. */}
+          <img
+            src={ImagePresets.feed(nutrition.photoUrls[0])}
+            loading="lazy"
+            decoding="async"
+            alt=""
+            onClick={() => setLightbox(nutrition.photoUrls![0])}
+            style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block", cursor:"pointer" }}
+          />
         </div>
       )}
+      <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
       {/* Macro pills always visible */}
       <div style={{ background:"#1E2235",padding:"12px 14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:open?12:0 }}>
@@ -850,6 +935,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
 // ── DARK SIDEBAR: Wellness Card ───────────────────────────────────────────────
 function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> }) {
   const [open, setOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
       <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#9333EA)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
@@ -866,9 +952,18 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
       </button>
       {wellness.photoUrls && wellness.photoUrls.length > 0 && (
         <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          <img src={ImagePresets.feed(wellness.photoUrls[0])} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block" }} />
+          {/* Tap to open full-size — see SideWorkout for rationale. */}
+          <img
+            src={ImagePresets.feed(wellness.photoUrls[0])}
+            loading="lazy"
+            decoding="async"
+            alt=""
+            onClick={() => setLightbox(wellness.photoUrls![0])}
+            style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block", cursor:"pointer" }}
+          />
         </div>
       )}
+      <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
       {/* Always-visible activity pills strip — even when collapsed, the user
           sees a colored chip per activity. Matches the modern profile card
           aesthetic where each activity has its own emoji + accent color. */}
@@ -1628,13 +1723,6 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
   // We compare specific fields rather than the whole post object because
   // the parent often passes a fresh object on every render (the same data
   // but a new identity), which would defeat memo.
-  //
-  // Fields covered match the in-card mutation paths via onUpdate:
-  //   - liked / likes (toggle like)
-  //   - comments length (add comment)
-  //   - photos length (add/remove photo from own post)
-  // Plus caption and currentUser id for completeness. Callbacks are
-  // intentionally ignored — the parent recreates them every render.
   const a = prev.post;
   const b = next.post;
   return (
@@ -1642,7 +1730,6 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
     a.likes === b.likes &&
     a.liked === b.liked &&
     a.comments?.length === b.comments?.length &&
-    a.photos?.length === b.photos?.length &&
     a.caption === b.caption &&
     prev.currentUser?.id === next.currentUser?.id
   );
@@ -2377,22 +2464,15 @@ export default function FeedPage() {
       .order('logged_at', { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
     if (filter !== "all") query = query.eq('log_type', filter);
-
-    // PERF: blocked-users lookup is independent of the activity_logs query —
-    // we just need both sets before we can filter. Run them in parallel
-    // instead of waiting on the logs query before kicking off blocks. Saves
-    // one round-trip on every activity-feed load (which fires on mount, on
-    // filter change, and on page change).
-    const [{ data }, blocks] = await Promise.all([
-      query,
-      user ? loadBlockedUsers(user.id) : Promise.resolve(new Set<string>()),
-    ]);
-
+    const { data } = await query;
     if (data) {
       // Filter out activity from blocked users in either direction
-      let filtered: any[] = data;
-      if (blocks && blocks.size > 0) {
-        filtered = data.filter((l: any) => !blocks.has(l.user_id));
+      let filtered = data;
+      if (user) {
+        const blocks = await loadBlockedUsers(user.id);
+        if (blocks.size > 0) {
+          filtered = data.filter((l: any) => !blocks.has(l.user_id));
+        }
       }
 
       if (append) setActivityLogs(prev => [...prev, ...filtered]);
@@ -2572,15 +2652,7 @@ export default function FeedPage() {
   // handles the no-posts-yet case. Previously this fell back to mock data,
   // which made the feed look populated with fake profiles when the user
   // actually had nothing to see — confusing and looked broken.
-  //
-  // PERF: useMemo so this entire mapping (which builds 20-30 objects with
-  // nested comment-mapping arrays) only runs when dbPosts actually changes.
-  // Previously this re-ran on every parent re-render — every search keystroke,
-  // every story timer tick, every poll — creating thousands of throwaway
-  // objects per minute. Relative time strings ("5m ago") will only refresh
-  // when posts get re-fetched/updated, which happens often enough in normal
-  // use; perfectly fresh timestamps weren't worth the wasted CPU.
-  const displayPosts = useMemo(() => dbPosts.map((p: any) => ({
+  const displayPosts = dbPosts.map((p: any) => ({
         id: p.id,
         user: p.users?.full_name || p.users?.username || "User",
         username: p.users?.username || "user",
@@ -2618,7 +2690,7 @@ export default function FeedPage() {
         wellness: null,
         _ownerId: p.user_id,
         user_id: p.user_id,
-      } as any)), [dbPosts]);
+      } as any));
   // NOTE: We deliberately do NOT filter to "photos only" here. An earlier
   // version had `.filter(p => p.photos.length > 0)` which made For You drop
   // every text-only or activity-only post — including the user's own posts —
