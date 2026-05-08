@@ -927,6 +927,30 @@ export async function POST(req: NextRequest) {
         role: 'owner',
       });
 
+      // ── Auto-award the "group-leader" badge ───────────────────────────
+      // Single-shot: fires the first time the user creates ANY group.
+      // Same idempotency pattern as group-member (read-then-write, no
+      // unique constraint on the badges table). Best-effort — failures
+      // here don't block group creation.
+      try {
+        const { data: alreadyEarned } = await admin
+          .from('badges')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('badge_id', 'group-leader')
+          .limit(1)
+          .maybeSingle();
+        if (!alreadyEarned) {
+          await admin.from('badges').insert({
+            user_id: userId,
+            badge_id: 'group-leader',
+            note: 'auto',
+          });
+        }
+      } catch (e) {
+        console.error('[create_group] group-leader badge award failed', e);
+      }
+
       return NextResponse.json({ group });
     }
 
@@ -2095,6 +2119,32 @@ export async function POST(req: NextRequest) {
         role: 'member',
       });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // ── Auto-award the "group-member" badge ───────────────────────────
+      // Single-shot: fires the first time the user joins ANY group. Idempotent
+      // by checking for an existing row before inserting (we don't have a
+      // unique constraint on (user_id, badge_id) since the user's other
+      // badges with the same badge_id can exist for ladder progress, but
+      // group-member isn't part of a ladder so a single row is enough).
+      // Best-effort — failures here don't block the join.
+      try {
+        const { data: alreadyEarned } = await admin
+          .from('badges')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('badge_id', 'group-member')
+          .limit(1)
+          .maybeSingle();
+        if (!alreadyEarned) {
+          await admin.from('badges').insert({
+            user_id: userId,
+            badge_id: 'group-member',
+            note: 'auto',
+          });
+        }
+      } catch (e) {
+        console.error('[join_group] group-member badge award failed', e);
+      }
 
       // Increment member_count
       await admin.rpc('increment_group_member_count', { gid: groupId }).catch(() => {
