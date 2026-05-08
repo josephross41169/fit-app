@@ -1863,6 +1863,67 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, updated, total_scanned: logs.length });
     }
 
+    // ── Backfill logged_at for today's midnight-timestamp logs ─────────────
+    // The profile-page editor used to set logged_at to midnight UTC of the
+    // chosen day. For TODAY's workouts that meant 00:00:00 even though
+    // the user logged at 3pm. Rivalries / wars filter
+    // `WHERE logged_at >= started_at`, and a rivalry started at 2pm
+    // would silently exclude the workout because 00:00 < 14:00.
+    //
+    // Going forward, the editor uses NOW for today (see computeLoggedAt
+    // helper in DayCard). For existing rows that already shipped with
+    // midnight timestamps, this backfill bumps logged_at up to created_at
+    // (the actual save time) when both are on the same calendar day —
+    // recovering the original save-time signal without inventing it.
+    //
+    // Conservative rules to avoid touching legitimately-old logs:
+    //   1. logged_at must be exactly 00:00:00 UTC (within the second)
+    //   2. created_at and logged_at must be on the SAME calendar day in UTC
+    //   3. created_at must be strictly LATER than logged_at
+    // Anything that fails (1) was probably set by a different code path
+    // and shouldn't be touched. (2) and (3) together mean "this row was
+    // logged for today and saved later that same day."
+    if (action === 'backfill_today_logged_at') {
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      const { data: logs } = await admin
+        .from('activity_logs')
+        .select('id, logged_at, created_at')
+        .eq('user_id', userId);
+
+      if (!logs || logs.length === 0) {
+        return NextResponse.json({ ok: true, updated: 0 });
+      }
+
+      let updated = 0;
+      for (const log of logs as any[]) {
+        if (!log.created_at || !log.logged_at) continue;
+        const logged = new Date(log.logged_at);
+        const created = new Date(log.created_at);
+
+        const isMidnight =
+          logged.getUTCHours() === 0 &&
+          logged.getUTCMinutes() === 0 &&
+          logged.getUTCSeconds() === 0;
+        const sameDay =
+          logged.getUTCFullYear() === created.getUTCFullYear() &&
+          logged.getUTCMonth() === created.getUTCMonth() &&
+          logged.getUTCDate() === created.getUTCDate();
+        const createdLater = created.getTime() > logged.getTime();
+
+        if (isMidnight && sameDay && createdLater) {
+          const { error } = await admin
+            .from('activity_logs')
+            .update({ logged_at: log.created_at })
+            .eq('id', log.id);
+          if (!error) updated++;
+        }
+      }
+
+      return NextResponse.json({ ok: true, updated, total_scanned: logs.length });
+    }
+
 
     // ── Detect PRs from a new workout log ─────────────────────────────────
     // Called after the client submits a new workout. We re-fetch the user's
