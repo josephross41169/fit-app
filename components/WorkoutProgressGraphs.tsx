@@ -421,15 +421,34 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         {isCalendarMonth ? "Stats reset at the start of each month." : "Rolling window."}
       </div>
 
-      {/* Key stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
+      {/* Key stats — 4-up grid: Lifts / Cardio / Muscle Groups / Avg/Week.
+          Previously this was a 3-up showing "Workouts" (the total
+          activity_log row count) which double-counted any day that had
+          both lifts and cardio. Users couldn't reconcile the number
+          with what they'd actually done — "I trained biceps, chest,
+          legs and ran a few times, why does it say 5?" Splitting into
+          two peer stats (lift sessions + cardio sessions) reads cleanly
+          regardless of overlap. Cardio gets a cyan accent matching the
+          chip cloud below so the visual link is obvious.
+
+          On narrow viewports the 4-col grid wraps to 2x2 thanks to
+          minmax(0, 1fr) so cards never collapse below readable size. */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: 10, marginBottom: 12,
+      }}>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Workouts</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.purple }}>{totalWorkouts}</div>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>💪 Lifts</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{liftingSessionCount}</div>
+        </div>
+        <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>🏃 Cardio</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{cardioSessionCount}</div>
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Muscle Groups</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{liftingChips.length || "—"}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.purple }}>{liftingChips.length || "—"}</div>
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Avg/Week</div>
