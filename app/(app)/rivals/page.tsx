@@ -10,11 +10,13 @@ import {
   getMessages, sendTextMessage, sendPhotoMessage,
   unblurPhoto, subscribeToMessages,
   getRivalryBadges,
+  getRivalryActivityStats,
   formatTimeLeft, formatScore,
   COMPETITIONS,
   type RivalCategory, type RivalTier,
   type RivalryWithOpponent, type RivalMessage,
   type UserRivalryRecord, type RivalryBadge,
+  type RivalryStat,
 } from "@/lib/rivalries";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,18 +294,157 @@ function MatchingScreen({ category, tier, onMatched, onCancel }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HEAD-TO-HEAD PANEL (real data)
+// HEAD-TO-HEAD PANEL (real data) — redesigned with profile face-off cards
+// + per-category recent activity comparison
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Avatar with photo or initials fallback. Used by both profile cards.
+// `accent` is the user's side-color (purple for me, red for opponent) which
+// drives the border + glow. `glow` toggles the highlight when this side is
+// currently winning the rivalry.
+function RivalAvatar({ name, url, accent, glow, size = 88 }: {
+  name: string;
+  url: string | null;
+  accent: string;
+  glow: boolean;
+  size?: number;
+}) {
+  const initials = (name || "?").split(" ").map(p => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
+  const baseStyle: React.CSSProperties = {
+    width: size, height: size, borderRadius: "50%", margin: "0 auto",
+    border: `3px solid ${glow ? accent : `${accent}55`}`,
+    boxShadow: glow ? `0 0 24px ${accent}66` : "none",
+    transition: "box-shadow 0.3s, border-color 0.3s",
+    objectFit: "cover" as const,
+    background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    color: "#fff", fontWeight: 900, fontSize: size * 0.32,
+    overflow: "hidden",
+  };
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={name} style={baseStyle} />;
+  }
+  return <div style={baseStyle}>{initials}</div>;
+}
+
+// Per-user profile column inside the face-off card. Compact, info-dense:
+// avatar → name + @handle → city pill → record pill → bio.
+// Bio is clamped to 2 lines so a long bio doesn't push the layout around.
+function RivalProfileCard({
+  name, username, avatarUrl, city, bio,
+  record, accent, glow, scoreLabel, score,
+}: {
+  name: string;
+  username: string;
+  avatarUrl: string | null;
+  city: string | null;
+  bio: string | null;
+  record: { wins: number; losses: number };
+  accent: string;
+  glow: boolean;
+  scoreLabel: string;
+  score: string;
+}) {
+  const total = record.wins + record.losses;
+  const winRate = total > 0 ? Math.round((record.wins / total) * 100) : 0;
+  return (
+    <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+      <RivalAvatar name={name} url={avatarUrl} accent={accent} glow={glow} />
+      <div style={{ marginTop: 12, fontWeight: 900, fontSize: 16, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {name}
+      </div>
+      <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>@{username}</div>
+
+      {/* City + record pills — wrap on narrow screens */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 10 }}>
+        {city && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "#0D0D0D", border: `1px solid ${accent}33`, borderRadius: 99, padding: "3px 9px", fontSize: 10, color: "#D1D5DB", fontWeight: 700 }}>
+            📍 {city.split(",")[0].trim()}
+          </span>
+        )}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: `${accent}18`, border: `1px solid ${accent}44`, borderRadius: 99, padding: "3px 9px", fontSize: 10, color: accent, fontWeight: 800 }}>
+          {record.wins}-{record.losses} · {winRate}%
+        </span>
+      </div>
+
+      {/* Bio — italicized so it reads like a tagline. Two-line clamp. */}
+      {bio && bio.trim().length > 0 && (
+        <div style={{
+          fontSize: 11, color: "#9CA3AF", fontStyle: "italic",
+          lineHeight: 1.4, marginBottom: 12, padding: "0 4px",
+          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}>
+          “{bio.trim()}”
+        </div>
+      )}
+
+      {/* Live score for this side */}
+      <div style={{ background: "#0D0D0D", borderRadius: 12, padding: "10px 8px", border: `1px solid ${accent}33` }}>
+        <div style={{ fontSize: 9, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{scoreLabel}</div>
+        <div style={{ fontWeight: 900, fontSize: 22, color: accent }}>{score}</div>
+      </div>
+    </div>
+  );
+}
+
+// Side-by-side recent-activity comparison. Three rows of stats per side,
+// labels in the middle column. Stats come from getRivalryActivityStats —
+// label set is determined by category (running gets miles/runs/longest,
+// lifting gets sessions/volume/duration, etc).
+function RivalStatsCompare({ myStats, theirStats, opponentName }: {
+  myStats: RivalryStat[];
+  theirStats: RivalryStat[];
+  opponentName: string;
+}) {
+  // Both arrays should be the same length (same category) but defensively
+  // pad to the longer one so the grid doesn't get lopsided if one user
+  // somehow has fewer stats.
+  const maxLen = Math.max(myStats.length, theirStats.length);
+  if (maxLen === 0) return null;
+
+  return (
+    <div style={{ background: "#1A0D3E33", borderRadius: 18, border: "1px solid #2D1B69", padding: "16px 18px", marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 14, textAlign: "center" }}>
+        📊 Last 4 weeks at a glance
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {Array.from({ length: maxLen }).map((_, i) => {
+          const mine  = myStats[i]    || { label: "", value: "—" };
+          const theirs = theirStats[i] || { label: "", value: "—" };
+          const label = mine.label || theirs.label;
+          return (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: "#7C3AED", textAlign: "right" }}>{mine.value}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5, minWidth: 100 }}>{label}</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: "#EF4444", textAlign: "left" }}>{theirs.value}</div>
+            </div>
+          );
+        })}
+      </div>
+      {/* Footer hint so users know whose number is whose */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", marginTop: 12, paddingTop: 10, borderTop: "1px solid #2D1B69", fontSize: 10, fontWeight: 700, color: "#6B7280" }}>
+        <div style={{ textAlign: "right", color: "#7C3AED" }}>YOU</div>
+        <div style={{ minWidth: 100 }}></div>
+        <div style={{ textAlign: "left", color: "#EF4444" }}>{opponentName.toUpperCase()}</div>
+      </div>
+    </div>
+  );
+}
 
 function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
   rivalry: RivalryWithOpponent;
   myRecord: UserRivalryRecord;
   theirRecord: UserRivalryRecord;
 }) {
+  const { user } = useAuth();
   const cat = getCategoryLabel(rivalry.category);
   const t = getTierLabel(rivalry.tier);
   const [liveScores, setLiveScores] = useState({ my_score: rivalry.my_score, their_score: rivalry.their_score });
   const [timeLeft, setTimeLeft] = useState(formatTimeLeft(rivalry.ends_at));
+  const [myStats, setMyStats] = useState<RivalryStat[]>([]);
+  const [theirStats, setTheirStats] = useState<RivalryStat[]>([]);
 
   // Refresh live scores every 30 seconds
   useEffect(() => {
@@ -323,12 +464,39 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
     return () => clearInterval(interval);
   }, [rivalry.ends_at]);
 
+  // Load 4-week activity stats for both users in parallel. Runs once on
+  // mount + when category changes (which would only happen if the user
+  // started a new rivalry, in which case the whole panel remounts anyway).
+  // Stats don't need to refresh while the rivalry is live — the live
+  // SCORE above already reflects in-rivalry progress; this panel is about
+  // historical context for who you're up against.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    Promise.all([
+      getRivalryActivityStats(user.id, rivalry.category),
+      getRivalryActivityStats(rivalry.opponent.id, rivalry.category),
+    ]).then(([mine, theirs]) => {
+      if (cancelled) return;
+      setMyStats(mine);
+      setTheirStats(theirs);
+    });
+    return () => { cancelled = true; };
+  }, [user, rivalry.category, rivalry.opponent.id]);
+
   const iAhead = liveScores.my_score > liveScores.their_score;
   const rivalAhead = liveScores.their_score > liveScores.my_score;
-  const myRecordTotal = myRecord.wins + myRecord.losses;
-  const myWinRate = myRecordTotal > 0 ? Math.round((myRecord.wins / myRecordTotal) * 100) : 0;
-  const theirRecordTotal = theirRecord.wins + theirRecord.losses;
-  const theirWinRate = theirRecordTotal > 0 ? Math.round((theirRecord.wins / theirRecordTotal) * 100) : 0;
+
+  // My profile values — pulled from the auth context. `city` isn't in the
+  // typed AuthUser interface but is selected by the `*` query in fetchProfile,
+  // so we cast through any to read it. Falls back gracefully if missing.
+  const myProfile = (user?.profile as any) || {};
+  const myName = myProfile.full_name || "You";
+  const myUsername = myProfile.username || "you";
+  const myAvatar = myProfile.avatar_url || null;
+  const myCity = myProfile.city || null;
+  const myBio = myProfile.bio || null;
+  const opponentFirstName = rivalry.opponent.full_name.split(" ")[0];
 
   return (
     <div>
@@ -337,7 +505,7 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
         @keyframes vsFloat { 0% { transform: scale(1) rotate(-3deg); } 50% { transform: scale(1.08) rotate(3deg); } 100% { transform: scale(1) rotate(-3deg); } }
       `}</style>
 
-      {/* Category + competition + tier badges */}
+      {/* Category + competition + tier + countdown badges */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
           {cat.emoji} {cat.name}
@@ -358,63 +526,49 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
         <span style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", background: "#EF444422", padding: "2px 8px", borderRadius: 99, border: "1px solid #EF444444" }}>LIVE</span>
       </div>
 
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1A1A1A, #1A0A0A)", borderRadius: 24, border: "2px solid #EF444455", padding: "24px", marginBottom: 20, animation: "h2hGlow 3s ease-in-out infinite", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at 30% 50%, #7C3AED08 0%, transparent 60%), radial-gradient(ellipse at 70% 50%, #EF444408 0%, transparent 60%)" }} />
+      {/* ── Profile face-off card ────────────────────────────────────────── */}
+      {/* Two-column flex with VS divider in the middle. The columns auto-collapse
+          on narrow screens (mobile flex behavior keeps things readable). */}
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1A1A1A, #1A0A0A)", borderRadius: 24, border: "2px solid #EF444455", padding: "24px 16px", marginBottom: 20, animation: "h2hGlow 3s ease-in-out infinite", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at 30% 50%, #7C3AED14 0%, transparent 60%), radial-gradient(ellipse at 70% 50%, #EF444414 0%, transparent 60%)" }} />
 
-        {/* Players row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, position: "relative", zIndex: 1 }}>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", margin: "0 auto 10px", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#fff", border: iAhead ? "3px solid #7C3AED" : "3px solid #7C3AED44", boxShadow: iAhead ? "0 0 20px #7C3AED55" : "none" }}>
-              YOU
-            </div>
-            <div style={{ fontWeight: 900, fontSize: 14, color: "#F0F0F0" }}>You</div>
-          </div>
-          <div style={{ width: 52, height: 52, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg, #1A1A1A, #2D1B69)", border: "2px solid #7C3AED66", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 14, color: "#7C3AED", animation: "vsFloat 3s ease-in-out infinite", boxShadow: "0 0 20px #7C3AED33" }}>VS</div>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", margin: "0 auto 10px", background: "linear-gradient(135deg, #EF4444, #EF444488)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#fff", border: rivalAhead ? "3px solid #EF4444" : "3px solid #7C3AED44", boxShadow: rivalAhead ? "0 0 20px #EF444455" : "none" }}>
-              {getInitials(rivalry.opponent.full_name)}
-            </div>
-            <div style={{ fontWeight: 900, fontSize: 14, color: "#F0F0F0" }}>{rivalry.opponent.full_name.split(" ")[0]}</div>
-            <div style={{ fontSize: 11, color: "#9CA3AF" }}>@{rivalry.opponent.username}</div>
-          </div>
-        </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, position: "relative", zIndex: 1 }}>
+          <RivalProfileCard
+            name={myName}
+            username={myUsername}
+            avatarUrl={myAvatar}
+            city={myCity}
+            bio={myBio}
+            record={{ wins: myRecord.wins, losses: myRecord.losses }}
+            accent="#7C3AED"
+            glow={iAhead}
+            scoreLabel="You"
+            score={formatScore(rivalry.category, rivalry.competition_type, liveScores.my_score)}
+          />
 
-        {/* Live scoreboard */}
-        <div style={{ background: "#0D0D0D", borderRadius: 14, padding: "18px 20px", marginBottom: 16, border: "1px solid #2D1B69" }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, textAlign: "center" }}>
-            {getCompetitionLabel(rivalry.category, rivalry.competition_type)} · Live Score
+          {/* VS divider — sits at the top so it stays even with the avatars
+              regardless of how tall each side's bio/city block grows */}
+          <div style={{ flexShrink: 0, paddingTop: 28 }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #1A1A1A, #2D1B69)", border: "2px solid #7C3AED66", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#7C3AED", animation: "vsFloat 3s ease-in-out infinite", boxShadow: "0 0 20px #7C3AED33" }}>VS</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 26, color: "#7C3AED" }}>
-                {formatScore(rivalry.category, rivalry.competition_type, liveScores.my_score)}
-              </div>
-              <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>YOU</div>
-            </div>
-            <div style={{ fontWeight: 900, fontSize: 18, color: "#9CA3AF" }}>—</div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 26, color: "#EF4444" }}>
-                {formatScore(rivalry.category, rivalry.competition_type, liveScores.their_score)}
-              </div>
-              <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>{rivalry.opponent.full_name.split(" ")[0].toUpperCase()}</div>
-            </div>
-          </div>
-        </div>
 
-        {/* All-time records side by side */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div style={{ background: "#0D0D0D", borderRadius: 12, padding: "12px", border: "1px solid #7C3AED33" }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: "#7C3AED", textAlign: "center", marginBottom: 6 }}>YOUR RECORD</div>
-            <div style={{ textAlign: "center", fontWeight: 900, fontSize: 18, color: "#F0F0F0" }}>{myRecord.wins}-{myRecord.losses}</div>
-            <div style={{ textAlign: "center", fontSize: 10, color: "#9CA3AF" }}>{myWinRate}% win rate</div>
-          </div>
-          <div style={{ background: "#0D0D0D", borderRadius: 12, padding: "12px", border: "1px solid #EF444433" }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: "#EF4444", textAlign: "center", marginBottom: 6 }}>{rivalry.opponent.full_name.split(" ")[0].toUpperCase()}'S RECORD</div>
-            <div style={{ textAlign: "center", fontWeight: 900, fontSize: 18, color: "#F0F0F0" }}>{theirRecord.wins}-{theirRecord.losses}</div>
-            <div style={{ textAlign: "center", fontSize: 10, color: "#9CA3AF" }}>{theirWinRate}% win rate</div>
-          </div>
+          <RivalProfileCard
+            name={rivalry.opponent.full_name}
+            username={rivalry.opponent.username}
+            avatarUrl={rivalry.opponent.avatar_url}
+            city={rivalry.opponent.city}
+            bio={rivalry.opponent.bio}
+            record={{ wins: theirRecord.wins, losses: theirRecord.losses }}
+            accent="#EF4444"
+            glow={rivalAhead}
+            scoreLabel={opponentFirstName}
+            score={formatScore(rivalry.category, rivalry.competition_type, liveScores.their_score)}
+          />
         </div>
       </div>
+
+      {/* ── Last 4 weeks comparison ──────────────────────────────────────── */}
+      <RivalStatsCompare myStats={myStats} theirStats={theirStats} opponentName={opponentFirstName} />
     </div>
   );
 }
