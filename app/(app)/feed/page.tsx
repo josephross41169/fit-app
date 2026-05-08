@@ -2914,7 +2914,7 @@ export default function FeedPage() {
         <div className="feed-header-inner" style={{ padding:"14px 20px 12px",display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
             <span style={{ fontSize:20 }}>⚡</span>
-            <span style={{ fontWeight:900,fontSize:22,color:C.blue,letterSpacing:3 }}>FIT</span>
+            <span style={{ fontWeight:900,fontSize:22,color:C.blue,letterSpacing:1.5 }}>Livelee</span>
           </div>
           {/* Search bar — sits right next to the FIT logo. Fixed width so it
               doesn't stretch out wide and feel disconnected from the logo. */}
