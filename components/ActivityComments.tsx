@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
+import MentionInput, { parseMentions } from "@/components/MentionInput";
 
 const C = {
   dark: "#0D0D0D",
@@ -38,7 +39,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
   // Load comments when expanded
   useEffect(() => {
@@ -182,12 +183,17 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
                 background: "#1A1D2E", borderRadius: 20,
                 padding: "7px 14px", border: `1.5px solid ${C.darkBorder}`,
               }}>
-                <input
-                  ref={inputRef}
+                {/* MentionInput swaps in @username autocomplete + the
+                    parseMentions helper (used in submitComment) lets
+                    us fire @mention notifications. Replaces a plain
+                    <input> that had no mention support — activity
+                    comments couldn't @ anyone before this. */}
+                <MentionInput
                   value={text}
-                  onChange={e => setText(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && submitComment()}
+                  onChange={setText}
                   placeholder="Say something encouraging..."
+                  onSubmit={submitComment}
+                  inputRef={inputRef}
                   style={{
                     flex: 1, background: "none", border: "none", outline: "none",
                     fontSize: 13, color: C.text,
