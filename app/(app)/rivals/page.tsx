@@ -820,6 +820,14 @@ function BuddyPanel({ userId }: { userId: string }) {
   const [activeMatch, setActiveMatch] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
+  // `loaded` is false until the very first loadState() call resolves.
+  // Without this gate, the panel mounts with step="category" and shows
+  // the category picker for ~200ms before the server response arrives —
+  // even when the user already has an active match. Reads as a
+  // "random refresh" every time the user switches to the Buddy tab or
+  // navigates back to /rivals. Showing a loading skeleton instead gives
+  // a clean transition.
+  const [loaded, setLoaded] = useState(false);
 
   // Check for an existing active match or queue entry on mount.
   //
@@ -846,6 +854,7 @@ function BuddyPanel({ userId }: { userId: string }) {
       if (data.match) {
         setActiveMatch(data.match);
         setStep("matched");
+        setLoaded(true);
         return;
       }
       if (data.queue) {
@@ -853,9 +862,16 @@ function BuddyPanel({ userId }: { userId: string }) {
         setTier(data.queue.tier);
         setStep("queued");
       } else {
-        setStep("category");
+        // Only reset to "category" on the FIRST load. Once the user has
+        // navigated past the picker (queued/matched), don't bounce them
+        // back to category just because a poll returned no data — that
+        // would feel like a random refresh. The active match / queued
+        // checks above run first so this branch only fires for genuinely
+        // unmatched users.
+        if (!loaded) setStep("category");
       }
-    } catch (e) { console.error(e); }
+      setLoaded(true);
+    } catch (e) { console.error(e); setLoaded(true); }
   }
   useEffect(() => { loadState(); /* eslint-disable-next-line */ }, [userId]);
 
@@ -901,6 +917,20 @@ function BuddyPanel({ userId }: { userId: string }) {
     setStep("category");
     setCategory(null);
     setTier(null);
+  }
+
+  // ── INITIAL LOADING SKELETON ──────────────────────────────────────────
+  // Render this while the very first loadState() is in flight. Prevents
+  // the category picker from flashing on screen for users who already
+  // have a match / are queued. Once `loaded` flips, we fall through to
+  // whichever real view applies based on `step`.
+  if (!loaded) {
+    return (
+      <div style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 22, padding: "40px 24px", textAlign: "center" }}>
+        <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.5 }}>🤝</div>
+        <div style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 700 }}>Loading your buddy status…</div>
+      </div>
+    );
   }
 
   // ── ACTIVE MATCH VIEW ──────────────────────────────────────────────────
@@ -1067,19 +1097,30 @@ export default function RivalsPage() {
   const [pageTab, setPageTab] = useState<"rivals" | "buddy">("rivals");
 
   // Load initial state: do I have an active rivalry? Am I already queued?
+  //
+  // PERF: own record is fetched in parallel with the rivalry+queue check
+  // because it's keyed only on user.id and doesn't depend on either of the
+  // other queries' results. Was previously sequential — fetched only after
+  // we knew there was an active rivalry — which added a round-trip onto
+  // the cold load. Opponent record still has to wait since we need the
+  // opponent's id from the rivalry first.
   const loadState = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [rivalry, queueEntry] = await Promise.all([getActiveRivalry(), getQueueEntry()]);
+      const [rivalry, queueEntry, myRecPrefetched] = await Promise.all([
+        getActiveRivalry(),
+        getQueueEntry(),
+        getUserRecord(user.id),
+      ]);
+      // Always set my record — relevant even without an active rivalry
+      // (e.g. shows on the matchmaking page eventually).
+      setMyRecord(myRecPrefetched);
       if (rivalry) {
         setActiveRivalry(rivalry);
         setMatchStep("active");
-        const [mine, theirs] = await Promise.all([
-          getUserRecord(user.id),
-          getUserRecord(rivalry.opponent.id),
-        ]);
-        setMyRecord(mine);
+        // Only the opponent's record needs waiting on now.
+        const theirs = await getUserRecord(rivalry.opponent.id);
         setTheirRecord(theirs);
         clearDraft();
       } else if (queueEntry) {
