@@ -78,6 +78,8 @@ export interface RivalUser {
   username: string;
   full_name: string;
   avatar_url: string | null;
+  city: string | null;
+  bio: string | null;
 }
 
 export interface RivalryWithOpponent extends Rivalry {
@@ -203,7 +205,7 @@ async function hydrateRivalry(r: Rivalry, myId: string): Promise<RivalryWithOppo
 
   const { data: opp } = await supabase
     .from("users")
-    .select("id, username, full_name, avatar_url")
+    .select("id, username, full_name, avatar_url, city, bio")
     .eq("id", opponentId)
     .single();
 
@@ -220,7 +222,7 @@ async function hydrateRivalry(r: Rivalry, myId: string): Promise<RivalryWithOppo
 
   return {
     ...r,
-    opponent: opp || { id: opponentId, username: "?", full_name: "Unknown", avatar_url: null },
+    opponent: opp || { id: opponentId, username: "?", full_name: "Unknown", avatar_url: null, city: null, bio: null },
     my_score,
     their_score,
     i_am_winner,
@@ -271,6 +273,172 @@ export async function getUserRecord(userId: string): Promise<UserRivalryRecord> 
     .eq("user_id", userId)
     .maybeSingle();
   return data ?? { wins: 0, losses: 0, ties: 0, cancelled: 0, active: 0 };
+}
+
+// ── RECENT ACTIVITY STATS (per-category, last 4 weeks) ──────────────────────
+//
+// Powers the "at a glance" panel on the rivalry view. For each category, we
+// surface 3 stats that give the user a feel for how strong their opponent is
+// — e.g. "they run 12mi/week on avg" or "they hit the gym 4 days/week".
+//
+// Window is fixed at 28 days. Same query for both users; we run it twice
+// (once for me, once for opponent) and compare side by side in the UI.
+//
+// Number formatting:
+// - Distances: 1 decimal, "mi" suffix
+// - Per-week counts: 1 decimal so "3.5 runs/week" reads sensibly
+// - Long values: rounded with comma separators
+// - "—" placeholder when there's no relevant data so empty cards look clean
+
+export interface RivalryStat {
+  label: string;
+  value: string;
+}
+
+const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
+
+function fmtDist(miles: number): string {
+  if (miles <= 0) return "—";
+  return `${miles.toFixed(1)} mi`;
+}
+
+function fmtPerWeek(total: number): string {
+  if (total <= 0) return "—";
+  return (total / 4).toFixed(1);
+}
+
+export async function getRivalryActivityStats(
+  userId: string,
+  category: RivalCategory,
+): Promise<RivalryStat[]> {
+  const since = new Date(Date.now() - FOUR_WEEKS_MS).toISOString();
+
+  // Pull the broadest set of fields once and slice up in JS. Doing one query
+  // and aggregating client-side is cheaper than 4 RPCs and easier to keep
+  // consistent across categories.
+  const { data: logs } = await supabase
+    .from("activity_logs")
+    .select("log_type, workout_category, workout_type, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, logged_at")
+    .eq("user_id", userId)
+    .gte("logged_at", since);
+
+  const rows: any[] = logs || [];
+
+  // Cardio entries (running/walking/biking/swimming) live in a JSONB array
+  // on workout-type logs. Each entry is { type, distance, duration, ... }.
+  // Different log entries can have multiple cardio sessions (e.g. brick
+  // workouts) so we flatten across all logs.
+  const allCardio: any[] = rows.flatMap(l =>
+    Array.isArray(l.cardio) ? l.cardio : []
+  );
+
+  switch (category) {
+    case "running": {
+      // Running includes all run subtypes (outdoor / treadmill / trail / hiit)
+      // — match by case-insensitive substring on `type`.
+      const runs = allCardio.filter(c => /run/i.test(c.type || ""));
+      const totalMiles = runs.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      const longest = runs.reduce((m, c) => Math.max(m, parseFloat(String(c.distance)) || 0), 0);
+      return [
+        { label: "Avg mi/week", value: totalMiles > 0 ? (totalMiles / 4).toFixed(1) : "—" },
+        { label: "Runs/week",   value: fmtPerWeek(runs.length) },
+        { label: "Longest run", value: fmtDist(longest) },
+      ];
+    }
+
+    case "walking": {
+      const walks = allCardio.filter(c => /walk|hik/i.test(c.type || ""));
+      const totalMiles = walks.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      const totalMin = walks.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0);
+      return [
+        { label: "Avg mi/week",    value: totalMiles > 0 ? (totalMiles / 4).toFixed(1) : "—" },
+        { label: "Walks/week",     value: fmtPerWeek(walks.length) },
+        { label: "Avg min/walk",   value: walks.length > 0 ? Math.round(totalMin / walks.length).toString() : "—" },
+      ];
+    }
+
+    case "biking": {
+      const rides = allCardio.filter(c => /bik|cycl/i.test(c.type || ""));
+      const totalMiles = rides.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      const totalMin = rides.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0);
+      return [
+        { label: "Avg mi/week",  value: totalMiles > 0 ? (totalMiles / 4).toFixed(1) : "—" },
+        { label: "Hours/week",   value: totalMin > 0 ? (totalMin / 60 / 4).toFixed(1) : "—" },
+        { label: "Rides/week",   value: fmtPerWeek(rides.length) },
+      ];
+    }
+
+    case "swimming": {
+      const swims = allCardio.filter(c => /swim/i.test(c.type || ""));
+      const totalMin = swims.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0);
+      const totalDist = swims.reduce((s, c) => s + (parseFloat(String(c.distance)) || 0), 0);
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(swims.length) },
+        { label: "Total dist",    value: totalDist > 0 ? `${totalDist.toFixed(1)} mi` : "—" },
+        { label: "Hours total",   value: totalMin > 0 ? (totalMin / 60).toFixed(1) : "—" },
+      ];
+    }
+
+    case "lifting": {
+      // Lifting = workout logs with a non-empty exercises array. Volume is
+      // sum of (weight * reps * sets) across all exercises in all sessions.
+      const liftSessions = rows.filter(
+        l => l.log_type === "workout" && Array.isArray(l.exercises) && l.exercises.length > 0
+      );
+      let totalVolume = 0;
+      let totalMin = 0;
+      liftSessions.forEach(l => {
+        if (Array.isArray(l.exercises)) {
+          l.exercises.forEach((ex: any) => {
+            const sets = parseFloat(String(ex.sets)) || 0;
+            const reps = parseFloat(String(ex.reps)) || 0;
+            const weight = parseFloat(String(ex.weight)) || 0;
+            totalVolume += sets * reps * weight;
+          });
+        }
+        totalMin += parseFloat(String(l.workout_duration_min)) || 0;
+      });
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(liftSessions.length) },
+        { label: "Avg volume",    value: liftSessions.length > 0 ? `${Math.round(totalVolume / liftSessions.length).toLocaleString()} lb` : "—" },
+        { label: "Avg duration",  value: liftSessions.length > 0 ? `${Math.round(totalMin / liftSessions.length)} min` : "—" },
+      ];
+    }
+
+    case "combat": {
+      // Combat sessions show up either as cardio with type="combat"/"boxing"
+      // or as workout logs with workout_category="combat". Combine both.
+      const combatCardio = allCardio.filter(c => /box|mma|combat|martial|kick/i.test(c.type || ""));
+      const combatLogs = rows.filter(l => l.workout_category === "combat" || l.workout_category === "martial_arts");
+      const totalSessions = combatCardio.length + combatLogs.length;
+      const totalMin =
+        combatCardio.reduce((s, c) => s + (parseFloat(String(c.duration)) || 0), 0) +
+        combatLogs.reduce((s, l) => s + (parseFloat(String(l.workout_duration_min)) || 0), 0);
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(totalSessions) },
+        { label: "Hours total",   value: totalMin > 0 ? (totalMin / 60).toFixed(1) : "—" },
+        { label: "Avg session",   value: totalSessions > 0 ? `${Math.round(totalMin / totalSessions)} min` : "—" },
+      ];
+    }
+
+    case "wellness": {
+      // Wellness logs are their own log_type, with wellness_type being
+      // the activity (meditation / sauna / cold plunge / yoga / etc).
+      const wellness = rows.filter(l => l.log_type === "wellness");
+      const totalMin = wellness.reduce((s, l) => s + (parseFloat(String(l.wellness_duration_min)) || 0), 0);
+      // Count distinct types for "variety" stat — shows whether they go deep
+      // on one thing or sample everything.
+      const types = new Set(wellness.map(l => l.wellness_type).filter(Boolean));
+      return [
+        { label: "Sessions/week", value: fmtPerWeek(wellness.length) },
+        { label: "Hours total",   value: totalMin > 0 ? (totalMin / 60).toFixed(1) : "—" },
+        { label: "Variety",       value: types.size > 0 ? `${types.size} type${types.size > 1 ? "s" : ""}` : "—" },
+      ];
+    }
+
+    default:
+      return [];
+  }
 }
 
 // ── CHAT ────────────────────────────────────────────────────────────────────
