@@ -1550,121 +1550,317 @@ export async function POST(req: NextRequest) {
     // tracking), untouchable (only awarded at rivalry end, not from a log).
     if (action === 'unlock_rivalry_badges') {
       const { userId, logId } = payload || {};
-      if (!userId || !logId) return NextResponse.json({ error: 'Missing userId or logId' }, { status: 400 });
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
 
-      // 1. Pull the log we're checking
-      const { data: thisLog } = await admin
-        .from('activity_logs')
-        .select('id, user_id, log_type, workout_category, logged_at')
-        .eq('id', logId)
-        .maybeSingle();
-      if (!thisLog || thisLog.log_type !== 'workout' || !thisLog.workout_category) {
-        return NextResponse.json({ ok: true, awarded: [] });
-      }
+      // ── TWO MODES ──────────────────────────────────────────────────────────
+      // 1. Single-log mode (logId provided): check if THIS specific log
+      //    earns any badges. Used by fireTrackers right after a save.
+      // 2. Scan-all mode (logId omitted): walk every active rivalry the
+      //    user is in, scan every log in the rivalry's window, award any
+      //    badges that should have been earned but weren't. Used by the
+      //    "force sync all progress" path on page-load to heal stale
+      //    state — e.g. badges that didn't unlock because fireTrackers
+      //    failed to fire (offline save, JS error, ad blocker, etc).
+      //
+      // Both modes use the same award logic; scan-all just iterates over
+      // all the user's logs in each rivalry instead of one specific log.
+      const isScanAll = !logId;
 
-      // 2. Find all active rivalries the user is in where the category
-      //    matches this log. Only rivalries whose window includes this
-      //    log are candidates.
+      // 2a. Fetch all active rivalries the user is in
       const { data: rivalries } = await admin
         .from('rivalries')
         .select('id, user_a_id, user_b_id, category, competition_type, started_at, ends_at, status')
         .eq('status', 'active')
-        .eq('category', thisLog.workout_category)
         .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
 
       if (!rivalries || rivalries.length === 0) {
         return NextResponse.json({ ok: true, awarded: [] });
       }
 
+      // 2b. In single-log mode, also pull the specific log we're checking
+      let thisLog: any = null;
+      if (!isScanAll) {
+        const { data } = await admin
+          .from('activity_logs')
+          .select('id, user_id, log_type, workout_category, logged_at')
+          .eq('id', logId)
+          .maybeSingle();
+        thisLog = data;
+        if (!thisLog || thisLog.log_type !== 'workout' || !thisLog.workout_category) {
+          return NextResponse.json({ ok: true, awarded: [] });
+        }
+      }
+
       const awarded: Array<{ rivalryId: string; badge: string }> = [];
 
+      // Helper: try to insert a badge row. Idempotent — unique constraint
+      // on (rivalry_id, user_id, badge_key) silently rejects duplicates.
+      const tryAward = async (rivalryId: string, badgeUserId: string, badgeKey: string) => {
+        const { error } = await admin
+          .from('rivalry_badges')
+          .insert({
+            rivalry_id: rivalryId,
+            user_id: badgeUserId,
+            badge_key: badgeKey,
+            earned_at: new Date().toISOString(),
+          });
+        if (!error) {
+          awarded.push({ rivalryId, badge: badgeKey });
+          return true;
+        }
+        return false;
+      };
+
       for (const rivalry of rivalries as any[]) {
-        const logTime = new Date(thisLog.logged_at).getTime();
+        // Filter to category-matching rivalries only. In single-log mode
+        // we already know thisLog.workout_category; in scan-all we iterate
+        // every category-matching rivalry.
+        if (!isScanAll && thisLog.workout_category !== rivalry.category) continue;
+
         const startedTime = new Date(rivalry.started_at).getTime();
         const endsTime = new Date(rivalry.ends_at).getTime();
-        // Skip rivalries whose window doesn't include this log
-        if (logTime < startedTime || logTime > endsTime) continue;
+
+        // Skip rivalries whose window doesn't include the single log
+        if (!isScanAll) {
+          const logTime = new Date(thisLog.logged_at).getTime();
+          if (logTime < startedTime || logTime > endsTime) continue;
+        }
+
+        const opponentId = rivalry.user_a_id === userId ? rivalry.user_b_id : rivalry.user_a_id;
+
+        // Pull what badges already exist for this rivalry so we can skip
+        // the work for ones that are already awarded — it's idempotent
+        // anyway but this avoids unnecessary RPC calls.
+        const { data: existingBadges } = await admin
+          .from('rivalry_badges')
+          .select('user_id, badge_key')
+          .eq('rivalry_id', rivalry.id);
+        const ownsBadge = (badgeKey: string) =>
+          (existingBadges || []).some((b: any) => b.user_id === userId && b.badge_key === badgeKey);
 
         // ── BADGE: first_blood ────────────────────────────────────────────
-        // Check if this log is the EARLIEST workout in the rivalry window
-        // by either participant. If so, award first_blood to this user.
-        // Tie-break: if logged_at ties exactly, the user_id stored in the
-        // badge row wins (whoever's log we got asked about first).
-        const { data: earlierLogs } = await admin
-          .from('activity_logs')
-          .select('id, user_id, logged_at')
-          .in('user_id', [rivalry.user_a_id, rivalry.user_b_id])
-          .eq('log_type', 'workout')
-          .eq('workout_category', rivalry.category)
-          .gte('logged_at', rivalry.started_at)
-          .lte('logged_at', rivalry.ends_at)
-          .order('logged_at', { ascending: true })
-          .limit(1);
+        // Earliest workout log in the rivalry window by either side. The
+        // user who owns that log gets the badge.
+        if (!ownsBadge('first_blood')) {
+          const { data: earlierLogs } = await admin
+            .from('activity_logs')
+            .select('id, user_id, logged_at')
+            .in('user_id', [rivalry.user_a_id, rivalry.user_b_id])
+            .eq('log_type', 'workout')
+            .eq('workout_category', rivalry.category)
+            .gte('logged_at', rivalry.started_at)
+            .lte('logged_at', rivalry.ends_at)
+            .order('logged_at', { ascending: true })
+            .limit(1);
 
-        const firstLog = earlierLogs?.[0];
-        if (firstLog && firstLog.id === thisLog.id) {
-          // This log IS the first. Try to award the badge — the unique
-          // constraint will silently no-op if it's already been awarded
-          // (e.g., this endpoint runs twice on retry).
-          const { error: insErr } = await admin
-            .from('rivalry_badges')
-            .insert({
-              rivalry_id: rivalry.id,
-              user_id: userId,
-              badge_key: 'first_blood',
-              earned_at: new Date().toISOString(),
-            });
-          if (!insErr) {
-            awarded.push({ rivalryId: rivalry.id, badge: 'first_blood' });
+          const firstLog = earlierLogs?.[0];
+          // In single-log mode: only award if the first log IS thisLog
+          // (this user is the one who logged first). In scan-all: award
+          // if the first log belongs to this user.
+          if (firstLog && firstLog.user_id === userId) {
+            await tryAward(rivalry.id, userId, 'first_blood');
           }
-          // Errors here include unique-constraint violations on retry —
-          // fine to swallow, that's the idempotent behavior we want.
         }
 
         // ── BADGE: dominant ───────────────────────────────────────────────
         // Past midweek (more than half the rivalry duration elapsed) AND
-        // the user is ahead by 3+ in score. Uses the same compute_rivalry_score
-        // RPC the rivalry page uses, so the count is consistent.
-        const totalMs = endsTime - startedTime;
-        const elapsedMs = logTime - startedTime;
-        const isMidweekOrLater = elapsedMs > totalMs / 2;
-        if (isMidweekOrLater) {
-          const opponentId = rivalry.user_a_id === userId ? rivalry.user_b_id : rivalry.user_a_id;
-          const [{ data: myScoreRaw }, { data: theirScoreRaw }] = await Promise.all([
-            admin.rpc('compute_rivalry_score', {
-              uid: userId,
-              p_category: rivalry.category,
-              p_metric: rivalry.competition_type,
-              p_from: rivalry.started_at,
-              p_to: rivalry.ends_at,
-            }),
-            admin.rpc('compute_rivalry_score', {
-              uid: opponentId,
-              p_category: rivalry.category,
-              p_metric: rivalry.competition_type,
-              p_from: rivalry.started_at,
-              p_to: rivalry.ends_at,
-            }),
-          ]);
-          const myScore = Number(myScoreRaw ?? 0);
-          const theirScore = Number(theirScoreRaw ?? 0);
-          if (myScore - theirScore >= 3) {
-            const { error: insErr } = await admin
-              .from('rivalry_badges')
-              .insert({
-                rivalry_id: rivalry.id,
-                user_id: userId,
-                badge_key: 'dominant',
-                earned_at: new Date().toISOString(),
-              });
-            if (!insErr) {
-              awarded.push({ rivalryId: rivalry.id, badge: 'dominant' });
+        // ahead by 3+ in score. Reuses compute_rivalry_score so the count
+        // matches what shows on the rivalry page.
+        if (!ownsBadge('dominant')) {
+          const totalMs = endsTime - startedTime;
+          // Pivot on "now" in scan-all mode; on the log's timestamp in
+          // single-log mode. Either is a moment-in-time check.
+          const pivotTime = isScanAll ? Date.now() : new Date(thisLog.logged_at).getTime();
+          const elapsedMs = pivotTime - startedTime;
+          const isMidweekOrLater = elapsedMs > totalMs / 2;
+          if (isMidweekOrLater) {
+            const [{ data: myScoreRaw }, { data: theirScoreRaw }] = await Promise.all([
+              admin.rpc('compute_rivalry_score', {
+                uid: userId,
+                p_category: rivalry.category,
+                p_metric: rivalry.competition_type,
+                p_from: rivalry.started_at,
+                p_to: rivalry.ends_at,
+              }),
+              admin.rpc('compute_rivalry_score', {
+                uid: opponentId,
+                p_category: rivalry.category,
+                p_metric: rivalry.competition_type,
+                p_from: rivalry.started_at,
+                p_to: rivalry.ends_at,
+              }),
+            ]);
+            const myScore = Number(myScoreRaw ?? 0);
+            const theirScore = Number(theirScoreRaw ?? 0);
+            if (myScore - theirScore >= 3) {
+              await tryAward(rivalry.id, userId, 'dominant');
             }
+          }
+        }
+
+        // ── BADGE: early_bird ─────────────────────────────────────────────
+        // Two consecutive calendar days with at least one workout logged
+        // before 11am local time (we use UTC since logged_at is in UTC).
+        // Only checks the user's own logs within the rivalry window.
+        if (!ownsBadge('early_bird')) {
+          const { data: userLogs } = await admin
+            .from('activity_logs')
+            .select('logged_at')
+            .eq('user_id', userId)
+            .eq('log_type', 'workout')
+            .gte('logged_at', rivalry.started_at)
+            .lte('logged_at', rivalry.ends_at)
+            .order('logged_at', { ascending: true });
+
+          // Build a sorted list of unique days the user logged a morning
+          // workout. A workout counts as "morning" if it's before 11am
+          // UTC on its calendar day.
+          const morningDays = new Set<string>();
+          for (const log of (userLogs || []) as any[]) {
+            const d = new Date(log.logged_at);
+            if (d.getUTCHours() < 11) {
+              morningDays.add(`${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`);
+            }
+          }
+          const sortedKeys = Array.from(morningDays).sort();
+          // Look for two consecutive days
+          let foundConsecutive = false;
+          for (let i = 1; i < sortedKeys.length; i++) {
+            const a = sortedKeys[i - 1].split('-').map(Number);
+            const b = sortedKeys[i].split('-').map(Number);
+            const dateA = new Date(Date.UTC(a[0], a[1], a[2]));
+            const dateB = new Date(Date.UTC(b[0], b[1], b[2]));
+            if (Math.round((dateB.getTime() - dateA.getTime()) / 86400000) === 1) {
+              foundConsecutive = true;
+              break;
+            }
+          }
+          if (foundConsecutive) {
+            await tryAward(rivalry.id, userId, 'early_bird');
+          }
+        }
+
+        // ── BADGE: comeback ───────────────────────────────────────────────
+        // User was behind at some point, then later took the lead. Computed
+        // by replaying the score after each of the user's logs in time
+        // order — at each point we ask the RPC for both scores up to that
+        // log's timestamp. Tracks `everBehind` then watches for the lead
+        // flip.
+        //
+        // Cost: O(N) RPC calls where N = user's logs in this rivalry.
+        // For a 7-day rivalry that's typically <10 calls, fine.
+        if (!ownsBadge('comeback')) {
+          const { data: userLogsForComeback } = await admin
+            .from('activity_logs')
+            .select('id, logged_at')
+            .eq('user_id', userId)
+            .eq('log_type', 'workout')
+            .eq('workout_category', rivalry.category)
+            .gte('logged_at', rivalry.started_at)
+            .lte('logged_at', rivalry.ends_at)
+            .order('logged_at', { ascending: true });
+
+          let everBehind = false;
+          let comebackEarned = false;
+          for (const log of (userLogsForComeback || []) as any[]) {
+            const [{ data: myAtT }, { data: theirAtT }] = await Promise.all([
+              admin.rpc('compute_rivalry_score', {
+                uid: userId,
+                p_category: rivalry.category,
+                p_metric: rivalry.competition_type,
+                p_from: rivalry.started_at,
+                p_to: log.logged_at,
+              }),
+              admin.rpc('compute_rivalry_score', {
+                uid: opponentId,
+                p_category: rivalry.category,
+                p_metric: rivalry.competition_type,
+                p_from: rivalry.started_at,
+                p_to: log.logged_at,
+              }),
+            ]);
+            const m = Number(myAtT ?? 0);
+            const t = Number(theirAtT ?? 0);
+            if (m < t) everBehind = true;
+            if (everBehind && m > t) { comebackEarned = true; break; }
+          }
+          if (comebackEarned) {
+            await tryAward(rivalry.id, userId, 'comeback');
           }
         }
       }
 
       return NextResponse.json({ ok: true, awarded });
+    }
+
+    // ── Backfill workout_category for old logs ─────────────────────────────
+    // Older app versions saved cardio entries to activity_logs without
+    // setting workout_category. Anything that depends on that column —
+    // most notably compute_rivalry_score, which filters on
+    // workout_category = 'running' / 'walking' / etc — silently misses
+    // those logs. The 4-week stats panel still picks them up because it
+    // reads cardio.type directly, which is why users see things like
+    // "2.7 mi LONGEST RUN" displayed in the side panel but a 0-0 rivalry
+    // score from the same log.
+    //
+    // This action scans all of a user's workout logs that DON'T have a
+    // workout_category, infers it from the log's cardio array (or
+    // exercises array as a fallback), and writes the corrected value.
+    // Idempotent — only touches rows where the field is currently empty.
+    if (action === 'backfill_workout_category') {
+      const { userId } = payload || {};
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+
+      const { data: logs } = await admin
+        .from('activity_logs')
+        .select('id, cardio, exercises, workout_category')
+        .eq('user_id', userId)
+        .eq('log_type', 'workout')
+        .or('workout_category.is.null,workout_category.eq.');
+
+      if (!logs || logs.length === 0) {
+        return NextResponse.json({ ok: true, updated: 0 });
+      }
+
+      // Same dictionary inferCategory uses on the client. Kept inline to
+      // avoid coupling a server action to a client-side module.
+      const cardioCatMap: Record<string, string> = {
+        run: 'running', running: 'running', jog: 'running', jogging: 'running',
+        walk: 'walking', walking: 'walking', hike: 'walking', hiking: 'walking',
+        bike: 'biking', biking: 'biking', cycle: 'biking', cycling: 'biking', ride: 'biking',
+        swim: 'swimming', swimming: 'swimming',
+        row: 'rowing', rowing: 'rowing', erg: 'rowing',
+        box: 'combat', boxing: 'combat', mma: 'combat', combat: 'combat',
+      };
+
+      const inferFromLog = (log: any): string | null => {
+        const cardio = Array.isArray(log.cardio) ? log.cardio : [];
+        const firstCardio = cardio[0];
+        const cType = (firstCardio?.type || '').toLowerCase().trim();
+        if (cType) {
+          if (cardioCatMap[cType]) return cardioCatMap[cType];
+          for (const k of Object.keys(cardioCatMap)) {
+            if (cType.includes(k)) return cardioCatMap[k];
+          }
+          return 'other';
+        }
+        const exercises = Array.isArray(log.exercises) ? log.exercises : [];
+        if (exercises.length > 0) return 'lifting';
+        return null;
+      };
+
+      let updated = 0;
+      for (const log of logs as any[]) {
+        const inferred = inferFromLog(log);
+        if (!inferred) continue;
+        const { error } = await admin
+          .from('activity_logs')
+          .update({ workout_category: inferred })
+          .eq('id', log.id);
+        if (!error) updated++;
+      }
+
+      return NextResponse.json({ ok: true, updated, total_scanned: logs.length });
     }
 
 
