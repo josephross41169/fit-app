@@ -40,6 +40,29 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
       // follow_user is the key social-graph growth signal — track every
       // successful follow so we can measure network density over time.
       track("follow_user", { target_user_id: targetUserId });
+      // ── Follow notification ──────────────────────────────────────────
+      // Followed user gets pinged so they can decide whether to follow
+      // back. Universal social-app expectation; absence of this was
+      // hurting our retention loop. Best-effort fire-and-forget — we
+      // don't want a notification failure to undo the follow.
+      try {
+        const senderProfile = (user as any)?.profile || {};
+        const senderName = senderProfile.full_name || senderProfile.username || "Someone";
+        fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create_notification',
+            payload: {
+              userId: targetUserId,
+              fromUserId: user.id,
+              type: 'follow',
+              referenceId: user.id, // deep-link target = follower's profile
+              body: `${senderName} started following you`,
+            },
+          }),
+        }).catch(() => {});
+      } catch { /* best-effort */ }
     }
     setLoading(false);
   }
