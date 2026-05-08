@@ -813,36 +813,40 @@ const BUDDY_TIERS: Array<{ id: string; label: string; desc: string }> = [
 ];
 
 function BuddyPanel({ userId }: { userId: string }) {
-  // Step machine: pick category → pick tier → queued → matched
-  const [step, setStep] = useState<"category" | "tier" | "queued" | "matched">("category");
+  // ── STATE MACHINE (multi-buddy) ────────────────────────────────────────
+  // Three top-level views:
+  //   1. List view (default when matches.length > 0): shows every active
+  //      buddy as a card, plus a "Find another buddy" CTA. Tapping a
+  //      buddy card opens its detail view via selectedMatchId.
+  //   2. Detail view (selectedMatchId set): full progress display for
+  //      one buddy, with a back button to return to the list.
+  //   3. Matchmaking flow (step !== "list"): the original
+  //      category → tier → queued chain. Triggered by tapping
+  //      "Find another buddy" or by mounting with no matches.
+  //
+  // `step` drives the matchmaking flow. `selectedMatchId` overrides
+  // everything to render detail view. `matches` is the list of every
+  // active buddy match this user is in.
+  const [step, setStep] = useState<"list" | "category" | "tier" | "queued">("category");
   const [category, setCategory] = useState<string | null>(null);
   const [tier, setTier] = useState<string | null>(null);
-  const [activeMatch, setActiveMatch] = useState<any | null>(null);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
-  // `loaded` is false until the very first loadState() call resolves.
-  // Without this gate, the panel mounts with step="category" and shows
-  // the category picker for ~200ms before the server response arrives —
-  // even when the user already has an active match. Reads as a
-  // "random refresh" every time the user switches to the Buddy tab or
-  // navigates back to /rivals. Showing a loading skeleton instead gives
-  // a clean transition.
+  // Loaded gate prevents the category picker from flashing on screen for
+  // users who already have a match — used to be reported as a "random
+  // refresh" every time the user switched to the Buddy tab.
   const [loaded, setLoaded] = useState(false);
+  // Track the previous matches count so we can auto-return to list view
+  // when a new match arrives (poll resolves with a higher length).
+  const prevMatchCountRef = useRef(0);
 
-  // Check for an existing active match or queue entry on mount.
+  // Load: pulls every active match for this user plus their queue entry.
   //
-  // WHY THIS GOES THROUGH /api/db: this used to do a direct supabase query
-  // with a Postgrest embedded join (`user_a:user_a(id,username,...)`) to
-  // hydrate the buddy users. That requires a foreign-key relationship from
-  // buddy_matches.user_a → users.id to be registered in Postgres. The
-  // buddy_matches table was created ad-hoc in Supabase without that FK,
-  // so the embedded join silently returned null — meaning users could
-  // queue up and the server would create the match row, but neither
-  // client could read it back. Both stayed stuck on "Searching..." forever.
-  //
-  // The server endpoint uses the admin client (service role) which bypasses
-  // the FK requirement AND any RLS policies, then hydrates the user objects
-  // via a separate users query before returning.
+  // The server endpoint (`buddy_get_active_match` action) was renamed in
+  // intent but kept its action name for backward-compat. It now returns
+  // `{ matches: [...], queue: ... }` — see the route handler.
   async function loadState() {
     try {
       const res = await fetch("/api/db", {
@@ -851,34 +855,48 @@ function BuddyPanel({ userId }: { userId: string }) {
         body: JSON.stringify({ action: "buddy_get_active_match", payload: { userId } }),
       });
       const data = await res.json();
-      if (data.match) {
-        setActiveMatch(data.match);
-        setStep("matched");
-        setLoaded(true);
-        return;
-      }
-      if (data.queue) {
+      const incomingMatches: any[] = Array.isArray(data.matches) ? data.matches : (data.match ? [data.match] : []);
+      const previousCount = prevMatchCountRef.current;
+      setMatches(incomingMatches);
+      prevMatchCountRef.current = incomingMatches.length;
+
+      // Decide which view to land on. Priority:
+      //   - If we just got a NEW match while queued, jump to the list
+      //     so the user sees their fresh buddy. Don't clobber their
+      //     selection if they're mid-flow on something else.
+      //   - If they're queued (and not in any match), show queued state.
+      //   - Otherwise: list when 1+ matches exist, category picker
+      //     otherwise. Only set this on first load — once the user
+      //     navigates within the panel we respect their choice.
+      if (incomingMatches.length > previousCount && previousCount > 0) {
+        // A new match arrived during polling — bring them to the list
+        setStep("list");
+        setSelectedMatchId(null);
+      } else if (data.queue && incomingMatches.length === 0) {
         setCategory(data.queue.category);
         setTier(data.queue.tier);
         setStep("queued");
-      } else {
-        // Only reset to "category" on the FIRST load. Once the user has
-        // navigated past the picker (queued/matched), don't bounce them
-        // back to category just because a poll returned no data — that
-        // would feel like a random refresh. The active match / queued
-        // checks above run first so this branch only fires for genuinely
-        // unmatched users.
-        if (!loaded) setStep("category");
+      } else if (!loaded) {
+        // First load only — don't bounce existing user out of their flow
+        setStep(incomingMatches.length > 0 ? "list" : "category");
+      } else if (incomingMatches.length === 0 && step === "list") {
+        // List view became empty (all matches ended) — fall back to picker
+        setStep("category");
       }
       setLoaded(true);
     } catch (e) { console.error(e); setLoaded(true); }
   }
   useEffect(() => { loadState(); /* eslint-disable-next-line */ }, [userId]);
 
-  // While queued, poll every 8s to see if we got matched. Was 4s; the
-  // matchmaking flow doesn't need sub-5s freshness — we're showing a spinner.
+  // Poll for updates in views where state can change server-side:
+  //   - "queued": waiting for a match to appear
+  //   - "list":   buddy progress increments need to show up; also picks
+  //               up newly-found matches if the user joined a queue
+  //               from another device
+  // 8s is fine — these views aren't time-critical and the interval
+  // would otherwise add load to /api/db.
   useEffect(() => {
-    if (step !== "queued") return;
+    if (step !== "queued" && step !== "list") return;
     setPolling(true);
     const id = setInterval(loadState, 8000);
     return () => { clearInterval(id); setPolling(false); };
@@ -901,6 +919,11 @@ function BuddyPanel({ userId }: { userId: string }) {
       const data = await res.json();
       if (data.status === "matched" || data.status === "already_matched") {
         await loadState();
+        // If we successfully matched, send the user back to the list so
+        // they see all their buddies including the new one. Without this
+        // they stay stuck on the tier picker after a fast match.
+        setStep("list");
+        setCategory(null); setTier(null);
       } else {
         setStep("queued");
       }
@@ -914,9 +937,28 @@ function BuddyPanel({ userId }: { userId: string }) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "buddy_cancel_queue", payload: { userId, category, tier } }),
     });
-    setStep("category");
+    // After cancelling, return to the list if there are still other
+    // buddies, otherwise back to the picker.
+    setStep(matches.length > 0 ? "list" : "category");
     setCategory(null);
     setTier(null);
+  }
+
+  // Forfeit/end a single buddy match. Optimistically removes it from the
+  // local list so the UI updates immediately, then reloads from the
+  // server to confirm. If the server rejects the leave (rare — only on
+  // network issues), the next loadState will restore it.
+  async function leaveMatch(matchId: string) {
+    if (!confirm("Leave this buddy match? You can find a new one anytime.")) return;
+    setMatches(prev => prev.filter(m => m.id !== matchId));
+    setSelectedMatchId(null);
+    try {
+      await fetch("/api/db", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "buddy_leave_match", payload: { userId, matchId } }),
+      });
+    } catch (e) { console.error(e); }
+    await loadState();
   }
 
   // ── INITIAL LOADING SKELETON ──────────────────────────────────────────
@@ -933,39 +975,64 @@ function BuddyPanel({ userId }: { userId: string }) {
     );
   }
 
-  // ── ACTIVE MATCH VIEW ──────────────────────────────────────────────────
-  if (step === "matched" && activeMatch) {
-    const isUserA = activeMatch.user_a?.id === userId;
-    const me      = isUserA ? activeMatch.user_a : activeMatch.user_b;
-    const buddy   = isUserA ? activeMatch.user_b : activeMatch.user_a;
-    const myProgress     = isUserA ? activeMatch.user_a_progress : activeMatch.user_b_progress;
-    const buddyProgress  = isUserA ? activeMatch.user_b_progress : activeMatch.user_a_progress;
-    const target  = activeMatch.target_value;
-    const unit    = activeMatch.target_unit;
-    const myPct    = Math.min(100, (myProgress / target) * 100);
-    const buddyPct = Math.min(100, (buddyProgress / target) * 100);
-    const endsLabel = new Date(activeMatch.ends_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // ── DETAIL VIEW (one specific buddy match) ─────────────────────────────
+  // Open via tap on a list card. Sticky-positioned back button at top
+  // returns to the list. Renders the same dual-progress UI as the old
+  // single-match view, but inside the list/detail navigation.
+  const selectedMatch = selectedMatchId ? matches.find(m => m.id === selectedMatchId) : null;
+  if (selectedMatch) {
+    const isUserA = selectedMatch.user_a?.id === userId;
+    const me      = isUserA ? selectedMatch.user_a : selectedMatch.user_b;
+    const buddy   = isUserA ? selectedMatch.user_b : selectedMatch.user_a;
+    const myProgress     = isUserA ? selectedMatch.user_a_progress : selectedMatch.user_b_progress;
+    const buddyProgress  = isUserA ? selectedMatch.user_b_progress : selectedMatch.user_a_progress;
+    const target  = selectedMatch.target_value;
+    const unit    = selectedMatch.target_unit;
+    const myPct    = Math.min(100, ((myProgress || 0) / target) * 100);
+    const buddyPct = Math.min(100, ((buddyProgress || 0) / target) * 100);
+    const endsLabel = new Date(selectedMatch.ends_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const daysLeft = Math.max(0, Math.ceil((new Date(selectedMatch.ends_at).getTime() - Date.now()) / 86400000));
+    const catEmoji = BUDDY_CATEGORIES.find(c => c.id === selectedMatch.category)?.emoji || "🤝";
+    const catName = BUDDY_CATEGORIES.find(c => c.id === selectedMatch.category)?.name || selectedMatch.category;
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Back to list — explicit button so the user knows they have
+            multiple buddies to navigate between. */}
+        <button
+          onClick={() => setSelectedMatchId(null)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "transparent", border: "none",
+            color: "#9CA3AF", fontSize: 13, fontWeight: 700,
+            padding: "4px 0", cursor: "pointer",
+            alignSelf: "flex-start",
+          }}
+        >← All buddies</button>
+
+        {/* Hero card — category + buddy name + days left + target */}
         <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "24px 22px", textAlign: "center" }}>
-          <div style={{ fontSize: 36, marginBottom: 6 }}>🤝</div>
-          <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 4 }}>You're paired up</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-            {(BUDDY_CATEGORIES.find(c => c.id === activeMatch.category)?.name) || activeMatch.category}
-            {" · "}
-            Hit <strong>{target} {unit}</strong> each by {endsLabel}
+          <div style={{ fontSize: 36, marginBottom: 6 }}>{catEmoji}</div>
+          <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 4 }}>
+            {catName} buddy
+          </div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>
+            with <strong style={{ color: "#fff" }}>{buddy?.full_name || `@${buddy?.username || "buddy"}`}</strong>
+          </div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+            Hit <strong style={{ color: "#fff" }}>{target} {unit}</strong> each by {endsLabel} · {daysLeft}d left
           </div>
         </div>
 
         {/* Two progress cards stacked — me + buddy */}
         {[
-          { user: me, progress: myProgress, pct: myPct, isMe: true },
-          { user: buddy, progress: buddyProgress, pct: buddyPct, isMe: false },
+          { user: me, progress: myProgress || 0, pct: myPct, isMe: true },
+          { user: buddy, progress: buddyProgress || 0, pct: buddyPct, isMe: false },
         ].map((row, i) => (
           <div key={i} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
               {row.user?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={row.user.avatar_url} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
               ) : (
                 <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900 }}>
@@ -995,6 +1062,138 @@ function BuddyPanel({ userId }: { userId: string }) {
             </div>
           </div>
         ))}
+
+        {/* Leave button — destructive, kept low-prominence so it's not
+            the obvious tap. Confirms before firing. */}
+        <button
+          onClick={() => leaveMatch(selectedMatch.id)}
+          style={{
+            background: "transparent", border: "1px solid #EF444466",
+            color: "#EF4444", fontSize: 12, fontWeight: 700,
+            padding: "10px 0", borderRadius: 12, marginTop: 4,
+            cursor: "pointer",
+          }}
+        >Leave this match</button>
+      </div>
+    );
+  }
+
+  // ── LIST VIEW (all active buddies) ─────────────────────────────────────
+  // Default landing page when the user has 1+ active buddy matches.
+  // Shows each buddy as a compact card with their progress at a glance.
+  // Tapping a card opens detail view. "Find another buddy" CTA at the
+  // bottom lets the user enter the matchmaking flow without leaving
+  // their existing buddies behind.
+  if (step === "list") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Header strip — count + intro */}
+        <div style={{ padding: "4px 4px 8px" }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#F0F0F0", marginBottom: 2 }}>
+            Your buddies <span style={{ color: "#A78BFA" }}>·</span> {matches.length}
+          </div>
+          <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+            Tap a card to see progress. You can pair up across categories — running buddy, lifting buddy, etc.
+          </div>
+        </div>
+
+        {/* Buddy cards */}
+        {matches.map((m: any) => {
+          const isUserA = m.user_a?.id === userId;
+          const buddy = isUserA ? m.user_b : m.user_a;
+          const myProgress = isUserA ? (m.user_a_progress || 0) : (m.user_b_progress || 0);
+          const buddyProgress = isUserA ? (m.user_b_progress || 0) : (m.user_a_progress || 0);
+          const target = m.target_value;
+          const unit = m.target_unit;
+          const myPct = Math.min(100, (myProgress / target) * 100);
+          const buddyPct = Math.min(100, (buddyProgress / target) * 100);
+          const daysLeft = Math.max(0, Math.ceil((new Date(m.ends_at).getTime() - Date.now()) / 86400000));
+          const catEmoji = BUDDY_CATEGORIES.find(c => c.id === m.category)?.emoji || "🤝";
+          const catName = BUDDY_CATEGORIES.find(c => c.id === m.category)?.name || m.category;
+          const bothDone = myPct >= 100 && buddyPct >= 100;
+
+          return (
+            <button
+              key={m.id}
+              onClick={() => setSelectedMatchId(m.id)}
+              style={{
+                background: bothDone ? "linear-gradient(135deg, #052e1a, #064e3b)" : "#1A1A1A",
+                border: bothDone ? "1px solid #4ADE8055" : "1px solid #2D1B69",
+                borderRadius: 18,
+                padding: "14px 16px",
+                cursor: "pointer",
+                textAlign: "left",
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {/* Top row: category + buddy name + days left */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  background: "rgba(124,58,237,0.18)", border: "1px solid rgba(124,58,237,0.3)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22, flexShrink: 0,
+                }}>{catEmoji}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {catName} · {buddy?.full_name || `@${buddy?.username || "buddy"}`}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF" }}>
+                    {bothDone ? "🎉 Both hit goal!" : `${daysLeft}d left · target ${target} ${unit}`}
+                  </div>
+                </div>
+                <div style={{ fontSize: 18, color: "#6B7280", flexShrink: 0 }}>›</div>
+              </div>
+
+              {/* Mini dual progress bars: you on top, buddy below */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  { label: "You", val: myProgress, pct: myPct },
+                  { label: buddy?.full_name?.split(" ")[0] || buddy?.username || "Buddy", val: buddyProgress, pct: buddyPct },
+                ].map((row, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", width: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</div>
+                    <div style={{ flex: 1, height: 6, background: "#0D0D0D", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${row.pct}%`,
+                        background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #7C3AED, #A78BFA)",
+                        borderRadius: 99,
+                      }} />
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#A78BFA", width: 36, textAlign: "right" }}>
+                      {row.pct >= 100 ? "✓" : `${Math.round(row.pct)}%`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+
+        {/* Find another buddy CTA — lets the user kick off matchmaking
+            without losing their existing buddies. Only shows categories
+            they don't already have a buddy for, since same-category
+            duals are blocked at the server. */}
+        <button
+          onClick={() => { setStep("category"); setCategory(null); setTier(null); }}
+          style={{
+            background: "rgba(124,58,237,0.12)",
+            border: "1.5px dashed rgba(124,58,237,0.5)",
+            borderRadius: 18,
+            padding: "16px 18px",
+            color: "#A78BFA",
+            fontWeight: 800,
+            fontSize: 14,
+            cursor: "pointer",
+            marginTop: 4,
+          }}
+        >
+          + Find another buddy
+        </button>
       </div>
     );
   }
@@ -1022,26 +1221,62 @@ function BuddyPanel({ userId }: { userId: string }) {
 
   // ── PICK CATEGORY ──────────────────────────────────────────────────────
   if (step === "category") {
+    // Categories already taken — same-category dual matches are blocked
+    // server-side, so we visually mark them so the user knows. We don't
+    // hide them entirely (might confuse users) — just disable.
+    const takenCategories = new Set(matches.map((m: any) => m.category));
+    const hasExistingBuddies = matches.length > 0;
+
     return (
       <div>
+        {/* Back to list — only when there are existing buddies. Reuses
+            the matchmaking flow's standard back-link styling. */}
+        {hasExistingBuddies && (
+          <button
+            onClick={() => setStep("list")}
+            style={{
+              background: "transparent", border: "none", color: "#9CA3AF",
+              fontSize: 13, fontWeight: 700, cursor: "pointer",
+              marginBottom: 12, padding: 0,
+            }}
+          >← All buddies ({matches.length})</button>
+        )}
         <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 24, border: "1px solid #7C3AED55", textAlign: "center" }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>🤝</div>
-          <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>Find a Workout Buddy</div>
+          <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>
+            {hasExistingBuddies ? "Find another buddy" : "Find a Workout Buddy"}
+          </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
             Pick a category. We'll match you with someone going for the same goal — you both win when you both hit the target.
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {BUDDY_CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => { setCategory(cat.id); setStep("tier"); }} style={{
-              background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 18, padding: "20px 14px",
-              cursor: "pointer", textAlign: "center", color: "#F0F0F0",
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>{cat.emoji}</div>
-              <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 3 }}>{cat.name}</div>
-              <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>{cat.desc}</div>
-            </button>
-          ))}
+          {BUDDY_CATEGORIES.map(cat => {
+            const taken = takenCategories.has(cat.id);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => { if (!taken) { setCategory(cat.id); setStep("tier"); } }}
+                disabled={taken}
+                title={taken ? `You already have a ${cat.name} buddy` : undefined}
+                style={{
+                  background: "#1A1A1A",
+                  border: taken ? "2px dashed #2D1B69" : "2px solid #2D1B69",
+                  borderRadius: 18, padding: "20px 14px",
+                  cursor: taken ? "not-allowed" : "pointer",
+                  textAlign: "center", color: "#F0F0F0",
+                  opacity: taken ? 0.45 : 1,
+                  position: "relative" as const,
+                }}
+              >
+                <div style={{ fontSize: 32, marginBottom: 8 }}>{cat.emoji}</div>
+                <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 3 }}>{cat.name}</div>
+                <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>
+                  {taken ? "✓ Already paired" : cat.desc}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     );
