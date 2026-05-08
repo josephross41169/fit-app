@@ -50,7 +50,14 @@ function UserAvatar({
       {avatarUrl && !imgFailed && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={ImagePresets.avatarSm(avatarUrl)}
+          // Use the raw avatar URL rather than ImagePresets.avatarSm.
+          // The latter routes through Supabase's `/render/image/public/`
+          // transformation endpoint, which only works when the project
+          // has image transformations enabled AND the bucket isn't
+          // gated by RLS quirks. The plain `/object/public/` URL just
+          // serves the file. Rivals page uses raw URLs and renders
+          // avatars correctly, so we match that behaviour here.
+          src={avatarUrl}
           loading="lazy"
           decoding="async"
           alt=""
