@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
+import { BADGES } from "@/lib/badges";
 import {
   joinQueue, leaveQueue, getQueueEntry,
   getActiveRivalry, getLiveScores, getUserRecord,
@@ -842,6 +843,13 @@ function BuddyPanel({ userId }: { userId: string }) {
   // Track the previous matches count so we can auto-return to list view
   // when a new match arrives (poll resolves with a higher length).
   const prevMatchCountRef = useRef(0);
+  // Enriched profile card data for the currently-selected buddy (city,
+  // bio, level, pinned badges, recent badge, current goal). Loaded lazily
+  // when the user opens a detail view so the list view stays cheap.
+  // Cleared between selections so a previous buddy's data doesn't flash
+  // when switching.
+  const [buddyProfile, setBuddyProfile] = useState<any | null>(null);
+  const [buddyProfileLoading, setBuddyProfileLoading] = useState(false);
 
   // Load: pulls every active match for this user plus their queue entry.
   //
@@ -912,6 +920,36 @@ function BuddyPanel({ userId }: { userId: string }) {
     return () => { clearInterval(id); setPolling(false); };
     // eslint-disable-next-line
   }, [step]);
+
+  // Fetch enriched profile card whenever the user opens a detail view.
+  // Pulls city/bio/level/pinned-badges/recent-badge/current-goal for the
+  // BUDDY (not the current user) so the detail view can render an
+  // intro card. Cleared on close so the previous buddy's data doesn't
+  // flash when the user opens a different match.
+  useEffect(() => {
+    if (!selectedMatchId) {
+      setBuddyProfile(null);
+      return;
+    }
+    const match = matches.find(m => m.id === selectedMatchId);
+    if (!match) return;
+    const isUserA = match.user_a?.id === userId;
+    const buddyId = isUserA ? match.user_b?.id : match.user_a?.id;
+    if (!buddyId) return;
+
+    setBuddyProfileLoading(true);
+    setBuddyProfile(null);
+    fetch("/api/db", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get_buddy_profile_card", payload: { userId: buddyId } }),
+    })
+      .then(r => r.json())
+      .then(data => { setBuddyProfile(data); })
+      .catch(() => { setBuddyProfile(null); })
+      .finally(() => { setBuddyProfileLoading(false); });
+    // eslint-disable-next-line
+  }, [selectedMatchId, matches]);
 
   async function findMatch(tierOverride?: string) {
     // tierOverride lets the caller pass the tier directly so we don't
@@ -1033,6 +1071,222 @@ function BuddyPanel({ userId }: { userId: string }) {
             Hit <strong style={{ color: "#fff" }}>{target} {unit}</strong> each by {endsLabel} · {daysLeft}d left
           </div>
         </div>
+
+        {/* ─── MEET YOUR BUDDY ───────────────────────────────────────────
+            Personalization card so this feels like meeting a person, not
+            a username on a leaderboard. Renders whatever data the buddy
+            has filled in (city, bio, level, badges) and silently hides
+            sections that have no data. While the fetch is in flight we
+            show a low-key skeleton — never a blocking spinner — so the
+            existing match progress below stays interactive.
+
+            Loaded lazily via /api/db get_buddy_profile_card when the
+            user opens this detail view; cleared on close so the next
+            buddy doesn't flash with stale data. */}
+        {(() => {
+          const profileUser = buddyProfile?.user;
+          const pinned: any[] = buddyProfile?.pinned_badges || [];
+          const recent = buddyProfile?.recent_badge;
+          const goal = buddyProfile?.current_goal;
+          // Look up display metadata for each badge_id from the catalog.
+          // Fallback to a generic medal if catalog doesn't have it (older
+          // badges that may have been renamed).
+          const badgeMeta = (badgeId: string) => {
+            const b = BADGES.find(x => x.id === badgeId);
+            return b ? { emoji: b.emoji, label: b.label } : { emoji: "🏅", label: badgeId };
+          };
+          // Filter pinned to ones the catalog knows about + cap at 4
+          const pinnedDisplay = pinned
+            .map((p: any) => ({ ...p, meta: badgeMeta(p.badge_id) }))
+            .slice(0, 4);
+
+          // If we have nothing yet (loading state OR user has no profile
+          // data at all), show a compact skeleton so the section isn't
+          // a jarring empty space.
+          if (buddyProfileLoading && !buddyProfile) {
+            return (
+              <div style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "20px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#2D1B6955" }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ width: 120, height: 12, background: "#2D1B6955", borderRadius: 4, marginBottom: 6 }} />
+                  <div style={{ width: 80, height: 9, background: "#2D1B6944", borderRadius: 4 }} />
+                </div>
+              </div>
+            );
+          }
+
+          // Don't render the card at all if we got back nothing — this
+          // is a graceful degradation case (e.g., the endpoint failed).
+          if (!profileUser) return null;
+
+          const initials = ((profileUser.full_name || profileUser.username || "?").trim()[0] || "?").toUpperCase();
+          const hasAnyData = profileUser.city || profileUser.bio || profileUser.current_level
+            || pinnedDisplay.length > 0 || recent || goal;
+          if (!hasAnyData) return null;
+
+          return (
+            <div style={{
+              background: "linear-gradient(135deg, #1A1A1A, #1A0D3E22)",
+              border: "1px solid #7C3AED44",
+              borderRadius: 20,
+              padding: 0,
+              overflow: "hidden",
+            }}>
+              {/* Section heading bar — sets the conversational frame */}
+              <div style={{
+                background: "rgba(124,58,237,0.12)",
+                padding: "10px 16px",
+                borderBottom: "1px solid #7C3AED22",
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span style={{ fontSize: 14 }}>👋</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: "#A78BFA", letterSpacing: 1, textTransform: "uppercase" as const }}>
+                  Meet your buddy
+                </span>
+              </div>
+
+              {/* Identity row — big avatar, name, username, level, city */}
+              <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "center", gap: 14 }}>
+                {profileUser.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profileUser.avatar_url}
+                    alt=""
+                    style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid #7C3AED55", flexShrink: 0 }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 64, height: 64, borderRadius: "50%",
+                    background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#fff", fontWeight: 900, fontSize: 24, flexShrink: 0,
+                    border: "2px solid #7C3AED55",
+                  }}>{initials}</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 900, fontSize: 17, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {profileUser.full_name || profileUser.username}
+                  </div>
+                  {profileUser.username && profileUser.full_name && (
+                    <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 6 }}>@{profileUser.username}</div>
+                  )}
+                  <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+                    {profileUser.current_level != null && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 99,
+                        background: "rgba(245,166,35,0.15)", border: "1px solid rgba(245,166,35,0.4)",
+                        color: "#F5A623",
+                      }}>⚡ Lvl {profileUser.current_level}</span>
+                    )}
+                    {profileUser.city && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99,
+                        background: "#0D0D0D", border: "1px solid #2D1B69",
+                        color: "#9CA3AF",
+                      }}>📍 {profileUser.city}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bio — italic quote-style. Only renders when set so we
+                  don't show empty quotes for users who skipped this. */}
+              {profileUser.bio && (
+                <div style={{ padding: "0 18px 12px" }}>
+                  <div style={{
+                    fontSize: 13, color: "#D1D5DB", fontStyle: "italic" as const,
+                    lineHeight: 1.5, paddingLeft: 10, borderLeft: "2px solid #7C3AED55",
+                  }}>"{profileUser.bio}"</div>
+                </div>
+              )}
+
+              {/* Current goal — surfaced as a "what they're chasing" card
+                  with progress so the user sees what motivates this buddy.
+                  Different from the buddy match itself; this is the
+                  buddy's PERSONAL goal (run miles per week, etc). */}
+              {goal && (
+                <div style={{
+                  margin: "0 14px 12px",
+                  padding: "10px 12px",
+                  background: "#0D0D0D",
+                  border: "1px solid #2D1B69",
+                  borderRadius: 12,
+                  display: "flex", alignItems: "center", gap: 10,
+                }}>
+                  <div style={{ fontSize: 22, flexShrink: 0 }}>{goal.emoji || "🎯"}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
+                      Currently chasing
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {goal.title}
+                    </div>
+                    {goal.target > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                        <div style={{ flex: 1, height: 4, background: "#2D1B6955", borderRadius: 99, overflow: "hidden" }}>
+                          <div style={{
+                            width: `${Math.min(100, ((goal.current || 0) / goal.target) * 100)}%`,
+                            height: "100%", background: "#A78BFA", borderRadius: 99,
+                          }} />
+                        </div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF" }}>
+                          {Math.round((goal.current || 0) * 10) / 10}/{goal.target} {goal.unit}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Pinned badges row — small tiles. Caps at 4 so the card
+                  doesn't blow out vertically. Includes the "Just earned"
+                  badge as a separate accent if it's not already pinned. */}
+              {(pinnedDisplay.length > 0 || recent) && (
+                <div style={{ padding: "0 16px 14px" }}>
+                  {pinnedDisplay.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 6 }}>
+                        Pinned badges
+                      </div>
+                      <div style={{ display: "flex", gap: 6, marginBottom: recent ? 10 : 0 }}>
+                        {pinnedDisplay.map((p: any) => (
+                          <div key={p.id} title={p.meta.label} style={{
+                            flex: 1, padding: "8px 4px", textAlign: "center" as const,
+                            background: "#0D0D0D", border: "1px solid #2D1B69", borderRadius: 10,
+                          }}>
+                            <div style={{ fontSize: 22, lineHeight: 1, marginBottom: 4 }}>{p.meta.emoji}</div>
+                            <div style={{
+                              fontSize: 9, fontWeight: 700, color: "#9CA3AF",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>{p.meta.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {recent && !pinnedDisplay.some((p: any) => p.badge_id === recent.badge_id) && (
+                    <div style={{
+                      padding: "8px 12px",
+                      background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.3)",
+                      borderRadius: 10,
+                      display: "flex", alignItems: "center", gap: 10,
+                    }}>
+                      <div style={{ fontSize: 20 }}>{badgeMeta(recent.badge_id).emoji}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: 0.6 }}>
+                          Just earned
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {badgeMeta(recent.badge_id).label}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Two progress cards stacked — me + buddy */}
         {[
