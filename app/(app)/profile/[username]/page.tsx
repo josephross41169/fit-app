@@ -15,6 +15,7 @@ import { ProfileHeaderSkeleton, DayCardSkeleton, SkeletonStyles } from "@/compon
 import BusinessProfileView from "@/components/BusinessProfileView";
 import { getLevelProgress, LEVEL_COLORS } from "@/lib/tiers";
 import WorkoutProgressGraphs from "@/components/WorkoutProgressGraphs";
+import TemplateGallery from "@/components/TemplateGallery";
 import TaggedPostsModal from "@/components/TaggedPostsModal";
 import StreakSection from "@/components/StreakSection";
 
@@ -1269,6 +1270,33 @@ export default function UserProfilePage() {
                     </div>
                   );
                 })()}
+              </div>
+            )}
+
+            {/* Templates card — public, read-only view. Same component
+                as the owner profile but with isOwner=false so private
+                templates are hidden and the delete CTA disappears.
+                onUseDay only fires when there's a signed-in viewer who
+                isn't the profile owner — they can pull this person's
+                public template into their own workout post. */}
+            {profile && (
+              <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                  <div style={{fontWeight:900,fontSize:17,color:C.text}}>💪 Templates</div>
+                </div>
+                <TemplateGallery
+                  ownerId={profile.id}
+                  isOwner={false}
+                  onUseDay={currentUser && currentUser.id !== profile.id ? (template, dayIndex) => {
+                    try {
+                      sessionStorage.setItem("__template_pick", JSON.stringify({
+                        templateId: template.id,
+                        dayIndex,
+                      }));
+                    } catch {}
+                    router.push("/post?useTemplate=1");
+                  } : undefined}
+                />
               </div>
             )}
           </div>
