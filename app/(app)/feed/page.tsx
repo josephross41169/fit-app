@@ -186,6 +186,12 @@ type Post = {
   workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string}[]; photoUrls?: string[]; } | null;
   nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; photoUrls?: string[]; } | null;
   wellness: { entries: { emoji: string; activity: string; notes: string; duration?: number; loggedAt?: string; }[]; photoUrls?: string[]; } | null;
+  // 'achievement' posts get a distinct gold treatment in the feed (the
+  // PR ticker drops these in automatically when a workout produces a
+  // PR). Other values: 'general' (default), 'workout', 'nutrition',
+  // 'wellness'. Optional because mock posts and older rows may not
+  // carry it.
+  post_type?: string;
 };
 
 function normalizePhotoUrls(...sources: any[]): string[] {
@@ -1398,14 +1404,44 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         </div>
       )}
 
-      {/* Tier skin: border + glow based on user's tier */}
+      {/* Outer wrapper · achievement posts (auto-generated PR ticker)
+          override the tier-based skin with a gold gradient + glow so
+          they pop in the feed. Regular posts keep the tier treatment. */}
       <div style={{
-        background: C.white,
-        border: `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : "#2D1F52"}`,
-        boxShadow: post.tier && post.tier !== "default" ? `0 4px 24px ${TIER_COLORS[post.tier as Tier]?.glow}` : "0 4px 24px rgba(124,58,237,0.10)",
+        background: post.post_type === 'achievement'
+          ? "linear-gradient(135deg, #FFF8E1 0%, #FFFFFF 60%)"
+          : C.white,
+        border: post.post_type === 'achievement'
+          ? "2px solid #F59E0B"
+          : `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : "#2D1F52"}`,
+        boxShadow: post.post_type === 'achievement'
+          ? "0 4px 28px rgba(245,158,11,0.30)"
+          : (post.tier && post.tier !== "default" ? `0 4px 24px ${TIER_COLORS[post.tier as Tier]?.glow}` : "0 4px 24px rgba(124,58,237,0.10)"),
         borderRadius: 20, marginBottom: 24, overflow: "hidden" as const,
+        position: "relative" as const,
       }}>
-
+        {post.post_type === 'achievement' && (
+          // Gold "PR" ribbon in the top-right corner so the achievement
+          // reads at a glance even before the user scrolls past the
+          // header. Compact (no bigger than the username row) so it
+          // doesn't compete with the avatar.
+          <div style={{
+            position: "absolute" as const,
+            top: 12,
+            right: 14,
+            background: "linear-gradient(135deg, #F59E0B, #FBBF24)",
+            color: "#fff",
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 0.5,
+            padding: "3px 9px",
+            borderRadius: 99,
+            boxShadow: "0 2px 6px rgba(245,158,11,0.4)",
+            zIndex: 1,
+          }}>
+            🏆 PR
+          </div>
+        )}
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
           <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
@@ -2693,6 +2729,10 @@ export default function FeedPage() {
         mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
         caption: p.caption || "",
+        // Carry post_type so PostCard can apply the gold "achievement"
+        // skin to PR-ticker auto-posts. Falls back gracefully if the
+        // column isn't selected on this code path.
+        post_type: p.post_type,
         likes: p.likes_count || 0,
         liked: p._liked || false,
         comments: (p.comments || []).map((c: any) => {
@@ -3104,6 +3144,7 @@ export default function FeedPage() {
                   mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
                   caption: p.caption || "",
+                  post_type: p.post_type, // see Post type definition for why
                   likes: p.likes_count || 0,
                   liked: p._liked || false,
                   // Map comments same shape PostCard expects (matching the
@@ -3371,6 +3412,7 @@ export default function FeedPage() {
                 mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
                 caption: p.caption || "",
+                post_type: p.post_type, // see Post type definition for why
                 likes: p.likes_count || 0,
                 liked: p._liked || false,
                 comments: (p.comments || []).map((c: any) => {
