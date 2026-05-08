@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { forceSyncAllProgress } from "@/lib/syncProgress";
 import {
   joinQueue, leaveQueue, getQueueEntry,
   getActiveRivalry, getLiveScores, getUserRecord,
@@ -886,7 +887,16 @@ function BuddyPanel({ userId }: { userId: string }) {
       setLoaded(true);
     } catch (e) { console.error(e); setLoaded(true); }
   }
-  useEffect(() => { loadState(); /* eslint-disable-next-line */ }, [userId]);
+  // Mount: load buddy state AND kick off self-healing progress sync.
+  // The sync recomputes user_a_progress / user_b_progress on every
+  // active match from full history, so any logs that didn't tick up
+  // their match (e.g. logged offline, save errored mid-flow) are
+  // self-corrected. The next loadState poll picks up the new values.
+  useEffect(() => {
+    loadState();
+    if (userId) forceSyncAllProgress(userId);
+    /* eslint-disable-next-line */
+  }, [userId]);
 
   // Poll for updates in views where state can change server-side:
   //   - "queued": waiting for a match to appear
@@ -1388,7 +1398,17 @@ export default function RivalsPage() {
     }
   }, [user]);
 
-  useEffect(() => { if (!authLoading) loadState(); }, [authLoading, loadState]);
+  // Mount: kick off self-healing sync for the user's progress data
+  // (backfills missing workout_category, recomputes wars/buddies/goals,
+  // scans for rivalry badges that should have been awarded but weren't).
+  // Runs in parallel with loadState — we don't make the UI wait on it.
+  // If sync writes new badges/scores while the page is open, the next
+  // 30s liveScores poll will pick them up. See lib/syncProgress.ts.
+  useEffect(() => {
+    if (authLoading) return;
+    loadState();
+    if (user?.id) forceSyncAllProgress(user.id);
+  }, [authLoading, user?.id, loadState]);
 
   async function handleSelectTier(t: RivalTier) {
     if (!rivalCategory || !rivalCompetition) return;
