@@ -171,8 +171,16 @@ export async function GET(req: NextRequest) {
 
       const gid = groupData.id;
 
-      // Load posts, events, challenges, notes, members in parallel
-      const [postsRes, eventsRes, challengesRes, notesRes, membersRes] = await Promise.all([
+      // Single parallel fan-out for everything that depends on group id.
+      // Previously this was split into two sequential blocks (5 queries
+      // for posts/events/etc., THEN 2 more for the user's membership +
+      // joined challenges), which forced a second round-trip on every
+      // group page load. Folding both blocks into one Promise.all cuts
+      // ~50-200ms off the cold load.
+      const [
+        postsRes, eventsRes, challengesRes, notesRes, membersRes,
+        memCheckRes, cpRes,
+      ] = await Promise.all([
         admin.from('group_posts')
           .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)')
           .eq('group_id', gid)
@@ -195,37 +203,46 @@ export async function GET(req: NextRequest) {
           .select('*, user:users!group_members_user_id_fkey(id,username,full_name,avatar_url)')
           .eq('group_id', gid)
           .order('joined_at', { ascending: true }),
+        // Membership check — only relevant when we have a userId. When
+        // unauthenticated, resolve immediately to a no-op shape.
+        userId
+          ? admin.from('group_members')
+              .select('role')
+              .eq('group_id', gid)
+              .eq('user_id', userId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        // User's joined challenges across the whole app — lets the client
+        // mark "joined" state on each challenge. Independent of which
+        // challenges this group has, so safe to run in parallel.
+        userId
+          ? admin.from('challenge_participants')
+              .select('challenge_id')
+              .eq('user_id', userId)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
 
-      // Check user membership and joined challenges
-      let isMember = false;
-      let joinedChallengeIds: string[] = [];
-      if (userId) {
-        const { data: memRow } = await admin
-          .from('group_members')
-          .select('role')
-          .eq('group_id', gid)
-          .eq('user_id', userId)
-          .single();
-        isMember = !!memRow;
+      const isMember = !!(memCheckRes as any).data;
+      const joinedChallengeIds: string[] = ((cpRes as any).data || []).map((r: any) => r.challenge_id);
 
-        const { data: cpRows } = await admin
-          .from('challenge_participants')
-          .select('challenge_id')
-          .eq('user_id', userId);
-        joinedChallengeIds = (cpRows || []).map((r: any) => r.challenge_id);
-      }
-
-      // Auto-lock expired challenges
+      // Auto-lock expired challenges. We DON'T await these writes — the
+      // response goes back to the client immediately and the writes run
+      // in the background. We still flip is_active=false on the local
+      // copy so the client sees the correct state right away even though
+      // the DB write is in flight.
       const nowIso = new Date().toISOString();
       const expiredChallenges = (challengesRes.data || []).filter((ch: any) =>
         ch.is_active && ch.deadline && ch.deadline < nowIso
       );
       if (expiredChallenges.length > 0) {
-        await Promise.all(expiredChallenges.map((ch: any) =>
+        // Fire-and-forget: collect the promises but don't await them.
+        // Errors get logged and dropped — the next get_group call will
+        // retry the deactivate. This is fine because the local
+        // is_active=false flip below makes the client behave as if it
+        // already happened.
+        Promise.all(expiredChallenges.map((ch: any) =>
           admin.from('challenges').update({ is_active: false }).eq('id', ch.id)
-        ));
-        // Update local data
+        )).catch((e) => console.error('[get_group] auto-lock failed', e));
         expiredChallenges.forEach((ch: any) => { ch.is_active = false; });
       }
 
