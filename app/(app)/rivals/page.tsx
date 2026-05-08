@@ -814,6 +814,227 @@ const BUDDY_TIERS: Array<{ id: string; label: string; desc: string }> = [
   { id: "elite",        label: "💎 Elite",        desc: "High target · only the committed" },
 ];
 
+// ─── BUDDY INTAKE FORM ───────────────────────────────────────────────────────
+// Shown the first time a user tries to find a buddy. Collects three required
+// fields the "Meet your buddy" card uses: city, immediate goal, and hobbies.
+// All three are required — Joey's call: people shouldn't be able to queue
+// without filling these in, otherwise their match-mate sees a blank profile
+// and the personalization card adds nothing.
+//
+// Inputs are local state, seeded from the parent's `me` row when present so
+// users with partial profiles can edit instead of starting from scratch.
+// `onSaved` is called after a successful supabase update; the parent then
+// refreshes its own state and routes the user to the matchmaking flow.
+function BuddyIntakeForm({
+  me,
+  userId,
+  onSaved,
+  onCancel,
+}: {
+  me: any | null;
+  userId: string;
+  onSaved: () => void | Promise<void>;
+  onCancel?: () => void;
+}) {
+  const [city, setCity] = useState<string>(me?.city || "");
+  const [immediateGoal, setImmediateGoal] = useState<string>(me?.immediate_goal || "");
+  const [hobbies, setHobbies] = useState<string>(me?.hobbies || "");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Re-seed inputs when the parent reloads `me` — handles the edge case
+  // where the form is open during a poll that fetches updated profile
+  // data. Without this, the locally-edited values would silently
+  // resync to whatever's on the server.
+  useEffect(() => {
+    if (!me) return;
+    setCity(prev => (prev ? prev : me.city || ""));
+    setImmediateGoal(prev => (prev ? prev : me.immediate_goal || ""));
+    setHobbies(prev => (prev ? prev : me.hobbies || ""));
+  }, [me]);
+
+  const cityTrim = city.trim();
+  const goalTrim = immediateGoal.trim();
+  const hobbiesTrim = hobbies.trim();
+  const allFilled = cityTrim.length > 0 && goalTrim.length > 0 && hobbiesTrim.length > 0;
+
+  async function save() {
+    if (!allFilled || submitting) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      // Cast `supabase as any` because the generated database types
+      // don't yet know about immediate_goal / hobbies. Project has
+      // ignoreBuildErrors so this is belt-and-suspenders for local
+      // typecheck cleanliness — once types regenerate post-migration
+      // the cast can come off.
+      const { error } = await (supabase as any)
+        .from("users")
+        .update({
+          city: cityTrim,
+          immediate_goal: goalTrim,
+          hobbies: hobbiesTrim,
+        })
+        .eq("id", userId);
+      if (error) {
+        // Most likely failure mode: the migration adding immediate_goal
+        // and hobbies hasn't been run on the database yet. The error
+        // message from PostgREST in that case will name the column
+        // ("column users.immediate_goal does not exist"), so we surface
+        // the raw message instead of a generic "save failed" — easier
+        // to diagnose during the rollout.
+        setErr(error.message || "Could not save. Please try again.");
+        setSubmitting(false);
+        return;
+      }
+      await onSaved();
+    } catch (e: any) {
+      setErr(e?.message || "Could not save. Please try again.");
+      setSubmitting(false);
+    }
+  }
+
+  // Reused styling for each text input — labelled, dark, full width.
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "#0D0D0D",
+    border: "1px solid #2D1B69",
+    borderRadius: 12,
+    padding: "12px 14px",
+    color: "#F0F0F0",
+    fontSize: 14,
+    fontFamily: "inherit",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: 11,
+    fontWeight: 800,
+    color: "#A78BFA",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  };
+
+  return (
+    <div>
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          style={{
+            background: "transparent", border: "none", color: "#9CA3AF",
+            fontSize: 13, fontWeight: 700, cursor: "pointer",
+            marginBottom: 12, padding: 0,
+          }}
+        >← Back</button>
+      )}
+
+      {/* Hero — explains why we're asking before the user can queue */}
+      <div style={{
+        background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)",
+        borderRadius: 24,
+        padding: "28px 24px",
+        marginBottom: 18,
+        border: "1px solid #7C3AED55",
+        textAlign: "center",
+      }}>
+        <div style={{ fontSize: 44, marginBottom: 8 }}>👋</div>
+        <div style={{ fontWeight: 900, fontSize: 22, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>
+          Tell your future buddy about you
+        </div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.5, maxWidth: 360, margin: "0 auto" }}>
+          Three quick prompts — your buddy sees these on their <em>Meet your buddy</em> card. <strong style={{ color: "#A78BFA" }}>Required before matching.</strong>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <label htmlFor="buddy-city" style={labelStyle}>📍 City / State</label>
+          <input
+            id="buddy-city"
+            type="text"
+            value={city}
+            onChange={e => setCity(e.target.value)}
+            placeholder="e.g. Austin, TX"
+            maxLength={80}
+            style={inputStyle}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="buddy-goal" style={labelStyle}>🎯 Most immediate goal</label>
+          <textarea
+            id="buddy-goal"
+            value={immediateGoal}
+            onChange={e => setImmediateGoal(e.target.value)}
+            placeholder="What are you training for right now?"
+            maxLength={200}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+          />
+          <div style={{ fontSize: 10, color: "#6B7280", marginTop: 4, textAlign: "right" }}>
+            {goalTrim.length}/200
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="buddy-hobbies" style={labelStyle}>🎨 What you do for fun</label>
+          <textarea
+            id="buddy-hobbies"
+            value={hobbies}
+            onChange={e => setHobbies(e.target.value)}
+            placeholder="Outside the gym — hiking, gaming, cooking, whatever"
+            maxLength={200}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+          />
+          <div style={{ fontSize: 10, color: "#6B7280", marginTop: 4, textAlign: "right" }}>
+            {hobbiesTrim.length}/200
+          </div>
+        </div>
+
+        {err && (
+          <div style={{
+            padding: "10px 12px",
+            background: "rgba(239,68,68,0.1)",
+            border: "1px solid rgba(239,68,68,0.4)",
+            borderRadius: 10,
+            color: "#FCA5A5",
+            fontSize: 12,
+            lineHeight: 1.4,
+          }}>{err}</div>
+        )}
+
+        <button
+          onClick={save}
+          disabled={!allFilled || submitting}
+          style={{
+            background: !allFilled || submitting
+              ? "rgba(124,58,237,0.25)"
+              : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+            border: "none",
+            borderRadius: 14,
+            padding: "14px 20px",
+            color: !allFilled || submitting ? "#9CA3AF" : "#fff",
+            fontWeight: 900,
+            fontSize: 15,
+            cursor: !allFilled || submitting ? "not-allowed" : "pointer",
+            marginTop: 4,
+            letterSpacing: 0.3,
+          }}
+        >
+          {submitting ? "Saving…" : allFilled ? "Continue to matchmaking →" : "Fill in all three to continue"}
+        </button>
+      </div>
+
+      <div style={{ fontSize: 11, color: "#6B7280", textAlign: "center", marginTop: 14, lineHeight: 1.5 }}>
+        You can update these any time from your profile settings.
+      </div>
+    </div>
+  );
+}
+
 function BuddyPanel({ userId }: { userId: string }) {
   // ── STATE MACHINE (multi-buddy) ────────────────────────────────────────
   // Three top-level views:
@@ -829,7 +1050,14 @@ function BuddyPanel({ userId }: { userId: string }) {
   // `step` drives the matchmaking flow. `selectedMatchId` overrides
   // everything to render detail view. `matches` is the list of every
   // active buddy match this user is in.
-  const [step, setStep] = useState<"list" | "category" | "tier" | "queued">("category");
+  const [step, setStep] = useState<"list" | "intake" | "category" | "tier" | "queued">("category");
+  // Current user's own profile fields, returned alongside the buddy
+  // matches by buddy_get_active_match. We use city + immediate_goal +
+  // hobbies to decide whether the user can proceed to matchmaking, or
+  // needs to fill out the intake form first. Refreshed on every
+  // loadState() poll so a save in the intake form is reflected next
+  // tick without a manual refetch.
+  const [me, setMe] = useState<any | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [tier, setTier] = useState<string | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
@@ -868,15 +1096,33 @@ function BuddyPanel({ userId }: { userId: string }) {
       const previousCount = prevMatchCountRef.current;
       setMatches(incomingMatches);
       prevMatchCountRef.current = incomingMatches.length;
+      // Cache the user's own profile so the intake gate has the
+      // current values to check against. Server returns me=null if the
+      // user row doesn't exist (shouldn't happen post-signup) — we
+      // treat that as "incomplete" which forces intake.
+      const myProfile = data.me || null;
+      setMe(myProfile);
+
+      // Decide whether the user has filled out the buddy intake. Joey's
+      // requirement: every user must input city + immediate_goal +
+      // hobbies before they can search for a buddy, so other users see
+      // a real personality on the "Meet your buddy" card instead of an
+      // empty profile.
+      const intakeComplete =
+        !!myProfile?.city?.trim() &&
+        !!myProfile?.immediate_goal?.trim() &&
+        !!myProfile?.hobbies?.trim();
 
       // Decide which view to land on. Priority:
       //   - If we just got a NEW match while queued, jump to the list
       //     so the user sees their fresh buddy. Don't clobber their
       //     selection if they're mid-flow on something else.
       //   - If they're queued (and not in any match), show queued state.
-      //   - Otherwise: list when 1+ matches exist, category picker
-      //     otherwise. Only set this on first load — once the user
-      //     navigates within the panel we respect their choice.
+      //   - Otherwise: list when 1+ matches exist; intake when the
+      //     profile is incomplete (and they have no buddies); category
+      //     picker only when intake is done. Only set this on first
+      //     load — once the user navigates within the panel we respect
+      //     their choice.
       if (incomingMatches.length > previousCount && previousCount > 0) {
         // A new match arrived during polling — bring them to the list
         setStep("list");
@@ -887,10 +1133,15 @@ function BuddyPanel({ userId }: { userId: string }) {
         setStep("queued");
       } else if (!loaded) {
         // First load only — don't bounce existing user out of their flow
-        setStep(incomingMatches.length > 0 ? "list" : "category");
+        if (incomingMatches.length > 0) {
+          setStep("list");
+        } else {
+          setStep(intakeComplete ? "category" : "intake");
+        }
       } else if (incomingMatches.length === 0 && step === "list") {
-        // List view became empty (all matches ended) — fall back to picker
-        setStep("category");
+        // List view became empty (all matches ended) — fall back to
+        // intake if needed, picker otherwise
+        setStep(intakeComplete ? "category" : "intake");
       }
       setLoaded(true);
     } catch (e) { console.error(e); setLoaded(true); }
@@ -1126,7 +1377,7 @@ function BuddyPanel({ userId }: { userId: string }) {
           // Whether we have any "personality" data — bio, goal, badges,
           // city, level. Drives whether we show the icebreaker prompt
           // instead of the rich sub-sections.
-          const hasPersonality = !!(u.city || u.bio || u.current_level || pinnedDisplay.length > 0 || recent || goal);
+          const hasPersonality = !!(u.city || u.bio || u.current_level || u.immediate_goal || u.hobbies || pinnedDisplay.length > 0 || recent || goal);
 
           return (
             <div style={{
@@ -1205,6 +1456,57 @@ function BuddyPanel({ userId }: { userId: string }) {
                     fontSize: 13, color: "#D1D5DB", fontStyle: "italic" as const,
                     lineHeight: 1.5, paddingLeft: 10, borderLeft: "2px solid #7C3AED55",
                   }}>"{u.bio}"</div>
+                </div>
+              )}
+
+              {/* Immediate goal — what the buddy is training for right
+                  now. Comes from the intake form, separate from their
+                  personal goals table — this is a free-text "what's
+                  driving you" line. Renders as a labelled mini-card so
+                  it stands apart from the bio. */}
+              {u.immediate_goal && (
+                <div style={{
+                  margin: "0 14px 10px",
+                  padding: "10px 12px",
+                  background: "rgba(124,58,237,0.08)",
+                  border: "1px solid rgba(124,58,237,0.25)",
+                  borderRadius: 12,
+                  display: "flex", alignItems: "flex-start", gap: 10,
+                }}>
+                  <div style={{ fontSize: 18, lineHeight: 1.2, flexShrink: 0 }}>🎯</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: "#A78BFA", textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
+                      Training for
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#F0F0F0", lineHeight: 1.4 }}>
+                      {u.immediate_goal}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* What they do for fun — light-touch personal angle so
+                  the buddy feels like a person rather than a workout
+                  metric. Same mini-card pattern as immediate_goal but
+                  with a softer accent color (gray vs purple). */}
+              {u.hobbies && (
+                <div style={{
+                  margin: "0 14px 10px",
+                  padding: "10px 12px",
+                  background: "#0D0D0D",
+                  border: "1px solid #2D1B69",
+                  borderRadius: 12,
+                  display: "flex", alignItems: "flex-start", gap: 10,
+                }}>
+                  <div style={{ fontSize: 18, lineHeight: 1.2, flexShrink: 0 }}>🎨</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
+                      For fun
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#F0F0F0", lineHeight: 1.4 }}>
+                      {u.hobbies}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1473,11 +1775,19 @@ function BuddyPanel({ userId }: { userId: string }) {
         })}
 
         {/* Find another buddy CTA — lets the user kick off matchmaking
-            without losing their existing buddies. Only shows categories
-            they don't already have a buddy for, since same-category
-            duals are blocked at the server. */}
+            without losing their existing buddies. Routes through the
+            intake form first if their profile is missing fields, since
+            we never want them to queue without prompts being completed. */}
         <button
-          onClick={() => { setStep("category"); setCategory(null); setTier(null); }}
+          onClick={() => {
+            const intakeComplete =
+              !!me?.city?.trim() &&
+              !!me?.immediate_goal?.trim() &&
+              !!me?.hobbies?.trim();
+            setCategory(null);
+            setTier(null);
+            setStep(intakeComplete ? "category" : "intake");
+          }}
           style={{
             background: "rgba(124,58,237,0.12)",
             border: "1.5px dashed rgba(124,58,237,0.5)",
@@ -1514,6 +1824,35 @@ function BuddyPanel({ userId }: { userId: string }) {
           padding: "10px 22px", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer",
         }}>Cancel</button>
       </div>
+    );
+  }
+
+  // ── INTAKE ─────────────────────────────────────────────────────────────
+  // Required first-time form before a user can search for a buddy. Asks
+  // for city/state, what they're training for, and what they do for fun.
+  // The values are saved straight into users.city, users.immediate_goal,
+  // users.hobbies via supabase update — no separate endpoint needed
+  // since the user is updating their own row and RLS allows it.
+  //
+  // Inputs are kept inside this component (not the parent) so navigating
+  // away from the buddy tab and back doesn't lose drafts. State is seeded
+  // from the loaded `me` row whenever it changes, so users with partial
+  // profiles get pre-filled fields they can edit.
+  if (step === "intake") {
+    return (
+      <BuddyIntakeForm
+        me={me}
+        userId={userId}
+        onSaved={async () => {
+          // Refresh state so the intake-complete check upstream now
+          // passes, then proceed to the matchmaking flow. We don't
+          // assume the next step — loadState picks list vs category
+          // based on whether this user already has buddies.
+          await loadState();
+          setStep("category");
+        }}
+        onCancel={matches.length > 0 ? () => setStep("list") : undefined}
+      />
     );
   }
 
