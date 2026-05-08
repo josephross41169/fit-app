@@ -3665,21 +3665,51 @@ export default function GroupPage() {
                           <button onClick={()=>setExpandedChallenge(isExpanded?null:chal.id)}
                             style={{width:"100%",background:"linear-gradient(135deg,#2D1F52,#1A0F30)",
                               padding:"14px 16px",border:"none",cursor:"pointer",textAlign:"left"}}>
+                            {/* Group-vs-group banner — emojis bracket the
+                                title so it reads "🟣 Group A vs Group B 🔵"
+                                at a glance. Used to be just the war title
+                                with a small metric line; now you can see
+                                who you're up against without expanding. */}
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,fontSize:11,color:"#9CA3AF",fontWeight:700}}>
+                              <span style={{fontSize:14}}>{(isCreator?chal.creator_group:chal.opponent_group)?.emoji||"💪"}</span>
+                              <span style={{color:"#7C3AED",fontWeight:800}}>{myGroupName||"Us"}</span>
+                              <span style={{color:"#6B7280"}}>vs</span>
+                              <span style={{color:"#06B6D4",fontWeight:800}}>{theirGroupName||"Them"}</span>
+                              <span style={{fontSize:14}}>{(isCreator?chal.opponent_group:chal.creator_group)?.emoji||"💪"}</span>
+                            </div>
+
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                              <div>
-                                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap" as const}}>
                                   <span style={{fontSize:18}}>{meta.icon}</span>
                                   <span style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{chal.title}</span>
                                   <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,
                                     background:"rgba(74,222,128,0.15)",color:"#4ADE80"}}>LIVE</span>
                                 </div>
-                                <div style={{fontSize:11,color:"#6B7280"}}>
-                                  {meta.label}{chal.lift_type?` · ${LIFT_TYPES.find(l=>l.key===chal.lift_type)?.label}`:""}
-                                  {daysLeft!==null?` · ${daysLeft}d left`:""}
+                                {/* Detail line — metric + lift type + days
+                                    left + (when set) goal target + member
+                                    count. Pipes are unicode bullets so they
+                                    wrap cleanly on narrow screens. */}
+                                <div style={{fontSize:11,color:"#6B7280",lineHeight:1.5}}>
+                                  {meta.label}
+                                  {chal.lift_type?` · ${LIFT_TYPES.find(l=>l.key===chal.lift_type)?.label}`:""}
+                                  {chal.goal>0?` · 🎯 ${chal.goal}${meta.unit}`:""}
+                                  {daysLeft!==null?` · ⏱ ${daysLeft}d left`:""}
+                                  {(() => {
+                                    const total = (chal.group_challenge_members||[]).length;
+                                    return total > 0 ? ` · ${total} player${total===1?"":"s"}` : "";
+                                  })()}
                                 </div>
+                                {/* Stakes preview — only render when set so
+                                    cards without stakes stay compact. */}
+                                {chal.stakes && (
+                                  <div style={{marginTop:6,fontSize:11,color:"#F5A623",fontStyle:"italic"}}>
+                                    🏅 {chal.stakes}
+                                  </div>
+                                )}
                               </div>
                               <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5"
-                                style={{width:16,height:16,flexShrink:0,transform:isExpanded?"rotate(180deg)":"none",transition:"transform 0.2s"}}>
+                                style={{width:16,height:16,flexShrink:0,transform:isExpanded?"rotate(180deg)":"none",transition:"transform 0.2s",marginTop:4}}>
                                 <path d="M6 9l6 6 6-6"/>
                               </svg>
                             </div>
@@ -3695,7 +3725,21 @@ export default function GroupPage() {
                                 <div style={{flex:1,background:"#06B6D4",borderRadius:"0 99px 99px 0"}}/>
                               </div>
                               <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:10,color:"#6B7280"}}>
-                                <span>{myPct}%</span><span>{100-myPct}%</span>
+                                <span>{myPct}%</span>
+                                {(() => {
+                                  // Show leader chip in the middle when one
+                                  // side is meaningfully ahead. Hidden at 0-0
+                                  // (start of war) and on ties.
+                                  const diff = (myScore||0) - (theirScore||0);
+                                  if (myScore === 0 && theirScore === 0) return null;
+                                  if (diff === 0) return <span style={{color:"#9CA3AF",fontWeight:700}}>tied</span>;
+                                  return (
+                                    <span style={{color:diff>0?"#7C3AED":"#06B6D4",fontWeight:800}}>
+                                      {diff>0?myGroupName||"Us":theirGroupName||"Them"} +{Math.abs(diff)}{meta.unit}
+                                    </span>
+                                  );
+                                })()}
+                                <span>{100-myPct}%</span>
                               </div>
                             </div>
                           </button>
@@ -3715,19 +3759,36 @@ export default function GroupPage() {
                               const val = m.contribution || 0;
                               const pct = Math.round((val/maxVal)*100);
                               const medals = ["🥇","🥈","🥉"];
+                              const initials = ((u?.full_name||u?.username||"?").trim()[0]||"?").toUpperCase();
                               return (
                                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",
                                   borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
                                   <span style={{width:20,fontSize:13,textAlign:"center" as const,flexShrink:0}}>
                                     {rank<=3 ? medals[rank-1] : <span style={{fontSize:11,color:"#6B7280"}}>#{rank}</span>}
                                   </span>
+                                  {/* Avatar — image when available, initials
+                                      gradient when not. The img stays inside
+                                      the gradient circle so a load failure
+                                      shows the initial behind it instead of a
+                                      broken-image icon. We trigger the
+                                      fallback explicitly via onError so even
+                                      404s look clean. */}
                                   <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,overflow:"hidden",
                                     background:`linear-gradient(135deg,${color},${color}99)`,
                                     display:"flex",alignItems:"center",justifyContent:"center",
-                                    fontSize:12,fontWeight:900,color:"#fff"}}>
-                                    {u?.avatar_url
-                                      ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-                                      : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
+                                    fontSize:12,fontWeight:900,color:"#fff",position:"relative" as const}}>
+                                    <span>{initials}</span>
+                                    {u?.avatar_url && (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={ImagePresets.avatarSm(u.avatar_url)}
+                                        loading="lazy"
+                                        decoding="async"
+                                        alt=""
+                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                        style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}
+                                      />
+                                    )}
                                   </div>
                                   <div style={{flex:1,minWidth:0}}>
                                     <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0",
