@@ -1271,6 +1271,40 @@ export default function PostPage() {
         } catch {}
       }
 
+      // -- Sync workout buddy matches + rivalry badges (workout-only) -------
+      // Wars/buddy progress recomputes from the user's full workout history
+      // (not just this log) so a single fire covers any number of matches.
+      // Rivalry badges are per-log: the unlock handler checks if THIS log
+      // earned first_blood / dominant for any active rivalry.
+      //
+      // Profile-page edits already wire these up via fireTrackers; the
+      // /post path was missing both, which is why workouts logged from
+      // /post never advanced wars or unlocked rivalry badges (e.g. "I
+      // logged a run and didn't get First Blood").
+      if (logTab === 'workout' && savedLogIds.length > 0) {
+        const logId = savedLogIds[0];
+        try {
+          await Promise.all([
+            fetch('/api/db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'buddy_update_from_log',
+                payload: { userId: user.id, logId },
+              }),
+            }).catch(() => {}),
+            fetch('/api/db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'unlock_rivalry_badges',
+                payload: { userId: user.id, logId },
+              }),
+            }).catch(() => {}),
+          ]);
+        } catch {}
+      }
+
       // -- Notify tagged workout partners ----------------------------------
       // Workout tags only fire when this is a workout log AND there are tagged
       // users. Each tagged user gets a notification. Best-effort: failures
