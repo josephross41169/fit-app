@@ -9,6 +9,7 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast } from "@/lib/share";
+import { forceSyncAllProgress } from "@/lib/syncProgress";
 import GroupHighlights from "@/components/GroupHighlights";
 
 // ── UserAvatar ─────────────────────────────────────────────────────────────
@@ -991,8 +992,19 @@ export default function GroupPage() {
     // a tab that needs it. Previously this ran as soon as dbGroup was set,
     // even if the user was on the overview tab and would never see the
     // wars panel. Saves a query on initial group page load.
-    if ((dbGroup as any)?.id && (tab === "war" || tab === "challenges")) loadWarChallenges();
-  }, [dbGroup, tab, loadWarChallenges]);
+    //
+    // Also kick off the self-healing progress sync when the war tab opens.
+    // Wars used to silently skip auto-tracking (the
+    // syncGroupChallengeProgressFor function explicitly returned early
+    // for non-goal challenges), so existing wars have stale
+    // contribution numbers from before the fix shipped. Firing the sync
+    // here recomputes every member's contribution from full history.
+    // Idempotent — safe to call on every tab switch.
+    if ((dbGroup as any)?.id && (tab === "war" || tab === "challenges")) {
+      loadWarChallenges();
+      if (currentUser?.id) forceSyncAllProgress(currentUser.id);
+    }
+  }, [dbGroup, tab, loadWarChallenges, currentUser?.id]);
 
   // ── Group Goals hook (must be before early returns) ─────────────────────────
   const loadGroupGoals = useCallback(async () => {
