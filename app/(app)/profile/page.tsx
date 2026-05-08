@@ -407,6 +407,29 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     }); e.target.value="";
   }
 
+  // Helper: pick the right `logged_at` timestamp for a save. When the
+  // day card is for TODAY's calendar date (in the user's local timezone),
+  // we use the current moment so logs land AFTER any rivalries or wars
+  // that started earlier today. For past days, we use that day's date
+  // so backfilled entries still fall in the right calendar bucket.
+  //
+  // Without this, `new Date(day._date).toISOString()` for today returns
+  // midnight UTC of today (00:00:00). A rivalry started at 2pm filters
+  // `WHERE logged_at >= started_at` and excludes 00:00 — even though
+  // the user logged the workout AFTER creating the rivalry. The 4-week
+  // stats panel doesn't filter by rivalry start, so users see the run
+  // there but get 0 on their rivalry score.
+  function computeLoggedAt(dayDate: any): string {
+    if (!dayDate) return new Date().toISOString();
+    const target = new Date(dayDate);
+    const now = new Date();
+    const isToday =
+      target.getFullYear() === now.getFullYear() &&
+      target.getMonth() === now.getMonth() &&
+      target.getDate() === now.getDate();
+    return isToday ? now.toISOString() : target.toISOString();
+  }
+
   // Helper: after any activity log is inserted/updated, fire all the
   // background trackers (PR detection, goal progress, group goals, member
   // challenges, buddy matches). Each is best-effort — errors are swallowed
@@ -560,7 +583,17 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         user_id: user.id,
         log_type: 'workout',
         is_public: true,
-        logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
+        // When the day card is for TODAY, use NOW as the timestamp.
+        // Previously this was always midnight UTC of the day, which
+        // meant a workout logged at, say, 3pm got logged_at = 00:00.
+        // Rivalries / wars that started earlier the same day filter
+        // `logged_at >= started_at`, and 00:00 < 14:00 silently
+        // excluded the workout. Symptom: stats panels showed the run
+        // (they don't filter by start time) but the rivalry score
+        // stayed 0. For PAST days we still use midnight — backfilling
+        // a workout for last Tuesday shouldn't claim it happened just
+        // now.
+        logged_at: computeLoggedAt(day._date),
         workout_type: woBuf.type || null,
         workout_category: inferredCategory,
         workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
@@ -597,7 +630,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         user_id: user.id,
         log_type: 'nutrition',
         is_public: true,
-        logged_at: day._date ? new Date(day._date).toISOString() : new Date().toISOString(),
+        logged_at: computeLoggedAt(day._date),
         calories_total: nutBuf.calories || null,
         protein_g: nutBuf.protein || null,
         carbs_g: nutBuf.carbs || null,
@@ -632,7 +665,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
       if (wellBuf.entries.length === 0) return; // user cleared all entries
 
-      const fallbackIso = day._date ? new Date(day._date).toISOString() : new Date().toISOString();
+      const fallbackIso = computeLoggedAt(day._date);
       const rows = wellBuf.entries.map((e: any) => ({
         user_id: user.id,
         log_type: 'wellness',
