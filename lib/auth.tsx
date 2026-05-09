@@ -74,38 +74,145 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // Get the current session — this reads from localStorage, should be instant
+    let mounted = true;
+    let recoveryInFlight = false;
+
+    // ── Initial session load ───────────────────────────────────────────
+    // Reads from localStorage on web, Capacitor Preferences on native.
+    // Failing here = no persisted session, treat as logged out.
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       setSession(session);
       if (session?.user) {
-        // IMMEDIATELY set the user so the app doesn't redirect to login
-        // Then load profile in background without blocking
         setUser(session.user);
         setLoading(false);
-        // Load profile in background — updates user silently
-        fetchProfile(session.user).then(withProfile => setUser(withProfile));
+        fetchProfile(session.user).then(withProfile => { if (mounted) setUser(withProfile); });
       } else {
         setLoading(false);
       }
     }).catch(() => {
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
-    // Listen for auth changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        // Same pattern — set user immediately, profile loads in background
-        setUser(session.user);
-        setLoading(false);
-        fetchProfile(session.user).then(withProfile => setUser(withProfile));
-      } else {
+    // ── onAuthStateChange — be defensive about iOS PWA flakiness ──────
+    // The previous handler wiped `user` on every null-session event,
+    // which kicked iOS PWA users back to the login screen anytime the
+    // WebView suspended/resumed during an upload (the user reported
+    // this happening 4 times in a row while posting wellness).
+    //
+    // Supabase fires this for: SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED,
+    // USER_UPDATED, PASSWORD_RECOVERY, INITIAL_SESSION.
+    //
+    // Rules now:
+    //   • SIGNED_OUT (explicit): clear user. The user actually signed out.
+    //   • TOKEN_REFRESHED + session present: update normally.
+    //   • TOKEN_REFRESHED + no session: a refresh failure (network blip on
+    //     PWA wake). DO NOT clear user — try to recover.
+    //   • Any other event with a session: update normally.
+    //   • INITIAL_SESSION + no session: first load, no persisted auth —
+    //     not really a state change but we set loading=false below.
+    //
+    // The recovery path: if we land in a "supposedly signed in but no
+    // session" state, kick a manual refresh once. If THAT fails too,
+    // accept the sign-out and clear. This converts a transient blip
+    // (the common case on iOS PWA wake) into a no-op while still
+    // honoring real session expiry.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!mounted) return;
+
+      // Real sign-out — honor it.
+      if (event === 'SIGNED_OUT') {
         setUser(null);
+        setSession(null);
         setLoading(false);
+        return;
+      }
+
+      // Have a session — happy path. Mirror it into state.
+      if (newSession?.user) {
+        setSession(newSession);
+        setUser(newSession.user);
+        setLoading(false);
+        fetchProfile(newSession.user).then(withProfile => { if (mounted) setUser(withProfile); });
+        return;
+      }
+
+      // No session, but the event isn't SIGNED_OUT. This is the iOS PWA
+      // failure mode. If we currently believe the user is signed in,
+      // try a one-shot manual refresh before clearing.
+      // (We use a ref-style flag because the user state we'd otherwise
+      // close over is stale inside this async listener.)
+      if (event === 'INITIAL_SESSION') {
+        // First load with no persisted session — definitely logged out.
+        // (Real users still get the sign-in screen here on first visit;
+        // just don't loop.)
+        setLoading(false);
+        return;
+      }
+
+      // For TOKEN_REFRESHED / USER_UPDATED / etc with no session: probe
+      // with a refresh. Avoid stacking concurrent refreshes when iOS
+      // resume fires a flurry of events.
+      if (recoveryInFlight) return;
+      recoveryInFlight = true;
+      try {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (!mounted) return;
+        if (refreshed?.session?.user) {
+          // Recovered. Don't sign them out.
+          setSession(refreshed.session);
+          setUser(refreshed.session.user);
+          setLoading(false);
+          fetchProfile(refreshed.session.user).then(withProfile => { if (mounted) setUser(withProfile); });
+        } else {
+          // Refresh truly failed — user is logged out for real.
+          setUser(null);
+          setSession(null);
+          setLoading(false);
+        }
+      } catch {
+        // Network errored on the refresh too. Don't punt the user yet —
+        // the next foreground tick (visibilitychange below) will retry.
+        // Keep current user/session in state.
+      } finally {
+        recoveryInFlight = false;
       }
     });
 
-    return () => subscription.unsubscribe();
+    // ── visibilitychange recovery ─────────────────────────────────────
+    // On iOS PWA / Safari, when the page comes back to foreground after
+    // the WebView was suspended, supabase-js's internal auto-refresh may
+    // have already run and failed silently. Trigger an explicit refresh
+    // when we regain visibility so any expired token gets renewed
+    // before the user's next tap that might depend on it.
+    function onVisible() {
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState !== 'visible') return;
+      // No-op if we don't think the user is signed in — nothing to refresh.
+      // Use getSession (cached) rather than the user state ref to avoid
+      // stale-closure issues.
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data?.session) return;
+        // Best-effort. If the refresh returns a session, the
+        // onAuthStateChange listener above will update state. If it
+        // fails, we keep the existing session — user can still browse.
+        supabase.auth.refreshSession().catch(() => {});
+      }).catch(() => {});
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible);
+      // Also on pageshow — iOS fires this when bfcache restores
+      window.addEventListener('pageshow', onVisible);
+    }
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible);
+        window.removeEventListener('pageshow', onVisible);
+      }
+    };
   }, []);
 
   async function signUp(email: string, password: string, username: string, fullName: string) {
