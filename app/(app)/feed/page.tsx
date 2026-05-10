@@ -1,520 +1,131 @@
 "use client";
-import { useState, useRef, useEffect, useMemo, memo } from "react";
-import Link from "next/link";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
-import { track } from "@/components/PostHogProvider";
+import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
+import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
-import ActivityComments from "@/components/ActivityComments";
+import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
+import TemplateGallery from "@/components/TemplateGallery";
+import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
+import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
+import WeightTracker from "@/components/WeightTracker";
+// Lazy-load WorkoutProgressGraphs — it's a chart-heavy component that lives
+// below the fold. Defers loading until the user actually scrolls to it.
+const WorkoutProgressGraphs = lazy(() => import("@/components/WorkoutProgressGraphs"));
+import ActivityShareButton from "@/components/ActivityShareButton";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
-import { computeTier, TIER_COLORS } from "@/lib/tiers";
-import type { Tier } from "@/lib/tiers";
-import { loadBlockedUsers } from "@/lib/blocks";
-import ReportModal, { ReportTarget } from "@/components/ReportModal";
+import { CreateGoalModal } from "@/components/GoalsTab";
+import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
+import { computeTier, getTierInfo } from "@/lib/tiers";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast, appUrl } from "@/lib/share";
-import { FeedPostSkeleton, SkeletonStyles } from "@/components/Skeleton";
-import MentionInput, { parseMentions } from "@/components/MentionInput";
-import { getCached, setCached } from "@/lib/queryCache";
-import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
+import type { Tier, Level, CounterData, LevelProgressInfo } from "@/lib/tiers";
+import { getLevelProgress, LEVEL_CHALLENGES, XP_FOR_NEXT, LEVEL_COLORS, XP_CATEGORIES } from "@/lib/tiers";
+import { tryLevelUp } from "@/lib/xp";
+import { isBusinessAccount } from "@/lib/businessTypes";
+import BusinessProfileView from "@/components/BusinessProfileView";
+import TaggedPostsModal from "@/components/TaggedPostsModal";
+import StreakSection from "@/components/StreakSection";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
-  gold:"#F5A623", goldLight:"#FFFBEE",
+  purple:"#7C3AED", purpleLight:"#2D1F52", purpleMid:"#3D2A6E",
+  gold:"#F5A623", goldLight:"#2A2010",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
-  green:"#7C3AED",
-  // Dark sidebar palette
-  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
 };
-
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-// ── Emoji Reaction Config ─────────────────────────────────────────────────────
-const REACTION_EMOJIS = [
-  { key: "heart",  emoji: "❤️",  label: "Heart"  },
-  { key: "fire",   emoji: "🔥",  label: "Fire"   },
-  { key: "flex",   emoji: "💪",  label: "Strong" },
-  { key: "clap",   emoji: "👏",  label: "Clap"   },
-  { key: "rocket", emoji: "🚀",  label: "LFG"    },
-] as const;
-type ReactionKey = "heart" | "fire" | "flex" | "clap" | "rocket";
-type ReactionCounts = Record<ReactionKey, number>;
-type MyReactions = Set<ReactionKey>;
+const DAYS = [
+  { id:"3.24", label:"Tuesday", emoji:"💪",
+    workout:{ type:"Arms Day", duration:"58 min", calories:420,
+      exercises:[
+        {name:"Barbell Curl",sets:4,reps:10,weight:"65 lbs"},
+        {name:"Hammer Curl",sets:3,reps:12,weight:"30 lbs"},
+        {name:"Skull Crushers",sets:4,reps:10,weight:"75 lbs"},
+        {name:"Tricep Pushdown",sets:3,reps:15,weight:"50 lbs"},
+        {name:"Overhead Extension",sets:3,reps:12,weight:"45 lbs"},
+      ]},
+    nutrition:{ calories:2150, protein:178, carbs:210, fat:62, sugar:28,
+      meals:[
+        {key:"Breakfast",emoji:"🍳",name:"Eggs & Oats",cal:520},
+        {key:"Lunch",emoji:"🍗",name:"Chicken & Rice Bowl",cal:780},
+        {key:"Dinner",emoji:"🥩",name:"Steak & Veggies",cal:850},
+      ]}},
+  { id:"3.23", label:"Monday", emoji:"🏋️",
+    workout:{ type:"Chest Day", duration:"65 min", calories:490,
+      exercises:[
+        {name:"Bench Press",sets:5,reps:8,weight:"185 lbs"},
+        {name:"Incline DB Press",sets:4,reps:10,weight:"70 lbs"},
+        {name:"Cable Flyes",sets:3,reps:15,weight:"35 lbs"},
+        {name:"Push-Ups",sets:3,reps:20,weight:"BW"},
+        {name:"Dips",sets:3,reps:12,weight:"BW"},
+      ]},
+    nutrition:{ calories:2380, protein:195, carbs:245, fat:58, sugar:32,
+      meals:[
+        {key:"Breakfast",emoji:"🥣",name:"Protein Oats",cal:580},
+        {key:"Lunch",emoji:"🌯",name:"Turkey Wrap",cal:720},
+        {key:"Dinner",emoji:"🍝",name:"Pasta & Chicken",cal:1080},
+      ]}},
+  { id:"3.22", label:"Sunday", emoji:"🌅", workout:null,
+    nutrition:{ calories:1850, protein:142, carbs:198, fat:55, sugar:42,
+      meals:[
+        {key:"Breakfast",emoji:"🥞",name:"Pancakes & Berries",cal:620},
+        {key:"Lunch",emoji:"🥙",name:"Grilled Chicken Wrap",cal:680},
+        {key:"Dinner",emoji:"🍜",name:"Salmon & Quinoa",cal:550},
+      ]}},
+];
 
-// ── Reaction Bar Component ────────────────────────────────────────────────────
-function ReactionBar({
-  postId,
-  currentUserId,
-  initialCounts,
-  initialMine,
-}: {
-  postId: string | number;
-  currentUserId?: string;
-  initialCounts: ReactionCounts;
-  initialMine: MyReactions;
-}) {
-  const [counts, setCounts] = useState<ReactionCounts>(initialCounts);
-  const [mine, setMine] = useState<MyReactions>(new Set(initialMine));
-  const [loading, setLoading] = useState<ReactionKey | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
-  const isDbPost = typeof postId === 'string' && postId.includes('-');
+// ── Badge definitions ─────────────────────────────────────────────────────────
+// BADGES imported from @/lib/badges
 
-  // Load reaction counts from Supabase on mount (for real db posts)
-  useEffect(() => {
-    if (!isDbPost) return;
-    async function loadCounts() {
-      const { data } = await supabase
-        .from('reactions')
-        .select('emoji, user_id')
-        .eq('post_id', postId as string);
-      if (!data) return;
-      const c: ReactionCounts = { heart: 0, fire: 0, flex: 0, clap: 0, rocket: 0 };
-      const m: MyReactions = new Set();
-      for (const row of data) {
-        if (row.emoji in c) c[row.emoji as ReactionKey]++;
-        if (row.user_id === currentUserId) m.add(row.emoji as ReactionKey);
-      }
-      setCounts(c);
-      setMine(m);
-    }
-    loadCounts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postId]);
-
-  const totalReactions = Object.values(counts).reduce((a, b) => a + b, 0);
-
-  async function toggleReaction(key: ReactionKey) {
-    if (!currentUserId || loading) return;
-    setLoading(key);
-    const had = mine.has(key);
-    // Optimistic update
-    const newMine = new Set(mine);
-    const newCounts = { ...counts };
-    if (had) {
-      newMine.delete(key);
-      newCounts[key] = Math.max(0, newCounts[key] - 1);
-    } else {
-      newMine.add(key);
-      newCounts[key]++;
-    }
-    setMine(newMine);
-    setCounts(newCounts);
-    setShowPicker(false);
-
-    if (isDbPost) {
-      if (had) {
-        await supabase.from('reactions').delete()
-          .eq('post_id', postId as string)
-          .eq('user_id', currentUserId)
-          .eq('emoji', key);
-      } else {
-        await supabase.from('reactions').upsert({
-          post_id: postId as string,
-          user_id: currentUserId,
-          emoji: key,
-        }, { onConflict: 'post_id,user_id,emoji' });
-      }
-    }
-    setLoading(null);
-  }
-
-  // Which emojis have any reactions?
-  const activeEmojis = REACTION_EMOJIS.filter(r => counts[r.key] > 0 || mine.has(r.key));
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-      {/* All 5 reactions always visible. No "React" button — tap any emoji
-          to toggle. Active ones (you've reacted OR has count) show the
-          count and purple highlight; inactive ones are dimmed. */}
-      {REACTION_EMOJIS.map(r => {
-        const count = counts[r.key];
-        const userHas = mine.has(r.key);
-        const isActive = count > 0 || userHas;
-        return (
-          <button
-            key={r.key}
-            onClick={() => toggleReaction(r.key)}
-            disabled={!!loading}
-            title={r.label}
-            style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "4px 10px", borderRadius: 99,
-              border: userHas ? "1.5px solid #7C3AED" : "1.5px solid #2D1F52",
-              background: userHas ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.04)",
-              cursor: loading ? "default" : "pointer",
-              transition: "all 0.15s",
-              opacity: loading === r.key ? 0.6 : (isActive ? 1 : 0.55),
-            }}
-          >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>{r.emoji}</span>
-            {count > 0 && (
-              <span style={{ fontSize: 12, fontWeight: 700, color: userHas ? "#A78BFA" : "#9CA3AF" }}>
-                {count}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-type Comment = { id: number; user: string; avatar: string; text: string; time: string; };
-type Exercise = { name: string; sets: number; reps: number; weight: string; };
-type Meal = { key: string; emoji: string; name: string; cal: number; };
-type Post = {
-  id: number;
-  user: string;
-  username: string;
-  avatar: string;
-  tier?: Tier;
-  time: string;
-  dateShort: string;
-  dayLabel: string;
-  photos: string[];
-  mediaTypes?: ('image' | 'video')[];
-  // Per-photo vertical crop offset (0..100% from top). Parallel to photos[].
-  // Defaults to 50 (centered) for any missing entries. Used by feed/discover/
-  // post-detail/profile renders to show the right slice of each photo.
-  mediaPositions?: number[];
-  caption: string;
-  likes: number;
-  liked: boolean;
-  comments: Comment[];
-  workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string}[]; photoUrls?: string[]; } | null;
-  nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; photoUrls?: string[]; } | null;
-  wellness: { entries: { emoji: string; activity: string; notes: string; duration?: number; loggedAt?: string; }[]; photoUrls?: string[]; } | null;
-  // 'achievement' posts get a distinct gold treatment in the feed (the
-  // PR ticker drops these in automatically when a workout produces a
-  // PR). Other values: 'general' (default), 'workout', 'nutrition',
-  // 'wellness'. Optional because mock posts and older rows may not
-  // carry it.
-  post_type?: string;
+// ── Rivalry badge catalog (keep in sync with rivals/page.tsx) ─────────────────
+const RIVALRY_BADGE_DISPLAY: Record<string, { emoji: string; label: string }> = {
+  first_blood:  { emoji: "⚔️", label: "First Blood"  },
+  early_bird:   { emoji: "🌅", label: "Early Bird"   },
+  dominant:     { emoji: "😤", label: "Dominant"     },
+  comeback:     { emoji: "🔄", label: "Comeback"     },
+  untouchable:  { emoji: "💀", label: "Untouchable"  },
 };
+function rivalryBadgeEmoji(key: string) { return RIVALRY_BADGE_DISPLAY[key]?.emoji ?? "🏅"; }
+function rivalryBadgeLabel(key: string) { return RIVALRY_BADGE_DISPLAY[key]?.label ?? key; }
 
-function normalizePhotoUrls(...sources: any[]): string[] {
-  const out: string[] = [];
-  const add = (value: any) => {
-    if (!value) return;
-    if (Array.isArray(value)) {
-      value.forEach(add);
-      return;
-    }
-    if (typeof value === 'object') {
-      Object.values(value).forEach(add);
-      return;
-    }
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (!trimmed) return;
-      if (trimmed.startsWith('[')) {
-        try {
-          add(JSON.parse(trimmed));
-          return;
-        } catch {}
-      }
-      if (trimmed.startsWith('{')) {
-        try {
-          add(JSON.parse(trimmed));
-          return;
-        } catch {}
-      }
-      if (trimmed.startsWith('http') || trimmed.startsWith('/')) out.push(trimmed);
-    }
-  };
-  sources.forEach(add);
-  return Array.from(new Set(out));
-}
 
-// Returns a per-index 'image'|'video' array aligned with the URLs returned by normalizePhotoUrls.
-// Priority: media_types array (new column) → media_type single string → URL extension sniff → 'image'.
-function mediaTypesFor(urls: string[], mediaTypesRaw: any, mediaTypeSingle: any): ('image' | 'video')[] {
-  const VIDEO_EXT = /\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i;
-
-  // Parse the raw media_types value (jsonb may arrive as array OR JSON string)
-  let parsed: any[] | null = null;
-  if (Array.isArray(mediaTypesRaw)) parsed = mediaTypesRaw;
-  else if (typeof mediaTypesRaw === 'string') {
-    try {
-      const j = JSON.parse(mediaTypesRaw);
-      if (Array.isArray(j)) parsed = j;
-    } catch {}
-  }
-
-  return urls.map((url, i) => {
-    if (parsed && (parsed[i] === 'image' || parsed[i] === 'video')) return parsed[i];
-    // Single-item legacy fallback
-    if (urls.length === 1 && (mediaTypeSingle === 'image' || mediaTypeSingle === 'video')) return mediaTypeSingle;
-    // Last resort: sniff URL
-    if (typeof url === 'string' && VIDEO_EXT.test(url)) return 'video';
-    return 'image';
-  });
-}
-
-// ── Suggested Users (shown when following feed runs out) ─────────────────────
-const SUGGESTED_USERS = [
-  { id: 101, user: "Alexis Rivera", username: "alexis_fit", avatar: "AR", followers: "12.4K", specialty: "CrossFit · Olympic Lifting",
-    workout: { type: "CrossFit WOD", duration: "45 min", calories: 580, exercises: [
-      { name: "Clean & Jerk", sets: 5, reps: 3, weight: "135 lbs" },
-      { name: "Box Jumps", sets: 4, reps: 10, weight: "24in" },
-      { name: "Pull-Ups", sets: 4, reps: 12, weight: "BW" },
-      { name: "Kettlebell Swings", sets: 3, reps: 20, weight: "53 lbs" },
-    ], cardio: [] },
-    nutrition: { calories: 2640, protein: 210, carbs: 280, fat: 62, sugar: 28,
-      meals: [
-        { key: "Pre-Workout", emoji: "🍌", name: "Banana + Whey", cal: 380 },
-        { key: "Lunch", emoji: "🥩", name: "Steak & Sweet Potato", cal: 860 },
-        { key: "Dinner", emoji: "🍚", name: "Rice Bowl", cal: 1400 },
-      ] },
-    wellness: null },
-  { id: 102, user: "Jordan Kim", username: "jordan_gains", avatar: "JK", followers: "8.1K", specialty: "Powerlifting · Nutrition",
-    workout: { type: "Pull Day", duration: "72 min", calories: 530, exercises: [
-      { name: "Deadlift", sets: 5, reps: 5, weight: "315 lbs" },
-      { name: "Barbell Row", sets: 4, reps: 8, weight: "185 lbs" },
-      { name: "Lat Pulldown", sets: 4, reps: 12, weight: "150 lbs" },
-      { name: "Face Pulls", sets: 3, reps: 20, weight: "40 lbs" },
-    ], cardio: [] },
-    nutrition: null,
-    wellness: { entries: [{ emoji: "🛁", activity: "Ice Bath", notes: "12 min @ 50°F post-lift" }] } },
-  { id: 103, user: "Maya Torres", username: "maya_moves", avatar: "MT", followers: "31.2K", specialty: "Yoga · Mindfulness",
-    workout: null,
-    nutrition: { calories: 1780, protein: 88, carbs: 195, fat: 71, sugar: 42,
-      meals: [
-        { key: "Breakfast", emoji: "🥑", name: "Avocado Toast + Eggs", cal: 520 },
-        { key: "Lunch", emoji: "🥗", name: "Buddha Bowl", cal: 680 },
-        { key: "Dinner", emoji: "🍜", name: "Miso Ramen", cal: 580 },
-      ] },
-    wellness: { entries: [
-      { emoji: "🧘", activity: "Vinyasa Flow", notes: "60 min morning practice" },
-      { emoji: "🫁", activity: "Breathwork", notes: "Wim Hof · 3 rounds" },
-    ] } },
-];
-
-const INITIAL_STORIES = [
-  { id: 1, username: "You", isYou: true, photo: null as string | null, hasNew: false },
-  { id: 2, username: "jake_lifts", photo: null as string | null, hasNew: true },
-  { id: 3, username: "sara_runs", photo: null as string | null, hasNew: true },
-  { id: 4, username: "mike_gains", photo: null as string | null, hasNew: false },
-  { id: 5, username: "lena_fit", photo: null as string | null, hasNew: true },
-  { id: 6, username: "chris_rx", photo: null as string | null, hasNew: false },
-];
-
-const INITIAL_POSTS: Post[] = [
-  {
-    id: 1, user: "Jake Morrison", username: "jake_lifts", avatar: "JM",
-    time: "2h ago", dateShort: "3.24", dayLabel: "Tuesday",
-    photos: [], caption: "Chest & shoulders on FIRE 🔥 PR on bench today! Nothing beats that feeling when the weight just flies up.",
-    likes: 47, liked: false,
-    comments: [
-      { id: 1, user: "Sara Chen", avatar: "SC", text: "Absolute beast mode! What was your PR?", time: "1h ago" },
-      { id: 2, user: "Mike Davis", avatar: "MD", text: "Let's gooo!! 💪", time: "45m ago" },
-    ],
-    workout: {
-      type: "Chest Day", duration: "65 min", calories: 490,
-      exercises: [
-        { name: "Bench Press", sets: 5, reps: 8, weight: "185 lbs" },
-        { name: "Incline DB Press", sets: 4, reps: 10, weight: "70 lbs" },
-        { name: "Cable Flyes", sets: 3, reps: 15, weight: "35 lbs" },
-        { name: "Push-Ups", sets: 3, reps: 20, weight: "BW" },
-      ],
-      cardio: [],
-    },
-    nutrition: {
-      calories: 2380, protein: 195, carbs: 245, fat: 58, sugar: 32,
-      meals: [
-        { key: "Breakfast", emoji: "🥣", name: "Protein Oats", cal: 580 },
-        { key: "Lunch", emoji: "🌯", name: "Turkey Wrap", cal: 720 },
-        { key: "Dinner", emoji: "🍝", name: "Pasta & Chicken", cal: 1080 },
-      ],
-    },
-    wellness: null,
-  },
-  {
-    id: 2, user: "Sara Chen", username: "sara_runs", avatar: "SC",
-    time: "4h ago", dateShort: "3.24", dayLabel: "Tuesday",
-    photos: [], caption: "Fueling after a 10K this morning ✅ Hitting macros perfectly this week! Consistency is everything.",
-    likes: 31, liked: true,
-    comments: [
-      { id: 1, user: "Lena Torres", avatar: "LT", text: "You're such an inspiration! 🙌", time: "3h ago" },
-    ],
-    workout: {
-      type: "Morning Run", duration: "52 min", calories: 620,
-      exercises: [],
-      cardio: [{ type: "Running", duration: "52 min", distance: "10 km" }],
-    },
-    nutrition: {
-      calories: 1920, protein: 142, carbs: 210, fat: 52, sugar: 28,
-      meals: [
-        { key: "Breakfast", emoji: "🍳", name: "Eggs & Toast", cal: 480 },
-        { key: "Lunch", emoji: "🍗", name: "Chicken & Rice", cal: 740 },
-        { key: "Dinner", emoji: "🥗", name: "Salmon Salad", cal: 700 },
-      ],
-    },
-    wellness: { entries: [{ emoji: "🧘", activity: "Yoga", notes: "30 min post-run stretch" }] },
-  },
-  {
-    id: 3, user: "Mike Davis", username: "mike_gains", avatar: "MD",
-    time: "6h ago", dateShort: "3.23", dayLabel: "Monday",
-    photos: [], caption: "Nobody said leg day was easy. Nobody said it wasn't worth it. 275 on squats today 💪",
-    likes: 89, liked: false,
-    comments: [
-      { id: 1, user: "Jake Morrison", avatar: "JM", text: "Bro 275 is INSANE. What program are you running?", time: "5h ago" },
-      { id: 2, user: "Chris", avatar: "CR", text: "Legend 🐐", time: "4h ago" },
-    ],
-    workout: {
-      type: "Leg Day", duration: "68 min", calories: 510,
-      exercises: [
-        { name: "Squats", sets: 5, reps: 5, weight: "275 lbs" },
-        { name: "Romanian Deadlift", sets: 4, reps: 8, weight: "185 lbs" },
-        { name: "Leg Press", sets: 3, reps: 12, weight: "360 lbs" },
-        { name: "Calf Raises", sets: 4, reps: 20, weight: "100 lbs" },
-      ],
-      cardio: [],
-    },
-    nutrition: null,
-    wellness: null,
-  },
-];
-
-// ── Story Viewer ──────────────────────────────────────────────────────────────
-// ── Story types ─────────────────────────────────────────────────────────────
-interface Story {
-  id: string;
-  user_id: string;
-  username: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  media_url: string;
-  media_type: 'image' | 'video';
-  caption: string | null;
-  created_at: string;
-  is_you: boolean;
-}
-
-// Format "2h ago" / "5m ago" for stories
-function timeAgoShort(iso: string): string {
-  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (sec < 60) return "just now";
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  return `${hr}h ago`;
-}
-
-function StoryViewer({
-  story, onClose, onDelete, onReply,
-}: {
-  story: Story;
-  onClose: () => void;
-  onDelete?: (id: string) => void;
-  onReply?: (story: Story, text: string) => Promise<void>;
-}) {
-  const [replyText, setReplyText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  // Auto-advance progress bar — closes after 8 seconds (Instagram standard)
-  const [progress, setProgress] = useState(0);
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; onClose: () => void; onSelectPhoto: (src: string) => void; }) {
   useEffect(() => {
-    const startedAt = Date.now();
-    const DURATION_MS = 8000;
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const pct = Math.min(100, (elapsed / DURATION_MS) * 100);
-      setProgress(pct);
-      if (pct >= 100) { clearInterval(interval); onClose(); }
-    }, 50);
-    return () => clearInterval(interval);
-  }, [story.id, onClose]);
-
-  async function handleReplySend() {
-    if (!replyText.trim() || sending || !onReply) return;
-    setSending(true);
-    try {
-      await onReply(story, replyText.trim());
-      setReplyText("");
-      onClose();
-    } finally { setSending(false); }
-  }
-
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
-    <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center" }}
-         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <button onClick={onClose} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer",zIndex:2 }}>×</button>
-
-      <div style={{ width:"100%",maxWidth:400,aspectRatio:"9/16",borderRadius:20,overflow:"hidden",position:"relative",background:"#1A1A2E" }}>
-        {/* Progress bar at top */}
-        <div style={{ position:"absolute",top:8,left:8,right:8,height:3,borderRadius:99,background:"rgba(255,255,255,0.25)",overflow:"hidden",zIndex:2 }}>
-          <div style={{ height:"100%",width:`${progress}%`,background:"#fff",transition:"width 50ms linear" }} />
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9997, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#0E0820', borderBottom: '1px solid #2D1F52', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0 }}>
+        <div style={{ fontWeight: 900, fontSize: 18, color: '#F0F0F0' }}>
+          All Photos {photos.length > 0 && (<span style={{ color: '#9CA3AF', fontSize: 13, fontWeight: 600, marginLeft: 6 }}>({photos.length})</span>)}
         </div>
-
-        {story.media_type === 'video' ? (
-          <video src={story.media_url} autoPlay muted playsInline
-            style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.10)', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>x</button>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', padding: '16px clamp(12px, 4vw, 32px) 32px', maxWidth: 1200, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        {photos.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9CA3AF' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u{1F4F7}'}</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>No feed photos yet.</div>
+          </div>
         ) : (
-          <img src={ImagePresets.thumb(story.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-        )}
-
-        {/* Header */}
-        <div style={{ position:"absolute",top:18,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:2 }}>
-          <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-            {story.avatar_url
-              ? <img src={story.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-              : (story.username[0] || "?").toUpperCase()}
-          </div>
-          <div style={{ flex:1 }}>
-            <div style={{ color:"#fff",fontWeight:700,fontSize:14,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{story.username}</div>
-            <div style={{ color:"rgba(255,255,255,0.85)",fontSize:11,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{timeAgoShort(story.created_at)}</div>
-          </div>
-          {/* Delete button — only for your own story */}
-          {story.is_you && onDelete && !confirmDelete && (
-            <button onClick={() => setConfirmDelete(true)} style={{ background:"rgba(0,0,0,0.4)",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }}>
-              🗑️ Delete
-            </button>
-          )}
-          {confirmDelete && (
-            <button onClick={() => onDelete!(story.id)} style={{ background:"#EF4444",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }}>
-              Confirm?
-            </button>
-          )}
-        </div>
-
-        {/* Caption — bottom center */}
-        {story.caption && (
-          <div style={{ position:"absolute",bottom:90,left:16,right:16,padding:"10px 14px",background:"rgba(0,0,0,0.5)",borderRadius:12,zIndex:2 }}>
-            <div style={{ color:"#fff",fontSize:13,fontWeight:600,textShadow:"0 1px 4px rgba(0,0,0,0.5)" }}>{story.caption}</div>
-          </div>
-        )}
-
-        {/* Reply input — only for OTHER people's stories */}
-        {!story.is_you && onReply && (
-          <div style={{ position:"absolute",bottom:16,left:16,right:16,zIndex:2,display:"flex",gap:8 }}
-               onClick={e => e.stopPropagation()}>
-            <input
-              value={replyText}
-              onChange={e => setReplyText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleReplySend(); }}
-              placeholder={`Reply to ${story.username}...`}
-              style={{
-                flex:1, padding:"12px 16px", borderRadius:99,
-                background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.3)",
-                color:"#fff", fontSize:13, outline:"none",
-              }}
-            />
-            <button
-              onClick={handleReplySend}
-              disabled={!replyText.trim() || sending}
-              style={{
-                padding:"10px 16px", borderRadius:99,
-                background: replyText.trim() ? C.blue : "rgba(255,255,255,0.15)",
-                border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer",
-                opacity: sending ? 0.6 : 1,
-              }}
-            >
-              {sending ? "..." : "Send"}
-            </button>
+          <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+            {photos.map((src, idx) => (
+              <button key={idx} onClick={() => onSelectPhoto(src)} style={{ padding: 0, border: 'none', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', background: '#1A1228', aspectRatio: '1', display: 'block' }}>
+                <img src={ImagePresets.thumb(src)} loading='lazy' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt='' />
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -522,24 +133,71 @@ function StoryViewer({
   );
 }
 
-// ── DARK SIDEBAR: Workout Card ────────────────────────────────────────────────
-// ── Wellness style lookup ───────────────────────────────────────────────────
-// 26 activities → emoji + accent color. Mirrors the constant in /profile/page.tsx
-// and /profile/[username]/page.tsx so wellness cards look identical everywhere.
-const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
+function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: string[]; onClose: () => void; onChange?: (newSrc: string) => void; }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (!photos || !onChange) return;
+      const idx = photos.indexOf(src);
+      if (idx === -1) return;
+      if (e.key === 'ArrowLeft' && idx > 0) onChange(photos[idx - 1]);
+      if (e.key === 'ArrowRight' && idx < photos.length - 1) onChange(photos[idx + 1]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [src, photos, onChange, onClose]);
+  const idx = photos ? photos.indexOf(src) : -1;
+  const hasPrev = photos && idx > 0;
+  const hasNext = photos && idx >= 0 && idx < photos.length - 1;
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 20, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>x</button>
+      {hasPrev && (
+        <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx - 1]); }} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'<'}</button>
+      )}
+      {hasNext && (
+        <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
+      )}
+      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      {photos && idx !== -1 && photos.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
+      )}
+    </div>
+  );
+}
+
+type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[];repsArr?:string[]};
+type CardioEntry = {type:string;duration:string;distance:string};
+type Meal        = {key:string;emoji:string;name:string;cal:number};
+// ── Wellness display: per-activity emoji + accent color ──────────────────
+// Maps wellness_type strings (Title Case) to a visual treatment for the
+// profile activity log cards. Lookup is case-insensitive — falls back to
+// the leaf emoji + neutral purple when an activity isn't in the table.
+// Adding a new activity later? Just add a row here.
+type WellnessStyle = { emoji: string; accent: string };
+const WELLNESS_STYLES: Record<string, WellnessStyle> = {
+  // Cold therapy — icy blues
   "cold plunge":          { emoji: "❄️", accent: "#38BDF8" },
   "ice bath":             { emoji: "❄️", accent: "#38BDF8" },
   "cryotherapy":          { emoji: "🥶", accent: "#22D3EE" },
+  // Heat therapy — warm reds/oranges
   "sauna":                { emoji: "🔥", accent: "#F97316" },
   "infrared sauna":       { emoji: "🌅", accent: "#FB923C" },
   "steam room":           { emoji: "♨️", accent: "#FBBF24" },
   "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
+  // Mind / breath — purples & soft tones
   "meditation":           { emoji: "🧘", accent: "#A78BFA" },
   "breathwork":           { emoji: "💨", accent: "#818CF8" },
   "yoga nidra":           { emoji: "🌙", accent: "#A78BFA" },
   "journaling":           { emoji: "📓", accent: "#C4B5FD" },
   "therapy":              { emoji: "💬", accent: "#A78BFA" },
   "sound bath":           { emoji: "🎵", accent: "#C084FC" },
+  // Body / mobility — earthy greens
   "stretching":           { emoji: "🤸", accent: "#34D399" },
   "foam rolling":         { emoji: "🌀", accent: "#10B981" },
   "mobility work":        { emoji: "🦵", accent: "#34D399" },
@@ -547,3153 +205,4494 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
   "acupuncture":          { emoji: "📍", accent: "#34D399" },
   "cupping":              { emoji: "🟣", accent: "#A78BFA" },
+  // Outdoor / light
   "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
   "grounding":            { emoji: "🌱", accent: "#84CC16" },
-  "nature walk":          { emoji: "🌲", accent: "#34D399" },
+  "nature walk":           { emoji: "🌲", accent: "#34D399" },
+  // Recovery / oxygen
   "hyperbaric oxygen":    { emoji: "💎", accent: "#06B6D4" },
   "compression therapy":  { emoji: "🦿", accent: "#0EA5E9" },
   "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
+  // Sleep & fasting
   "sleep":                { emoji: "😴", accent: "#6366F1" },
   "fasting":              { emoji: "⏳", accent: "#A78BFA" },
 };
-function getWellnessStyle(activity: string): { emoji: string; accent: string } {
+function getWellnessStyle(activity: string): WellnessStyle {
   return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#A78BFA" };
 }
 
-// ── StreakCard ────────────────────────────────────────────────────────────
-// In-app reminder card shown at the top of the For You feed when the user
-// has an active streak (>= 2 days) but hasn't logged today. Renders a
-// flame, the day count, a "Log now" CTA, and a dismiss button.
-//
-// Behavior is intentionally non-intrusive: the card is small, doesn't block
-// content, and stays dismissed for the rest of the day once tapped away.
-// It re-appears the next day if the streak is still alive.
-function StreakCard({ days, onDismiss, onLog }: { days: number; onDismiss: () => void; onLog: () => void }) {
-  return (
-    <div style={{
-      background: "linear-gradient(135deg, #F97316 0%, #DC2626 100%)",
-      borderRadius: 16,
-      padding: "14px 16px 14px 18px",
-      marginBottom: 14,
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      position: "relative",
-      boxShadow: "0 4px 16px rgba(249, 115, 22, 0.25)",
-    }}>
-      <div style={{ fontSize: 32, lineHeight: 1, flexShrink: 0 }}>🔥</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>
-          {days}-day streak
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginTop: 3, lineHeight: 1.35 }}>
-          Log a workout or wellness session today to keep it alive
-        </div>
-      </div>
-      <button onClick={onLog}
-        style={{
-          background: "rgba(255,255,255,0.95)",
-          color: "#DC2626",
-          border: "none",
-          borderRadius: 99,
-          padding: "8px 16px",
-          fontWeight: 800,
-          fontSize: 13,
-          cursor: "pointer",
-          flexShrink: 0,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-        }}>
-        Log now →
-      </button>
-      <button onClick={onDismiss} aria-label="Dismiss"
-        style={{
-          position: "absolute",
-          top: 6,
-          right: 8,
-          background: "transparent",
-          border: "none",
-          color: "rgba(255,255,255,0.7)",
-          fontSize: 18,
-          lineHeight: 1,
-          cursor: "pointer",
-          padding: 4,
-        }}>
-        ×
-      </button>
-    </div>
-  );
-}
-
-// ── RecapPromptCard ───────────────────────────────────────────────────────
-// Shows once per week pointing the user to last week's recap. Same visual
-// language as StreakCard (gradient + dismiss × + CTA button) but in the
-// purple-pink palette to differentiate from the orange streak card.
-//
-// onView links to /recap/<weekKey> for deep-linking. We don't auto-navigate
-// — the user has to tap "View Recap" so they're never surprised by a
-// page change.
-function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: () => void }) {
-  return (
-    <div style={{
-      background: "linear-gradient(135deg, #7C3AED 0%, #DB2777 100%)",
-      borderRadius: 16,
-      padding: "14px 16px 14px 18px",
-      marginBottom: 14,
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      position: "relative",
-      boxShadow: "0 4px 16px rgba(124, 58, 237, 0.25)",
-    }}>
-      <div style={{ fontSize: 32, lineHeight: 1, flexShrink: 0 }}>📊</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>
-          Your weekly recap is ready
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginTop: 3, lineHeight: 1.35 }}>
-          See last week's stats, PRs, streaks, and badges
-        </div>
-      </div>
-      {/* "View" button navigates to the recap. We do NOT call onDismiss here
-          — viewing should not permanently hide the prompt; only the × should. */}
-      <Link href={`/recap/${weekKey}`}
-        style={{
-          background: "rgba(255,255,255,0.95)",
-          color: "#7C3AED",
-          border: "none",
-          borderRadius: 99,
-          padding: "8px 16px",
-          fontWeight: 800,
-          fontSize: 13,
-          cursor: "pointer",
-          flexShrink: 0,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-          textDecoration: "none",
-        }}>
-        View →
-      </Link>
-      <button onClick={onDismiss} aria-label="Dismiss"
-        style={{
-          position: "absolute",
-          top: 6,
-          right: 8,
-          background: "transparent",
-          border: "none",
-          color: "rgba(255,255,255,0.7)",
-          fontSize: 18,
-          lineHeight: 1,
-          cursor: "pointer",
-          padding: 4,
-        }}>
-        ×
-      </button>
-    </div>
-  );
-}
-
-// ─── PHOTO LIGHTBOX ─────────────────────────────────────────────────────────
-// Shared full-screen image viewer used by the activity sub-cards
-// (SideWorkout, SideNutrition, SideWellness). The main post photo already
-// had its own inline lightbox in FeedPostCard; this is for the smaller
-// thumbnails on the workout/nutrition/wellness cards which were previously
-// just static cropped images with no way to see the full picture.
-//
-// Renders absolutely nothing when `url` is null so it's safe to mount
-// unconditionally. Uses ImagePresets.full to fetch the larger 1200px
-// variant from Supabase, displayed with objectFit:contain so the entire
-// image is visible regardless of aspect ratio. Click backdrop or ESC to
-// close — ESC handler is added/removed with the open state to avoid
-// stealing global keystrokes when the lightbox isn't visible.
-function PhotoLightbox({ url, onClose }: { url: string | null; onClose: () => void }) {
-  useEffect(() => {
-    if (!url) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [url, onClose]);
-  if (!url) return null;
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        background: "rgba(0,0,0,0.92)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
-    >
-      <img
-        src={ImagePresets.full(url)}
-        loading="eager"
-        alt=""
-        // Stop propagation so clicking the image itself doesn't close.
-        // Backdrop and close button are the close affordances.
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          maxWidth: "95vw",
-          maxHeight: "90vh",
-          borderRadius: 16,
-          objectFit: "contain",
-        }}
-      />
-      <button
-        onClick={onClose}
-        aria-label="Close"
-        style={{
-          position: "absolute", top: 20, right: 24,
-          background: "none", border: "none",
-          color: "#fff", fontSize: 32, cursor: "pointer",
-          width: 44, height: 44, lineHeight: 1,
-        }}
-      >×</button>
-    </div>
-  );
-}
-
-function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
-  const [open, setOpen] = useState(false);
-  // Lightbox state for the optional workout photo. Null = closed.
-  const [lightbox, setLightbox] = useState<string | null>(null);
-  const exercises = workout.exercises || [];
-  const cardio = workout.cardio || [];
-  const totalSets = exercises.reduce((s, ex) => s + (ex.sets || 0), 0);
-  const totalVol = exercises.reduce((s, ex) => {
-    const w = parseFloat(String(ex.weight)) || 0;
-    return s + (w * (ex.sets || 0) * (ex.reps || 0));
-  }, 0);
-  const isPR = (workout as any).isPR;
-  return (
-    <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
-        <div style={{ display:"flex",alignItems:"center",gap:10, flex:1, minWidth:0 }}>
-          <span style={{ fontSize:18, flexShrink:0 }}>💪</span>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <span style={{ fontWeight:800,fontSize:14,color:"#fff" }}>{workout.type}</span>
-              {isPR && <span style={{ fontSize:9, fontWeight:800, background:C.gold, color:"#000", borderRadius:99, padding:"1px 6px", flexShrink:0 }}>🏆 PR</span>}
-            </div>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.8)" }}>
-              {workout.duration}{workout.calories > 0 ? ` · ${workout.calories} cal` : ''}
-              {totalSets > 0 && ` · ${totalSets} sets`}
-              {totalVol > 0 && ` · ${totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}k` : totalVol.toFixed(0)} lbs`}
-            </div>
-          </div>
-        </div>
-        <div style={{ width:26,height:26,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0 }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-      </button>
-      {workout.photoUrls && workout.photoUrls.length > 0 && (
-        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          {/* Clickable so users can see the full uncropped photo. The
-              card itself shows a `cover`-cropped version capped at 260px
-              tall (it's a thumbnail, not the focus); tap opens the
-              shared <PhotoLightbox> which uses objectFit:contain so the
-              whole image is visible regardless of aspect ratio. */}
-          <img
-            src={ImagePresets.feed(workout.photoUrls[0])}
-            loading="lazy"
-            decoding="async"
-            alt=""
-            onClick={() => setLightbox(workout.photoUrls![0])}
-            style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block", cursor:"pointer" }}
-          />
-        </div>
-      )}
-      <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
-      {/* Always-visible summary strip — shows top exercises AND cardio inline
-          so the collapsed card actually communicates what was done. Mobile users
-          rarely tap to expand, so this is the primary information surface. */}
-      {!open && (exercises.length > 0 || cardio.length > 0) && (
-        <div style={{ background:"#1E2235", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}` }}>
-          {exercises.length > 0 && (
-            <div style={{ fontSize:11, color:C.darkSub, marginBottom: cardio.length > 0 ? 6 : 0 }}>
-              <span style={{ fontWeight:800, color:"#E2E8F0" }}>Exercises:</span>{" "}
-              {exercises.slice(0,3).map(e=>e.name).filter(Boolean).join(' · ')}{exercises.length > 3 ? ` +${exercises.length-3}` : ''}
-            </div>
-          )}
-          {cardio.length > 0 && (
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {cardio.map((c,i) => (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, padding:"4px 9px", borderRadius:99, background:"rgba(124,58,237,0.18)", border:"1px solid rgba(124,58,237,0.35)" }}>
-                  <span style={{ fontWeight:800, color:"#E2E8F0" }}>{c.type}</span>
-                  {c.duration && <span style={{ color:C.blue, fontWeight:700 }}>· {c.duration}</span>}
-                  {c.distance && <span style={{ color:C.gold, fontWeight:700 }}>· {c.distance}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {open && (
-        <div style={{ background:"#1E2235",padding:"10px 14px" }}>
-          {exercises.length > 0 && (<>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 42px 42px 72px",gap:5,paddingBottom:6,marginBottom:4,borderBottom:"1px solid #2A2D3E" }}>
-              {["Exercise","Sets","Reps","Weight"].map(h => <span key={h} style={{ fontSize:9,fontWeight:800,color:C.darkSub,textTransform:"uppercase",letterSpacing:0.5 }}>{h}</span>)}
-            </div>
-            {exercises.map((ex,i) => (
-              <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 42px 42px 72px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
-                <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{ex.name}</span>
-                <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.sets}</span>
-                <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.reps}</span>
-                <span style={{ fontSize:12,fontWeight:800,color:C.gold,textAlign:"center" }}>{ex.weight}</span>
-              </div>
-            ))}
-            {/* Volume footer */}
-            {totalVol > 0 && (
-              <div style={{ display:"flex", justifyContent:"flex-end", gap:12, paddingTop:8, marginTop:4, borderTop:"1px solid #2A2D3E", fontSize:11 }}>
-                <span style={{ color:C.darkSub }}>{totalSets} sets total</span>
-                <span style={{ color:C.gold, fontWeight:800 }}>📊 {totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}k` : totalVol.toFixed(0)} lbs volume</span>
-              </div>
-            )}
-          </>)}
-          {cardio.length > 0 && (
-            <div style={{ marginTop:exercises.length?10:0 }}>
-              <div style={{ fontSize:10,fontWeight:800,color:C.darkSub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:6 }}>🏃 Cardio</div>
-              {cardio.map((c,i) => (
-                <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 70px 70px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
-                  <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{c.type}</span>
-                  <span style={{ fontSize:12,fontWeight:700,color:C.blue,textAlign:"center" }}>{c.duration}</span>
-                  <span style={{ fontSize:12,fontWeight:700,color:C.gold,textAlign:"center" }}>{c.distance}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── DARK SIDEBAR: Nutrition Card ─────────────────────────────────────────────
-function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]> }) {
-  const [open, setOpen] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
-  return (
-    <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:18 }}>🥗</span>
-          <div>
-            <div style={{ fontWeight:800,fontSize:14,color:"#fff" }}>Nutrition</div>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.8)" }}>{nutrition.calories} kcal · {nutrition.protein}g protein</div>
-          </div>
-        </div>
-        <div style={{ width:26,height:26,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0 }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-      </button>
-      {nutrition.photoUrls && nutrition.photoUrls.length > 0 && (
-        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          {/* Tap to open full-size — see SideWorkout for rationale. */}
-          <img
-            src={ImagePresets.feed(nutrition.photoUrls[0])}
-            loading="lazy"
-            decoding="async"
-            alt=""
-            onClick={() => setLightbox(nutrition.photoUrls![0])}
-            style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block", cursor:"pointer" }}
-          />
-        </div>
-      )}
-      <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
-      {/* Macro pills always visible */}
-      <div style={{ background:"#1E2235",padding:"12px 14px" }}>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:open?12:0 }}>
-          {[
-            { label:"Cal",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000 },
-            { label:"Protein",val:nutrition.protein,unit:"g",color:"#60A5FA",max:250 },
-            { label:"Carbs",val:nutrition.carbs,unit:"g",color:C.blue,max:300 },
-            { label:"Fat",val:nutrition.fat,unit:"g",color:"#C084FC",max:100 },
-          ].map(m => (
-            <div key={m.label} style={{ background:"#252A3D",borderRadius:10,padding:"10px 4px",textAlign:"center",border:"1px solid #2A2D3E" }}>
-              <div style={{ fontSize:16,fontWeight:900,color:m.color }}>{m.val}</div>
-              <div style={{ fontSize:9,color:C.darkSub }}>{m.unit}</div>
-              <div style={{ height:3,borderRadius:2,background:"#2A2D3E",margin:"5px 0 3px",overflow:"hidden" }}>
-                <div style={{ height:"100%",borderRadius:2,background:m.color,width:`${Math.min((m.val/m.max)*100,100)}%` }}/>
-              </div>
-              <div style={{ fontSize:9,fontWeight:700,color:C.darkSub }}>{m.label}</div>
-            </div>
-          ))}
-        </div>
-        {open && (
-          <div style={{ display:"flex",flexDirection:"column",gap:7 }}>
-            {nutrition.meals.map(meal => (
-              <div key={meal.key} style={{ background:"#252A3D",borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",gap:10,border:"1px solid #2A2D3E" }}>
-                <div style={{ width:34,height:34,borderRadius:9,background:"#1E2235",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0 }}>{meal.emoji}</div>
-                <div style={{ flex:1,minWidth:0 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between" }}>
-                    <span style={{ fontWeight:800,fontSize:12,color:"#E2E8F0" }}>{meal.key}</span>
-                    <span style={{ fontWeight:900,fontSize:12,color:C.gold }}>{meal.cal} kcal</span>
-                  </div>
-                  {/* Meal description (the comma-separated food list).
-                      Previously truncated with text-overflow: ellipsis +
-                      white-space: nowrap so anything beyond ~30 chars got
-                      cut off ("6 eggs w Mozzarella cheese, Bluebe…"). 
-                      We let it wrap naturally now — line-height kept tight
-                      so the card doesn't balloon, and word-break: break-word
-                      handles edge cases like one really long ingredient
-                      name without spaces. */}
-                  <div style={{
-                    fontSize:11, color:C.darkSub, marginTop:1,
-                    lineHeight:1.4,
-                    wordBreak:"break-word",
-                  }}>{meal.name}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── DARK SIDEBAR: Wellness Card ───────────────────────────────────────────────
-function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> }) {
-  const [open, setOpen] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
-  return (
-    <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#9333EA)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:18 }}>🌿</span>
-          <div>
-            <div style={{ fontWeight:800,fontSize:14,color:"#fff" }}>Wellness</div>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.85)" }}>{wellness.entries.map(e=>e.activity).join(" · ")}</div>
-          </div>
-        </div>
-        <div style={{ width:26,height:26,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0 }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ width:13,height:13 }}><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-      </button>
-      {wellness.photoUrls && wellness.photoUrls.length > 0 && (
-        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
-          {/* Tap to open full-size — see SideWorkout for rationale. */}
-          <img
-            src={ImagePresets.feed(wellness.photoUrls[0])}
-            loading="lazy"
-            decoding="async"
-            alt=""
-            onClick={() => setLightbox(wellness.photoUrls![0])}
-            style={{ width:"100%", maxHeight:260, objectFit:"cover", display:"block", cursor:"pointer" }}
-          />
-        </div>
-      )}
-      <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
-      {/* Always-visible activity pills strip — even when collapsed, the user
-          sees a colored chip per activity. Matches the modern profile card
-          aesthetic where each activity has its own emoji + accent color. */}
-      {!open && (
-        <div style={{ background:"#1E2235", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}`, display:"flex", flexWrap:"wrap", gap:6 }}>
-          {wellness.entries.slice(0, 4).map((e, i) => {
-            const s = getWellnessStyle(e.activity || "");
-            return (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, padding:"4px 9px", borderRadius:99, background:`${s.accent}22`, border:`1px solid ${s.accent}55` }}>
-                <span style={{ fontSize:12 }}>{s.emoji}</span>
-                <span style={{ fontWeight:700, color:"#E2E8F0" }}>{e.activity}</span>
-                {e.duration ? <span style={{ color:s.accent, fontWeight:800 }}>· {e.duration}m</span> : null}
-              </div>
-            );
-          })}
-          {wellness.entries.length > 4 && (
-            <span style={{ fontSize:11, color:C.darkSub, alignSelf:"center" }}>+{wellness.entries.length - 4}</span>
-          )}
-        </div>
-      )}
-      {open && (
-        <div style={{ background:"#1E2235",padding:"10px 14px",display:"flex",flexDirection:"column",gap:7 }}>
-          {wellness.entries.map((e, i) => {
-            const s = getWellnessStyle(e.activity || "");
-            // Lookup wins. The feed loader hardcodes e.emoji='🌿' for every row,
-            // so respecting e.emoji first would force every activity to render
-            // as a leaf even when WELLNESS_STYLES has the right per-activity icon.
-            // Only fall back to e.emoji if the activity name isn't in our table.
-            const isMappedActivity = WELLNESS_STYLES[(e.activity || "").toLowerCase().trim()] !== undefined;
-            const emoji = isMappedActivity ? s.emoji : (e.emoji || s.emoji);
-            const accent = s.accent;
-            // Time pill — formatted same as profile cards.
-            const timeStr = e.loggedAt ? (() => {
-              try { return new Date(e.loggedAt!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
-            })() : "";
-            const dur = e.duration ? `${e.duration} min` : null;
-            return (
-              <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
-                <div style={{ width:38, height:38, borderRadius:11, background:`${accent}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, border:`1.5px solid ${accent}55` }}>{emoji}</div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0" }}>{e.activity}</div>
-                  {e.notes && <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{e.notes}</div>}
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end", flexShrink:0 }}>
-                  {dur && <span style={{ fontSize:10, fontWeight:800, color:accent, background:`${accent}22`, padding:"2px 7px", borderRadius:99 }}>{dur}</span>}
-                  {timeStr && <span style={{ fontSize:10, fontWeight:600, color:C.darkSub, background:"#1A1D2E", padding:"2px 7px", borderRadius:99 }}>{timeStr}</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── DARK SIDEBAR: Badge definitions ──────────────────────────────────────────
-const BADGE_DEFS: Record<string, { emoji: string; label: string }> = {
-  "first-workout": { emoji: "🏋️", label: "First Workout" },
-  "7day-streak": { emoji: "🔥", label: "7 Day Streak" },
-  "30day-streak": { emoji: "💪", label: "30 Day Streak" },
-  "90day-streak": { emoji: "🦁", label: "90 Day Grind" },
-  "first-5k": { emoji: "🏃", label: "First 5K" },
-  "marathon": { emoji: "🏅", label: "Marathon" },
-  "weight-lost-10": { emoji: "⚡", label: "10 lbs Down" },
-  "weight-lost-25": { emoji: "🌟", label: "25 lbs Down" },
-  "weight-lost-50": { emoji: "👑", label: "50 lbs Down" },
-  "macro-week": { emoji: "🥗", label: "Macro Week" },
-  "protein-streak": { emoji: "🥩", label: "Protein Streak" },
-  "hydration-week": { emoji: "💧", label: "Hydration Week" },
-  "zen-week": { emoji: "🧘", label: "Zen Week" },
-  "zero-alcohol": { emoji: "🌿", label: "Sober Streak" },
-  "sleep-champion": { emoji: "😴", label: "Sleep Champion" },
-  "community-100": { emoji: "🤝", label: "Community 100" },
-  "personal-trainer": { emoji: "🎓", label: "Personal Trainer" },
-};
-
-// ── DARK SIDEBAR: One user's full activity block ──────────────────────────────
-// userBadges here is *per-card* — only badges that were earned within a
-// few minutes of this card's underlying activity logs. So an empty list
-// means nothing new was unlocked by this workout/log; we hide the whole
-// Badges section in that case to avoid cluttering the feed with stale
-// achievements that already showed up on prior cards.
-function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: string[] }) {
-  const hasActivity = post.workout || post.nutrition || post.wellness;
-  if (!hasActivity) return null;
-  // De-dupe in case a badge somehow ended up in the list twice (defensive).
-  const displayBadges = Array.from(new Set(userBadges));
-  return (
-    <div style={{ background:C.darkCard, borderRadius:18, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:16 }}>
-      {/* User header — avatar + name + username are all clickable and
-          navigate to the user's profile page. Mirrors the behavior of
-          the main feed post header so users have a consistent way to
-          tap a poster's name from anywhere. window.location for parity
-          with the rest of the file's profile-link pattern (no router
-          dependency injected here). */}
-      <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-        <div
-          onClick={() => window.location.href = `/profile/${post.username}`}
-          style={{ cursor:"pointer", flexShrink:0 }}
-          aria-label={`Open ${post.user}'s profile`}
-          role="link"
-        >
-          <TierFrame tier={(post as any).tier || "default"} size={44}>
-            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
-              {(post as any).avatarUrl
-                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-                : post.avatar}
-            </div>
-          </TierFrame>
-        </div>
-        <div
-          onClick={() => window.location.href = `/profile/${post.username}`}
-          style={{ flex:1, minWidth:0, cursor:"pointer" }}
-          role="link"
-        >
-          <div style={{ display:"flex",alignItems:"center",gap:5,flexWrap:"wrap" }}>
-            <span style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{post.user}</span>
-            <TierBadgeChip tier={(post as any).tier || "default"} small />
-          </div>
-          <div style={{ fontSize:11,color:C.darkSub }}>@{post.username}</div>
-        </div>
-        <div style={{ marginLeft:"auto",fontSize:11,color:C.darkSub }}>{post.time}</div>
-      </div>
-      {/* Activity cards */}
-      <div style={{ padding:"12px 14px 4px" }}>
-        {post.workout && <SideWorkout workout={post.workout} />}
-        {post.nutrition && <SideNutrition nutrition={post.nutrition} />}
-        {post.wellness && <SideWellness wellness={post.wellness} />}
-      </div>
-      {/* Badges — only show NEW ones earned by this specific card's logs */}
-      {displayBadges.length > 0 && (
-        <div style={{ padding:"8px 14px 12px", borderTop:`1px solid ${C.darkBorder}` }}>
-          <div style={{ fontSize:10, fontWeight:700, color:"#F5A623", textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>
-            ✨ {displayBadges.length === 1 ? "New badge unlocked" : `${displayBadges.length} new badges unlocked`}
-          </div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            {displayBadges.map(badgeId => {
-              const def = BADGE_DEFS[badgeId] || { emoji: "🏆", label: badgeId };
-              return (
-                <div key={badgeId} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(245,166,35,0.12)", border:"1px solid rgba(245,166,35,0.3)", borderRadius:99, padding:"4px 10px" }}>
-                  <span style={{ fontSize:12 }}>{def.emoji}</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#F5A623" }}>{def.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {/* Comments */}
-      <ActivityComments cardId={post.id as string} cardOwnerId={post._userId as string} />
-    </div>
-  );
-}
-
-// ── Post Card (left column — media + social only) ─────────────────────────────
-// PERF: PostCard is memoized so it only re-renders when its specific
-// post or callbacks change. Without this, every parent state change
-// (which happens often — likes, comments, story progress) re-renders
-// every visible card on the feed. With ~10-20 cards visible at once
-// and 50+ state values on the parent, that's a lot of wasted work.
-//
-// Custom equality function: re-render only if the post's data changed
-// or the user changed. We deliberately ignore callback identity since
-// the parent recreates them on every render — comparing by reference
-// would defeat the memo entirely.
-
-/** Render text with @mentions as tappable links to /profile/[username]. */
-function renderMentions(text: string): React.ReactNode {
-  if (!text) return text;
-  // Match either start-of-string or whitespace, then @username. We capture
-  // the leading char so we can preserve it in the output.
-  const re = /(^|\s)@([a-zA-Z0-9_]{2,32})/g;
-  const out: React.ReactNode[] = [];
-  let lastIdx = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const matchStart = m.index;
-    const lead = m[1];
-    const uname = m[2];
-    // Push text before the mention
-    if (matchStart > lastIdx) out.push(text.slice(lastIdx, matchStart));
-    if (lead) out.push(lead);
-    out.push(
-      <a
-        key={`${matchStart}-${uname}`}
-        href={`/profile/${uname}`}
-        style={{ color: '#A78BFA', fontWeight: 700, textDecoration: 'none' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        @{uname}
-      </a>
-    );
-    lastIdx = matchStart + lead.length + 1 + uname.length;
-  }
-  if (lastIdx < text.length) out.push(text.slice(lastIdx));
-  return out;
-}
-
-/** Fire @mention notifications for a comment or post. Resolves usernames
- *  → user ids in one query, then fires create_notification for each.
- *  Errors are swallowed — mention notifs are a nice-to-have, not critical. */
-async function fireMentionNotifications(
-  usernames: string[],
-  fromUserId: string,
-  fromDisplayName: string,
-  referenceId: string | number,
-  kind: 'comment' | 'caption'
-) {
-  if (!usernames.length) return;
+// Format an ISO datetime as a friendly local time, e.g. "8:42 AM".
+// Falls back to empty string when the input is unparseable.
+function formatTimeOfDay(iso: string | null | undefined): string {
+  if (!iso) return "";
   try {
-    // Lowercase for case-insensitive match
-    const lowered = usernames.map(u => u.toLowerCase());
-    const { data } = await supabase
-      .from('users')
-      .select('id, username')
-      .in('username', lowered);
-    if (!data || data.length === 0) return;
-    const body = kind === 'comment'
-      ? `${fromDisplayName} mentioned you in a comment`
-      : `${fromDisplayName} mentioned you in a post`;
-    await Promise.all(data.map((u: any) => {
-      // Don't notify yourself
-      if (u.id === fromUserId) return Promise.resolve();
-      return fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create_notification',
-          payload: {
-            userId: u.id,
-            fromUserId,
-            type: 'mention',
-            referenceId: String(referenceId),
-            body,
-          },
-        }),
-      }).catch(() => {});
-    }));
-  } catch { /* best-effort */ }
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch { return ""; }
 }
 
-const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
-  // Determine ownership. Prefer comparing user IDs (reliable) over username
-  // (which can be stale or fall back to "User" if profile data didn't load).
-  const isOwner = !!currentUser && (
-    (typeof (post as any).user_id === "string" && (post as any).user_id === currentUser.id) ||
-    (post.username && (post.username === currentUser?.profile?.username || post.username === currentUser?.user_metadata?.username))
+type WellnessEntry = {
+  emoji: string;
+  activity: string;
+  notes: string;
+  duration?: number | null;     // minutes (from wellness_duration_min)
+  loggedAt?: string | null;     // ISO string (from logged_at) for time-of-day display
+};
+type Workout    = {type:string;duration:string;calories:number;exercises:Exercise[];cardio:CardioEntry[]};
+type Nutrition  = {calories:number;protein:number;carbs:number;fat:number;sugar:number;meals:Meal[]};
+type Wellness   = {entries:WellnessEntry[]};
+
+const iStyle = {background:"#0D0D0D",border:`1.5px solid #3D2A6E`,borderRadius:10,padding:"7px 10px",fontSize:13,color:"#F0F0F0",outline:"none",width:"100%",boxSizing:"border-box" as const};
+const emptyCardio:CardioEntry  = {type:"",duration:"",distance:""};
+const emptyWellness:WellnessEntry = {emoji:"🧘",activity:"",notes:""};
+
+// ── Month Card (collapsible) ───────────────────────────────────────────────────
+const MONTHS_FULL_MC = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTHS_SHORT_MC = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const now = new Date();
+  const dt = new Date((mDays[0] as any)._date || 0);
+  const isCurrentYear = dt.getFullYear() === now.getFullYear();
+  const label = isCurrentYear
+    ? MONTHS_FULL_MC[dt.getMonth()]
+    : `${MONTHS_FULL_MC[dt.getMonth()]} ${dt.getFullYear()}`;
+  const totalWorkouts = mDays.filter((d:any) => d.workout).length;
+  const totalNutrition = mDays.filter((d:any) => d.nutrition).length;
+  const totalWellness  = mDays.filter((d:any) => d.wellness).length;
+  const firstDay = mDays[mDays.length - 1];
+  const lastDay  = mDays[0];
+  const dateRange = `${MONTHS_SHORT_MC[new Date((firstDay as any)._date||0).getMonth()]} ${new Date((firstDay as any)._date||0).getDate()} – ${MONTHS_SHORT_MC[new Date((lastDay as any)._date||0).getMonth()]} ${new Date((lastDay as any)._date||0).getDate()}`;
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%",
+        background: open ? "#2D1F52" : "#1A1228",
+        border: `2px solid ${open ? "#7C3AED" : "#3D2A6E"}`,
+        borderRadius: open ? "16px 16px 0 0" : 16,
+        padding: "14px 18px", cursor: "pointer", textAlign: "left",
+        transition: "all 0.2s",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontWeight:900, fontSize:17, color:"#F0F0F0" }}>{label}</div>
+            <div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>
+              {dateRange} · {mDays.length} day{mDays.length!==1?"s":""} logged
+            </div>
+            <div style={{ display:"flex", gap:12, marginTop:6, flexWrap:"wrap" }}>
+              {totalWorkouts>0 && <span style={{fontSize:11,color:"#9CA3AF"}}>💪 {totalWorkouts} workout{totalWorkouts!==1?"s":""}</span>}
+              {totalNutrition>0 && <span style={{fontSize:11,color:"#9CA3AF"}}>🥗 {totalNutrition} nutrition</span>}
+              {totalWellness>0  && <span style={{fontSize:11,color:"#9CA3AF"}}>🌿 {totalWellness} wellness</span>}
+            </div>
+          </div>
+          <div style={{
+            width:32, height:32, borderRadius:"50%",
+            background: open ? "#7C3AED" : "#2D1F52",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            flexShrink:0, marginLeft:12,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.25s",
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}>
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div style={{
+          border: "2px solid #7C3AED", borderTop:"none",
+          borderRadius:"0 0 16px 16px",
+          padding:"8px 10px 10px",
+          background:"#0D0820",
+        }}>
+          {(()=>{
+            // Group days by week (Sun–Sat)
+            const byWeek: Record<string, any[]> = {};
+            mDays.forEach(d => {
+              const dt = new Date((d as any)._date || 0);
+              const weekStart = new Date(dt);
+              weekStart.setDate(dt.getDate() - dt.getDay());
+              const wk = weekStart.toISOString().slice(0,10);
+              if (!byWeek[wk]) byWeek[wk] = [];
+              byWeek[wk].push(d);
+            });
+            return Object.entries(byWeek)
+              .sort((a,b) => b[0].localeCompare(a[0]))
+              .map(([wk, wDays]) => {
+                const wStart = new Date(wk);
+                const wEnd = new Date(wk); wEnd.setDate(wEnd.getDate() + 6);
+                const fmt = (d: Date) => `${MONTHS_SHORT_MC[d.getMonth()]} ${d.getDate()}`;
+                return (
+                  <div key={wk}>
+                    <div style={{
+                      fontSize:10, fontWeight:700, color:"#6B7280",
+                      textTransform:"uppercase", letterSpacing:1,
+                      padding:"10px 4px 5px",
+                    }}>
+                      Week of {fmt(wStart)} – {fmt(wEnd)}
+                    </div>
+                    {wDays.map(makeCard)}
+                  </div>
+                );
+              });
+          })()}
+        </div>
+      )}
+    </div>
   );
-  const [commentText, setCommentText] = useState("");
-  const [showAllComments, setShowAllComments] = useState(false);
-  const [currentPhoto, setCurrentPhoto] = useState(0);
-  // Swipe tracking via ref — survives React's event pooling and is more reliable
-  // than stashing properties on e.currentTarget across separate handler calls.
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
-  // Set true on pointerup if the gesture was a real swipe (>40px horizontal).
-  // Cleared on the next pointerdown. This lets us suppress the image's onClick
-  // → lightbox handler when the user was actually swiping rather than tapping.
-  const justSwipedRef = useRef(false);
-  // Clamp currentPhoto if it falls out of bounds (e.g. user removes a photo, or
-  // photos array shrinks for any reason). Without this the carousel tries to
-  // render undefined and the dots/arrows misbehave.
+}
+
+// ── Day Card ──────────────────────────────────────────────────────────────────
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; onLogSaved?: ()=>void; earnedBadges?: string[]; userLevel?: number };
+function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, onLogSaved, earnedBadges = [], userLevel = 1}:DayCardProps) {
+  const { user } = useAuth();
+  const [open,setOpen]       = useState(false);
+  const [confirmDel,setConfirmDel] = useState(false);
+  const [nut,setNut]         = useState(false);
+  const [woOpen,setWoOpen]   = useState(false);
+  const [wellOpen,setWellOpen] = useState(false);
+  const [editWo,setEditWo]   = useState(false);
+  const [editNut,setEditNut] = useState(false);
+  const [editWell,setEditWell] = useState(false);
+  const [photos,setPhotos]   = useState<string[]>([]);
+  const [lb,setLb]           = useState<string|null>(null);
+  const [workout,setWorkout]     = useState<Workout|null>(day.workout ? {...day.workout as Workout, cardio:(day.workout as any).cardio || []} : null);
+  const [nutrition,setNutrition] = useState<Nutrition|null>(day.nutrition as Nutrition|null);
+  const [wellness,setWellness]   = useState<Wellness|null>((day as any).wellness as Wellness | null ?? null);
+  // edit buffers
+  const [woBuf,setWoBuf]   = useState<Workout>(() => workout ? {...workout, cardio: (workout as any).cardio || [], exercises: workout.exercises || []} : {type:"",duration:"",calories:0,exercises:[],cardio:[]});
+  const [nutBuf,setNutBuf] = useState<Nutrition>(nutrition ?? {calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});
+  const [wellBuf,setWellBuf] = useState<Wellness>({entries:[]});
+  const [showAllBadges, setShowAllBadges] = useState(false);
+  const parts = day.id.split("/");
+  const m = parseInt(parts[0]) || 1;
+  const d = parseInt(parts[1]) || 1;
+
+  // Load existing photo from DB on mount
   useEffect(() => {
-    if (currentPhoto > post.photos.length - 1) setCurrentPhoto(Math.max(0, post.photos.length - 1));
-  }, [post.photos.length, currentPhoto]);
-  const [lightbox, setLightbox] = useState<string|null>(null);
-  const [showMenu, setShowMenu] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [likeLoading, setLikeLoading] = useState(false);
-  const [commentLoading, setCommentLoading] = useState(false);
-  const [brokenImage, setBrokenImage] = useState(false);
-  // Share button state — shows a "✓ Copied" confirmation for 2.5s after
-  // the user copies a post link to their clipboard.
-  const [shareCopied, setShareCopied] = useState(false);
+    const allPhotos: string[] = [];
+    if ((day as any).photo_url) allPhotos.push((day as any).photo_url);
+    // Also load all nutrition photos
+    const nutPhotos: string[] = ((day as any).nutrition?.photoUrls || []).filter(Boolean);
+    nutPhotos.forEach((url: string) => {
+      if (!allPhotos.includes(url)) allPhotos.push(url);
+    });
+    if (allPhotos.length > 0) setPhotos(allPhotos);
+  }, []);
 
-  /** Share or copy a permalink to this post. Tries native share sheet
-   *  on mobile, falls back to clipboard.writeText with a visible toast.
-   *  Used by the previously-broken Share button on each feed post.
-   *
-   *  Builds the URL from the current origin so it works both on
-   *  liveleeapp.com and on Vercel preview deployments without baking
-   *  the domain in. Mock posts (numeric ids without dashes) skip share
-   *  since they don't have public permalinks.
-   *
-   *  As of the universal-share refactor, this just delegates to
-   *  shareWithToast — keeping the function as a thin wrapper preserves
-   *  the existing onClick={sharePost} bindings without churn. */
-  async function sharePost() {
-    const isRealPost = typeof post.id === "string" && post.id.includes("-");
-    if (!isRealPost) return;
-    await shareWithToast(
-      {
-        url: appUrl(`/post/${post.id}`),
-        title: "Check out this post on Livelee",
-        text: post.caption ? post.caption.slice(0, 120) : "Check out this post on Livelee",
-      },
-      setShareCopied
-    );
-  }
-  // Carousel video mute toggle. Default muted because browsers refuse to
-  // autoplay videos with audio (Chrome/Safari/Firefox all block this), and we
-  // want the video to start playing the moment it becomes the active slide.
-  // User taps the speaker icon to unmute.
-  const [videoMuted, setVideoMuted] = useState(true);
-  const [replyTo, setReplyTo] = useState<{id:number|string;user:string}|null>(null);
-  const commentInputRef = useRef<HTMLInputElement>(null);
-  const [m, d] = post.dateShort.split(".").map(Number);
-
-  async function toggleLike() {
-    if (!currentUser || likeLoading) return;
-    setLikeLoading(true);
-    const isDbPost = typeof post.id === 'string' && post.id.includes('-');
-    if (isDbPost) {
-      if (post.liked) {
-        await supabase.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', post.id);
-      } else {
-        await supabase.from('likes').insert({ user_id: currentUser.id, post_id: post.id });
-        // Notify post owner (only if not liking own post)
-        const postOwnerId = (post as any)._ownerId;
-        if (postOwnerId && postOwnerId !== currentUser.id) {
-          const name = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || 'Someone';
-          fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ action:'create_notification', payload:{ userId: postOwnerId, fromUserId: currentUser.id, type:'like', referenceId: post.id, body:`${name} liked your post` }}) });
+  function onFiles(e:React.ChangeEvent<HTMLInputElement>) {
+    Array.from(e.target.files??[]).forEach(f=>{
+      const r=new FileReader();
+      r.onload=async ev=>{
+        const dataUrl = ev.target!.result as string;
+        setPhotos(p=>[...p, dataUrl]); // show preview immediately
+        // Upload to Supabase via server API
+        const { uploadPhoto: up } = await import('@/lib/uploadPhoto');
+        const { compressImage: ci } = await import('@/lib/compressImage');
+        const logId = workoutLogId || (nutritionLogIds?.[0]);
+        const bucket = 'activity';
+        const path = `${logId || Date.now()}/photo-${Date.now()}.jpg`;
+        const compressed = await ci(dataUrl);
+        const publicUrl = await up(compressed, bucket, path);
+        if (publicUrl) {
+          setPhotos(p => p.map(u => u === dataUrl ? publicUrl : u));
+          // Save URL back to the activity log
+          if (logId) {
+            await supabase.from('activity_logs').update({ photo_url: publicUrl }).eq('id', logId);
+          }
         }
-      }
-    }
-    onUpdate({ ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 });
-    setLikeLoading(false);
+      };
+      r.readAsDataURL(f);
+    }); e.target.value="";
   }
 
-  async function submitComment() {
-    if (!commentText.trim() || commentLoading) return;
-    setCommentLoading(true);
-    const isDbPost = typeof post.id === 'string' && post.id.includes('-');
-    const displayName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "You";
-    const avatarInitials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-    const fullText = replyTo ? `@${replyTo.user.split(' ')[0]} ${commentText.trim()}` : commentText.trim();
-    setReplyTo(null);
+  // Helper: pick the right `logged_at` timestamp for a save. When the
+  // day card is for TODAY's calendar date (in the user's local timezone),
+  // we use the current moment so logs land AFTER any rivalries or wars
+  // that started earlier today. For past days, we use that day's date
+  // so backfilled entries still fall in the right calendar bucket.
+  //
+  // Without this, `new Date(day._date).toISOString()` for today returns
+  // midnight UTC of today (00:00:00). A rivalry started at 2pm filters
+  // `WHERE logged_at >= started_at` and excludes 00:00 — even though
+  // the user logged the workout AFTER creating the rivalry. The 4-week
+  // stats panel doesn't filter by rivalry start, so users see the run
+  // there but get 0 on their rivalry score.
+  function computeLoggedAt(dayDate: any): string {
+    if (!dayDate) return new Date().toISOString();
+    const target = new Date(dayDate);
+    const now = new Date();
+    const isToday =
+      target.getFullYear() === now.getFullYear() &&
+      target.getMonth() === now.getMonth() &&
+      target.getDate() === now.getDate();
+    return isToday ? now.toISOString() : target.toISOString();
+  }
 
-    if (isDbPost && currentUser) {
-      // Submit via /api/db so the admin client bypasses RLS. The server
-      // returns the FULL updated comments list for this post, which we use
-      // to refresh the parent state authoritatively (no optimistic-state
-      // drift bugs — the UI reflects exactly what's in the database).
-      try {
-        const res = await fetch('/api/db', {
+  // Helper: after any activity log is inserted/updated, fire all the
+  // background trackers (PR detection, goal progress, group goals, member
+  // challenges, buddy matches). Each is best-effort — errors are swallowed
+  // so the user always sees their save succeed even if a tracker fails.
+  //
+  // After every tracker resolves we call onLogSaved() so the parent
+  // ProfilePage can refresh its goal panel from the now-updated DB.
+  // Without this, server-side `update_goals_from_log` would correctly
+  // tick up the stored goal but the on-screen profile would still show
+  // the cached pre-edit value until the user navigated away and back.
+  // (Reported symptom: "I edited my workout, added a run, my running
+  // goal didn't move.")
+  async function fireTrackers(logId: string, kind: 'workout' | 'nutrition' | 'wellness') {
+    if (!user || !logId) return;
+    try {
+      const triggers: Array<Promise<any>> = [
+        // Personal goals: applies to all kinds (nutrition_avg goals fire on
+        // nutrition logs, workout_count fires on workout logs, etc.)
+        fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'post_feed_comment',
-            payload: {
-              postId: post.id,
-              commenterId: currentUser.id,
-              content: fullText,
-              postOwnerId: (post as any)._ownerId || null,
-            },
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          console.error('[comment] post failed:', data?.error || res.statusText);
-          alert(`Couldn't post your comment: ${data?.error || 'Server error'}`);
-          setCommentLoading(false);
-          return;
+          body: JSON.stringify({ action: 'update_goals_from_log', payload: { userId: user.id, logId } }),
+        }).catch(() => {}),
+        // Group goals: also applies to all kinds. nutrition_logs / wellness_*
+        // metrics fire on those log types.
+        syncGroupChallengeProgressFor(user.id).catch(() => {}),
+        // Member challenges (auto-tracked ones with metric_key set): same.
+        syncMemberChallengeProgressFor(user.id).catch(() => {}),
+      ];
+      if (kind === 'workout') {
+        // PRs — workout-only
+        triggers.push(fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'detect_prs_from_log', payload: { userId: user.id, logId } }),
+        }).catch(() => {}));
+        // Wars / buddy matches — workout-only, recomputes from history server-side
+        triggers.push(fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'buddy_update_from_log', payload: { userId: user.id, logId } }),
+        }).catch(() => {}));
+        // Rivalry badges — workout-only. Server detects whether this log
+        // earns first_blood (first log of the rivalry by either side) or
+        // dominant (ahead by 3+ past midweek) and inserts the badge row.
+        // Idempotent on retry. There WAS no badge unlock pipeline before
+        // this — rivalry_badges was a read-only table that never got
+        // written to from anywhere in the codebase, which is why no one
+        // was ever earning the First Blood badge despite logging.
+        triggers.push(fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'unlock_rivalry_badges', payload: { userId: user.id, logId } }),
+        }).catch(() => {}));
+      }
+      await Promise.all(triggers);
+      // Notify parent — triggers a goals refetch on ProfilePage so the UI
+      // shows the new `current` values right away. Best-effort: swallow if
+      // the parent didn't pass a callback.
+      try { onLogSaved?.(); } catch { /* noop */ }
+    } catch { /* best-effort */ }
+  }
+
+  async function saveWorkout() {
+    setWorkout({...woBuf});
+    setEditWo(false);
+    // Normalize exercises: ensure both per-set weights and per-set reps
+    // are stored. The legacy `reps` field is kept set to the first value
+    // for backward compat with PR detection / badge engines.
+    const normalizedExercises = (woBuf.exercises || []).map((ex: any) => {
+      const setCount = parseInt(String(ex.sets)) || 1;
+      const weights = ex.weights && ex.weights.length > 0
+        ? ex.weights
+        : Array(setCount).fill(ex.weight || '');
+      const repsArr = ex.repsArr && ex.repsArr.length > 0
+        ? ex.repsArr
+        : Array(setCount).fill(String(ex.reps || ''));
+      return {
+        name: ex.name,
+        sets: ex.sets,
+        reps: parseInt(repsArr[0]) || ex.reps,
+        weight: weights[0] || ex.weight || '',
+        weights,
+        repsArr,
+      };
+    });
+    const cardioData = (woBuf.cardio || []).length > 0
+      ? woBuf.cardio.map((c: any) => {
+          // Group goal sync (lib/groupGoalSync.ts) reads `c.miles` as a
+          // numeric value, but the editor stores distance as a string in
+          // `c.distance`. We mirror it as a parsed number into `miles` to
+          // match what /post page writes — without this, group goals like
+          // "Run 151 mi this month" never see profile-edited cardio.
+          const distNum = parseFloat(String(c.distance || '')) || 0;
+          const out: any = { ...c };
+          if (distNum > 0) out.miles = distNum;
+          return out;
+        })
+      : null;
+
+    // ── Derive workout_category from the data the user entered ──────────────
+    // workout_category is the standardized classifier that drives goals,
+    // badges, stats, and rivalries. The /post page sets it explicitly via
+    // a category picker; this profile editor doesn't have that picker, so
+    // we infer it from the cardio type or fall back to "lifting" if any
+    // exercises are logged.
+    //
+    // Without this, goals like "run 15 miles this month" never update from
+    // a profile-edited workout — the goal asks "is workout_category =
+    // 'running'?" and gets undefined → 0 contribution → goal stays at 0/15.
+    const cardioCatMap: Record<string, string> = {
+      run: 'running', running: 'running', jog: 'running', jogging: 'running',
+      walk: 'walking', walking: 'walking', hike: 'walking', hiking: 'walking',
+      bike: 'biking', biking: 'biking', cycle: 'biking', cycling: 'biking', ride: 'biking',
+      swim: 'swimming', swimming: 'swimming',
+      row: 'rowing', rowing: 'rowing', erg: 'rowing',
+    };
+    const inferCategory = (): string | null => {
+      const firstCardio = (woBuf.cardio || [])[0];
+      const cType = (firstCardio?.type || '').toLowerCase().trim();
+      if (cType) {
+        // Try direct map first, then substring match for "Trail Running" etc.
+        if (cardioCatMap[cType]) return cardioCatMap[cType];
+        for (const k of Object.keys(cardioCatMap)) {
+          if (cType.includes(k)) return cardioCatMap[k];
         }
-        // Refresh the parent's view of this post's comments using the
-        // authoritative list returned by the server.
-        if (onCommentsRefresh && data.comments) {
-          onCommentsRefresh(post.id, data.comments);
-        }
-        // @mention notifications — parse @usernames from the comment and
-        // fire one notification per mentioned user. We do this client-
-        // side so the user gets immediate feedback; the server doesn't
-        // re-validate the mention parse (low-stakes — worst case is a
-        // user gets a stray notif).
-        const mentions = parseMentions(fullText);
-        if (mentions.length > 0 && currentUser) {
-          fireMentionNotifications(mentions, currentUser.id, displayName, post.id, 'comment').catch(() => {});
-        }
-        // Analytics: comments are a strong engagement signal — track per
-        // post so we can compute "% of users commenting" funnels.
-        track("comment_created", {
-          post_id: post.id,
-          comment_length: fullText.length,
-          mention_count: mentions.length,
-        });
-        setCommentText("");
-        setCommentLoading(false);
-        return;
-      } catch (err: any) {
-        console.error('[comment] network error:', err);
-        alert(`Couldn't post your comment: ${err?.message || 'Network error'}`);
-        setCommentLoading(false);
-        return;
+        return 'other'; // cardio of unknown type — better than null
+      }
+      if (normalizedExercises.length > 0) return 'lifting';
+      return null;
+    };
+    const inferredCategory = inferCategory();
+
+    let savedLogId: string | null = workoutLogId || null;
+    if (workoutLogId) {
+      // Update existing log — save ALL fields including cardio + category.
+      // Only overwrite workout_category when we have a meaningful inference;
+      // otherwise leave whatever was there (e.g. set originally by /post).
+      const updatePayload: any = {
+        workout_type: woBuf.type || null,
+        workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
+        workout_calories: woBuf.calories || null,
+        exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
+        cardio: cardioData,
+      };
+      if (inferredCategory) updatePayload.workout_category = inferredCategory;
+      await supabase.from('activity_logs').update(updatePayload).eq('id', workoutLogId);
+    } else if (user) {
+      // No existing log for this day — insert a new one so it persists after refresh
+      const { data: insertedRow } = await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        log_type: 'workout',
+        is_public: true,
+        // When the day card is for TODAY, use NOW as the timestamp.
+        // Previously this was always midnight UTC of the day, which
+        // meant a workout logged at, say, 3pm got logged_at = 00:00.
+        // Rivalries / wars that started earlier the same day filter
+        // `logged_at >= started_at`, and 00:00 < 14:00 silently
+        // excluded the workout. Symptom: stats panels showed the run
+        // (they don't filter by start time) but the rivalry score
+        // stayed 0. For PAST days we still use midnight — backfilling
+        // a workout for last Tuesday shouldn't claim it happened just
+        // now.
+        logged_at: computeLoggedAt(day._date),
+        workout_type: woBuf.type || null,
+        workout_category: inferredCategory,
+        workout_duration_min: woBuf.duration ? parseInt(String(woBuf.duration)) : null,
+        workout_calories: woBuf.calories || null,
+        exercises: normalizedExercises.length > 0 ? normalizedExercises : null,
+        cardio: cardioData,
+      }).select('id').single().catch(() => ({ data: null }));
+      if (insertedRow && (insertedRow as any).id) {
+        savedLogId = (insertedRow as any).id;
       }
     }
-
-    // Mock posts (not in DB) — fall back to local-only optimistic update
-    const nc: Comment = { id: Date.now(), user: displayName, avatar: avatarInitials, text: fullText, time: "Just now" };
-    onUpdate({ ...post, comments: [...post.comments, nc] });
-    setCommentText("");
-    setCommentLoading(false);
-  }
-  function addPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file) return;
-    const r = new FileReader();
-    r.onload = ev => onUpdate({ ...post, photos: [...post.photos, ev.target!.result as string] });
-    r.readAsDataURL(file);
-    e.target.value = "";
+    if (savedLogId) fireTrackers(savedLogId, 'workout');
   }
 
-  const visibleComments = showAllComments ? post.comments : post.comments.slice(0,1);
+  async function saveNutrition() {
+    setNutrition({...nutBuf});
+    setEditNut(false);
+    let savedLogId: string | null = nutritionLogIds && nutritionLogIds.length > 0 ? nutritionLogIds[0] : null;
+    if (nutritionLogIds && nutritionLogIds.length > 0) {
+      // Update existing log — save ALL macro fields
+      await supabase.from('activity_logs').update({
+        calories_total: nutBuf.calories || null,
+        protein_g: nutBuf.protein || null,
+        carbs_g: nutBuf.carbs || null,
+        fat_g: nutBuf.fat || null,
+        // Persist meals as food_items so they survive refresh
+        food_items: nutBuf.meals && nutBuf.meals.length > 0
+          ? nutBuf.meals.map((m: any) => ({ name: m.key || m.name || 'Meal', calories: m.cal || 0 }))
+          : null,
+      }).eq('id', nutritionLogIds[0]);
+    } else if (user) {
+      // No existing log — insert so it persists
+      const { data: insertedRow } = await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        log_type: 'nutrition',
+        is_public: true,
+        logged_at: computeLoggedAt(day._date),
+        calories_total: nutBuf.calories || null,
+        protein_g: nutBuf.protein || null,
+        carbs_g: nutBuf.carbs || null,
+        fat_g: nutBuf.fat || null,
+      }).select('id').single().catch(() => ({ data: null }));
+      if (insertedRow && (insertedRow as any).id) savedLogId = (insertedRow as any).id;
+    }
+    if (savedLogId) fireTrackers(savedLogId, 'nutrition');
+  }
 
-  return (
-    <>
-      {lightbox && (
-        <div style={{ position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center" }} onClick={() => setLightbox(null)}>
-          <img src={ImagePresets.full(lightbox)} loading="eager" style={{ maxWidth:"95vw",maxHeight:"90vh",borderRadius:16,objectFit:"contain" }} alt="" onClick={e => e.stopPropagation()} />
-          <button onClick={() => setLightbox(null)} style={{ position:"absolute",top:20,right:24,background:"none",border:"none",color:"#fff",fontSize:32,cursor:"pointer" }}>×</button>
+  async function saveWellness() {
+    const newWellness = wellBuf.entries.length ? {...wellBuf} : null;
+    setWellness(newWellness);
+    setEditWell(false);
+    if (!user) return;
+
+    // Delete-and-replace strategy: we delete every existing wellness log
+    // for this day card, then insert one row per current wellBuf entry.
+    // This is the only sane way to handle add/remove/reorder of multiple
+    // wellness entries on a card — partial updates would have to diff
+    // against the original loaded state and that gets complicated fast.
+    //
+    // We preserve the original logged_at on each new row when possible by
+    // reading it off the wellBuf entry (added in fetchProfile mapping).
+    // Falls back to day._date midnight for entries with no timestamp,
+    // which is what the old INSERT branch did.
+    try {
+      const existingIds = wellnessLogIds || [];
+      if (existingIds.length > 0) {
+        await supabase.from('activity_logs').delete().in('id', existingIds);
+      }
+
+      if (wellBuf.entries.length === 0) return; // user cleared all entries
+
+      const fallbackIso = computeLoggedAt(day._date);
+      const rows = wellBuf.entries.map((e: any) => ({
+        user_id: user.id,
+        log_type: 'wellness',
+        is_public: true,
+        // Preserve original logged_at so the time pill on each card stays
+        // accurate. New rows the user just added won't have a loggedAt and
+        // fall back to day._date.
+        logged_at: e.loggedAt || fallbackIso,
+        wellness_type: e.activity || null,
+        wellness_emoji: e.emoji || null,
+        wellness_duration_min: typeof e.duration === 'number' ? e.duration : null,
+        notes: e.notes || null,
+        photo_url: e.photo_url || null,
+      }));
+      await supabase.from('activity_logs').insert(rows);
+    } catch (err) {
+      console.warn('[saveWellness] failed:', err);
+    }
+  }
+
+  // ── Apply tier-specific cosmetic effects to the card ────────────────────
+  // Each level layers visual treatment via CSS classes. Higher levels stack.
+  // L2 Bronze   → bronze gradient bg + bronze border
+  // L3 Silver   → silver gradient bg + silver border (avatar gets the ring)
+  // L4 Gold     → gold gradient bg + gold border + gold shimmer name
+  // L5 Emerald  → emerald gradient bg + pulsing emerald border
+  // L6 Diamond  → diamond cyan/dark-teal bg + cyan shimmer sweep
+  // All gradients keep a dark base (#0E1118 / #0F172A range) with metal-tinted
+  // overlays so white text stays readable. We don't use light metallic
+  // backgrounds because they wash out copy.
+  const lvl = userLevel;
+  const tierCardClass =
+    lvl >= 6 ? "diamond-shimmer-card tier-diamond-card" :
+    lvl >= 5 ? "tier-emerald-card" :
+    lvl >= 4 ? "tier-gold-card"    :
+    lvl >= 3 ? "tier-silver-card"  :
+    lvl >= 2 ? "tier-bronze-card"  : "";
+
+  // Level-specific card BACKGROUND + BORDER, applied as inline style.
+  // Each gradient is dark-base → metal-tinted-mid → dark-base, giving the
+  // card a subtle metal sheen across its body without sacrificing contrast.
+  const tierCardStyle: React.CSSProperties =
+    lvl >= 6 ? { background: "linear-gradient(135deg, #0F172A 0%, #164E63 35%, #1E3A5F 50%, #164E63 65%, #0F172A 100%)", border: "1.5px solid #67E8F9", boxShadow: "0 0 16px rgba(34,211,238,0.35), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(186,230,253,0.2)" } :
+    lvl >= 5 ? { background: "linear-gradient(135deg, #0A1F18 0%, #0F3D2E 40%, #134E3A 50%, #0F3D2E 60%, #0A1F18 100%)", border: "1.5px solid #10B981" } :
+    lvl >= 4 ? { background: "linear-gradient(135deg, #1F1A0A 0%, #3D2F00 40%, #4A3A00 50%, #3D2F00 60%, #1F1A0A 100%)", border: "1.5px solid #FFD700", boxShadow: "0 0 16px rgba(255,215,0,0.30), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(252,211,77,0.2)" } :
+    lvl >= 3 ? { background: "linear-gradient(135deg, #14161C 0%, #2A2D38 40%, #383B47 50%, #2A2D38 60%, #14161C 100%)", border: "1.5px solid #C0C0C0", boxShadow: "0 0 14px rgba(220,220,235,0.25), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" } :
+    lvl >= 2 ? { background: "linear-gradient(135deg, #1A0E05 0%, #3A2410 40%, #4A2D14 50%, #3A2410 60%, #1A0E05 100%)", border: "1.5px solid #CD7F32", boxShadow: "0 0 14px rgba(205,127,50,0.30), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(232,168,124,0.2)" } :
+    /* L1: default light card */
+    { background: C.white, border: `2px solid ${C.purpleMid}`, boxShadow: "0 4px 18px rgba(124,58,237,0.10)" };
+
+  // Header background — when card body is dark-themed (L2+), the open header
+  // needs a slightly brighter shade to differentiate it from the collapsed
+  // body color. White card (L1) keeps the original purple/white toggle.
+  const headerOpenBg   = lvl >= 2 ? "rgba(255,255,255,0.06)" : "#2D1F52";
+  const headerClosedBg = lvl >= 2 ? "transparent"            : C.white;
+
+  return (<>
+    {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
+    <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
+
+      {/* HEADER */}
+      <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"20px 24px",cursor:"pointer",background:open?headerOpenBg:headerClosedBg,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
+        <div style={{width:64,height:64,borderRadius:18,flexShrink:0,background:`linear-gradient(135deg,#4ADE80,#22C55E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(74,222,128,0.3)"}}>
+          <span style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{d}</span>
+          <span style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:700}}>{MONTHS[m-1]}</span>
         </div>
-      )}
-
-      {/* Outer wrapper · achievement posts (auto-generated PR ticker)
-          override the tier-based skin with a gold gradient + glow so
-          they pop in the feed. Regular posts keep the tier treatment. */}
-      <div style={{
-        background: post.post_type === 'achievement'
-          ? "linear-gradient(135deg, #FFF8E1 0%, #FFFFFF 60%)"
-          : C.white,
-        border: post.post_type === 'achievement'
-          ? "2px solid #F59E0B"
-          : `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : "#2D1F52"}`,
-        boxShadow: post.post_type === 'achievement'
-          ? "0 4px 28px rgba(245,158,11,0.30)"
-          : (post.tier && post.tier !== "default" ? `0 4px 24px ${TIER_COLORS[post.tier as Tier]?.glow}` : "0 4px 24px rgba(124,58,237,0.10)"),
-        borderRadius: 20, marginBottom: 24, overflow: "hidden" as const,
-        position: "relative" as const,
-      }}>
-        {post.post_type === 'achievement' && (
-          // Gold "PR" ribbon in the top-right corner so the achievement
-          // reads at a glance even before the user scrolls past the
-          // header. Compact (no bigger than the username row) so it
-          // doesn't compete with the avatar.
-          <div style={{
-            position: "absolute" as const,
-            top: 12,
-            right: 14,
-            background: "linear-gradient(135deg, #F59E0B, #FBBF24)",
-            color: "#fff",
-            fontSize: 10,
-            fontWeight: 900,
-            letterSpacing: 0.5,
-            padding: "3px 9px",
-            borderRadius: 99,
-            boxShadow: "0 2px 6px rgba(245,158,11,0.4)",
-            zIndex: 1,
-          }}>
-            🏆 PR
-          </div>
-        )}
-        {/* Header */}
-        <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
-          <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
-            <TierFrame tier={post.tier || "default"} size={46}>
-              <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
-                {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-                  ? /* Use the raw avatar URL — routing through
-                        pipes it through the Supabase
-                       image transform endpoint which does a center-square
-                       crop, and that crop looks "zoomed in" when the
-                       subject isn't dead-centered in the source photo
-                       (basically all phone selfies). The sidebar
-                       SideUserBlock uses the raw URL too — keeping these
-                       consistent so a user's face renders the same in
-                       both places. */
-                    <img src={post.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-                  : post.avatar}
-              </div>
-            </TierFrame>
-          </div>
-          <div style={{ flex:1,cursor:"pointer" }} onClick={() => window.location.href=`/profile/${post.username}`}>
-            <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
-              <span style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</span>
-              <TierBadgeChip tier={post.tier || "default"} small />
-            </div>
-            <TierTitle tier={post.tier || "default"} />
-            <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
-          </div>
-          <div style={{ width:50,height:50,borderRadius:13,background:`linear-gradient(135deg,${C.gold},#FFD700)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(245,166,35,0.3)" }}>
-            <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
-            <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
-          </div>
-          {/* ⋯ menu — owners see Delete, non-owners see Report.
-              Report button covers Apple Guideline 1.2 for user-generated content. */}
-          {(isOwner || (currentUser && !isOwner)) && (
-            <div style={{ position:"relative" }}>
-              <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:C.sub,fontSize:20,lineHeight:1 }}>···</button>
-              {showMenu && (
-                <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:"#111118",border:"1.5px solid #2D1F52",borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.4)",minWidth:160,overflow:"hidden" }}>
-                  {isOwner && onDelete && !confirmDelete && (
-                    <button onClick={() => setConfirmDelete(true)} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#EF4444",display:"flex",alignItems:"center",gap:8 }}>
-                      🗑️ Delete Post
-                    </button>
-                  )}
-                  {isOwner && onDelete && confirmDelete && (
-                    <div style={{ padding:"12px 16px" }}>
-                      <div style={{ fontSize:13,fontWeight:700,color:C.text,marginBottom:10 }}>Delete this post?</div>
-                      <div style={{ display:"flex",gap:8 }}>
-                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); onDelete(); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer" }}>Yes, delete</button>
-                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"1.5px solid #2D1F52",background:"#1A1228",color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
-                      </div>
-                    </div>
-                  )}
-                  {!isOwner && currentUser && (
-                    <button onClick={() => { setShowMenu(false); onReport?.(); }} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#FCA5A5",display:"flex",alignItems:"center",gap:8 }}>
-                      🚩 Report Post
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Caption */}
-        {post.caption && post.post_type !== 'achievement' && (
-          // Plain caption rendering. Skipped on achievement posts —
-          // the celebration card below visualizes the same content,
-          // so double-rendering would be redundant.
-          <div style={{ padding:"0 18px 12px",fontSize:14,color:C.text,lineHeight:1.6 }}>{renderMentions(post.caption)}</div>
-        )}
-
-        {/* ── MEDIA — square, full width ── */}
-        {post.photos.length > 0 ? (
-          <div
-            style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
-            // Swipe support — uses Pointer Events instead of Touch Events for
-            // iOS reliability. iOS Safari has a quirk where touch-action: pan-y
-            // can absorb touch sequences if iOS detects any vertical component,
-            // killing touchend before our handler runs. Pointer Events with
-            // setPointerCapture sidestep this entirely. Mouse drags are filtered
-            // out so desktop users still get arrow-button + click behavior.
-            onPointerDown={(e) => {
-              if (post.photos.length <= 1) return;
-              if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
-              try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch {}
-              justSwipedRef.current = false;
-              swipeStartRef.current = {
-                x: e.clientX,
-                y: e.clientY,
-              };
-            }}
-            onPointerUp={(e) => {
-              if (post.photos.length <= 1) return;
-              const start = swipeStartRef.current;
-              if (!start) return;
-              swipeStartRef.current = null;
-              const dx = e.clientX - start.x;
-              const dy = e.clientY - start.y;
-              if (Math.abs(dy) > Math.abs(dx)) return;
-              if (dx > 40 && currentPhoto > 0) {
-                justSwipedRef.current = true;
-                setCurrentPhoto(c => c - 1);
-              } else if (dx < -40 && currentPhoto < post.photos.length - 1) {
-                justSwipedRef.current = true;
-                setCurrentPhoto(c => c + 1);
-              }
-            }}
-            onPointerCancel={() => { swipeStartRef.current = null; }}
-          >
-            {!brokenImage && (() => {
-              const currentUrl = post.photos[currentPhoto];
-              const currentType = (post as any).mediaTypes?.[currentPhoto] || 'image';
-              if (currentType === 'video') {
-                return (
-                  <>
-                    {/* Carousel video — Instagram-style. autoPlay+loop+muted+playsInline
-                        is the only combination browsers will autoplay reliably. The
-                        `key` change on swipe-to forces a fresh mount which retriggers
-                        autoplay. pointerEvents:'none' is the magic bit — the native
-                        <video controls> UI eats touch events, so we drop controls AND
-                        block pointer events on the video itself, letting the wrapper
-                        div's swipe handlers see every touch. The mute button is a
-                        sibling so it gets normal pointer events. */}
-                    <video
-                      key={currentUrl}
-                      src={currentUrl}
-                      autoPlay
-                      loop
-                      muted={videoMuted}
-                      playsInline
-                      preload="metadata"
-                      style={{ width:"100%",height:"100%",objectFit:"cover",background:"#000",pointerEvents:"none" }}
-                      onError={() => { setBrokenImage(true); }}
-                    />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setVideoMuted(m => !m); }}
-                      aria-label={videoMuted ? "Unmute video" : "Mute video"}
-                      style={{ position:"absolute",bottom:12,right:12,width:36,height:36,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"none",color:"#fff",fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2 }}
-                    >
-                      {videoMuted ? "🔇" : "🔊"}
-                    </button>
-                  </>
-                );
-              }
-              return (
-                <img
-                  // PERF: serve a feed-sized variant (~800px wide) instead
-                  // of the original 2-3MB iPhone photo. Supabase resizes
-                  // on the fly. Lightbox click opens the full-resolution.
-                  src={ImagePresets.feed(currentUrl)}
-                  loading="lazy"
-                  decoding="async"
-                  style={{
-                    width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",
-                    // Apply per-photo crop position. Falls back to centered (50)
-                    // if the post predates this column or the array is shorter
-                    // than expected. Old posts with no media_positions render
-                    // exactly as before.
-                    objectPosition: `center ${(post as any).mediaPositions?.[currentPhoto] ?? 50}%`,
-                  }}
-                  alt=""
-                  onClick={() => { if (justSwipedRef.current) { justSwipedRef.current = false; return; } setLightbox(currentUrl); }}
-                  onError={() => { setBrokenImage(true); }}
-                />
-              );
-            })()}
-            {brokenImage && (
-              <div style={{ display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12 }}>
-                <div style={{ fontSize:60 }}>📸</div>
-                <div style={{ fontSize:14,color:"rgba(255,255,255,0.8)",fontWeight:700 }}>Media unavailable</div>
-              </div>
-            )}
-            {post.photos.length > 1 && (<>
-              {/* Counter pill — shows "2/4" so users know there's more */}
-              <div style={{ position:"absolute",top:12,right:12,padding:"4px 10px",borderRadius:99,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",color:"#fff",fontSize:12,fontWeight:700,pointerEvents:"none" }}>
-                {currentPhoto + 1}/{post.photos.length}
-              </div>
-              <div style={{ position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6,zIndex:2 }}>
-                {post.photos.map((_,i) => (
-                  <button key={i} onClick={(e) => { e.stopPropagation(); setCurrentPhoto(i); }} style={{ width:i===currentPhoto?20:8,height:8,borderRadius:4,border:"none",background:i===currentPhoto?"#fff":"rgba(255,255,255,0.45)",cursor:"pointer",transition:"width 0.2s",padding:0 }}/>
-                ))}
-              </div>
-              {currentPhoto > 0 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setCurrentPhoto(c => c - 1); }}
-                  aria-label="Previous"
-                  style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"none",color:"#fff",fontSize:22,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,paddingBottom:3 }}
-                >‹</button>
-              )}
-              {currentPhoto < post.photos.length-1 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setCurrentPhoto(c => c + 1); }}
-                  aria-label="Next"
-                  style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",border:"none",color:"#fff",fontSize:22,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,paddingBottom:3 }}
-                >›</button>
-              )}
-            </>)}
-          </div>
-        ) : post.post_type === 'achievement' ? (
-          // ── Achievement celebration card ──────────────────────────────
-          // Auto-generated PR posts don't have media (the post-page
-          // engine drops them in caption-only). The standard "Add
-          // Photo / Video" placeholder looks awful on these — it asks
-          // the owner to upload to an auto-celebration post and shows
-          // non-owners "No photo shared", neither of which matches the
-          // moment. Instead we render a styled celebration card that
-          // takes the caption and lays it out big and proud.
-          //
-          // Caption shapes we handle:
-          //   single PR     →  "🏆 Bench 245×5 (+10 lb)"
-          //   first PR      →  "🏆 First Bench 185×8"
-          //   reps PR       →  "🏆 Pull Up 0×12 (+2 reps)"
-          //   multi-PR      →  "3 New PRs!\n🏆 Bench 245×5 (+10 lb)\n🏆 Squat ..."
-          //
-          // For the multi-PR case we show a stacked list of mini cards.
-          // For the single-PR case we go big with the lift name + reps
-          // as the hero. Falls back to plain styled text if parsing
-          // doesn't recognize the format.
-          (() => {
-            const lines = (post.caption || "").split("\n").map(s => s.trim()).filter(Boolean);
-            const isMulti = lines.length > 1 && /new prs/i.test(lines[0]);
-            // Each PR line: "🏆 [First ]<exercise> <weight>×<reps>[ (+N lb)|(+N reps)]"
-            // Build a regex that pulls the parts out. The first capture is
-            // optional "First " for first-ever lifts. Last delta is
-            // optional. We don't need perfection — anything we can't
-            // parse just shows the raw line.
-            const PR_RE = /^🏆\s+(First\s+)?(.+?)\s+(\d+(?:\.\d+)?)×(\d+)(?:\s*\(([^)]+)\))?$/i;
-            const parsed = (isMulti ? lines.slice(1) : lines).map(line => {
-              const m = line.match(PR_RE);
-              if (!m) return { raw: line };
-              return {
-                first: !!m[1],
-                exercise: m[2],
-                weight: m[3],
-                reps: m[4],
-                delta: m[5] || null,
-              };
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:900,fontSize:19,color:C.text}}>{day.label}</div>
+          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?(()=>{
+            const cardioList = ((workout as any).cardio || []) as any[];
+            const exList = workout.exercises || [];
+            const parts: string[] = [];
+            const cardioByType: Record<string,{dist:number;dur:number}> = {};
+            cardioList.forEach((c:any)=>{
+              const t = (c.type||'Cardio') as string;
+              if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
+              cardioByType[t].dist += parseFloat(String(c.distance))||0;
+              cardioByType[t].dur  += parseFloat(String(c.duration))||0;
             });
+            Object.entries(cardioByType).forEach(([type,{dist,dur}])=>{
+              if(dist>0) parts.push(`${dist.toFixed(2)} mi ${type.toLowerCase()}`);
+              else if(dur>0) parts.push(`${dur} min ${type.toLowerCase()}`);
+              else parts.push(type);
+            });
+            if(exList.length>0) parts.push(workout.type||'Workout');
+            const summary = parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
+            const extras = [
+              workout.duration&&workout.duration!=='—'?`⏱ ${workout.duration}`:null,
+              workout.calories>0?`🔥 ${workout.calories} cal`:null,
+            ].filter(Boolean).join('  ·  ');
+            return '💪 ' + summary + (extras ? '  ·  ' + extras : '');
+          })():"😴 Rest day"}</div>
+          {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
+        </div>
+        <div style={{width:34,height:34,borderRadius:"50%",background:"#2D1F52",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        {photos.length > 0 && (
+          <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.purpleMid}`}}>
+            <img src={ImagePresets.thumb(photos[0])} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+          </div>
+        )}
+        {onDelete && (
+          <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+            {!confirmDel
+              ? <button onClick={()=>setConfirmDel(true)} style={{width:34,height:34,borderRadius:"50%",background:"#FEE2E2",border:"none",color:"#EF4444",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+              : <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <button onClick={()=>onDelete()} style={{padding:"5px 10px",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer"}}>Delete</button>
+                  <button onClick={()=>setConfirmDel(false)} style={{padding:"5px 10px",borderRadius:10,border:`1px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:800,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                </div>
+            }
+          </div>
+        )}
+        {/* Share / save-as-image button. Self-contained — wraps itself in
+            an error boundary so any crash inside is contained to the
+            button, not the page. */}
+        <div style={{flexShrink:0}} onClick={e=>e.stopPropagation()}>
+          <ActivityShareButton
+            data={{
+              dateLabel: day.label,
+              monthShort: MONTHS[m-1],
+              dayNum: d,
+              workout: workout ? {
+                type: workout.type,
+                duration: workout.duration,
+                calories: workout.calories,
+                exercises: (workout.exercises || []).map(e => ({
+                  name: e.name,
+                  sets: e.sets,
+                  reps: e.reps,
+                  weight: e.weight || '',
+                })),
+                cardio: ((workout as any).cardio || []).map((c: any) => ({
+                  type: c.type || 'Cardio',
+                  duration: c.duration || undefined,
+                  distance: c.distance || undefined,
+                })),
+              } : null,
+              nutrition: nutrition ? {
+                calories: nutrition.calories,
+                protein: nutrition.protein,
+                carbs: nutrition.carbs,
+                fat: nutrition.fat,
+                meals: (nutrition.meals || []).map(meal => ({
+                  key: meal.key,
+                  name: meal.name,
+                  cal: meal.cal,
+                  emoji: meal.emoji,
+                })),
+                photoUrls: photos,
+              } : null,
+              wellness: wellness ? {
+                entries: (wellness.entries || []).map(e => ({
+                  activity: e.activity,
+                  emoji: e.emoji,
+                  notes: e.notes,
+                  duration: (e as any).duration,
+                })),
+              } : null,
+            }}
+            filename={`livelee-${day.id.replace(/\//g,'-')}`}
+          />
+        </div>
+      </button>
 
-            return (
-              <div style={{
-                margin: "0 18px 12px",
-                borderRadius: 18,
-                padding: "24px 20px",
-                background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 50%, #FCD34D 100%)",
-                position: "relative" as const,
-                overflow: "hidden" as const,
-                boxShadow: "0 8px 24px rgba(245,158,11,0.3)",
-                color: "#fff",
-              }}>
-                {/* Sparkle/ray pattern in the corners. Pure CSS radial
-                    gradients — cheap and crisp on any zoom. */}
-                <div style={{
-                  position: "absolute" as const, inset: 0, pointerEvents: "none" as const,
-                  background: `
-                    radial-gradient(circle at 10% 20%, rgba(255,255,255,0.4) 0%, transparent 25%),
-                    radial-gradient(circle at 90% 80%, rgba(255,255,255,0.35) 0%, transparent 25%),
-                    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.25) 0%, transparent 35%)
-                  `,
-                }} />
-                {/* Single PR — hero layout */}
-                {!isMulti && parsed.length === 1 && parsed[0].exercise && (
-                  <div style={{ position: "relative" as const, textAlign: "center" }}>
-                    <div style={{
-                      fontSize: 44, lineHeight: 1, marginBottom: 8,
-                      filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.15))",
-                    }}>🏆</div>
-                    <div style={{
-                      fontSize: 11, fontWeight: 800, letterSpacing: 2,
-                      textTransform: "uppercase" as const, opacity: 0.85, marginBottom: 4,
-                    }}>
-                      {parsed[0].first ? "First-Ever PR" : "New PR"}
+      {/* BODY */}
+      {open && <div style={{padding:"24px 24px 28px",borderTop:`2px solid ${C.purpleMid}`,background:"#1E1530"}}>
+
+        {/* Photos */}
+        <div style={{marginBottom:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Photos</span>
+            <label style={{fontSize:13,fontWeight:700,padding:"6px 16px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",cursor:"pointer"}}>
+              📷 Add Photos<input type="file" accept="image/*" multiple style={{display:"none"}} onChange={onFiles}/>
+            </label>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+            {photos.map((src,i)=>(
+              <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
+                <img onClick={()=>setLb(src)} src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
+                <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>
+              </div>
+            ))}
+            <label style={{width:108,height:108,borderRadius:16,border:`2px dashed ${C.purpleMid}`,background:"#1A1230",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:4}}>
+              <span style={{fontSize:28,color:C.purple}}>+</span>
+              <span style={{fontSize:12,fontWeight:600,color:C.purple}}>Add</span>
+              <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={onFiles}/>
+            </label>
+          </div>
+        </div>
+
+        {/* ── WORKOUT ── */}
+        {editWo ? (
+          <div style={{borderRadius:18,border:`2px solid ${C.purple}`,marginBottom:20,overflow:"hidden"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Workout</span>
+            </div>
+            <div style={{background:"#1A1230",padding:16,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <div><label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>WORKOUT TYPE</label><input style={iStyle} value={woBuf.type} onChange={e=>setWoBuf(w=>({...w,type:e.target.value}))}/></div>
+                <div><label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>DURATION</label><input style={iStyle} value={woBuf.duration} onChange={e=>setWoBuf(w=>({...w,duration:e.target.value}))}/></div>
+                <div><label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>CALORIES BURNED</label><input style={iStyle} type="number" value={woBuf.calories} onChange={e=>setWoBuf(w=>({...w,calories:+e.target.value}))}/></div>
+              </div>
+              <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12,marginTop:4}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Exercises</span>
+                  <button onClick={()=>setWoBuf(w=>({...w,exercises:[...w.exercises,{name:"",sets:3,reps:10,weight:""}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0D0D0D",color:C.purple,border:"1.5px solid #7C3AED",cursor:"pointer"}}>+ Add Exercise</button>
+                </div>
+                {woBuf.exercises.map((ex,i)=>{
+                  const numSets = ex.sets || 1;
+                  const weights: string[] = ex.weights && ex.weights.length === numSets
+                    ? ex.weights
+                    : Array.from({length: numSets}, (_,k) => (ex.weights?.[k] ?? ex.weight ?? ''));
+                  // Same fan-out logic for per-set reps. Legacy logs only have
+                  // a single `reps` number — we replicate it across all sets
+                  // so existing data still displays. New edits will save the
+                  // per-set values back as repsArr.
+                  const repsArr: string[] = ex.repsArr && ex.repsArr.length === numSets
+                    ? ex.repsArr
+                    : Array.from({length: numSets}, (_,k) => (ex.repsArr?.[k] ?? String(ex.reps || '')));
+                  return (
+                  <div key={i} style={{background:"#0D0D0D",borderRadius:14,padding:12,marginBottom:10,border:`1px solid ${C.purpleMid}`}}>
+                    {/* Name + remove */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <input style={{...iStyle,flex:1}} placeholder="Exercise name" value={ex.name} onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>j===i?{...x,name:e.target.value}:x)}))}/>
+                      <button onClick={()=>setWoBuf(w=>({...w,exercises:w.exercises.filter((_,j)=>j!==i)}))} style={{width:32,height:32,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer",flexShrink:0}}>×</button>
                     </div>
-                    <div style={{
-                      fontSize: 22, fontWeight: 900, lineHeight: 1.15,
-                      textShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                      marginBottom: 6,
-                    }}>
-                      {parsed[0].exercise}
+                    {/* Sets count — single field; reps and weight live per-set below. */}
+                    <div style={{marginBottom:8}}>
+                      <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:0.8}}>Sets</label>
+                      <input style={iStyle} type="number" value={ex.sets} onChange={e=>{
+                        const n = Math.max(1, +e.target.value);
+                        setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                          if(j!==i) return x;
+                          // Resize both per-set arrays to the new count, seeding
+                          // empty slots with the last filled value (or fall back
+                          // to the legacy single-value field).
+                          const ws = x.weights || Array(x.sets).fill(x.weight||'');
+                          const rs = x.repsArr || Array(x.sets).fill(String(x.reps||''));
+                          const lastW = [...ws].reverse().find(v=>v!=='')||x.weight||'';
+                          const lastR = [...rs].reverse().find(v=>v!=='')||String(x.reps||'');
+                          const newWs = Array.from({length:n},(_,k)=>ws[k]??lastW);
+                          const newRs = Array.from({length:n},(_,k)=>rs[k]??lastR);
+                          return {...x,sets:n,weights:newWs,repsArr:newRs};
+                        })}));
+                      }}/>
                     </div>
-                    <div style={{
-                      fontSize: 38, fontWeight: 900, lineHeight: 1,
-                      letterSpacing: -1,
-                      textShadow: "0 3px 10px rgba(0,0,0,0.2)",
-                    }}>
-                      {parsed[0].weight}<span style={{ fontSize: 24, opacity: 0.85, margin: "0 4px" }}>×</span>{parsed[0].reps}
-                    </div>
-                    {parsed[0].delta && (
-                      <div style={{
-                        marginTop: 10, display: "inline-block",
-                        padding: "4px 12px", borderRadius: 99,
-                        background: "rgba(255,255,255,0.25)",
-                        backdropFilter: "blur(4px)",
-                        fontSize: 13, fontWeight: 800,
-                      }}>
-                        {parsed[0].delta}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Multi-PR — stacked mini list with the count headline */}
-                {isMulti && (
-                  <div style={{ position: "relative" as const }}>
-                    <div style={{ textAlign: "center", marginBottom: 14 }}>
-                      <div style={{ fontSize: 36, lineHeight: 1, marginBottom: 4 }}>🏆</div>
-                      <div style={{
-                        fontSize: 20, fontWeight: 900,
-                        textShadow: "0 2px 6px rgba(0,0,0,0.15)",
-                      }}>
-                        {lines[0]}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
-                      {parsed.map((pr, i) => (
-                        <div key={i} style={{
-                          padding: "10px 14px",
-                          borderRadius: 12,
-                          background: "rgba(255,255,255,0.22)",
-                          backdropFilter: "blur(4px)",
-                          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
-                        }}>
-                          {(pr as any).exercise ? (<>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                                {(pr as any).first ? "First " : ""}{(pr as any).exercise}
-                              </div>
-                              {(pr as any).delta && (
-                                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.85, marginTop: 1 }}>
-                                  {(pr as any).delta}
-                                </div>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 16, fontWeight: 900, flexShrink: 0 }}>
-                              {(pr as any).weight}<span style={{ fontSize: 12, opacity: 0.8, margin: "0 2px" }}>×</span>{(pr as any).reps}
-                            </div>
-                          </>) : (
-                            // Unparsed line — render raw, lightly styled.
-                            <div style={{ fontSize: 13, fontWeight: 700 }}>{(pr as any).raw}</div>
-                          )}
+                    {/* Per-set rows: reps × weight, with quick-add weight buttons. */}
+                    <label style={{fontSize:10,fontWeight:800,color:C.sub,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:0.8}}>Reps × Weight (per set)</label>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {weights.map((_,s)=>(
+                        <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{fontSize:11,color:C.sub,fontWeight:700,width:24,flexShrink:0}}>S{s+1}</span>
+                          <input
+                            style={{...iStyle,width:52,padding:"6px 6px",fontSize:13,textAlign:"center" as const,flexShrink:0}}
+                            type="text" inputMode="numeric" placeholder="reps"
+                            value={repsArr[s]}
+                            onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                              if(j!==i) return x;
+                              const rs=[...(x.repsArr||Array(numSets).fill(String(x.reps||'')))];
+                              rs[s]=e.target.value;
+                              // Mirror set-1 reps back into the legacy `reps`
+                              // field so PR detection / older code paths still
+                              // see a meaningful value when reading this log.
+                              const newReps = parseInt(rs[0]) || x.reps;
+                              return {...x,repsArr:rs,reps:newReps};
+                            })}))}
+                          />
+                          <span style={{fontSize:12,color:C.sub,fontWeight:700,flexShrink:0}}>×</span>
+                          <input
+                            style={{...iStyle,flex:1,padding:"6px 8px",fontSize:13}}
+                            type="text" inputMode="decimal" placeholder="lbs"
+                            value={weights[s]}
+                            onChange={e=>setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                              if(j!==i) return x;
+                              const ws=[...(x.weights||Array(numSets).fill(''))];
+                              ws[s]=e.target.value;
+                              return {...x,weights:ws,weight:ws[0]};
+                            })}))}
+                          />
+                          {[2.5,5,10].map(d=>(
+                            <button key={d} onClick={()=>{
+                              setWoBuf(w=>({...w,exercises:w.exercises.map((x,j)=>{
+                                if(j!==i) return x;
+                                const ws=[...(x.weights||Array(numSets).fill(''))];
+                                const cur=ws[s];
+                                const prev=s>0?ws[s-1]:'0';
+                                const base=parseFloat(cur!==''?cur:prev)||0;
+                                ws[s]=String(Math.max(0,base+d));
+                                return {...x,weights:ws,weight:ws[0]};
+                              })})
+                              );
+                            }}
+                              style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.purpleMid}`,background:"#2D1F52",color:"#A78BFA",cursor:"pointer",flexShrink:0}}>
+                              +{d}
+                            </button>
+                          ))}
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
-                {/* Fallback — couldn't parse caption at all. Just put
-                    the trophy + caption big and centered. Better than
-                    the empty-photo placeholder under any circumstances. */}
-                {!isMulti && (parsed.length !== 1 || !parsed[0].exercise) && (
-                  <div style={{ position: "relative" as const, textAlign: "center" }}>
-                    <div style={{ fontSize: 44, marginBottom: 10 }}>🏆</div>
-                    <div style={{
-                      fontSize: 18, fontWeight: 900, lineHeight: 1.3,
-                      textShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                    }}>
-                      {post.caption}
+                  );
+                })}
+              </div>
+              {/* Cardio section inside workout editor */}
+              <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12,marginTop:4}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>🏃 Cardio</span>
+                  <button onClick={()=>setWoBuf(w=>({...w,cardio:[...w.cardio,{...emptyCardio}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0D0D0D",color:C.purple,border:"1.5px solid #7C3AED",cursor:"pointer"}}>+ Add Cardio</button>
+                </div>
+                {(woBuf.cardio || []).map((c,i)=>(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
+                    <input style={iStyle} placeholder="Type (e.g. Running, Cycling)" value={c.type} onChange={e=>setWoBuf(w=>({...w,cardio:w.cardio.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))}/>
+                    <input style={iStyle} placeholder="Duration" value={c.duration} onChange={e=>setWoBuf(w=>({...w,cardio:w.cardio.map((x,j)=>j===i?{...x,duration:e.target.value}:x)}))}/>
+                    <input style={iStyle} placeholder="Distance" value={c.distance} onChange={e=>setWoBuf(w=>({...w,cardio:w.cardio.map((x,j)=>j===i?{...x,distance:e.target.value}:x)}))}/>
+                    <button onClick={()=>setWoBuf(w=>({...w,cardio:w.cardio.filter((_,j)=>j!==i)}))} style={{width:34,height:34,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+                  </div>
+                ))}
+                {(woBuf.cardio || []).length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>No cardio logged — click + Add Cardio above</div>}
+              </div>
+              <div style={{display:"flex",gap:10,marginTop:4}}>
+                <button onClick={()=>setEditWo(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
+              </div>
+            </div>
+          </div>
+        ) : workout ? (
+          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:26}}>💪</span>
+                <div>
+                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{(()=>{
+                    const cardioList = ((workout as any).cardio || []) as any[];
+                    const exList = workout.exercises || [];
+                    const parts: string[] = [];
+                    const cardioByType: Record<string,{dist:number;dur:number}> = {};
+                    cardioList.forEach((c:any)=>{
+                      const t = (c.type||'Cardio') as string;
+                      if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
+                      cardioByType[t].dist += parseFloat(String(c.distance))||0;
+                      cardioByType[t].dur  += parseFloat(String(c.duration))||0;
+                    });
+                    Object.entries(cardioByType).forEach(([type,{dist,dur}])=>{
+                      if(dist>0) parts.push(`${dist.toFixed(2)} mi ${type.toLowerCase()}`);
+                      else if(dur>0) parts.push(`${dur} min ${type.toLowerCase()}`);
+                      else parts.push(type);
+                    });
+                    if(exList.length>0) parts.push(workout.type||'Workout');
+                    return parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
+                  })()}</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)",marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                    {workout.duration&&workout.duration!=='—'&&<span>⏱ {workout.duration}</span>}
+                    {workout.calories>0&&<span>🔥 {workout.calories} cal</span>}
+                    {workout.exercises&&workout.exercises.length>0&&<span>💪 {workout.exercises.length} exercise{workout.exercises.length!==1?'s':''}</span>}
+                    {((workout as any).cardio||[]).length>0&&<span>🏃 {((workout as any).cardio||[]).length} cardio</span>}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+            </button>
+            {woOpen && <div style={{background:"#1A1230",padding:"12px 16px"}}>
+              {(() => {
+                // When the bucketing layer attached _workoutParts (>= 2 entries),
+                // render a labeled section per workout instead of one combined
+                // exercise + cardio table. This keeps the totals header but
+                // makes each individual workout visible/distinguishable.
+                const parts: any[] = (day as any)._workoutParts || [];
+                const hasMultiple = parts.length >= 2;
+
+                // Helper that renders a single workout's exercise + cardio
+                // tables. Used for both "single combined" and "section per
+                // workout" modes.
+                const renderWorkoutBody = (w: any, key: string) => {
+                  const exList = w.exercises || [];
+                  const carList = w.cardio || [];
+                  const totalSets = exList.reduce((s: number, ex: any) => s + (ex.sets || 0), 0);
+                  const totalVol = exList.reduce((s: number, ex: any) => {
+                    const wt = parseFloat(String(ex.weight)) || 0;
+                    return s + (wt * (ex.sets || 0) * (ex.reps || 0));
+                  }, 0);
+                  return (
+                    <div key={key}>
+                      {exList.length > 0 && (<>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
+                          {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+                        </div>
+                        {exList.map((ex: any, i: number) => {
+                          const wsArr: string[] = ex.weights && Array.isArray(ex.weights) ? ex.weights : [];
+                          const weightDisplay = wsArr.length > 1
+                            ? wsArr.join(' / ') + ' lbs'
+                            : (wsArr[0] || ex.weight || '—');
+                          return (
+                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                              <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                              <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
+                              <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
+                              <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
+                            </div>
+                          );
+                        })}
+                        {totalVol > 0 && (
+                          <div style={{display:"flex",gap:16,padding:"10px 8px 4px",borderTop:`1px solid ${C.purpleMid}`,marginTop:4,flexWrap:"wrap"}}>
+                            <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.text,fontWeight:800}}>{totalSets}</strong> total sets</span>
+                            <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.gold,fontWeight:800}}>📊 {totalVol>=1000?`${(totalVol/1000).toFixed(1)}k`:totalVol.toFixed(0)} lbs</strong> total volume</span>
+                          </div>
+                        )}
+                      </>)}
+                      {carList.length > 0 && (
+                        <div style={{marginTop: exList.length > 0 ? 12 : 0, paddingTop: exList.length > 0 ? 12 : 0, borderTop: exList.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
+                          <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
+                            {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+                          </div>
+                          {carList.map((c: any, i: number)=>(
+                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                              <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
+                              <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
+                              <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {exList.length === 0 && carList.length === 0 && (
+                        <div style={{textAlign:"center",padding:"12px 0",color:C.sub,fontSize:13}}>No exercises logged</div>
+                      )}
+                    </div>
+                  );
+                };
+
+                if (hasMultiple) {
+                  return parts.map((p: any, idx: number) => {
+                    // Format the workout time as "7:14 AM" using the user's locale.
+                    let timeStr = '';
+                    try {
+                      timeStr = new Date(p.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    } catch { timeStr = ''; }
+                    return (
+                      <div key={p.id} style={{ marginBottom: idx < parts.length - 1 ? 16 : 0, paddingBottom: idx < parts.length - 1 ? 16 : 0, borderBottom: idx < parts.length - 1 ? `2px dashed ${C.purpleMid}` : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 900, color: '#fff', background: `linear-gradient(135deg, ${C.purple}, #A78BFA)`, padding: '4px 10px', borderRadius: 999, letterSpacing: 0.5 }}>WORKOUT {idx + 1}</span>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{p.type}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, fontSize: 12, color: C.sub, flexWrap: 'wrap' }}>
+                            {timeStr && <span>🕐 {timeStr}</span>}
+                            {p.duration && p.duration !== '—' && <span>⏱ {p.duration}</span>}
+                            {p.calories > 0 && <span>🔥 {p.calories} cal</span>}
+                          </div>
+                        </div>
+                        {renderWorkoutBody(p, p.id)}
+                      </div>
+                    );
+                  });
+                }
+
+                // Single workout (or legacy) — render the merged shape directly.
+                return renderWorkoutBody(workout, 'single');
+              })()}
+            </div>}
+          </div>
+        ) : (
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E",marginBottom:20}}>
+            <div style={{fontSize:34,marginBottom:8}}>😴</div>
+            <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No workout logged</div>
+            <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>
+          </div>
+        )}
+
+        {/* ── NUTRITION ── */}
+        {editNut ? (
+          <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"14px 20px"}}>
+              <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Nutrition</span>
+            </div>
+            <div style={{background:"#1A1230",padding:16,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                {[{l:"Calories",k:"calories"},{l:"Protein (g)",k:"protein"},{l:"Carbs (g)",k:"carbs"},{l:"Fat (g)",k:"fat"},{l:"Sugar (g)",k:"sugar"}].map(f=>(
+                  <div key={f.k}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.sub,display:"block",marginBottom:4}}>{f.l}</label>
+                    <input style={iStyle} type="number" value={(nutBuf as any)[f.k]} onChange={e=>setNutBuf(n=>({...n,[f.k]:+e.target.value}))}/>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Meals</span>
+                  <button onClick={()=>setNutBuf(n=>({...n,meals:[...n.meals,{key:"Snack",emoji:"🍎",name:"",cal:0}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0D0D0D",color:C.purple,border:"1.5px solid #7C3AED",cursor:"pointer"}}>+ Add Meal</button>
+                </div>
+                {nutBuf.meals.map((meal,i)=>(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"50px 90px 1fr 80px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
+                    <input style={iStyle} placeholder="😊" value={meal.emoji} onChange={e=>setNutBuf(n=>({...n,meals:n.meals.map((x,j)=>j===i?{...x,emoji:e.target.value}:x)}))}/>
+                    <input style={iStyle} placeholder="Meal type" value={meal.key} onChange={e=>setNutBuf(n=>({...n,meals:n.meals.map((x,j)=>j===i?{...x,key:e.target.value}:x)}))}/>
+                    <input style={iStyle} placeholder="What did you eat?" value={meal.name} onChange={e=>setNutBuf(n=>({...n,meals:n.meals.map((x,j)=>j===i?{...x,name:e.target.value}:x)}))}/>
+                    <input style={iStyle} type="number" placeholder="kcal" value={meal.cal} onChange={e=>setNutBuf(n=>({...n,meals:n.meals.map((x,j)=>j===i?{...x,cal:+e.target.value}:x)}))}/>
+                    <button onClick={()=>setNutBuf(n=>({...n,meals:n.meals.filter((_,j)=>j!==i)}))} style={{width:34,height:34,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:18,cursor:"pointer"}}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:10,marginTop:4}}>
+                <button onClick={()=>setEditNut(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
+              </div>
+            </div>
+          </div>
+        ) : nutrition ? (
+          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
+            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:26}}>🥗</span>
+                <div>
+                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>Nutrition</div>
+                  <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+            </button>
+            <div style={{background:"#1A1230",padding:16}}>
+              {/* Macro progress vs goals (if goals set) */}
+              {(()=>{
+                let goals: any = null;
+                try { goals = (user as any)?.profile?.nutrition_goals || null; } catch {}
+                if (!goals) return null;
+                const rows = [
+                  {label:"Calories",val:nutrition.calories,goal:goals.calories||0,unit:"kcal",color:C.gold},
+                  {label:"Protein",val:nutrition.protein,goal:goals.protein||0,unit:"g",color:"#3B82F6"},
+                  {label:"Carbs",val:nutrition.carbs,goal:goals.carbs||0,unit:"g",color:"#7C3AED"},
+                  {label:"Fat",val:nutrition.fat,goal:goals.fat||0,unit:"g",color:"#C084FC"},
+                ];
+                return (
+                  <div style={{marginBottom:16,display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>📊 vs Daily Goal</div>
+                    {rows.filter(r=>r.goal>0).map(r=>{
+                      const pct = Math.min((r.val/r.goal)*100,100);
+                      const over = r.val > r.goal;
+                      const barColor = over ? "#EF4444" : pct >= 90 ? "#7C3AED" : r.color;
+                      return (
+                        <div key={r.label}>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,color:C.sub,marginBottom:3}}>
+                            <span>{r.label}</span>
+                            <span style={{color:over?"#EF4444":C.text}}>{r.val}{r.unit} / {r.goal}{r.unit} {over?"🔴 over":"✅"}</span>
+                          </div>
+                          <div style={{height:6,borderRadius:3,background:"#2D1F52",overflow:"hidden"}}>
+                            <div style={{height:"100%",borderRadius:3,background:barColor,width:`${pct}%`,transition:"width 0.4s"}}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:nut?20:0}}>
+                {[{label:"Calories",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000},{label:"Protein",val:nutrition.protein,unit:"g",color:"#3B82F6",max:250},{label:"Carbs",val:nutrition.carbs,unit:"g",color:C.purple,max:300},{label:"Fat",val:nutrition.fat,unit:"g",color:"#4ADE80",max:100}].map(mc=>(
+                  <div key={mc.label} style={{background:"#0D0D0D",borderRadius:14,padding:"12px 6px",textAlign:"center",border:"1.5px solid #3D2A6E"}}>
+                    <div style={{fontSize:20,fontWeight:900,color:mc.color}}>{mc.val}</div>
+                    <div style={{fontSize:11,color:C.sub}}>{mc.unit}</div>
+                    <div style={{height:5,borderRadius:3,background:"#2D1F52",margin:"6px 0 4px",overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:3,background:mc.color,width:`${Math.min((mc.val/mc.max)*100,100)}%`}}/>
+                    </div>
+                    <div style={{fontSize:11,fontWeight:700,color:C.sub}}>{mc.label}</div>
+                  </div>
+                ))}
+              </div>
+              {nut && <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {/* Nutrition photos — supports JSON per-meal photos or legacy array */}
+                {(()=>{
+                  const photoUrls: string[] = (nutrition as any).photoUrls || [];
+                  // Try to parse any URL that looks like JSON (per-meal photos)
+                  const parsedMealPhotos: Record<string,string> = {};
+                  const plainPhotos: string[] = [];
+                  photoUrls.forEach((url: string) => {
+                    if (url && url.trim().startsWith('{')) {
+                      try { Object.assign(parsedMealPhotos, JSON.parse(url)); } catch {}
+                    } else if (url) {
+                      plainPhotos.push(url);
+                    }
+                  });
+                  const MEAL_LABELS: Record<string,string> = {
+                    Breakfast:'🌅 Breakfast', Lunch:'☀️ Lunch', Dinner:'🌙 Dinner', Snack:'🍎 Snack',
+                    'Pre-workout':'⚡ Pre-WO', 'Post-workout':'💪 Post-WO',
+                  };
+                  const hasMealPhotos = Object.keys(parsedMealPhotos).length > 0;
+                  const hasPlainPhotos = plainPhotos.length > 0;
+                  if (!hasMealPhotos && !hasPlainPhotos) return null;
+                  return (
+                    <div style={{marginBottom:8}}>
+                      {hasMealPhotos && (
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                          {Object.entries(parsedMealPhotos).map(([meal, src])=>(
+                            <div key={meal} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                              <button onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                                <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:90,height:90,objectFit:"cover",display:"block"}} alt={meal}/>
+                              </button>
+                              <span style={{fontSize:10,fontWeight:700,color:C.sub}}>{MEAL_LABELS[meal]||meal}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {hasPlainPhotos && (
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {plainPhotos.map((src, i)=>(
+                            <button key={i} onClick={()=>setLb(src)} style={{padding:0,border:`2px solid ${C.purpleMid}`,borderRadius:12,overflow:"hidden",cursor:"pointer",background:"none"}}>
+                              <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:90,height:90,objectFit:"cover",display:"block"}} alt="Meal photo"/>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                {nutrition.meals.map(meal=>(
+                  <div key={meal.key} style={{background:"#0D0D0D",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,border:"1.5px solid #3D2A6E"}}>
+                    <div style={{width:46,height:46,borderRadius:13,background:"#2D1F52",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{meal.emoji}</div>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <span style={{fontWeight:800,fontSize:15,color:C.text}}>{meal.key}</span>
+                        <span style={{fontWeight:900,fontSize:15,color:C.gold}}>{meal.cal} kcal</span>
+                      </div>
+                      <div style={{fontSize:13,color:C.sub,marginTop:2}}>{meal.name}</div>
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })()
-        ) : (
-          <label style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,margin:"0 18px 12px",height:340,borderRadius:16,border:"2px dashed #2D1F52",background:"#1A1228",cursor:isOwner?"pointer":"default" }}>
-            {isOwner ? (<>
-              <span style={{ fontSize:36 }}>📷</span>
-              <div>
-                <div style={{ fontSize:15,fontWeight:700,color:C.blue }}>Add Photo / Video</div>
-                <div style={{ fontSize:12,color:C.sub,marginTop:2 }}>Tap to upload</div>
-              </div>
-              <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
-            </>) : (
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontSize:40,marginBottom:8 }}>🏋️</div>
-                <span style={{ fontSize:13,color:C.sub }}>No photo shared</span>
-              </div>
-            )}
-          </label>
-        )}
-        {post.photos.length > 0 && isOwner && (
-          <div style={{ padding:"6px 18px 0",display:"flex",alignItems:"center",gap:8 }}>
-            <label style={{ fontSize:12,fontWeight:700,color:C.blue,cursor:"pointer",padding:"5px 14px",borderRadius:20,background:"#1A1228",border:"1px solid #2D1F52" }}>
-              + Add Photo
-              <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
-            </label>
-            <span style={{ fontSize:12,color:C.sub }}>{post.photos.length} photo{post.photos.length!==1?"s":""}</span>
-            <button onClick={() => onUpdate({ ...post, photos: post.photos.filter((_,i) => i !== currentPhoto) })} style={{ marginLeft:"auto",fontSize:12,fontWeight:700,color:"#EF4444",background:"#FEE2E2",border:"none",cursor:"pointer",padding:"5px 14px",borderRadius:20 }}>
-              🗑️ Remove Photo
-            </button>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div style={{ padding:"12px 18px 8px",borderTop:"1px solid #2D1F52",marginTop:12 }}>
-          {/* Reaction bar */}
-          <ReactionBar
-            postId={post.id}
-            currentUserId={currentUser?.id}
-            initialCounts={{ heart: post.likes, fire: 0, flex: 0, clap: 0, rocket: 0 }}
-            initialMine={post.liked ? new Set<ReactionKey>(["heart"]) : new Set<ReactionKey>()}
-          />
-          {/* Comment + Share row */}
-          <div style={{ display:"flex",alignItems:"center",gap:16,marginTop:10 }}>
-            <button onClick={() => document.getElementById(`ci-${post.id}`)?.focus()} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:20,height:20 }}>
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              <span style={{ fontSize:13,fontWeight:700,color:C.sub }}>{post.comments.length > 0 ? post.comments.length : ""} {post.comments.length === 1 ? "comment" : post.comments.length > 1 ? "comments" : "Comment"}</span>
-            </button>
-            <button
-              onClick={sharePost}
-              aria-label={shareCopied ? "Link copied" : "Share post"}
-              style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,marginLeft:"auto" }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke={shareCopied ? C.green : C.sub} strokeWidth="2" style={{ width:20,height:20, transition: "stroke 0.2s" }}>
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-              </svg>
-              <span style={{ fontSize:13,fontWeight:700,color: shareCopied ? C.green : C.sub, transition:"color 0.2s" }}>
-                {shareCopied ? "Copied" : "Share"}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Comments */}
-        {post.comments.length > 0 && (
-          <div style={{ padding:"0 18px 10px",display:"flex",flexDirection:"column",gap:10 }}>
-            {visibleComments.map(c => (
-              <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-                  {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
-                    ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-                    : c.avatar}
-                </div>
-                <div style={{ flex:1,background:"#1A1228",borderRadius:14,padding:"9px 13px",border:"1px solid #2D1F52" }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3 }}>
-                    <span style={{ fontWeight:800,fontSize:12,color:C.text }}>{c.user}</span>
-                    <span style={{ fontSize:10,color:C.sub }}>{c.time}</span>
-                  </div>
-                  <p style={{ fontSize:13,color:C.text,margin:0,lineHeight:1.5 }}>{renderMentions(c.text)}</p>
-                  <div style={{ display:"flex", gap:14, marginTop:2 }}>
-                    <button onClick={()=>{ setReplyTo({id:c.id,user:c.user}); setCommentText(`@${c.user.split(' ')[0]} `); setTimeout(()=>commentInputRef.current?.focus(),50); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.sub,padding:"4px 0 0" }}>Reply</button>
-                    {currentUser && (c as any).user_id === currentUser.id && (
-                      <button
-                        onClick={async () => {
-                          if (!confirm("Delete this comment?")) return;
-                          try {
-                            const res = await fetch("/api/db", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ action: "delete_post_comment", payload: { commentId: c.id, userId: currentUser.id } }),
-                            });
-                            const json = await res.json();
-                            if (json.error) throw new Error(json.error);
-                            // Fetch the fresh comment list and propagate via onCommentsRefresh
-                            const freshRes = await fetch("/api/db", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ action: "get_post_comments", payload: { postId: post.id } }),
-                            });
-                            const fresh = await freshRes.json();
-                            onCommentsRefresh?.(post.id, fresh.comments || []);
-                          } catch (e: any) {
-                            alert(`Could not delete: ${e?.message || "unknown error"}`);
-                          }
-                        }}
-                        style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#EF4444",padding:"4px 0 0" }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {post.comments.length > 1 && (
-              <button onClick={() => setShowAllComments(s=>!s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:C.blue,textAlign:"left",padding:0 }}>
-                {showAllComments ? "Show less" : `View all ${post.comments.length} comments`}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Comment input */}
-        {replyTo && (
-          <div style={{ padding:"0 18px 6px",display:"flex",alignItems:"center",gap:8 }}>
-            <span style={{ fontSize:12,color:C.sub }}>Replying to <strong>{replyTo.user.split(' ')[0]}</strong></span>
-            <button onClick={()=>{setReplyTo(null);setCommentText("");}} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:14,padding:0,lineHeight:1}}>×</button>
-          </div>
-        )}
-        <div style={{ padding:"0 18px 16px",display:"flex",gap:10,alignItems:"center" }}>
-          <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-            {currentUser?.profile?.avatar_url
-              ? <img src={currentUser.profile.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-              : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
-          </div>
-          <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#1A1228",borderRadius:24,padding:"8px 16px",border:"1.5px solid #2D1F52" }}>
-            <div style={{ flex:1 }}>
-              <MentionInput
-                inputRef={commentInputRef as any}
-                id={`ci-${post.id}`}
-                value={commentText}
-                onChange={setCommentText}
-                onSubmit={submitComment}
-                placeholder={replyTo?`Reply to ${replyTo.user.split(' ')[0]}...`:"Add a comment..."}
-                style={{ width:"100%",background:"none",border:"none",outline:"none",fontSize:13,color:C.text }}
-              />
+                ))}
+              </div>}
             </div>
-            {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
           </div>
-        </div>
-      </div>
-    </>
-  );
-}, (prev, next) => {
-  // Custom equality: re-render only when meaningful post data changes.
-  // We compare specific fields rather than the whole post object because
-  // the parent often passes a fresh object on every render (the same data
-  // but a new identity), which would defeat memo.
-  const a = prev.post;
-  const b = next.post;
-  return (
-    a.id === b.id &&
-    a.likes === b.likes &&
-    a.liked === b.liked &&
-    a.comments?.length === b.comments?.length &&
-    a.caption === b.caption &&
-    prev.currentUser?.id === next.currentUser?.id
-  );
-});
+        ) : (
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E"}}>
+            <div style={{fontSize:34,marginBottom:8}}>🥗</div>
+            <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No nutrition logged</div>
+            <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>
+          </div>
+        )}
 
-// ── New Members Panel ─────────────────────────────────────────────────────────
-interface Member {
-  id: string;
-  full_name?: string;
-  username?: string;
-  city?: string;
-  created_at: string;
-  avatar_url?: string;
+        {/* ── WELLNESS ── */}
+        {editWell ? (
+          <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden",marginTop:16}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"14px 20px"}}>
+              <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Wellness</span>
+            </div>
+            <div style={{background:"#1A1230",padding:16,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Activities</span>
+                <button onClick={()=>setWellBuf(w=>({entries:[...w.entries,{...emptyWellness}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0D0D0D",color:C.purple,border:"1.5px solid #7C3AED",cursor:"pointer"}}>+ Add Activity</button>
+              </div>
+              {wellBuf.entries.map((e,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"40px 1fr 80px 32px",gap:8,alignItems:"center"}}>
+                  <input style={iStyle} placeholder="🧘" value={e.emoji} onChange={ev=>setWellBuf(w=>({entries:w.entries.map((x,j)=>j===i?{...x,emoji:ev.target.value}:x)}))}/>
+                  <input style={iStyle} placeholder="Activity (e.g. Cold Plunge)" value={e.activity} onChange={ev=>setWellBuf(w=>({entries:w.entries.map((x,j)=>j===i?{...x,activity:ev.target.value}:x)}))}/>
+                  <input style={iStyle} placeholder="Notes (optional)" value={e.notes} onChange={ev=>setWellBuf(w=>({entries:w.entries.map((x,j)=>j===i?{...x,notes:ev.target.value}:x)}))}/>
+                  <button onClick={()=>setWellBuf(w=>({entries:w.entries.filter((_,j)=>j!==i)}))} style={{width:34,height:34,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:18,cursor:"pointer"}}>×</button>
+                </div>
+              ))}
+              {wellBuf.entries.length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>Add wellness activities like meditation, cold plunge, sauna, stretching...</div>}
+              <div style={{display:"flex",gap:10,marginTop:4}}>
+                <button onClick={()=>setEditWell(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+              </div>
+            </div>
+          </div>
+        ) : wellness ? (
+          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginTop:16}}>
+            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:24}}>🌿</span>
+                <div>
+                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>Wellness</div>
+                  <div style={{fontSize:13,color:"rgba(255,255,255,0.85)"}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+            </button>
+            {wellOpen && <div style={{background:"#1A1230",padding:14,display:"flex",flexDirection:"column",gap:8}}>
+              {wellness.entries.map((e,i)=>{
+                // Per-activity styling — pulls emoji + accent color from
+                // WELLNESS_STYLES lookup. Falls back gracefully if the activity
+                // isn't in the table (returns generic leaf + soft purple).
+                const style = getWellnessStyle(e.activity);
+                const time = formatTimeOfDay((e as any).loggedAt);
+                const dur = (e as any).duration as number | null | undefined;
+                return (
+                  <div key={i} style={{
+                    background:"#0D0D0D",borderRadius:14,padding:"12px 16px",
+                    display:"flex",alignItems:"center",gap:14,
+                    // Activity-color left border = subtle visual signature per type
+                    borderLeft:`4px solid ${style.accent}`,
+                    border:`1.5px solid #3D2A6E`,borderLeftWidth:4,borderLeftColor:style.accent,
+                  }}>
+                    <div style={{
+                      width:44,height:44,borderRadius:13,
+                      // Tinted background using the activity's accent at 20% opacity
+                      background:`${style.accent}33`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:22,flexShrink:0,
+                    }}>{style.emoji}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      {/* Top row: activity name + duration + time pills.
+                          Pills use the activity's accent color so each card
+                          has a coordinated palette. */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</span>
+                        {dur != null && dur > 0 && (
+                          <span style={{
+                            fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
+                            background:`${style.accent}22`,color:style.accent,
+                            letterSpacing:0.3,
+                          }}>{dur} min</span>
+                        )}
+                        {time && (
+                          <span style={{
+                            fontSize:11,fontWeight:600,color:C.sub,
+                          }}>{time}</span>
+                        )}
+                      </div>
+                      {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:4,lineHeight:1.4}}>{e.notes}</div>}
+                      {(e as any).photo_url && (
+                        <button onClick={()=>setLb((e as any).photo_url)} style={{ padding:0, border:`2px solid #2A3A2A`, borderRadius:10, overflow:"hidden", cursor:"pointer", background:"none", flexShrink:0, marginTop:8 }}>
+                          <img src={ImagePresets.thumb((e as any).photo_url)} loading="lazy" decoding="async" style={{ width:60, height:60, objectFit:"cover", display:"block" }} alt=""/>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>}
+          </div>
+        ) : (
+          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E",marginTop:16}}>
+            <div style={{fontSize:34,marginBottom:8}}>🌿</div>
+            <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No wellness logged</div>
+            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
+          </div>
+        )}
+        {/* ── BADGES ── */}
+        {earnedBadges.length > 0 && (
+          <div style={{ marginTop:16, paddingTop:14, borderTop:`1px solid ${C.purpleMid}` }}>
+            <div style={{ fontSize:11, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>🏆 Badges</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {(showAllBadges ? earnedBadges : earnedBadges.slice(0, 3)).map(badgeId => {
+                const badge = BADGES.find(b => b.id === badgeId);
+                if (!badge) return null;
+                return (
+                  <div key={badgeId} style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(245,166,35,0.12)", border:"1.5px solid rgba(245,166,35,0.35)", borderRadius:99, padding:"5px 12px" }}>
+                    <span style={{ fontSize:14 }}>{badge.emoji}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:"#F5A623" }}>{badge.label}</span>
+                  </div>
+                );
+              })}
+              {earnedBadges.length > 3 && (
+                <button onClick={() => setShowAllBadges(s => !s)} style={{ display:"flex", alignItems:"center", background:"rgba(245,166,35,0.08)", border:"1.5px dashed rgba(245,166,35,0.3)", borderRadius:99, padding:"5px 12px", cursor:"pointer", fontFamily:"inherit" }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#F5A623" }}>{showAllBadges ? "Show less" : `+${earnedBadges.length - 3} more`}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>}
+    </div>
+  </>);
 }
 
-function NewMembersPanel({ members, currentUser }: { members: Member[]; currentUser: { profile?: { city?: string }; id: string } }) {
-  const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? members : members.slice(0, 3);
-  const userCity = currentUser?.profile?.city?.split(",")[0]?.trim()?.toLowerCase() || "";
-
-  return (
-    <div style={{ background:C.darkCard, borderRadius:24, border:`1px solid ${C.darkBorder}`, overflow:"hidden", marginBottom:24 }}>
-      <div style={{ padding:"14px 18px 10px", borderBottom:`1px solid ${C.darkBorder}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div>
-          <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👋 New Members</div>
-          <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>Recently joined · your city first</div>
-        </div>
-        <span style={{ fontSize:11, color:C.darkSub }}>{members.length} new</span>
+// ── Editable sidebar section ──────────────────────────────────────────────────
+function EditableList({title,items,onSave,renderItem,emptyItem}:{
+  title:string;
+  items:any[];
+  onSave:(i:any[])=>void;
+  renderItem:(item:any,i:number,setItems:React.Dispatch<React.SetStateAction<any[]>>)=>React.ReactNode;
+  emptyItem:any;
+}) {
+  const [editing,setEditing] = useState(false);
+  const [list,setList]       = useState(items);
+  if (editing) return (
+    <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purple}`,marginBottom:20}}>
+      <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>{title}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+        {list.map((item,i)=>renderItem(item,i,setList))}
       </div>
-      <div style={{ padding:"6px 12px 10px" }}>
-        {visible.map((member: any, i: number) => {
-          const name = member.full_name || member.username || "User";
-          const ini = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-          const memberCity = member.city?.split(",")[0]?.trim()?.toLowerCase() || "";
-          const isLocal = userCity && memberCity && memberCity.includes(userCity);
-          const joined = (() => {
-            const diff = Date.now() - new Date(member.created_at).getTime();
-            if (diff < 3600000) return "just now";
-            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-            if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-            return new Date(member.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          })();
-          return (
-            <div key={member.id}
-              onClick={() => window.location.href = `/profile/${member.username}`}
-              style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 8px", borderRadius:14, cursor:"pointer", transition:"background 0.15s", marginBottom:2 }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#1E2A1E")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
-                {member.avatar_url
-                  ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                  : ini}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
-                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#7C3AED", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
-                </div>
-                <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
-                <div style={{ fontSize:10, color:"#7C3AED", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
-              </div>
-              <FollowButton targetUserId={member.id} size="sm" />
-            </div>
-          );
-        })}
-        {members.length > 3 && (
-          <button
-            onClick={e => { e.stopPropagation(); setExpanded(x => !x); }}
-            style={{ width:"100%", padding:"9px 0", marginTop:4, background:"none", border:`1px solid ${C.darkBorder}`, borderRadius:12, color:C.darkSub, fontSize:12, fontWeight:700, cursor:"pointer" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "#1E2A1E")}
-            onMouseLeave={e => (e.currentTarget.style.background = "none")}
-          >
-            {expanded ? "Show less ▲" : `See all ${members.length} new members ▼`}
-          </button>
-        )}
+      <button onClick={()=>setList(l=>[...l,{...emptyItem}])} style={{width:"100%",padding:"9px 0",borderRadius:12,border:`2px dashed ${C.purpleMid}`,background:"#2D1F52",color:"#A78BFA",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12}}>+ Add</button>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setEditing(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+        <button onClick={()=>{onSave(list);setEditing(false);}} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
       </div>
     </div>
   );
-}
-
-// ── Activity Type Filter Chips ────────────────────────────────────────────────
-type ActivityFilter = "all" | "workout" | "nutrition" | "wellness";
-
-function ActivityFilterChips({ value, onChange }: { value: ActivityFilter; onChange: (v: ActivityFilter) => void }) {
-  const chips: { key: ActivityFilter; label: string; emoji: string }[] = [
-    { key: "all", label: "All", emoji: "⚡" },
-    { key: "workout", label: "Workouts", emoji: "🏋️" },
-    { key: "nutrition", label: "Nutrition", emoji: "🥗" },
-    { key: "wellness", label: "Wellness", emoji: "🌿" },
-  ];
   return (
-    <div style={{ display:"flex", gap:6, flexWrap:"wrap", padding:"0 12px 12px" }}>
-      {chips.map(c => (
-        <button key={c.key} onClick={() => onChange(c.key)} style={{
-          padding:"5px 11px", borderRadius:99, border:"none", cursor:"pointer",
-          fontWeight:700, fontSize:11,
-          background: value === c.key ? "#7C3AED" : "rgba(124,58,237,0.10)",
-          color: value === c.key ? "#fff" : "#9CA3AF",
-          transition:"all 0.15s",
-        }}>
-          {c.emoji} {c.label}
-        </button>
+    <div style={{background:"#111811",borderRadius:22,padding:24,border:`1.5px solid #2A3A2A`,marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontWeight:900,fontSize:17,color:C.text}}>{title}</div>
+        <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.purple,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>
+      </div>
+      {items.map((item,i)=>(
+        <div key={i} style={{background:i%2===0?"#1A2A1A":"#141F14",borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12,border:"1px solid #2A3A2A"}}>
+          {item.emoji && <span style={{fontSize:24,flexShrink:0}}>{item.emoji}</span>}
+          <span style={{fontSize:14,fontWeight:700,color:C.text}}>{item.name || item.label || Object.values(item).filter((_,idx)=>idx>0).join(' ')}</span>
+        </div>
       ))}
     </div>
   );
 }
 
-// ── Main Feed Page ────────────────────────────────────────────────────────────
-export default function FeedPage() {
-  const { user } = useAuth();
-  const [posts, setPosts] = useState(INITIAL_POSTS);
-  const [dbPosts, setDbPosts] = useState<any[]>([]);
-  const [dbPostsPage, setDbPostsPage] = useState(0);
-  const [dbPostsHasMore, setDbPostsHasMore] = useState(true);
-  const [loadingMorePosts, setLoadingMorePosts] = useState(false);
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
-  const [activityLogsPage, setActivityLogsPage] = useState(0);
-  const [activityLogsHasMore, setActivityLogsHasMore] = useState(true);
-  const [loadingMoreActivity, setLoadingMoreActivity] = useState(false);
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  // Per-user list of recently-earned badges (last 7 days) WITH their
-  // created_at timestamps. We store the timestamps so each activity card
-  // can match badges to the specific workout/log that earned them, rather
-  // than showing every recent badge on every card from that user.
-  const [userBadgeMap, setUserBadgeMap] = useState<Record<string, Array<{ badge_id: string; created_at: string }>>>({});
-  // Report state — when non-null, ReportModal is shown for that target.
-  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
-  const [loadingFeed, setLoadingFeed] = useState(true);
-  // Pull-to-refresh state. Tracked at the page level (not PostCard) because
-  // the gesture lives on the feed scroll container. The pull distance is
-  // capped at 80px which roughly matches iOS's native PTR. The threshold for
-  // commit is 65px — past that, releasing fires the refresh and we show the
-  // spinner state until fetchPosts(0) resolves.
-  const [ptrPullPx, setPtrPullPx] = useState(0);
-  const [ptrRefreshing, setPtrRefreshing] = useState(false);
-  const ptrStartYRef = useRef<number | null>(null);
-  const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
-  const [followingPosts, setFollowingPosts] = useState<any[]>([]);
-  const [loadingFollowing, setLoadingFollowing] = useState(false);
-  // Streak reminder card — shows at top of For You when user has an active
-  // streak AND hasn't logged anything today. The streak is computed from
-  // activity_logs (workouts + wellness) over the last 30 days. Set to 0 means
-  // "don't show the card." A user who dismisses the card today gets
-  // localStorage'd so they don't see it again until tomorrow.
-  const [streakInfo, setStreakInfo] = useState<{
-    days: number;
-    loggedToday: boolean;
-  } | null>(null);
-  const [streakDismissed, setStreakDismissed] = useState(false);
-  // Recap prompt — appears once per week on first feed load showing a CTA
-  // to view last week's recap. Persists dismissal in localStorage by week
-  // start date so users see exactly one recap prompt per week.
-  const [showRecapPrompt, setShowRecapPrompt] = useState(false);
-  // The Sunday-ISO of the week we're prompting about. Stored separately
-  // so the URL the prompt links to is correct.
-  const [recapWeekKey, setRecapWeekKey] = useState<string>("");
-  // Stories — real data from /api/db
-  const [stories, setStories] = useState<Story[]>([]);
-  const [viewingStory, setViewingStory] = useState<Story | null>(null);
-  const [postingStory, setPostingStory] = useState(false);
-  const storyFileInputRef = useRef<HTMLInputElement>(null);
-  // Search
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchTimeout = useRef<any>(null);
-  // Notifications
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const unreadCount = notifications.filter(n => !n.read).length;
-  const [newMembers, setNewMembers] = useState<any[]>([]);
-
-  const PAGE_SIZE = 10;
-
-  // ── For You feed loader ───────────────────────────────────────────────
-  // CLEAN REBUILD. Direct supabase query. Only columns we KNOW exist
-  // (proven by Discover and Profile working with them). No /api/db dependency
-  // — that endpoint had multiple sources of silent failure.
-  //
-  // Columns selected: id, username, full_name, avatar_url, city — exactly
-  // what Discover uses (proven to work). NOT tier (column missing), NOT
-  // logs_last_28_days (also potentially missing). Tier is computed in the
-  // renderer fallback.
-  //
-  // No nested comments join — that hits RLS edge cases. Comments load
-  // lazily per post when expanded.
-  async function fetchPosts(page: number, append = false) {
-    if (page === 0) setLoadingFeed(true);
-    else setLoadingMorePosts(true);
-
-    let data: any[] | null = null;
-
-    try {
-      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
-
-      // PERF: fire posts + follows + viewer-city in PARALLEL. None of them
-      // depend on each other; previously we waited for posts to finish
-      // before starting the others, costing ~200-400ms of needless serial
-      // wait time. Promise.all + .catch fallbacks let any slow query fail
-      // independently without blocking the others.
-      const postsPromise = supabase
-        .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city), locationData:locations(id, name, city, kind)')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(FETCH_LIMIT);
-
-      const followsPromise = user
-        ? supabase.from('follows').select('following_id').eq('follower_id', user.id)
-        : Promise.resolve({ data: [] as any[] });
-
-      const viewerPromise = user
-        ? supabase.from('users').select('city').eq('id', user.id).maybeSingle()
-        : Promise.resolve({ data: null });
-
-      const [postsResult, followsRes, viewerRes] = await Promise.all([
-        postsPromise,
-        followsPromise,
-        viewerPromise,
-      ]);
-
-      const { data: posts, error: queryErr } = postsResult;
-
-      if (queryErr) {
-        console.error('[feed] posts query failed:', queryErr.message, queryErr);
-      } else if (Array.isArray(posts)) {
-        // Score for ranking. Tier 0 = own posts, 1 = follows, 2 = same city, 3 = rest
-        const followingIds: string[] = (followsRes.data || []).map((f: any) => f.following_id);
-        const viewerCity = ((viewerRes.data as any)?.city || '').split(',')[0]?.trim()?.toLowerCase() || '';
-        const followingSet = new Set(followingIds);
-
-        // Find the user's single most recent post id (if any). Only THAT id
-        // gets bucket 0; the user's older posts fall to bucket 3 with everyone
-        // else. This prevents the feed from being a wall of your own old
-        // content before you ever see anyone you follow. Posts come in already
-        // sorted desc by created_at, so the first match is the most recent.
-        let mostRecentOwnPostId: string | null = null;
-        if (user) {
-          const ownPost = posts.find((p: any) => p.user_id === user.id);
-          if (ownPost) mostRecentOwnPostId = ownPost.id;
-        }
-
-        const ranked = posts
-          .map((p: any, index: number) => {
-            const postCity = (p.users?.city || '').split(',')[0]?.trim()?.toLowerCase();
-            let bucket = 3;
-            // Bucket 0 is RESERVED for your single most recent post.
-            // All your older posts fall through to follow / city / rest.
-            if (mostRecentOwnPostId && p.id === mostRecentOwnPostId) bucket = 0;
-            else if (user && p.user_id === user.id) bucket = 3; // your older posts join "rest"
-            else if (followingSet.has(p.user_id)) bucket = 1;
-            else if (viewerCity && postCity && postCity === viewerCity) bucket = 2;
-            return { post: p, bucket, index };
-          })
-          .sort((a, b) => a.bucket - b.bucket || a.index - b.index)
-          .map(r => r.post);
-
-        const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-        // Hydrate _liked client-side
-        let likedPostIds: Set<string> = new Set();
-        if (user && pageRows.length > 0) {
-          try {
-            const postIds = pageRows.map((p: any) => p.id);
-            const { data: likeData } = await supabase
-              .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
-            if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
-          } catch (likeErr) {
-            console.warn('[feed] couldnt fetch likes:', likeErr);
-          }
-        }
-
-        // PERF: Batch-load comments for ALL visible posts in ONE query
-        // instead of N separate /api/db calls. The previous version fired
-        // 10 parallel HTTP requests (browser → Vercel → Supabase → back) —
-        // even in parallel, the slowest one bottlenecks page load. Direct
-        // Supabase query with .in() does the same work in 1 request.
-        //
-        // We then group results by post_id client-side and only show the
-        // most-recent comment per post in the feed preview (PostCard limits
-        // display, but having all of them in state means tapping "show more"
-        // is instant).
-        const postCommentsMap: Record<string, any[]> = {};
-        if (pageRows.length > 0) {
-          try {
-            const postIds = pageRows.map((p: any) => p.id);
-            const { data: allComments } = await supabase
-              .from('comments')
-              .select('id, content, created_at, user_id, post_id, users:user_id(id, username, full_name, avatar_url)')
-              .in('post_id', postIds)
-              .order('created_at', { ascending: false });
-
-            (allComments || []).forEach((c: any) => {
-              const pid = c.post_id;
-              if (!pid) return;
-              const cu = c.users || {};
-              const cname = cu.full_name || cu.username || 'User';
-              const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-              const t = (() => {
-                if (!c.created_at) return '';
-                const d = new Date(c.created_at);
-                if (isNaN(d.getTime())) return '';
-                const diff = Date.now() - d.getTime();
-                if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-                if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-                return d.toLocaleDateString();
-              })();
-              const display = {
-                id: c.id,
-                user: cname,
-                avatar: cu.avatar_url || cini,
-                text: c.content || '',
-                time: t,
-                user_id: c.user_id,
-              };
-              if (!postCommentsMap[pid]) postCommentsMap[pid] = [];
-              postCommentsMap[pid].push(display);
-            });
-            // Comments came in DESC for the .in() — reverse per-post so
-            // they display oldest-first like the previous code did.
-            Object.keys(postCommentsMap).forEach(pid => {
-              postCommentsMap[pid].reverse();
-            });
-          } catch (cmtErr) {
-            console.warn('[feed] batch comments fetch failed:', cmtErr);
-          }
-        }
-
-        data = pageRows.map((p: any) => ({
-          ...p,
-          _liked: likedPostIds.has(p.id),
-          comments: postCommentsMap[p.id] || [],
-        }));
-      }
-    } catch (err) {
-      console.error('[feed] fetchPosts unexpected error:', err);
-    }
-
-    if (data) {
-      let filtered = data;
-      if (user) {
-        try {
-          const blocks = await loadBlockedUsers(user.id);
-          if (blocks.size > 0) {
-            filtered = data.filter((p: any) => !blocks.has(p.user_id));
-          }
-        } catch {}
-      }
-      console.log('[feed] fetchPosts complete:', {
-        rawCount: data.length,
-        filteredCount: filtered.length,
-        page,
-        firstPostId: filtered[0]?.id,
-      });
-      if (append) setDbPosts(prev => [...prev, ...filtered]);
-      else setDbPosts(filtered);
-      setDbPostsHasMore(data.length === PAGE_SIZE);
-      setDbPostsPage(page);
-      // PERF: cache page 0 of the feed for back/forward navigation. We
-      // only cache page 0 — paginated extra pages don't survive the
-      // round trip and that's fine. 30s TTL is enough for the user to
-      // hop to a profile and back without seeing a stale feed.
-      if (page === 0 && user?.id) {
-        setCached(`feed:${user.id}`, filtered);
-      }
-    } else {
-      console.warn('[feed] fetchPosts ended with no data');
-    }
-    if (page === 0) setLoadingFeed(false);
-    else setLoadingMorePosts(false);
-  }
-
-
-  // Fetch the For You feed once on mount AND once when user resolves so we
-  // get personalized ranking. The first fetch on mount runs with user=null
-  // (auth context still resolving) and gives an unranked fallback; the
-  // refetch when user.id appears gives the proper bucketed ranking.
-  //
-  // PERF: hydrate from in-memory cache instantly if we have a recent
-  // version. The user navigated away and came back — show what we had,
-  // then refresh in the background.
-  useEffect(() => {
-    if (user?.id) {
-      const cached = getCached<any[]>(`feed:${user.id}`, 30_000);
-      if (cached && cached.length > 0) {
-        setDbPosts(cached);
-        setLoadingFeed(false);
-      }
-    }
-    fetchPosts(0);
-  }, [user?.id]);
-
-  // ── Stories: load active stories (last 24h) ────────────────────────────
-  async function loadStories() {
-    if (!user) return;
-    try {
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_active_stories', payload: { viewerId: user.id } }),
-      });
-      const data = await res.json();
-      if (data.stories) setStories(data.stories as Story[]);
-    } catch (err) {
-      console.warn('[stories] load failed:', err);
-    }
-  }
-  useEffect(() => { loadStories(); }, [user?.id]);
-
-  // ── Stories: post a new story (called when user picks a photo) ─────────
-  async function handlePostStory(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    setPostingStory(true);
-    try {
-      // iPhone photos can be 4-8MB and may be HEIC, both of which break the
-      // upload pipeline (Vercel 4.5MB body limit + Supabase rejects HEIC).
-      // Re-encode through a canvas to get a clean ~1MB JPEG every time.
-      const compressed = await compressImage(file, 1600, 0.85);
-      const url = await uploadPhoto(compressed, 'activity', `stories/${user.id}/${Date.now()}.jpg`);
-      if (!url) {
-        alert("Couldn't upload that photo. Try another one.");
-        return;
-      }
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'post_story',
-          payload: { userId: user.id, mediaUrl: url, mediaType: 'image', caption: null },
-        }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        alert(`Failed to post story: ${data.error}`);
-        return;
-      }
-      await loadStories();
-    } catch (err: any) {
-      console.warn('[stories] post failed:', err);
-      alert(`Story upload error: ${err?.message || String(err)}`);
-    } finally {
-      setPostingStory(false);
-      if (storyFileInputRef.current) storyFileInputRef.current.value = "";
-    }
-  }
-
-  // ── Stories: delete one of your own ────────────────────────────────────
-  async function handleDeleteStory(storyId: string) {
-    if (!user) return;
-    try {
-      await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete_my_story', payload: { userId: user.id, storyId } }),
-      });
-      setViewingStory(null);
-      await loadStories();
-    } catch (err) {
-      console.warn('[stories] delete failed:', err);
-    }
-  }
-
-  // ── Stories: reply via DM ──────────────────────────────────────────────
-  // Encodes the story media URL in the message content using a [story_reply]
-  // marker that the messages page knows how to render.
-  async function handleStoryReply(story: Story, text: string) {
-    if (!user) return;
-    try {
-      // Find or create a conversation between user and story author
-      const convRes = await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create_conversation',
-          payload: { userId: user.id, otherUserId: story.user_id },
-        }),
-      });
-      const convData = await convRes.json();
-      const conversationId = convData?.conversationId || convData?.conversation?.id;
-      if (!conversationId) {
-        alert("Couldn't open DM with that user.");
-        return;
-      }
-
-      // Send the message with the story-reply marker. The messages page
-      // parses [story_reply]: URL out and renders it as a small preview tile.
-      const content = `[story_reply]: ${story.media_url}\n${text}`;
-      await fetch('/api/db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'send_message',
-          payload: { conversationId, senderId: user.id, content },
-        }),
-      });
-    } catch (err: any) {
-      console.warn('[stories] reply failed:', err);
-      alert(`Reply failed: ${err?.message || String(err)}`);
-    }
-  }
-
-  async function loadMorePosts() {
-    if (loadingMorePosts || !dbPostsHasMore) return;
-    await fetchPosts(dbPostsPage + 1, true);
-  }
-
-  useEffect(() => {
-    if (feedTab !== "following" || !user) return;
-    setLoadingFollowing(true);
-    async function loadFollowingFeed() {
-      // Try the unified /api/db endpoint first. Falls back to a direct
-      // supabase query if the API fails — same approach as the For You
-      // feed so the Following tab keeps working even if the API endpoint
-      // is broken (just without comments).
-      let posts: any[] | null = null;
-      try {
-        const res = await fetch('/api/db', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'get_feed_posts',
-            payload: { viewerId: user!.id, page: 0, pageSize: 20, followingOnly: true },
-          }),
-        });
-        const json = await res.json();
-        if (json.error) {
-          console.error('[feed] following API error:', json.error);
-        } else if (Array.isArray(json.posts)) {
-          posts = json.posts;
-        }
-      } catch (err) {
-        console.error('[feed] following network error:', err);
-      }
-
-      // Fallback: direct supabase query (no comments — just posts)
-      if (posts === null) {
-        console.warn('[feed] following falling back to direct supabase query');
-        const { data: followData } = await supabase
-          .from('follows').select('following_id').eq('follower_id', user!.id);
-
-        if (!followData || followData.length === 0) {
-          setFollowingPosts([]);
-          setLoadingFollowing(false);
-          return;
-        }
-
-        const followingIds = followData.map(f => f.following_id);
-        const { data: fp } = await supabase
-          .from('posts')
-          .select('*, users(id, username, full_name, avatar_url), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))')
-          .in('user_id', followingIds)
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-          .limit(20);
-
-        posts = fp || [];
-      }
-
-      setFollowingPosts(posts);
-      setLoadingFollowing(false);
-    }
-    loadFollowingFeed();
-  }, [feedTab, user]);
-
-  // ── Streak loader ─────────────────────────────────────────────────────
-  // Computes the user's CURRENT consecutive-day activity streak (workouts
-  // OR wellness logs). Runs once when the user resolves; if there's an
-  // active streak (>=2 days) and they haven't logged TODAY yet, the
-  // reminder card shows on the For You feed.
-  //
-  // We special-case "started yesterday and haven't logged today yet" — the
-  // streak is still alive (today isn't over) but we want to nudge them.
-  // If they last logged 2+ days ago the streak is broken; we don't show
-  // a card for broken streaks because that's just sad.
-  //
-  // Dismissal: the user can tap × on the card. We set a localStorage flag
-  // keyed by today's date; tomorrow the flag is stale and the card returns
-  // (assuming streak is still alive, which it won't be if they kept ignoring).
-  useEffect(() => {
-    if (!user) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const dismissedKey = `streak_dismissed_${user.id}_${todayKey}`;
-    if (typeof window !== "undefined" && localStorage.getItem(dismissedKey)) {
-      setStreakDismissed(true);
-      return;
-    }
-
-    (async () => {
-      // Pull the last 30 days of activity logs — enough to compute any
-      // reasonable streak without bloating the query.
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase
-        .from('activity_logs')
-        .select('logged_at, created_at')
-        .eq('user_id', user.id)
-        .or('log_type.eq.workout,log_type.eq.wellness')
-        .gte('logged_at', thirtyDaysAgo)
-        .order('logged_at', { ascending: false });
-      if (!data || data.length === 0) {
-        setStreakInfo({ days: 0, loggedToday: false });
-        return;
-      }
-
-      // Bucket logs by local-date string so multiple workouts on the same
-      // day count as one "active day" toward the streak.
-      const dayKey = (iso: string) => {
-        const d = new Date(iso);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      };
-      const activeDays = new Set<string>();
-      data.forEach((row: any) => {
-        const ts = row.logged_at || row.created_at;
-        if (ts) activeDays.add(dayKey(ts));
-      });
-
-      // Walk backward from today counting consecutive days. We allow today
-      // to be missing (streak alive even if they haven't logged yet today)
-      // but stop at the first gap before yesterday.
-      const today = new Date();
-      const todayK = dayKey(today.toISOString());
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayK = dayKey(yesterday.toISOString());
-
-      const loggedToday = activeDays.has(todayK);
-      // Streak base: did they log yesterday? Otherwise the streak is broken
-      // unless today is the first ever log.
-      if (!loggedToday && !activeDays.has(yesterdayK)) {
-        setStreakInfo({ days: 0, loggedToday: false });
-        return;
-      }
-      let count = 0;
-      const cursor = new Date(today);
-      // If they haven't logged today, start counting from yesterday.
-      if (!loggedToday) cursor.setDate(cursor.getDate() - 1);
-      while (true) {
-        if (activeDays.has(dayKey(cursor.toISOString()))) {
-          count++;
-          cursor.setDate(cursor.getDate() - 1);
-        } else break;
-        // Safety bound — 30 days back is the most we ever loaded
-        if (count >= 30) break;
-      }
-      setStreakInfo({ days: count, loggedToday });
-    })();
-  }, [user]);
-
-  function dismissStreakCard() {
-    if (!user) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
-    try { localStorage.setItem(`streak_dismissed_${user.id}_${todayKey}`, '1'); } catch {}
-    setStreakDismissed(true);
-  }
-
-  // ── Recap prompt loader ─────────────────────────────────────────────
-  // Shows a card on the For You feed pointing to last week's recap.
-  //
-  // We always compute and set recapWeekKey so other UI surfaces (e.g. a
-  // "Last week's recap" link) can use it regardless of whether the auto-
-  // prompt shows.
-  //
-  // Auto-show logic for the prompt card:
-  //   1. Compute the Sunday of the previous week → that's our recap target
-  //   2. The prompt auto-shows during the "fresh window" — Sun/Mon/Tue of
-  //      the current week. After that it stops auto-showing because by
-  //      Wednesday the recap is no longer "new."
-  //   3. Within that window, dismissal still suppresses for the rest of
-  //      the week (so we don't pester users who've already dismissed).
-  //
-  // ALSO, defensive cleanup: if a user has stale `recap_seen_*` flags
-  // from prior weeks left over in localStorage, those would never expire
-  // and could cause confusing behavior if the same week-key was reused
-  // (it won't be, but cleanup is cheap and prevents bugs).
-  useEffect(() => {
-    if (!user) return;
-    const today = new Date();
-    const thisSun = new Date(today);
-    thisSun.setHours(0, 0, 0, 0);
-    thisSun.setDate(thisSun.getDate() - thisSun.getDay());
-    const prevSun = new Date(thisSun);
-    prevSun.setDate(prevSun.getDate() - 7);
-    const weekKey = `${prevSun.getFullYear()}-${String(prevSun.getMonth() + 1).padStart(2, "0")}-${String(prevSun.getDate()).padStart(2, "0")}`;
-
-    // Always set the week key — the always-visible "Last week's recap"
-    // link uses it. Disconnects the recap link from the auto-prompt logic.
-    setRecapWeekKey(weekKey);
-
-    if (typeof window === "undefined") return;
-
-    // One-time recovery: users who dismissed during the buggy v1 recap
-    // got locked out from seeing the corrected v2 recap. We do a one-time
-    // wipe of all old recap_seen_* keys, gated by a version flag so it
-    // only runs ONCE per user. Future dismissals work normally after this.
-    const versionFlagKey = `recap_v2_migrated_${user.id}`;
-    try {
-      if (!localStorage.getItem(versionFlagKey)) {
-        const prefix = `recap_seen_${user.id}_`;
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith(prefix)) {
-            localStorage.removeItem(k);
-          }
-        }
-        localStorage.setItem(versionFlagKey, "1");
-      }
-    } catch { /* localStorage may be unavailable in private mode */ }
-
-    // Normal flow: show the prompt if the user hasn't dismissed THIS week's
-    // recap yet. After the wipe above this is always true on first load
-    // post-migration. Subsequent dismissals via × persist as before.
-    const seenKey = `recap_seen_${user.id}_${weekKey}`;
-    const alreadyDismissed = !!localStorage.getItem(seenKey);
-    if (!alreadyDismissed) {
-      setShowRecapPrompt(true);
-    }
-  }, [user]);
-
-  function dismissRecapPrompt() {
-    if (!user || !recapWeekKey) return;
-    const seenKey = `recap_seen_${user.id}_${recapWeekKey}`;
-    try { localStorage.setItem(seenKey, '1'); } catch {}
-    setShowRecapPrompt(false);
-  }
-
-  async function fetchActivityLogs(page: number, append = false, filter: ActivityFilter = activityFilter) {
-    if (page > 0) setLoadingMoreActivity(true);
-    let query = supabase
-      .from('activity_logs')
-      .select('*, users:user_id(id, username, full_name, avatar_url)')
-      .order('logged_at', { ascending: false })
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-    if (filter !== "all") query = query.eq('log_type', filter);
-    const { data } = await query;
-    if (data) {
-      // Filter out activity from blocked users in either direction
-      let filtered = data;
-      if (user) {
-        const blocks = await loadBlockedUsers(user.id);
-        if (blocks.size > 0) {
-          filtered = data.filter((l: any) => !blocks.has(l.user_id));
-        }
-      }
-
-      if (append) setActivityLogs(prev => [...prev, ...filtered]);
-      else setActivityLogs(filtered);
-      setActivityLogsHasMore(data.length === PAGE_SIZE);
-      setActivityLogsPage(page);
-      // badge loading
-      // We store created_at alongside badge_id so each activity card can
-      // match badges by timestamp (±5 min window) instead of dumping the
-      // user's whole 7-day badge collection onto every card. This way a
-      // badge only appears on the card it was earned from.
-      if (filtered.length > 0) {
-        const userIds = [...new Set(filtered.map((l: any) => l.user_id).filter(Boolean))];
-        if (userIds.length > 0) {
-          const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          const { data: badgeData } = await supabase.from('badges').select('user_id, badge_id, created_at')
-            .in('user_id', userIds).gte('created_at', sevenDaysAgo.toISOString());
-          if (badgeData) {
-            const map: Record<string, Array<{ badge_id: string; created_at: string }>> = {};
-            badgeData.forEach((b: any) => {
-              if (!map[b.user_id]) map[b.user_id] = [];
-              map[b.user_id].push({ badge_id: b.badge_id, created_at: b.created_at });
-            });
-            if (append) setUserBadgeMap(prev => ({ ...prev, ...map }));
-            else setUserBadgeMap(map);
-          }
-        }
-      }
-    }
-    if (page > 0) setLoadingMoreActivity(false);
-  }
-
-  // Load activity logs for sidebar
-  useEffect(() => {
-    async function loadActivityFeed() {
-      await fetchActivityLogs(0, false, activityFilter);
-      // legacy badge load already handled inside fetchActivityLogs
-      if (false) {
-      const { data } = await supabase
-        .from('activity_logs')
-        .select('*, users:user_id(id, username, full_name, avatar_url)')
-        .order('logged_at', { ascending: false })
-        .limit(20);
-      if (data && data.length > 0) {
-        setActivityLogs(data);
-        // Load RECENT badges for users in the feed (earned in last 7 days only)
-        const userIds = [...new Set(data.map((l: any) => l.user_id).filter(Boolean))];
-        if (userIds.length > 0) {
-          const sevenDaysAgo = new Date();
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          const { data: badgeData } = await supabase
-            .from('badges')
-            .select('user_id, badge_id, created_at')
-            .in('user_id', userIds)
-            .gte('created_at', sevenDaysAgo.toISOString())
-            .eq('show_celebration', true);
-          if (badgeData) {
-            const map: Record<string, string[]> = {};
-            badgeData.forEach((b: any) => {
-              if (!map[b.user_id]) map[b.user_id] = [];
-              map[b.user_id].push(b.badge_id);
-            });
-            setUserBadgeMap(map);
-          }
-        }
-      }
-      } // end if (false)
-    }
-    loadActivityFeed();
-  }, []);
-
-  // Background HealthKit sync. Runs once on mount, after auth resolves, if
-  // the user has previously connected Apple Health on this device. The
-  // helper itself short-circuits on web/Android and respects a 2-minute
-  // cooldown so this isn't a heavy call. Fires asynchronously — the feed
-  // doesn't wait on it. New activity logs from the sync will appear on
-  // the next feed refresh (pull-to-refresh, navigating away and back, or
-  // posting something new).
-  useEffect(() => {
-    if (!user) return;
-    maybeRunHealthKitAutoSync(user.id);
-  }, [user]);
-
-  // Re-fetch activity logs when filter changes
-  useEffect(() => {
-    fetchActivityLogs(0, false, activityFilter);
-  }, [activityFilter]);
-
-  // Search users
-  useEffect(() => {
-    if (!searchQuery.trim()) { setSearchResults([]); return; }
-    clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(async () => {
-      setSearchLoading(true);
-      const q = searchQuery.trim();
-      const { data } = await supabase.from('users').select('id,username,full_name,avatar_url').or(`username.ilike.%${q}%,full_name.ilike.%${q}%`).limit(10);
-      setSearchResults(data || []);
-      setSearchLoading(false);
-    }, 300);
-    return () => clearTimeout(searchTimeout.current);
-  }, [searchQuery]);
-
-  // Load notifications
-  useEffect(() => {
-    if (!user) return;
-    async function loadNotifs() {
-      const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_notifications', payload:{ userId: user!.id }}) });
-      const json = await res.json();
-      setNotifications(json.notifications || []);
-    }
-    loadNotifs();
-    const interval = setInterval(loadNotifs, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Load new members — city-first ordering
-  useEffect(() => {
-    async function loadNewMembers() {
-      // Get current user's city for local-first sorting
-      const userCity = (user as any)?.profile?.city || null;
-
-      const { data } = await supabase
-        .from('users')
-        .select('id, username, full_name, avatar_url, city, followers_count, created_at')
-        .neq('id', user?.id ?? '')
-        .order('created_at', { ascending: false })
-        .limit(30);
-
-      if (!data) return;
-
-      // Sort: city matches first, then everyone else — both groups by newest
-      const cityMatch = userCity
-        ? data.filter((u: any) => u.city && u.city.toLowerCase().includes(userCity.toLowerCase().split(',')[0].trim()))
-        : [];
-      const everyone = data.filter((u: any) => !cityMatch.find((c: any) => c.id === u.id));
-      setNewMembers([...cityMatch, ...everyone].slice(0, 10));
-    }
-    loadNewMembers();
-  }, [user]);
-
-  function updatePost(updated: Post) {
-    if (dbPosts.find((p: any) => p.id === updated.id)) {
-      setDbPosts(prev => prev.map((p: any) => p.id === updated.id
-        ? { ...p, likes_count: updated.likes, _liked: updated.liked, comments: updated.comments.map((c: any) => ({ id: c.id, content: c.text, created_at: new Date().toISOString(), users: { full_name: c.user, username: c.user } })) }
-        : p));
-    } else {
-      setPosts(prev => prev.map(p => p.id === updated.id ? updated : p));
-    }
-  }
-
-  // After the server inserts a comment it returns the full updated list of
-  // comments for that post. Replace the post's comments with that list in
-  // BOTH dbPosts (For You) and followingPosts (Following) so whichever feed
-  // the user is on, the comment shows up immediately.
-  function refreshPostComments(postId: string | number, comments: any[]) {
-    setDbPosts(prev => prev.map((p: any) =>
-      p.id === postId ? { ...p, comments } : p
-    ));
-    setFollowingPosts(prev => prev.map((p: any) =>
-      p.id === postId ? { ...p, comments } : p
-    ));
-  }
-
-  async function deletePost(id: number | string) {
-    // Try Supabase first for real posts
-    const isDbPost = dbPosts.find((p: any) => p.id === id);
-    if (isDbPost) {
-      await supabase.from('posts').delete().eq('id', id);
-      setDbPosts(prev => prev.filter((p: any) => p.id !== id));
-    } else {
-      setPosts(prev => prev.filter(p => p.id !== id));
-    }
-  }
-
-  // Use real DB posts when available, fall back to mock
-  // displayPosts: real DB posts only. The "empty state" message below
-  // handles the no-posts-yet case. Previously this fell back to mock data,
-  // which made the feed look populated with fake profiles when the user
-  // actually had nothing to see — confusing and looked broken.
-  const displayPosts = dbPosts.map((p: any) => ({
-        id: p.id,
-        user: p.users?.full_name || p.users?.username || "User",
-        username: p.users?.username || "user",
-        tier: (p.users?.tier as Tier) || computeTier(p.users?.logs_last_28_days || 0, 0),
-        avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
-        time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-        dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
-        dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
-        photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
-        mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
-        mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
-        caption: p.caption || "",
-        // Carry post_type so PostCard can apply the gold "achievement"
-        // skin to PR-ticker auto-posts. Falls back gracefully if the
-        // column isn't selected on this code path.
-        post_type: p.post_type,
-        likes: p.likes_count || 0,
-        liked: p._liked || false,
-        comments: (p.comments || []).map((c: any) => {
-          // The For You loader already maps DB comments to display shape at
-          // ~line 1480 ({user, text, time}). When this outer mapper runs, those
-          // comments come in already-mapped, so c.users is undefined and we'd
-          // fall through to "User" + new Date(undefined) = "Invalid Date".
-          // Detect already-mapped shape and pass it through unchanged.
-          if (typeof c.user === 'string' && typeof c.text === 'string') {
-            return { id: c.id, user_id: c.user_id, user: c.user, avatar: c.avatar || '?', text: c.text, time: c.time || '' };
-          }
-          return {
-            id: c.id,
-            user_id: c.user_id,
-            user: c.users?.full_name || c.users?.username || "User",
-            avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
-            text: c.content || "",
-            time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-          };
-        }),
-        workout: null,
-        nutrition: null,
-        wellness: null,
-        _ownerId: p.user_id,
-        user_id: p.user_id,
-      } as any));
-  // NOTE: We deliberately do NOT filter to "photos only" here. An earlier
-  // version had `.filter(p => p.photos.length > 0)` which made For You drop
-  // every text-only or activity-only post — including the user's own posts —
-  // making the feed look empty even when posts existed. Following uses no
-  // such filter, which is exactly why Following showed posts but For You
-  // didn't despite querying the same table. If a "Photos only" tab is
-  // wanted later, add it as a separate filtered view, not a global drop.
-
-  const activityPosts = displayPosts.filter(p => p.workout || p.nutrition || p.wellness);
-
-  // Group activity logs by user + calendar day so multiple nutrition logs become one card
-  const sidebarActivityPosts = (() => {
-    const grouped = new Map<string, any>();
-    activityLogs.forEach((log: any) => {
-      const userId = log.user_id || 'unknown';
-      const dayKey = new Date(log.logged_at || log.created_at).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-      const key = `${userId}__${dayKey}`;
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          id: key,
-          _userId: userId,
-          user: log.users?.full_name || log.users?.username || 'User',
-          username: log.users?.username || 'user',
-          avatarUrl: log.users?.avatar_url || null,
-          avatar: (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
-          time: (() => {
-            const d = new Date(log.logged_at || log.created_at);
-            const diff = Date.now() - d.getTime();
-            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-            return d.toLocaleDateString();
-          })(),
-          _workoutLogs: [] as any[],
-          _nutritionLogs: [] as any[],
-          _wellnessLogs: [] as any[],
-        });
-      }
-      const entry = grouped.get(key);
-      if (log.log_type === 'workout') entry._workoutLogs.push(log);
-      if (log.log_type === 'nutrition') entry._nutritionLogs.push(log);
-      if (log.log_type === 'wellness') entry._wellnessLogs.push(log);
-    });
-
-    return Array.from(grouped.values()).map((entry: any) => {
-      const wl = entry._workoutLogs[0];
-      const nls = entry._nutritionLogs;
-      const wels = entry._wellnessLogs;
-
-      const workout = wl ? {
-        type: wl.workout_type || 'Workout',
-        duration: wl.workout_duration_min ? `${wl.workout_duration_min} min` : '—',
-        calories: wl.workout_calories || 0,
-        exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—' })) : [],
-        cardio: Array.isArray(wl.cardio) ? wl.cardio.map((c: any) => ({
-          type: c.type || 'Cardio',
-          duration: c.duration || '—',
-          distance: c.distance || '',
-        })) : [],
-        notes: wl.notes,
-        photoUrls: normalizePhotoUrls(wl.photo_url, wl.media_url, wl.media_urls),
-        // PR badge — set by /api/db detect_prs_from_log when this workout
-        // beat the user's prior all-time max for any exercise. Drives the
-        // "🏆 PR" pill on the feed card header.
-        isPR: !!wl.is_pr,
-      } : null;
-
-      const nutrition = nls.length > 0 ? {
-        calories: Math.round(nls.reduce((s: number, l: any) => s + (l.calories_total || 0), 0)),
-        protein:  Math.round(nls.reduce((s: number, l: any) => s + (l.protein_g || 0), 0)),
-        carbs:    Math.round(nls.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0)),
-        fat:      Math.round(nls.reduce((s: number, l: any) => s + (l.fat_g || 0), 0)),
-        sugar: 0,
-        meals: nls.map((l: any) => ({
-          key: l.meal_type || 'Meal',
-          emoji: '🍽️',
-          name: Array.isArray(l.food_items) && l.food_items.length > 0 ? l.food_items.map((f: any) => f.name).join(', ') : (l.notes || 'Logged meal'),
-          cal: l.calories_total || 0,
-        })),
-        photoUrls: normalizePhotoUrls(...nls.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
-      } : null;
-
-      const wellness = wels.length > 0 ? {
-        // duration / loggedAt enable the modern card aesthetic (duration pill +
-        // time stamp pill) on mobile and desktop. Falls back to undefined if
-        // a row was logged before those fields existed.
-        entries: wels.map((l: any) => ({
-          activity: l.wellness_type || 'Wellness',
-          emoji: '🌿',
-          notes: l.notes || '',
-          duration: typeof l.wellness_duration_min === 'number' ? l.wellness_duration_min : undefined,
-          loggedAt: l.logged_at || l.created_at || undefined,
-        })),
-        photoUrls: normalizePhotoUrls(...wels.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
-      } : null;
-
-      // Match badges to this specific card. Each card's logs were created
-      // within seconds of any badges those logs auto-awarded. We collect
-      // every timestamp from this card's logs and find badges whose
-      // created_at falls within a ±5 minute window of any of them. Result:
-      // badges only appear on the card that actually earned them.
-      const userBadgesWithTime = userBadgeMap[entry._userId] || [];
-      const cardLogTimes: number[] = [
-        ...entry._workoutLogs,
-        ...entry._nutritionLogs,
-        ...entry._wellnessLogs,
-      ]
-        .map((l: any) => new Date(l.logged_at || l.created_at).getTime())
-        .filter((t: number) => !isNaN(t));
-      const WINDOW_MS = 5 * 60 * 1000; // 5 minute window
-      const matchedBadges = userBadgesWithTime
-        .filter(b => {
-          const badgeTime = new Date(b.created_at).getTime();
-          if (isNaN(badgeTime)) return false;
-          return cardLogTimes.some(t => Math.abs(badgeTime - t) <= WINDOW_MS);
-        })
-        .map(b => b.badge_id);
-
-      return { ...entry, workout, nutrition, wellness, _matchedBadges: matchedBadges };
-    });
-  })();
-
-  // On mobile: interleave posts + activity blocks so both are visible
-  // On desktop: keep two-column layout
-  const mobileActivityItems = sidebarActivityPosts.length > 0 ? sidebarActivityPosts : activityPosts;
-  const mobileItems: Array<{ type: "post"; data: Post } | { type: "activity"; data: Post } | { type: "suggested"; data: typeof SUGGESTED_USERS[0] }> = [];
-  const maxLen = Math.max(displayPosts.length, mobileActivityItems.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (displayPosts[i]) mobileItems.push({ type: "post", data: displayPosts[i] as Post });
-    if (mobileActivityItems[i]) mobileItems.push({ type: "activity", data: mobileActivityItems[i] as Post });
-  }
-  SUGGESTED_USERS.forEach(u => mobileItems.push({ type: "suggested", data: u }));
-
+// ── Crop Modal ────────────────────────────────────────────────────────────────
+// (crop modal removed — photos use adjust-to-fit / object-fit:cover)
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+// ─── Loading skeleton ───────────────────────────────────────────────────────
+// Renders a structural placeholder while the real profile page is loading
+// its data. Mimics the page's layout (avatar block, level XP, activity
+// cards, badges panel) using shimmer animations so the user perceives
+// the page as loaded instantly. Total LOC small enough to inline rather
+// than splitting into its own file.
+function ProfileSkeleton() {
+  // Single shimmer style reused everywhere. Pulled out so we only inject
+  // the keyframes once.
+  const shimmer: React.CSSProperties = {
+    background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+    backgroundSize: "200% 100%",
+    animation: "skeletonShimmer 1.4s ease-in-out infinite",
+  };
   return (
-    <div style={{ background:C.bg, minHeight:"100vh", paddingBottom:80 }}>
+    <div style={{ background: "#0D0D0D", minHeight: "100vh", paddingBottom: 80 }}>
       <style jsx global>{`
-        .feed-layout { display:flex; max-width:1200px; margin:0 auto; padding:0 24px; gap:48px; align-items:flex-start; }
-        .feed-sidebar { width:340px; flex-shrink:0; padding-top:20px; padding-bottom:20px; }
-        .feed-main { flex:1; min-width:0; padding-top:20px; }
-        .feed-mobile-only { display:none; }
-        .feed-desktop-only { display:block; }
-        @media (max-width: 767px) {
-          .feed-layout { flex-direction:column; padding:0 12px; gap:0; }
-          .feed-sidebar { display:none !important; }
-          .feed-main { width:100%; padding-top:12px; }
-          .feed-mobile-only { display:block; }
-          .feed-desktop-only { display:none; }
-          .feed-header-inner { padding:12px 16px !important; }
+        @keyframes skeletonShimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
       `}</style>
-
-      {/* ── Sticky Header ── */}
-      <div style={{ position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid #2D1F52` }}>
-        <div className="feed-header-inner" style={{ padding:"14px 20px 12px",display:"flex",alignItems:"center",gap:14 }}>
-          <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
-            <span style={{ fontSize:20 }}>⚡</span>
-            <span style={{ fontWeight:900,fontSize:22,color:C.blue,letterSpacing:1.5 }}>Livelee</span>
+      {/* Banner placeholder */}
+      <div style={{ ...shimmer, height: 180, width: "100%" }} />
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "20px 16px" }}>
+        {/* Avatar + name row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: -60 }}>
+          <div style={{ ...shimmer, width: 120, height: 120, borderRadius: "50%", border: "4px solid #0D0D0D" }} />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ ...shimmer, height: 24, width: "40%", borderRadius: 8 }} />
+            <div style={{ ...shimmer, height: 16, width: "25%", borderRadius: 8 }} />
           </div>
-          {/* Search bar — sits right next to the FIT logo. Fixed width so it
-              doesn't stretch out wide and feel disconnected from the logo. */}
-          <div style={{ width:320,maxWidth:"100%",position:"relative",flex:"1 1 auto",minWidth:0 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:8,background:"#1A1228",borderRadius:24,padding:"7px 14px",border:`1.5px solid ${searchQuery?C.blue:"#2D1F52"}` }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:15,height:15,flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search people..." style={{background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1,minWidth:0}}/>
-              {searchQuery && <button onClick={()=>{setSearchQuery("");setSearchResults([]);}} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>×</button>}
-            </div>
-            {searchQuery.trim() && (
-              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:"#111118",borderRadius:16,border:"1.5px solid #2D1F52",boxShadow:"0 8px 24px rgba(0,0,0,0.4)",zIndex:200,overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
-                {searchLoading ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>Searching...</div>
-                : searchResults.length===0 ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>No results</div>
-                : searchResults.map(u=>(
-                  <div key={u.id} onClick={()=>{setSearchQuery("");setSearchResults([]);window.location.href=`/profile/${u.username}`;}}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #2D1F52"}}
-                    onMouseEnter={e=>(e.currentTarget.style.background="#2D1F52")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
-                    <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
-                      {u.avatar_url?<img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(u.full_name||u.username||"?")[0].toUpperCase()}
-                    </div>
-                    <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{u.full_name}</div><div style={{fontSize:11,color:C.sub}}>@{u.username}</div></div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* ── Bell button — prominent, far right of header ──
-              Replaces the small inline 🔔 in the tab row. Tapping switches the
-              feed tab to "notifications" so the existing in-page notif list
-              shows up. Marks unread on click. */}
-          <button
-            onClick={async () => {
-              setFeedTab("notifications");
-              if (user) {
-                await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_notifications_read', payload:{ userId: user.id }}) });
-                setNotifications(p => p.map(n => ({...n, read: true})));
-              }
-            }}
-            aria-label="Notifications"
-            style={{
-              position:"relative", flexShrink:0,
-              width:42, height:42, borderRadius:14,
-              background: feedTab === "notifications" ? "#7C3AED" : "rgba(124,58,237,0.12)",
-              border: feedTab === "notifications" ? "1.5px solid #A78BFA" : "1.5px solid rgba(124,58,237,0.35)",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              cursor:"pointer", padding:0,
-              transition:"all 0.15s",
-            }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke={feedTab === "notifications" ? "#fff" : "#A78BFA"}
-              strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-            {unreadCount > 0 && feedTab !== "notifications" && (
-              <span style={{
-                position:"absolute", top:-3, right:-3,
-                minWidth:18, height:18, borderRadius:9,
-                background:"#FF6B6B",
-                fontSize:10, fontWeight:900, color:"#fff",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                padding:"0 4px",
-                border:"2px solid #0D0D0D",
-                lineHeight:1,
-              }}>
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
         </div>
-        {/* Feed tabs — bell removed from here; see prominent bell above */}
-        <div style={{ display:"flex",gap:4,padding:"0 20px 10px" }}>
-          {[
-            { key: "foryou", label: "For You" },
-            { key: "following", label: "Following" },
-          ].map(t => (
-            <button key={t.key} onClick={() => setFeedTab(t.key as any)} style={{
-              padding:"8px 20px",borderRadius:99,border:"none",cursor:"pointer",
-              fontWeight:800,fontSize:13,
-              background:feedTab===t.key?"#7C3AED":"transparent",
-              color:feedTab===t.key?"#fff":"#6B7280",
-              transition:"all 0.15s",
-            }}>
-              {t.label}
-            </button>
+        {/* Stats strip */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 24 }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} style={{ ...shimmer, height: 64, borderRadius: 14 }} />
           ))}
         </div>
-      </div>
-
-      {/* ── Story Viewer overlay ── */}
-      {viewingStory && (
-        <StoryViewer
-          story={viewingStory}
-          onClose={() => setViewingStory(null)}
-          onDelete={handleDeleteStory}
-          onReply={handleStoryReply}
-        />
-      )}
-
-      {/* Hidden file input — clicked programmatically when "+" is tapped */}
-      <input
-        ref={storyFileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handlePostStory}
-      />
-
-      {/* ── Stories Row (visible on all views) ── */}
-      <div style={{ padding:"12px 0 0", borderBottom:"1px solid #2D1F52", overflowX:"auto" }}>
-        <div style={{ display:"flex", gap:16, padding:"4px 24px 14px", minWidth:"max-content" }}>
-          {/* "Your story" tile — always first. Tap to upload (or view if posted). */}
-          {(() => {
-            const myStory = stories.find(s => s.is_you);
-            const tier: Tier = "default";
-            return (
-              <button
-                key="my-story"
-                onClick={() => {
-                  if (myStory) setViewingStory(myStory);
-                  else storyFileInputRef.current?.click();
-                }}
-                disabled={postingStory}
-                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0, opacity: postingStory ? 0.5 : 1 }}
-              >
-                <TierFrame tier={tier} size={60}>
-                  {myStory ? (
-                    <div style={{ width:"100%",height:"100%",position:"relative" }}>
-                      <img src={ImagePresets.thumb(myStory.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
-                    </div>
-                  ) : (
-                    <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff" }}>
-                      {postingStory ? "…" : "＋"}
-                    </div>
-                  )}
-                </TierFrame>
-                <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {myStory ? "Your story" : "Add story"}
-                </span>
-              </button>
-            );
-          })()}
-
-          {/* Other users' stories */}
-          {stories.filter(s => !s.is_you).map(story => {
-            const tier: Tier = "default";
-            return (
-              <button
-                key={story.id}
-                onClick={() => setViewingStory(story)}
-                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0 }}
-              >
-                <TierFrame tier={tier} size={60}>
-                  <div style={{ width:"100%",height:"100%",position:"relative",overflow:"hidden" }}>
-                    <img src={ImagePresets.thumb(story.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
-                  </div>
-                </TierFrame>
-                <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {story.username}
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Empty state — only show if NO stories AND user hasn't posted */}
-          {stories.length === 0 && (
-            <span style={{ alignSelf:"center", fontSize:12, color:C.sub, padding:"0 12px" }}>
-              No stories yet · be the first to post one
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Desktop: two-column layout ── */}
-      <div className="feed-layout">
-
-        {/* LEFT: Social feed (desktop only) */}
-        <div className="feed-main feed-desktop-only">
-          <div style={{ height:1,background:"#2D1F52",marginBottom:20 }}/>
-          {feedTab === "notifications" ? (
-            <div style={{ padding:"16px 20px", maxWidth:600 }}>
-              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
-              {notifications.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
-                  <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
-                  <div style={{ fontWeight:700, fontSize:15 }}>No notifications yet</div>
-                  <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
-                </div>
-              ) : notifications.map(n => (
-                <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
-                    <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
-                  </div>
-                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#7C3AED",flexShrink:0}}/>}
-                </div>
-              ))}
-            </div>
-          ) : feedTab === "following" ? (
-            loadingFollowing ? (
-              <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
-                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-                <p style={{ fontWeight:600 }}>Loading following feed…</p>
-              </div>
-            ) : followingPosts.length === 0 ? (
-              <div style={{ textAlign:"center",padding:"64px 20px",color:"#9CA3AF" }}>
-                <div style={{ fontSize:56,marginBottom:12 }}>👥</div>
-                <p style={{ fontWeight:800,fontSize:16,color:"#374151",marginBottom:6 }}>Nothing here yet</p>
-                <p style={{ fontSize:14 }}>Follow some people to see their posts here!</p>
-              </div>
-            ) : (
-              followingPosts.map((p: any) => {
-                const mockPost = {
-                  id: p.id,
-                  user: p.users?.full_name || p.users?.username || "User",
-                  username: p.users?.username || "user",
-                  avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
-                  time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-                  dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
-                  dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                  photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
-                  mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
-        mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
-                  caption: p.caption || "",
-                  post_type: p.post_type, // see Post type definition for why
-                  likes: p.likes_count || 0,
-                  liked: p._liked || false,
-                  // Map comments same shape PostCard expects (matching the
-                  // For You feed mapping). Already-mapped shapes pass through
-                  // — see displayPosts mapper for context.
-                  comments: (p.comments || []).map((c: any) => {
-                    if (typeof c.user === 'string' && typeof c.text === 'string') {
-                      return { id: c.id, user_id: c.user_id, user: c.user, avatar: c.avatar || '?', text: c.text, time: c.time || '' };
-                    }
-                    return {
-                      id: c.id,
-                      user_id: c.user_id,
-                      user: c.users?.full_name || c.users?.username || "User",
-                      avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
-                      text: c.content || "",
-                      time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-                    };
-                  }),
-                  workout: null,
-                  nutrition: null,
-                  wellness: null,
-                  _ownerId: p.user_id,
-                  user_id: p.user_id,
-                };
-                return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onDelete={() => deletePost(p.id)} onCommentsRefresh={refreshPostComments} />;
-              })
-            )
-          ) : (
-            <>
-              {loadingFeed ? (
-                <div style={{ padding: "8px 0" }}>
-                  <SkeletonStyles />
-                  <FeedPostSkeleton count={3} />
-                </div>
-              ) : (
-                <>
-                  {/* Recap prompt — once-per-week link to last week's recap.
-                      Goes ABOVE streak card since it's a richer "look what
-                      you did" moment vs the streak's nudge. */}
-                  {feedTab === "foryou" && showRecapPrompt && recapWeekKey && (
-                    <RecapPromptCard weekKey={recapWeekKey} onDismiss={dismissRecapPrompt} />
-                  )}
-                  {/* Streak reminder card — only on For You feed, only when
-                      an active streak exists and the user hasn't logged today.
-                      Tapping "Log now" goes to /post. */}
-                  {feedTab === "foryou" && streakInfo && streakInfo.days >= 2 && !streakInfo.loggedToday && !streakDismissed && (
-                    <StreakCard days={streakInfo.days} onDismiss={dismissStreakCard} onLog={() => router.push('/post')} />
-                  )}
-                  {/* New Members panel — recently joined users, your city first.
-                      Only shows on For You. Lives in the center column near the
-                      top so people can browse who's just joined the community. */}
-                  {feedTab === "foryou" && newMembers.length > 0 && user && (
-                    <NewMembersPanel members={newMembers} currentUser={user as any} />
-                  )}
-                  {/* Empty state only when there's truly nothing — no feed
-                      posts AND no activity. Previously this said "no posts"
-                      even when the user had logged plenty of activity. */}
-                  {displayPosts.length === 0 && (
-                    <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-                      👋 No posts yet. Share something to the feed to see it here!
-                    </div>
-                  )}
-                  {/* Desktop For You: ONLY feed posts (Share to Feed) in the
-                      main column. Activity logs (workouts/nutrition/wellness)
-                      live in the right-side Activity Feed sidebar — they do
-                      NOT appear here. This matches Instagram-style behavior
-                      where the main column is photo posts. Mobile interleaves
-                      because there's no sidebar on small screens. */}
-                  {displayPosts.map((post: any) => (
-                    <PostCard
-                      key={`post-${post.id}`}
-                      post={post}
-                      onUpdate={updatePost}
-                      currentUser={user}
-                      onDelete={() => deletePost(post.id)}
-                      onReport={() => setReportTarget({ type: "post", id: post.id as string })}
-                      onCommentsRefresh={refreshPostComments}
-                    />
-                  ))}
-                  {/* Load More posts */}
-                  {dbPostsHasMore && dbPosts.length > 0 && (
-                    <div style={{ textAlign:"center", marginBottom:24 }}>
-                      <button
-                        onClick={loadMorePosts}
-                        disabled={loadingMorePosts}
-                        style={{ padding:"12px 32px", borderRadius:99, background:"#7C3AED", color:"#fff", border:"none", cursor:loadingMorePosts?"default":"pointer", fontWeight:800, fontSize:14, opacity:loadingMorePosts?0.6:1, transition:"opacity 0.15s" }}
-                      >
-                        {loadingMorePosts ? "Loading…" : "Load More Posts"}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* RIGHT: Activity sidebar (desktop only) */}
-        <div className="feed-sidebar feed-desktop-only" style={{ background:C.dark, borderRadius:24, padding:"20px 0" }}>
-          <div style={{ padding:"0 16px 12px", borderBottom:`1px solid ${C.darkBorder}`, marginBottom:8 }}>
-            <div style={{ fontWeight:900,fontSize:16,color:"#E2E8F0",marginBottom:2 }}>Activity Feed</div>
-            <div style={{ fontSize:12,color:C.darkSub }}>Workouts, nutrition & wellness</div>
+        {/* 3-column main area */}
+        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr 320px", gap: 16, marginTop: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...shimmer, height: 280, borderRadius: 18 }} />
+            <div style={{ ...shimmer, height: 200, borderRadius: 18 }} />
           </div>
-          <ActivityFilterChips value={activityFilter} onChange={f => setActivityFilter(f)} />
-          <div style={{ padding:"0 12px" }}>
-            {sidebarActivityPosts.length > 0
-              ? sidebarActivityPosts.map((post: any) => (
-                  <SideUserBlock key={post.id} post={post} userBadges={post._matchedBadges || []} />
-                ))
-              : activityPosts.map(post => (
-                  <SideUserBlock key={post.id} post={post} userBadges={[]} />
-                ))
-            }
-            {/* Load More activity */}
-            {activityLogsHasMore && activityLogs.length > 0 && (
-              <div style={{ textAlign:"center", marginBottom:16 }}>
-                <button
-                  onClick={() => fetchActivityLogs(activityLogsPage + 1, true, activityFilter)}
-                  disabled={loadingMoreActivity}
-                  style={{ padding:"9px 24px", borderRadius:99, background:"rgba(124,58,237,0.15)", color:"#7C3AED", border:"1px solid rgba(124,58,237,0.3)", cursor:loadingMoreActivity?"default":"pointer", fontWeight:700, fontSize:12, opacity:loadingMoreActivity?0.6:1 }}
-                >
-                  {loadingMoreActivity ? "Loading…" : "Load More ↓"}
-                </button>
-              </div>
-            )}
-            <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-              <div>
-                <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>Suggested For You</div>
-                <div style={{ fontSize:11,color:C.darkSub }}>People you might like</div>
-              </div>
-              <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
-            </div>
-            {SUGGESTED_USERS.map(u => (
-              <div key={u.id} style={{ background:C.darkCard,borderRadius:18,border:`1px solid ${C.darkBorder}`,overflow:"hidden",marginBottom:16 }}>
-                <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
-                    <div style={{ fontSize:11,color:C.darkSub }}>@{u.username}</div>
-                    <div style={{ fontSize:10,color:"#7C3AED",marginTop:1,fontWeight:600 }}>{u.specialty}</div>
-                  </div>
-                  <div style={{ textAlign:"right",flexShrink:0 }}>
-                    <div style={{ fontSize:13,fontWeight:900,color:"#E2E8F0" }}>{u.followers}</div>
-                    <div style={{ fontSize:10,color:C.darkSub }}>followers</div>
-                  </div>
-                </div>
-                <div style={{ padding:"10px 16px",borderBottom:`1px solid ${C.darkBorder}`,display:"flex",justifyContent:"center" }}>
-                  <FollowButton targetUserId={String(u.id)} size="sm" />
-                </div>
-                <div style={{ padding:"12px 14px 4px" }}>
-                  {u.workout && <SideWorkout workout={u.workout} />}
-                  {u.nutrition && <SideNutrition nutrition={u.nutrition} />}
-                  {u.wellness && <SideWellness wellness={u.wellness} />}
-                </div>
-              </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...shimmer, height: 90, borderRadius: 18 }} />
+            <div style={{ ...shimmer, height: 240, borderRadius: 18 }} />
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} style={{ ...shimmer, height: 80, borderRadius: 14 }} />
             ))}
           </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...shimmer, height: 320, borderRadius: 18 }} />
+            <div style={{ ...shimmer, height: 240, borderRadius: 18 }} />
+          </div>
         </div>
       </div>
-
-      {/* ── Mobile: interleaved single-column feed ──
-          Pull-to-refresh: native iOS gesture. We listen on touch events instead
-          of pointer events because PTR specifically wants to consume vertical
-          scroll at the top of the page — pointer events would fight the
-          carousel swipe handlers in the PostCards below. The detection is
-          gated on `window.scrollY === 0` so mid-feed pulls don't trigger. */}
-      <div
-        className="feed-mobile-only"
-        style={{ padding:"0 12px", touchAction:"pan-y" }}
-        onTouchStart={(e) => {
-          if (window.scrollY > 0) return;
-          ptrStartYRef.current = e.touches[0].clientY;
-        }}
-        onTouchMove={(e) => {
-          if (ptrStartYRef.current == null || ptrRefreshing) return;
-          const dy = e.touches[0].clientY - ptrStartYRef.current;
-          if (dy <= 0) { setPtrPullPx(0); return; }
-          // Damping curve — pull feels resistive past ~50px so it doesn't
-          // shoot down the page.
-          const damped = Math.min(80, dy * 0.55);
-          setPtrPullPx(damped);
-        }}
-        onTouchEnd={async () => {
-          const pull = ptrPullPx;
-          ptrStartYRef.current = null;
-          setPtrPullPx(0);
-          if (pull < 65 || ptrRefreshing) return;
-          // Commit the refresh. Refresh state is shown until fetchPosts resolves.
-          setPtrRefreshing(true);
-          try {
-            await fetchPosts(0, false);
-            // Also reload activity logs so the feed actually feels fresh end-to-end
-            try { await fetchActivityLogs(0, false, activityFilter); } catch {}
-          } finally {
-            setPtrRefreshing(false);
-          }
-        }}
-      >
-        {/* PTR indicator — only renders during pull or refresh. The transform
-            on the feed content below pushes it down to expose this. */}
-        {(ptrPullPx > 0 || ptrRefreshing) && (
-          <div style={{
-            position:"absolute", top:0, left:0, right:0,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            height: ptrRefreshing ? 60 : ptrPullPx,
-            color: "#A78BFA", fontSize: 13, fontWeight: 700,
-            transition: ptrRefreshing ? "height 0.18s" : undefined,
-            pointerEvents:"none",
-          }}>
-            {ptrRefreshing
-              ? <div style={{ width:22, height:22, borderRadius:"50%", border:"3px solid #2D1F52", borderTopColor:"#7C3AED", animation:"spin 0.8s linear infinite" }}/>
-              : (ptrPullPx >= 65 ? "↑ Release to refresh" : "↓ Pull to refresh")}
-          </div>
-        )}
-        <div style={{
-          transform: `translateY(${ptrRefreshing ? 60 : ptrPullPx}px)`,
-          transition: ptrPullPx === 0 ? "transform 0.2s ease-out" : undefined,
-        }}>
-        <div style={{ height:1,background:"#2D1F52",margin:"12px 0 16px" }}/>
-        {feedTab === "notifications" ? (
-          <div style={{ padding:"16px 4px", maxWidth:600 }}>
-            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
-            {notifications.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
-                <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
-                <div style={{ fontWeight:700, fontSize:15 }}>No notifications yet</div>
-                <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
-              </div>
-            ) : notifications.map(n => (
-              <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
-                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
-                  <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
-                </div>
-                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#7C3AED",flexShrink:0}}/>}
-              </div>
-            ))}
-          </div>
-        ) : feedTab === "following" ? (
-          loadingFollowing ? (
-            <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
-              <p style={{ fontWeight:600 }}>Loading following feed…</p>
-            </div>
-          ) : followingPosts.length === 0 ? (
-            <div style={{ textAlign:"center",padding:"64px 20px",color:"#9CA3AF" }}>
-              <div style={{ fontSize:56,marginBottom:12 }}>👥</div>
-              <p style={{ fontWeight:800,fontSize:16,color:"#374151",marginBottom:6 }}>Nothing here yet</p>
-              <p style={{ fontSize:14 }}>Follow some people to see their posts here!</p>
-            </div>
-          ) : (
-            followingPosts.map((p: any) => {
-              const mockPost = {
-                id: p.id,
-                user: p.users?.full_name || p.users?.username || "User",
-                username: p.users?.username || "user",
-                avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
-                time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-                dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
-                dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
-                photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
-                mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
-        mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
-                caption: p.caption || "",
-                post_type: p.post_type, // see Post type definition for why
-                likes: p.likes_count || 0,
-                liked: p._liked || false,
-                comments: (p.comments || []).map((c: any) => {
-                  if (typeof c.user === 'string' && typeof c.text === 'string') {
-                    return { id: c.id, user_id: c.user_id, user: c.user, avatar: c.avatar || '?', text: c.text, time: c.time || '' };
-                  }
-                  return {
-                    id: c.id,
-                    user_id: c.user_id,
-                    user: c.users?.full_name || c.users?.username || "User",
-                    avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
-                    text: c.content || "",
-                    time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
-                  };
-                }),
-                workout: null,
-                nutrition: null,
-                wellness: null,
-                _ownerId: p.user_id,
-                user_id: p.user_id,
-              };
-              return <PostCard key={p.id} post={mockPost} onUpdate={() => {}} currentUser={user} onDelete={() => deletePost(p.id)} onCommentsRefresh={refreshPostComments} />;
-            })
-          )
-        ) : (
-        <>
-        {/* Recap prompt — shows once per week, points to last week's recap.
-            Lives above the streak card because it's a richer, more rewarding
-            CTA (here's what you DID) versus the streak nudge (don't break it). */}
-        {feedTab === "foryou" && showRecapPrompt && recapWeekKey && (
-          <RecapPromptCard weekKey={recapWeekKey} onDismiss={dismissRecapPrompt} />
-        )}
-        {/* Streak reminder card — only on For You feed when an active streak
-            exists AND the user hasn't logged today AND they haven't dismissed
-            it. Dismissed state lives in localStorage for the current day so
-            it doesn't keep re-appearing every load. */}
-        {feedTab === "foryou" && streakInfo && streakInfo.days >= 2 && !streakInfo.loggedToday && !streakDismissed && (
-          <StreakCard days={streakInfo.days} onDismiss={dismissStreakCard} onLog={() => router.push('/post')} />
-        )}
-        {/* New Members panel — same placement as desktop, right under the
-            Recap/Streak banners, above the interleaved feed. */}
-        {feedTab === "foryou" && newMembers.length > 0 && user && (
-          <NewMembersPanel members={newMembers} currentUser={user as any} />
-        )}
-        {mobileItems.length === 0 && !loadingFeed && (
-          <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
-            👋 No posts yet. Log a workout or share to feed to see content here!
-          </div>
-        )}
-        {mobileItems.map((item, idx) => {
-          if (item.type === "post") {
-            return <PostCard key={`post-${item.data.id}`} post={item.data} onUpdate={updatePost} currentUser={user} onDelete={() => deletePost(item.data.id)} onReport={() => setReportTarget({ type: "post", id: item.data.id as string })} onCommentsRefresh={refreshPostComments} />;
-          }
-          if (item.type === "activity") {
-            return (
-              <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
-                <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
-                  <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
-                    <div>
-                      <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
-                      <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
-                    </div>
-                  </div>
-                  <div style={{ padding:"10px 12px 4px" }}>
-                    {item.data.workout && <SideWorkout workout={item.data.workout} />}
-                    {item.data.nutrition && <SideNutrition nutrition={item.data.nutrition} />}
-                    {item.data.wellness && <SideWellness wellness={item.data.wellness} />}
-                  </div>
-                  <ActivityComments cardId={item.data.id as string} cardOwnerId={(item.data as any)._userId as string} />
-                </div>
-              </div>
-            );
-          }
-          if (item.type === "suggested") {
-            const u = item.data;
-            return (
-              <div key={`sug-${u.id}`} style={{ background:C.dark,borderRadius:20,overflow:"hidden",marginBottom:16 }}>
-                <div style={{ padding:"10px 14px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <span style={{ fontSize:11,fontWeight:800,color:C.darkSub,letterSpacing:1,textTransform:"uppercase" }}>Suggested</span>
-                </div>
-                <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
-                    <div style={{ fontSize:11,color:C.darkSub }}>@{u.username} · {u.specialty}</div>
-                  </div>
-                  <FollowButton targetUserId={String(u.id)} size="sm" />
-                </div>
-                <div style={{ padding:"10px 12px 4px" }}>
-                  {u.workout && <SideWorkout workout={u.workout} />}
-                  {u.nutrition && <SideNutrition nutrition={u.nutrition} />}
-                  {u.wellness && <SideWellness wellness={u.wellness} />}
-                </div>
-              </div>
-            );
-          }
-          return null;
-        })}
-        </>
-        )}
-        </div>{/* close PTR transform wrapper */}
-      </div>
-
-      {/* ReportModal — activated when ⋯ → Report is clicked on a post */}
-      <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </div>
   );
 }
+
+export default function ProfilePage() {
+  const { user, refreshProfile } = useAuth();
+  const router = useRouter();
+
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const avatarSize = isMobile ? 220 : 280;
+
+  // Page-level lightbox source for the full-screen avatar/banner viewer.
+  // Separate from DayCard's internal `lb` state so the avatar/banner
+  // viewer works regardless of which day card (if any) is open.
+  const [pageLb, setPageLb] = useState<string | null>(null);
+
+  const [profile,setProfile] = useState({
+    name: "",
+    username: "",
+    bio: "",
+    city: "",
+  });
+
+  // Sync profile state from user data
+  useEffect(() => {
+    if (user?.profile) {
+      setProfile({
+        name: user.profile.full_name || "",
+        username: user.profile.username || "",
+        bio: user.profile.bio || "",
+        city: (user.profile as any).city || "",
+      });
+    }
+  }, [user]);
+  const [bannerImg,setBanner] = useState<string|null>(null);
+  const [profileImg,setAvatar]= useState<string|null>(null);
+  const [editProfile,setEditProfile] = useState(false);
+  const [showLevelModal,setShowLevelModal] = useState(false);
+  // Profile share button state. Shows "✓ Copied" for 2.5s after copy.
+  const [profileShareCopied, setProfileShareCopied] = useState(false);
+
+  /** Share or copy a link to the current user's profile. Native share
+   *  sheet on mobile, clipboard fallback on desktop. The URL uses the
+   *  username path which is the public-facing profile route. Delegates
+   *  to the universal share helper. */
+  async function shareProfile() {
+    const username = profile?.username || (user as any)?.profile?.username;
+    if (!username) {
+      alert("Set a username first to share your profile.");
+      return;
+    }
+    await shareWithToast(
+      {
+        url: appUrl(`/profile/${username}`),
+        // The own-profile state uses `name` (not full_name) — old code
+        // used profile?.full_name which always fell through to @username.
+        title: `${profile?.name || "@" + username} on Livelee`,
+        text: `Check out my Livelee profile`,
+      },
+      setProfileShareCopied
+    );
+  }
+
+  const [showCustomizations, setShowCustomizations] = useState(false);
+  const [customizationDetail, setCustomizationDetail] = useState<number | null>(null);
+  const [repositionMode, setRepositionMode] = useState(false);
+  const [bannerPosition, setBannerPosition] = useState(50); // 0-100, default center
+  // Banner zoom — 100 = fit to frame, 200 = 2x zoomed in. Lets the user
+  // scale their banner up to focus on a detail. Clamped 100-300.
+  const [bannerScale, setBannerScale] = useState(100);
+  const [bannerHovered, setBannerHovered] = useState(false);
+  const [dragState, setDragState] = useState<{ startY: number; startPos: number } | null>(null);
+  const [avatarRepositionMode, setAvatarRepositionMode] = useState(false);
+  const [avatarPosition, setAvatarPosition] = useState(50);
+  // Avatar zoom — same scheme as banner. 100 = fit, 200 = 2x.
+  const [avatarScale, setAvatarScale] = useState(100);
+  const [avatarDragState, setAvatarDragState] = useState<{startY:number;startPos:number}|null>(null);
+  const [brands,setBrands] = useState([{emoji:"👟",name:"New Balance"},{emoji:"👕",name:"Gym Shark"},{emoji:"🎧",name:"AirPods"}]);
+
+  // ── Crop state ──
+  const [cropSrc,setCropSrc] = useState<string|null>(null);
+  const [cropAspect,setCropAspect] = useState(1);
+  const [cropCallback,setCropCallback] = useState<((url:string)=>void)|null>(null);
+
+  // ── Feed photos (for All Photos modal + Highlight picker) ──
+  const [feedPhotos,setFeedPhotos] = useState<string[]>([]);
+  const [showHighlightPicker,setShowHighlightPicker] = useState(false);
+  useEffect(()=>{
+    if(!user) return;
+    // Pool of media available for highlights — both photos AND videos.
+    // Videos previously got filtered out so the highlights row was photo-only.
+    // Now that the strip supports autoplay video tiles, we accept both.
+    supabase.from('posts')
+      .select('media_url, media_type, media_types')
+      .eq('user_id', user.id)
+      .eq('is_public', true)
+      .not('media_url','is',null)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const urls = data
+          .map((p: any) => p.media_url as string)
+          .filter((url): url is string => Boolean(url));
+        setFeedPhotos(urls);
+      });
+  },[user?.id]);
+
+  // ── Highlights state ──
+  const [highlights,setHighlights] = useState<string[]>([]);
+  const [highlightLb,setHighlightLb] = useState<string|null>(null);
+  const [editingHighlights,setEditingHighlights] = useState(false);
+
+  // Load persisted highlights — Supabase is source of truth.
+  // localStorage is just a fallback for users who haven't saved to DB yet.
+  useEffect(() => {
+    if (!user) return;
+    async function loadHighlights() {
+      try {
+        // Supabase is the source of truth. If the row exists, use whatever
+        // it says — including empty array. Previously this fell through to
+        // localStorage when DB had an empty array, which caused deleted
+        // highlights to come back from stale localStorage cache.
+        const { data, error } = await supabase.from('users').select('highlights').eq('id', user!.id).single();
+        if (!error && data) {
+          const dbHighlights = Array.isArray(data.highlights) ? data.highlights : [];
+          // Filter to only valid URLs (not base64 blobs which may be truncated)
+          const validUrls = dbHighlights.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
+          setHighlights(validUrls);
+          // Sync localStorage to match DB so future loads are consistent
+          try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(validUrls)); } catch {}
+          return;
+        }
+      } catch {}
+      // Only reach here if DB query failed entirely — fall back to localStorage
+      try {
+        const saved = localStorage.getItem(`fit_highlights_${user!.id}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const validUrls = parsed.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
+          setHighlights(validUrls);
+          // Migrate valid URLs to Supabase
+          if (validUrls.length > 0) {
+            supabase.from('users').update({ highlights: validUrls } as any).eq('id', user!.id).catch(() => {});
+          }
+        }
+      } catch {}
+    }
+    loadHighlights();
+  }, [user?.id]);
+
+  // Track whether we've already initialized avatar/banner from auth.profile.
+  // After upload we update the DB directly; the auth.profile value lags behind
+  // (it's cached in the auth context), so without this guard a stale re-render
+  // would overwrite the freshly uploaded URL with the old one.
+  const initedAvatarRef = useRef(false);
+  const initedBannerRef = useRef(false);
+  const latestUploadedAvatarUrlRef = useRef<string | null>(null);
+  const latestUploadedBannerUrlRef = useRef<string | null>(null);
+
+  // Load avatar/banner from profile
+  useEffect(() => {
+    if (latestUploadedAvatarUrlRef.current) {
+      setAvatar(latestUploadedAvatarUrlRef.current);
+      initedAvatarRef.current = true;
+    }
+    if (latestUploadedBannerUrlRef.current) {
+      setBanner(latestUploadedBannerUrlRef.current);
+      initedBannerRef.current = true;
+    }
+    if (user?.profile?.avatar_url && !initedAvatarRef.current) {
+      setAvatar(user.profile.avatar_url);
+      initedAvatarRef.current = true;
+    }
+    if (user?.profile?.banner_url && !initedBannerRef.current) {
+      setBanner(user.profile.banner_url);
+      initedBannerRef.current = true;
+    }
+    if (user?.id) {
+      // Load saved banner position
+      try {
+        const savedPos = localStorage.getItem(`banner_position_${user.id}`);
+        if (savedPos !== null) setBannerPosition(parseFloat(savedPos));
+      } catch {}
+      // Also check Supabase profile for saved banner_position
+      if ((user as any)?.profile?.banner_position !== undefined && (user as any)?.profile?.banner_position !== null) {
+        setBannerPosition((user as any).profile.banner_position);
+      }
+      // Banner zoom — local first, then Supabase
+      try {
+        const savedScale = localStorage.getItem(`banner_scale_${user.id}`);
+        if (savedScale !== null) setBannerScale(Math.max(100, Math.min(300, parseFloat(savedScale))));
+      } catch {}
+      if ((user as any)?.profile?.banner_scale !== undefined && (user as any)?.profile?.banner_scale !== null) {
+        setBannerScale((user as any).profile.banner_scale);
+      }
+      // Load saved avatar position
+      try {
+        const savedAvatarPos = localStorage.getItem(`avatar_position_${user.id}`);
+        if (savedAvatarPos !== null) setAvatarPosition(parseFloat(savedAvatarPos));
+      } catch {}
+      if ((user as any)?.profile?.avatar_position !== undefined && (user as any)?.profile?.avatar_position !== null) {
+        setAvatarPosition((user as any).profile.avatar_position);
+      }
+      // Avatar zoom
+      try {
+        const savedAvatarScale = localStorage.getItem(`avatar_scale_${user.id}`);
+        if (savedAvatarScale !== null) setAvatarScale(Math.max(100, Math.min(300, parseFloat(savedAvatarScale))));
+      } catch {}
+      if ((user as any)?.profile?.avatar_scale !== undefined && (user as any)?.profile?.avatar_scale !== null) {
+        setAvatarScale((user as any).profile.avatar_scale);
+      }
+    }
+  }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
+  const [showAllPhotos,setShowAllPhotos] = useState(false);
+  // Tagged-in modal state — opens when user taps the 🏷️ Tagged In button.
+  // Modal lazily fetches its own data from /api/db get_tagged_posts so the
+  // profile page render isn't blocked by an extra query.
+  const [showTaggedPosts, setShowTaggedPosts] = useState(false);
+  const [photoFilter,setPhotoFilter] = useState<"all"|"workout"|"nutrition"|"wellness">("all");
+
+  // Helper: derive photo type based on index (mock data assignment)
+  function getPhotoType(idx:number):"workout"|"nutrition"|"wellness" {
+    if(idx<3) return "workout";
+    if(idx<6) return "nutrition";
+    return "wellness";
+  }
+
+  // ── Real activity log state ──
+  const [realDays, setRealDays] = useState<typeof DAYS>([]);
+  // Raw individual workout logs — one entry per actual logged workout
+  // (not aggregated by day). Used by WorkoutProgressGraphs so multi-workout
+  // days count correctly. Each entry is the full activity_logs row.
+  const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadLogs() {
+      setLoadingLogs(true);
+      try {
+        // Pull a generous slice so the Workout Progress graphs can show
+        // older calendar months. 60 was too tight — even casual users hit
+        // that in 2 months. 500 covers ~1.5 years of daily activity for
+        // most users without paginating.
+        const { data } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .eq('user_id', user!.id)
+          .order('logged_at', { ascending: false })
+          .limit(500);
+
+        if (!data || data.length === 0) {
+          setRealDays([]);
+          setRawWorkoutLogs([]);
+          setLoadingLogs(false);
+          return;
+        }
+
+        // Cache the raw workout rows for the graphs component — this lets
+        // it count individual workouts (including multi-per-day) instead of
+        // days. The day-merged `realDays` view is still used elsewhere for
+        // the activity-log card list.
+        setRawWorkoutLogs(data.filter((l: any) => l.log_type === 'workout'));
+
+        const byDate = new Map<string, any[]>();
+        data.forEach((log: any) => {
+          // Use local date string to correctly bucket by calendar day in user's timezone
+          const d = new Date(log.logged_at);
+          const key = d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); // e.g. "04/02/2026"
+          if (!byDate.has(key)) byDate.set(key, []);
+          byDate.get(key)!.push(log);
+        });
+
+        const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+        // Build one card per calendar date. When multiple workouts are logged
+        // on the same day, the card aggregates totals (calories/duration) but
+        // RENDERS each workout as its own labeled section ("Workout 1", etc.)
+        // so the user can tell them apart.
+        const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
+          // dateKey is "MM/DD/YYYY"
+          const [month, day, year] = dateKey.split('/').map(Number);
+          const date = new Date(year, month - 1, day);
+          const dayName = DAY_NAMES[date.getDay()];
+          const today = new Date();
+          const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+          const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+          const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+          const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
+
+          const workoutLogs   = logs.filter((l: any) => l.log_type === 'workout');
+          const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
+          const wellnessLogs  = logs.filter((l: any) => l.log_type === 'wellness');
+
+          // Sort workouts by their logged_at time, earliest first. The first
+          // becomes "Workout 1", second "Workout 2", etc.
+          const sortedWorkouts = [...workoutLogs].sort((a, b) =>
+            new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+          );
+
+          // Build per-workout parts (rendered as labeled sections in the card)
+          const parts = sortedWorkouts.map((w: any) => ({
+            id: w.id,
+            type: w.workout_type || 'Workout',
+            time: w.logged_at, // ISO; consumer formats with toLocaleTimeString
+            duration: w.workout_duration_min ? `${w.workout_duration_min} min` : '—',
+            calories: w.workout_calories || 0,
+            exercises: Array.isArray(w.exercises)
+              ? w.exercises.map((e: any) => ({
+                  name: e.name || '',
+                  sets: parseInt(e.sets) || 0,
+                  reps: parseInt(e.reps) || 0,
+                  weight: e.weight || '—',
+                  weights: Array.isArray(e.weights) ? e.weights : [],
+                }))
+              : [],
+            cardio: Array.isArray(w.cardio)
+              ? w.cardio.map((c: any) => ({
+                  type: c.type || 'Cardio',
+                  duration: c.duration || '—',
+                  distance: c.distance || '',
+                }))
+              : [],
+          }));
+
+          // Aggregate totals for the header summary (uses MERGED arrays so
+          // header summary chips like "🔥 X cal" and "⏱ X min" reflect the
+          // whole day's lifting + cardio across all workouts).
+          let totalDurationMin = 0;
+          let totalCalories = 0;
+          const allExercises: any[] = [];
+          const allCardio: any[] = [];
+          for (const p of parts) {
+            totalDurationMin += parseInt(String(p.duration)) || 0;
+            totalCalories    += parseInt(String(p.calories)) || 0;
+            for (const e of p.exercises) allExercises.push(e);
+            for (const c of p.cardio) allCardio.push(c);
+          }
+
+          // Headline: first workout's type, plus "(+N more)" hint when there
+          // are multiple workouts. Sections below the header label them.
+          let workout: any = null;
+          if (parts.length > 0) {
+            const extraCount = parts.length - 1;
+            const headline = extraCount > 0
+              ? `${parts[0].type} (+${extraCount} more)`
+              : parts[0].type;
+            workout = {
+              type: headline,
+              duration: totalDurationMin > 0 ? `${totalDurationMin} min` : '—',
+              calories: totalCalories,
+              exercises: allExercises,
+              cardio: allCardio,
+            };
+          }
+
+          const totalNutCal = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
+          const totalProtein  = nutritionLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
+          const totalCarbs    = nutritionLogs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
+          const totalFat      = nutritionLogs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
+
+          const nutrition = nutritionLogs.length > 0 ? {
+            calories: Math.round(totalNutCal),
+            protein:  Math.round(totalProtein),
+            carbs:    Math.round(totalCarbs),
+            fat:      Math.round(totalFat),
+            sugar:    0,
+            photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
+            meals: nutritionLogs.map((l: any) => ({
+              key:   l.meal_type || 'Meal',
+              emoji: '🍽️',
+              name:  Array.isArray(l.food_items) && l.food_items.length > 0
+                       ? l.food_items.map((f: any) => f.name).join(', ')
+                       : (l.notes || 'Logged meal'),
+              cal:   l.calories_total || 0,
+            })),
+          } : null;
+
+          const wellness = wellnessLogs.length > 0 ? {
+            entries: wellnessLogs.map((l: any) => ({
+              // Emoji is now derived from activity name via the WELLNESS_STYLES
+              // lookup — so users get the right icon (❄️ for cold plunge etc.)
+              // without us storing it on every row. The `wellness_emoji` column
+              // is a legacy fallback.
+              emoji: l.wellness_emoji || getWellnessStyle(l.wellness_type || '').emoji,
+              activity: l.wellness_type || l.notes || 'Wellness',
+              notes: l.notes || '',
+              photo_url: l.photo_url || null,
+              duration: l.wellness_duration_min ?? null,
+              loggedAt: l.logged_at || l.created_at || null,
+            })),
+          } : null;
+
+          // Workout log IDs — array form so delete wipes ALL workouts on a day.
+          const workoutLogIds = parts.map((p: any) => p.id);
+
+          return {
+            id: dateKey,
+            label: friendlyLabel,
+            emoji: workout ? '💪' : (nutrition ? '🥗' : (wellness ? '🌿' : '🌅')),
+            workout,
+            // _workoutParts is read by DayCard. When >1 part, DayCard renders
+            // labeled sections instead of one combined exercise/cardio table.
+            _workoutParts: parts,
+            nutrition,
+            wellness,
+            _workoutLogId: workoutLogIds[0] || null,
+            _workoutLogIds: workoutLogIds,
+            _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
+            _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
+            photo_url: sortedWorkouts[0]?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
+            _date: date.getTime(),
+          };
+        });
+
+        // Sort newest first so today's card is always at the top
+        days.sort((a: any, b: any) => b._date - a._date);
+
+        setRealDays(days);
+      } catch (e) {
+        console.error('Failed to load activity logs:', e);
+        setRealDays([]);
+      }
+      setLoadingLogs(false);
+    }
+    loadLogs();
+  }, [user]);
+
+  // ── Followers / Following modal ──
+  const [socialModal,setSocialModal] = useState<"followers"|"following"|null>(null);
+  const [socialList,setSocialList]   = useState<{id:string;username:string;full_name:string;avatar_url:string|null}[]>([]);
+  const [socialLoading,setSocialLoading] = useState(false);
+
+  async function openSocialModal(type:"followers"|"following") {
+    if (!user) return;
+    setSocialModal(type);
+    setSocialLoading(true);
+    setSocialList([]);
+    try {
+      if (type === "followers") {
+        const { data } = await supabase
+          .from('follows')
+          .select('follower_id, users!follows_follower_id_fkey(id,username,full_name,avatar_url)')
+          .eq('following_id', user.id)
+          .limit(100);
+        setSocialList((data || []).map((r:any) => r.users).filter(Boolean));
+      } else {
+        const { data } = await supabase
+          .from('follows')
+          .select('following_id, users!follows_following_id_fkey(id,username,full_name,avatar_url)')
+          .eq('follower_id', user.id)
+          .limit(100);
+        setSocialList((data || []).map((r:any) => r.users).filter(Boolean));
+      }
+    } catch {}
+    setSocialLoading(false);
+  }
+
+  // ── Completed challenges (auto-badges) ──
+  const [completedChallenges, setCompletedChallenges] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('challenge_participants')
+      .select('*, challenges(name, emoji, group_id, deadline, is_active, groups(name))')
+      .eq('user_id', user.id)
+      .gt('score', 0)
+      .then(({ data }) => {
+        if (data) {
+          const now = new Date();
+          const completed = data.filter((cp: any) => {
+            const ch = cp.challenges;
+            if (!ch) return false;
+            // Only show if deadline has passed OR is_active is false
+            if (ch.deadline && new Date(ch.deadline) <= now) return true;
+            if (ch.is_active === false) return true;
+            return false;
+          });
+          setCompletedChallenges(completed);
+        }
+      });
+  }, [user?.id]);
+
+  // ── Badge state ──
+  // Badges are fetched with the year column so yearly badges (like
+  // "2026 Birthday Workout") can display the correct year.
+  const [earnedBadges,setEarnedBadges] = useState<EarnedBadge[]>([]);
+  // Active goals shown on profile under highlights. Public goals only.
+  const [profileGoals, setProfileGoals] = useState<any[]>([]);
+  // Past (completed or expired) goals — same source, different filter.
+  // Loaded on demand when the user flips to the Past sub-tab so we don't
+  // pay the query for everyone.
+  const [profilePastGoals, setProfilePastGoals] = useState<any[]>([]);
+  const [profileGoalsHistoryTab, setProfileGoalsHistoryTab] = useState<"active"|"past">("active");
+  // Controls the create-goal modal mounted at the bottom of this page.
+  // Lives on profile so the +New button doesn't have to navigate to /post
+  // (which no longer has a goal tab anyway).
+  const [showGoalCreate, setShowGoalCreate] = useState(false);
+
+  // Reusable loader so we can refetch after creating a new goal.
+  const reloadProfileGoals = useCallback(() => {
+    if (!user) return;
+    supabase.from('goals').select('*').eq('user_id', user.id).eq('is_completed', false)
+      .order('created_at', { ascending: false }).limit(8)
+      .then(({ data }) => {
+        if (data) {
+          const now = Date.now();
+          setProfileGoals(data.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
+        }
+      });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('badges').select('badge_id, year, id, pin_slot').eq('user_id', user.id)
+      .then(({ data }) => {
+        if (data) setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null })));
+      });
+    reloadProfileGoals();
+  }, [user, reloadProfileGoals]);
+
+  // Lazy-load past goals when the user opens the Past tab. Pulls
+  // completed=true OR window_end already passed.
+  useEffect(() => {
+    if (!user || profileGoalsHistoryTab !== "past") return;
+    if (profilePastGoals.length > 0) return;
+    supabase.from('goals').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending: false }).limit(20)
+      .then(({ data }) => {
+        if (!data) return;
+        const now = Date.now();
+        setProfilePastGoals(data.filter((g: any) =>
+          g.is_completed === true ||
+          (g.window_end && new Date(g.window_end).getTime() <= now)
+        ));
+      });
+  }, [user, profileGoalsHistoryTab, profilePastGoals.length]);
+  const [showBadgeModal,setShowBadgeModal] = useState(false);
+  const [selectedBadge,setSelectedBadge] = useState<string>("");
+  const [badgeNote,setBadgeNote] = useState("");
+  const [badgeToast,setBadgeToast] = useState<string|null>(null);
+  // Filter the long manual badge list — without these the modal renders ~150
+  // badges in one scroll and users can't find what they want.
+  const [badgeCategoryFilter,setBadgeCategoryFilter] = useState<string>("all");
+  const [badgeSearch,setBadgeSearch] = useState("");
+  const [showAllBadgesModal,setShowAllBadgesModal] = useState(false);
+  // Pin-badge menu state. When non-null, the badge action sheet is open
+  // for the given badge family. The badge can be pinned to a slot 1-5,
+  // unpinned, or pin closed without action. Cap of 5 pinned enforced
+  // here: if user tries to pin a 6th, show alert.
+  const [pinMenuFor, setPinMenuFor] = useState<{ badgeRowId: string; currentSlot: number | null; label: string } | null>(null);
+
+  // How many badges are already pinned. Used to enforce 5-pin cap.
+  function countPinned(): number {
+    return earnedBadges.filter(b => b.pin_slot != null).length;
+  }
+
+  /** Persist a pin/unpin via API. Optimistically update local state too
+   *  so the UI updates instantly without waiting for round-trip. */
+  async function setPin(badgeRowId: string, pinSlot: number | null) {
+    if (!user) return;
+    // Local optimistic update — also handles slot-swap. If we're pinning
+    // a badge to a slot already in use, the API will unpin the old one.
+    setEarnedBadges(prev => prev.map(b => {
+      if (b.id === badgeRowId) return { ...b, pin_slot: pinSlot };
+      // If we're stealing the slot, clear it on the badge that had it
+      if (pinSlot != null && b.pin_slot === pinSlot) return { ...b, pin_slot: null };
+      return b;
+    }));
+    try {
+      await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pin_badge', payload: { userId: user.id, badgeRowId, pinSlot } }),
+      });
+    } catch (e) { console.error('pin failed', e); }
+    setPinMenuFor(null);
+  }
+  const [badgesTab,setBadgesTab] = useState<"fitness"|"rivals">("fitness");
+  const [rivalryBadges,setRivalryBadges] = useState<RivalryBadgeWithContext[]>([]);
+  const [badgeCounters,setBadgeCounters] = useState<BadgeCounters>({});
+
+  useEffect(() => {
+    if (!user || !showAllBadgesModal) return;
+    getAllUserRivalryBadges(user.id).then(setRivalryBadges).catch(() => setRivalryBadges([]));
+  }, [user, showAllBadgesModal]);
+
+  // Fetch current counts for each badge family so we can show progress like
+  // "14 / 20 runs" on badges. One parallel batch when the modal opens.
+  //
+  // NOTE: wellness_type values use Title Case ("Cold Plunge", "Sauna") matching
+  // what the logging UI actually writes. workout_type is currently free-text
+  // (e.g. "Chest", "Deadlift day") so running/lifting counts return 0 until we
+  // add proper category dropdowns to the workout logger (Fix 2).
+  useEffect(() => {
+    if (!user || !showAllBadgesModal) return;
+    (async () => {
+      const uid = user.id;
+      try {
+        const [
+          // Existing
+          runs, liftSessions, totalWorkouts, yoga, meditation, coldPlunges,
+          sauna, breathwork, walks, stretching, totalWellness, nutritionLogs,
+          postCount, followerCount,
+          // Newly added — workout category counters
+          biking, swimming, rowing, hiit, boxing, sports, pilates,
+          // Newly added — wellness modality counters
+          infraredSauna, redLight, massage, floatTank, mobility, journaling, sunlight,
+          // Newly added — social counters
+          likesReceived, commentsMade,
+          // Newly added — strength PR counters (read all logs and pick max client-side)
+          strengthLogs,
+          // Newly added — 5K detection from running cardio entries
+          fiveKLogs,
+          // Workout Partner — counts workout rows where tagged_user_ids has at
+          // least one entry. We use NOT IS NULL plus a Postgres array length
+          // check expressed as filter (`tagged_user_ids.cs.{}` doesn't work for
+          // "non-empty" — we use a server-side filter instead.)
+          partnerWorkoutsResult,
+        ] = await Promise.all([
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'yoga'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'meditation'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.cold plunge,wellness_type.ilike.ice bath'),
+          // Sauna — must NOT match Infrared Sauna. We do exact match instead of ilike '%sauna%'.
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'sauna'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'breathwork'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'walking'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'stretching'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'nutrition'),
+          supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+          supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', uid),
+          // Workout categories that were missing
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'biking'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'swimming'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'rowing'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'hiit'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'boxing'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'sports'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'pilates'),
+          // Wellness modalities — wellness_type matches the strings the post UI writes
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'infrared sauna'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'red light therapy'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'massage'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'float tank'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.mobility%,wellness_type.ilike.foam rolling'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').ilike('wellness_type', 'journaling'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'wellness').or('wellness_type.ilike.sunlight%,wellness_type.ilike.grounding,wellness_type.ilike.nature walk'),
+          // Likes received — sum likes_count across all the user's posts.
+          // We can't COUNT from `likes` because there's no post_user_id column;
+          // would require a join Supabase REST won't permit through RLS. The
+          // posts.likes_count denormalized counter is updated by a trigger.
+          supabase.from('posts').select('likes_count').eq('user_id', uid),
+          supabase.from('comments').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+          // Strength — fetch lifting logs with exercises array; compute max bench/squat/deadlift client-side
+          supabase.from('activity_logs').select('exercises').eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
+          // 5K — fetch running cardio entries; count rows where distance ≥ 3.1mi.
+          // Easier than parsing JSON in Postgres. Distance lives inside the
+          // cardio jsonb array as `[{ type, duration, distance }]`.
+          supabase.from('activity_logs').select('cardio').eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
+          // Partner Workouts — count workout rows where tagged_user_ids is not
+          // null and has at least one element. The PostgREST filter `not.is.null`
+          // alone doesn't reject empty arrays, so we fetch the column and count
+          // client-side. Cheap because tagged_user_ids is small.
+          supabase.from('activity_logs').select('tagged_user_ids').eq('user_id', uid).eq('log_type', 'workout').not('tagged_user_ids', 'is', null),
+        ]);
+
+        // Compute strength PRs from exercises array. Each `weights` array entry
+        // is parsed as a number; the max across all sessions becomes the PR.
+        // Total = best bench + best squat + best deadlift across all logs.
+        let benchMax = 0, squatMax = 0, deadliftMax = 0;
+        const liftRows = (strengthLogs as any).data || [];
+        for (const row of liftRows) {
+          const exs = Array.isArray(row.exercises) ? row.exercises : [];
+          for (const e of exs) {
+            const name = (e.name || '').toLowerCase();
+            const weightsArr: any[] = Array.isArray(e.weights) ? e.weights : [e.weight];
+            for (const w of weightsArr) {
+              const num = parseFloat(String(w)) || 0;
+              if (num <= 0) continue;
+              if (name.includes('bench')) benchMax = Math.max(benchMax, num);
+              else if (name.includes('squat')) squatMax = Math.max(squatMax, num);
+              else if (name.includes('deadlift')) deadliftMax = Math.max(deadliftMax, num);
+            }
+          }
+        }
+        const totalLiftMax = benchMax + squatMax + deadliftMax;
+
+        // 5K count — number of running workouts with at least one cardio entry
+        // ≥ 3.1 miles. Distance is stored as a string inside cardio jsonb;
+        // parseFloat strips any unit suffix like "5.2 mi".
+        let fiveKCount = 0;
+        const runningRows = ((fiveKLogs as any).data || []) as any[];
+        for (const row of runningRows) {
+          const cardioEntries = Array.isArray(row.cardio) ? row.cardio : [];
+          const has5K = cardioEntries.some((c: any) => {
+            const dist = parseFloat(String(c.distance ?? '')) || 0;
+            return dist >= 3.1;
+          });
+          if (has5K) fiveKCount++;
+        }
+
+        // Sum likes_count across the user's posts (since `likesReceived` is
+        // a sum of counts, not a row count).
+        const likesReceivedTotal = ((likesReceived as any).data || []).reduce(
+          (s: number, p: any) => s + (p.likes_count || 0), 0
+        );
+
+        // Partner workouts — count rows where tagged_user_ids is a non-empty
+        // array. PostgREST returns the column raw; we filter empty arrays
+        // here so old rows without tags don't accidentally count.
+        const partnerRows = ((partnerWorkoutsResult as any).data || []) as any[];
+        const partnerWorkouts = partnerRows.filter(
+          (r: any) => Array.isArray(r.tagged_user_ids) && r.tagged_user_ids.length > 0
+        ).length;
+
+        setBadgeCounters({
+          runs: runs.count ?? 0,
+          liftSessions: liftSessions.count ?? 0,
+          totalWorkouts: totalWorkouts.count ?? 0,
+          yogaSessions: yoga.count ?? 0,
+          meditationSessions: meditation.count ?? 0,
+          coldPlunges: coldPlunges.count ?? 0,
+          saunaSessions: sauna.count ?? 0,
+          breathworkSessions: breathwork.count ?? 0,
+          walks: walks.count ?? 0,
+          stretchingSessions: stretching.count ?? 0,
+          totalWellness: totalWellness.count ?? 0,
+          nutritionLogs: nutritionLogs.count ?? 0,
+          postCount: postCount.count ?? 0,
+          followerCount: followerCount.count ?? 0,
+          // Newly wired
+          bikingSessions: biking.count ?? 0,
+          swimmingSessions: swimming.count ?? 0,
+          rowingSessions: rowing.count ?? 0,
+          hiitSessions: hiit.count ?? 0,
+          boxingSessions: boxing.count ?? 0,
+          sportsSessions: sports.count ?? 0,
+          pilatesSessions: pilates.count ?? 0,
+          infraredSaunaSessions: infraredSauna.count ?? 0,
+          redLightSessions: redLight.count ?? 0,
+          massageSessions: massage.count ?? 0,
+          floatTankSessions: floatTank.count ?? 0,
+          mobilitySessions: mobility.count ?? 0,
+          journalingSessions: journaling.count ?? 0,
+          sunlightSessions: sunlight.count ?? 0,
+          likesReceived: likesReceivedTotal,
+          commentsMade: commentsMade.count ?? 0,
+          benchMax,
+          squatMax,
+          deadliftMax,
+          totalLiftMax,
+          fiveKCount,
+          partnerWorkouts,
+        });
+      } catch (e) {
+        console.error('Failed to fetch badge counters:', e);
+        setBadgeCounters({});
+      }
+    })();
+  }, [user, showAllBadgesModal]);
+
+  // 🏆 Tier state — computed from activity logs
+  const [userTier, setUserTier] = useState<Tier>("default");
+  const [tierInfo, setTierInfo] = useState(getTierInfo(0, 0));
+
+  // ── NEW Level System v2 ────────────────────────────────────────────────────
+  // Source of truth: users.current_level + users.xp_in_level + counter columns
+  // populated by the level-system-v2 migration. Loads in one query.
+  const [counterData, setCounterData] = useState<CounterData | null>(null);
+  // Set of XP categories the user has already earned XP for today (resets daily).
+  // Used to highlight already-completed categories purple in the level modal.
+  const [todayXpCategories, setTodayXpCategories] = useState<Set<string>>(new Set());
+  const [progressInfo, setProgressInfo] = useState<LevelProgressInfo | null>(null);
+  // Modal-local state — which level is currently expanded in the breakdown
+  const [modalSelectedLevel, setModalSelectedLevel] = useState<Level | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadCounters() {
+      // Pull all the counter columns + xp/level + following count
+      const { data: u } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user!.id)
+        .single();
+
+      // Compute streaks client-side from realDays — DB doesn't track these
+      // (Date-gap math; longest consecutive day workout / nutrition logs)
+      const computeStreak = (filterFn: (d: any) => boolean): number => {
+        const dates = [...new Set(
+          realDays.filter(filterFn).map((d: any) => {
+            const dt = new Date(d._date || 0);
+            return `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+          })
+        )].sort();
+        if (dates.length === 0) return 0;
+        // longest run of consecutive days
+        let longest = 1, current = 1;
+        for (let i = 1; i < dates.length; i++) {
+          const [y1, m1, d1] = dates[i - 1].split('-').map(Number);
+          const [y2, m2, d2] = dates[i].split('-').map(Number);
+          const a = new Date(y1, m1, d1).getTime();
+          const b = new Date(y2, m2, d2).getTime();
+          if ((b - a) === 86400000) { current++; longest = Math.max(longest, current); }
+          else current = 1;
+        }
+        return longest;
+      };
+
+      const workoutStreak = computeStreak((d: any) => !!d.workout);
+      const nutritionStreak = computeStreak((d: any) => !!d.nutrition);
+
+      const cd: CounterData = {
+        xpInLevel:        (u as any)?.xp_in_level ?? 0,
+        currentLevel:     ((u as any)?.current_level ?? 1) as Level,
+        workoutsCount:    (u as any)?.workouts_count ?? 0,
+        wellnessCount:    (u as any)?.wellness_count ?? 0,
+        nutritionCount:   (u as any)?.nutrition_count ?? 0,
+        yogaCount:        (u as any)?.yoga_count ?? 0,
+        swimCount:        (u as any)?.swim_count ?? 0,
+        sportsCount:      (u as any)?.sports_count ?? 0,
+        feedPostsCount:   (u as any)?.feed_posts_count ?? 0,
+        rivalWinsCount:   (u as any)?.rival_wins_count ?? 0,
+        groupsJoinedCount:(u as any)?.groups_joined_count ?? 0,
+        eventsRsvpCount:  (u as any)?.events_rsvp_count ?? 0,
+        badgesEarnedCount:(u as any)?.badges_earned_count ?? 0,
+        groupWarsParticipated:        (u as any)?.group_wars_participated ?? 0,
+        groupChallengesParticipated:  (u as any)?.group_challenges_participated ?? 0,
+        followingCount:   (u as any)?.following_count ?? 0,
+        workoutStreak, nutritionStreak,
+      };
+      setCounterData(cd);
+      const info = getLevelProgress(cd);
+      setProgressInfo(info);
+      setModalSelectedLevel(((cd.currentLevel + 1) <= 6 ? cd.currentLevel + 1 : 6) as Level);
+
+      // Compute which XP categories the user already earned today, by querying
+      // activity_logs for the LOCAL calendar day window. Used to highlight
+      // already-done categories purple in the level modal.
+      // Bug fix: previously used setUTCHours(0,0,0,0) which is 4-5pm Pacific.
+      // That meant logs from yesterday afternoon Pacific stayed highlighted
+      // into the next morning. Now uses local midnight so the bars reset on
+      // calendar day rollover in the user's timezone.
+      try {
+        const localMidnight = new Date();
+        localMidnight.setHours(0, 0, 0, 0);
+        const { data: todayLogs } = await supabase
+          .from('activity_logs')
+          .select('log_type, workout_category')
+          .eq('user_id', user!.id)
+          .gte('logged_at', localMidnight.toISOString());
+        const cats = new Set<string>();
+        const cardioSet = new Set(['running', 'walking', 'biking', 'swimming', 'rowing']);
+        for (const log of (todayLogs || []) as any[]) {
+          if (log.log_type === 'workout') {
+            // Cardio types map to "cardio" XP, everything else to "workout"
+            if (log.workout_category && cardioSet.has(log.workout_category)) cats.add('cardio');
+            else cats.add('workout');
+          } else if (log.log_type === 'nutrition') cats.add('nutrition');
+          else if (log.log_type === 'wellness') cats.add('wellness');
+        }
+        // Also check if user posted to feed today (separate table)
+        const { count: feedCount } = await supabase
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .gte('created_at', localMidnight.toISOString());
+        if ((feedCount ?? 0) > 0) cats.add('feed_post');
+        setTodayXpCategories(cats);
+      } catch { /* non-fatal — leaves the set empty */ }
+
+      // If user is ready to level up (XP + challenges all met), trigger server-side level_up
+      if (info.readyToLevelUp) {
+        const result = await tryLevelUp(user!.id);
+        if (result && result.level !== cd.currentLevel) {
+          // Reload counters with new level
+          setTimeout(() => loadCounters(), 200);
+        }
+      }
+    }
+    loadCounters();
+  }, [user?.id, realDays.length]);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadTier() {
+      // Count logs in last 28 days
+      const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from('activity_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .gte('logged_at', since);
+      const logsCount = count || 0;
+      const info = getTierInfo(logsCount, 0);
+      setTierInfo(info);
+      setUserTier(info.tier);
+      // Persist tier back to DB for feed to pick up
+      if (user) {
+        supabase.from('users').update({ tier: info.tier, logs_last_28_days: logsCount } as any).eq('id', user.id).catch(() => {});
+      }
+    }
+    loadTier();
+  }, [user?.id, realDays.length]);
+
+  // uploadPhoto imported from @/lib/uploadPhoto — server-side, bypasses RLS
+
+  // Adjust to fit — uploads directly, photo is displayed with object-fit:cover
+  function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }) {
+    const f=e.target.files?.[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=async ev=>{
+      const dataUrl = ev.target!.result as string;
+      set(dataUrl); // show immediately
+      if (supabasePath && user) {
+        const compressed = await compressImage(dataUrl);
+        const publicUrl = await uploadPhoto(compressed, supabasePath.bucket, supabasePath.path);
+        if (publicUrl) {
+          if (supabasePath.dbField === "avatar_url") {
+            latestUploadedAvatarUrlRef.current = publicUrl;
+            initedAvatarRef.current = true;
+          }
+          if (supabasePath.dbField === "banner_url") {
+            latestUploadedBannerUrlRef.current = publicUrl;
+            initedBannerRef.current = true;
+          }
+          set(publicUrl);
+          const { error } = await supabase.from('users').update({ [supabasePath.dbField]: publicUrl }).eq('id', user.id);
+          if (error) console.error(`[profile] failed to save ${supabasePath.dbField}:`, error.message);
+        }
+      }
+    };
+    r.readAsDataURL(f); e.target.value="";
+  }
+
+  async function saveBannerPosition() {
+    if (!user) return;
+    try { localStorage.setItem(`banner_position_${user.id}`, String(bannerPosition)); } catch {}
+    try { localStorage.setItem(`banner_scale_${user.id}`, String(bannerScale)); } catch {}
+    // Try to save to Supabase (banner_position / banner_scale columns may
+    // or may not exist on older deployments — failures here are silent).
+    supabase.from('users').update({ banner_position: bannerPosition, banner_scale: bannerScale } as any).eq('id', user.id).then(() => {});
+    setRepositionMode(false);
+  }
+
+  function handleBannerMouseDown(e: React.MouseEvent) {
+    if (!repositionMode) return;
+    e.preventDefault();
+    setDragState({ startY: e.clientY, startPos: bannerPosition });
+  }
+
+  function handleBannerMouseMove(e: React.MouseEvent) {
+    if (!dragState || !repositionMode) return;
+    const dy = e.clientY - dragState.startY;
+    // Moving up (negative dy) should move position up (smaller percentage)
+    const newPos = Math.max(0, Math.min(100, dragState.startPos - dy / 3));
+    setBannerPosition(newPos);
+  }
+
+  function handleBannerMouseUp() {
+    setDragState(null);
+  }
+
+  function handleBannerTouchMove(e: React.TouchEvent) {
+    if (!dragState || !repositionMode) return;
+    const dy = e.touches[0].clientY - dragState.startY;
+    const newPos = Math.max(0, Math.min(100, dragState.startPos - dy / 3));
+    setBannerPosition(newPos);
+  }
+
+  function handleAvatarMouseDown(e: React.MouseEvent) {
+    if (!avatarRepositionMode) return;
+    e.preventDefault();
+    setAvatarDragState({ startY: e.clientY, startPos: avatarPosition });
+  }
+  function handleAvatarMouseMove(e: React.MouseEvent) {
+    if (!avatarDragState || !avatarRepositionMode) return;
+    const dy = e.clientY - avatarDragState.startY;
+    const newPos = Math.max(0, Math.min(100, avatarDragState.startPos - dy / 2));
+    setAvatarPosition(newPos);
+  }
+  function handleAvatarMouseUp() { setAvatarDragState(null); }
+  async function saveAvatarPosition() {
+    if (!user) return;
+    try { localStorage.setItem(`avatar_position_${user.id}`, String(avatarPosition)); } catch {}
+    try { localStorage.setItem(`avatar_scale_${user.id}`, String(avatarScale)); } catch {}
+    supabase.from('users').update({ avatar_position: avatarPosition, avatar_scale: avatarScale } as any).eq('id', user!.id).then(() => {});
+    setAvatarRepositionMode(false);
+  }
+
+  // Centralized helper: persist a new highlights array to DB + localStorage.
+  // Returns true on success, false on failure. ALL highlight mutations should
+  // go through this — previously each callsite did its own save (or didn't),
+  // which is why some highlights weren't persisting and refreshes lost them.
+  async function persistHighlights(next: string[]): Promise<boolean> {
+    if (!user) return false;
+    // Strip any non-http URLs (base64 data: URLs aren't real persisted images)
+    const httpOnly = next.filter(u => typeof u === 'string' && u.startsWith('http'));
+    const { error } = await supabase
+      .from('users')
+      .update({ highlights: httpOnly } as any)
+      .eq('id', user.id);
+    if (error) {
+      console.error("Failed to persist highlights:", error);
+      return false;
+    }
+    try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(httpOnly)); } catch {}
+    return true;
+  }
+
+  function addHighlight(e:React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = async ev => {
+      const dataUrl = ev.target!.result as string;
+      // Show base64 preview immediately so user sees the photo land in the slot
+      setHighlights(h => [...h, dataUrl]);
+      if (!user) return;
+      // Upload to storage to get a real URL
+      const compressed = await compressImage(dataUrl);
+      const publicUrl = await uploadPhoto(compressed, 'avatars', `${user.id}/highlights/${Date.now()}.jpg`);
+      if (!publicUrl || !publicUrl.startsWith('http')) {
+        // Upload failed — remove the preview so user knows something went wrong
+        setHighlights(h => h.filter(u => u !== dataUrl));
+        alert("Couldn't upload that image. Try again.");
+        return;
+      }
+      // Swap base64 preview for the real URL and save to DB
+      setHighlights(h => {
+        const next = h.map(u => u === dataUrl ? publicUrl : u);
+        // Persist outside render cycle so we don't block paint
+        persistHighlights(next);
+        return next;
+      });
+    };
+    r.readAsDataURL(f);
+    e.target.value = "";
+  }
+
+  async function removeHighlight(idx:number) {
+    // Capture URL up-front and key off URL (not index) so a re-render between
+    // click and execution can't make us delete the wrong photo or all photos.
+    const urlToRemove = highlights[idx];
+    if (!urlToRemove || !user) return;
+
+    const next = highlights.filter(u => u !== urlToRemove);
+
+    // Optimistic UI
+    setHighlights(next);
+    if (next.length === 0) setEditingHighlights(false);
+
+    // Persist to DB. If save fails, roll back to BEFORE state.
+    const ok = await persistHighlights(next);
+    if (!ok) {
+      setHighlights(prev => {
+        // Only roll back if our delete is still the latest change
+        if (!prev.includes(urlToRemove)) return [...prev, urlToRemove];
+        return prev;
+      });
+      alert("Couldn't delete that highlight. Try again.");
+      return;
+    }
+
+    // Best-effort: remove the file from storage. If this fails the highlight
+    // is already gone from the user's view (DB updated), so it's fine.
+    try {
+      const match = urlToRemove.match(/avatars\/(.+?)(\?|$)/);
+      if (match) {
+        const path = decodeURIComponent(match[1]);
+        await supabase.storage.from('avatars').remove([path]);
+      }
+    } catch(e) { console.error("Storage delete error:", e); }
+  }
+
+  async function claimBadge() {
+    if (!user || !selectedBadge) return;
+
+    // ── Ladder progression check ────────────────────────────────────────
+    // If the selected badge is the entry of a manual ladder (marathon-1,
+    // spartan-1, etc.), figure out which tier to actually award based on
+    // how many badges in this family the user has already claimed.
+    //
+    // First time → award tier 1 (marathon-1)
+    // 3rd time   → award tier 2 (marathon-3)
+    // 5th time   → award tier 3 (marathon-5)
+    // ...etc, capping at tier 5 (marathon-20) for 20+ claims.
+    let badgeIdToAward = selectedBadge;
+    let actualCount = 1;
+    const family = findManualBadgeFamily(selectedBadge);
+    if (family) {
+      // Count how many badges in this family the user already has
+      const existingInFamily = earnedBadges.filter(eb => family.tiers.includes(eb.badge_id)).length;
+      actualCount = existingInFamily + 1; // +1 for the one we're about to claim
+      badgeIdToAward = getTierForCount(family, actualCount);
+
+      // If they're already at the highest tier (marathon-20), don't insert
+      // anything — just show them they're maxed.
+      if (actualCount > 20) {
+        setBadgeToast("You're already at the highest tier for this badge! 👑");
+        setTimeout(() => setBadgeToast(null), 3000);
+        setShowBadgeModal(false);
+        setSelectedBadge("");
+        setBadgeNote("");
+        setBadgeSearch("");
+        setBadgeCategoryFilter("all");
+        return;
+      }
+    }
+
+    // Insert into DB and select the row back so we have the real ID + timestamp
+    const { data, error } = await supabase
+      .from('badges')
+      .insert({
+        user_id: user.id,
+        badge_id: badgeIdToAward,
+        note: badgeNote || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("claimBadge failed:", error);
+      alert("Couldn't claim that badge. Try again.");
+      return;
+    }
+
+    // earnedBadges expects objects with shape { badge_id, ... } — pushing
+    // just the string broke the .some(eb => eb.badge_id === b.id) check
+    // and made claimed badges look unclaimed.
+    setEarnedBadges(prev => [...prev, data]);
+    setShowBadgeModal(false);
+    setSelectedBadge("");
+    setBadgeNote("");
+    setBadgeSearch("");
+    setBadgeCategoryFilter("all");
+
+    // Toast — for ladder badges, name the actual tier they hit
+    if (family) {
+      const awarded = BADGES.find(b => b.id === badgeIdToAward);
+      setBadgeToast(`${awarded?.emoji ?? "🏆"} ${awarded?.label ?? "Badge"} unlocked! (${actualCount} total)`);
+    } else {
+      setBadgeToast("Badge unlocked! 🎉");
+    }
+    setTimeout(() => setBadgeToast(null), 3500);
+  }
+
+  const inputStyle = {width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box" as const,marginBottom:10};
+
+  const manualBadges = BADGES.filter(b => isManualBadge(b.id));
+  const HIGHLIGHT_SLOTS = 9;
+
+  // ── EARLY: loading skeleton ─────────────────────────────────────────
+  // Profile page fires 15+ useEffects on mount. Without this skeleton the
+  // user sees a blank dark page for 1-2 seconds while data loads. The
+  // skeleton renders structure (header bar, activity card stubs, badges
+  // panel) immediately so it FEELS like the page loaded fast even though
+  // the actual data is still coming in. Replaced by the real layout as
+  // soon as `user` is populated.
+  if (!user) {
+    return <ProfileSkeleton />;
+  }
+
+  // ── BRANCH: business accounts render a completely different layout ──
+  // The entire athlete profile (followers/following, badges, activity log,
+  // level progress, rivals, etc.) is inappropriate for a business. Instead
+  // we render the dedicated BusinessProfileView with hero + tabs + contact
+  // info. This branch applies to the LOGGED-IN user viewing their own
+  // profile at /profile — the public profile at /profile/[username] already
+  // has its own branch.
+  if (user?.profile && isBusinessAccount(user.profile)) {
+    return (
+      <BusinessProfileView
+        profile={user.profile}
+        currentUser={{ id: user.id }}
+        // No message/block on own profile — they're the owner
+      />
+    );
+  }
+
+  return (
+    <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
+      {/* Page-level lightbox for the avatar + banner viewers. Opened by
+          tapping the avatar circle or the banner; closes on backdrop click
+          via the Lightbox component's onClose handler. Independent of any
+          DayCard's own internal lightbox state. */}
+      {pageLb && <Lightbox src={pageLb} onClose={() => setPageLb(null)} />}
+
+      <style jsx global>{`
+        /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
+           Activated by adding the tier class to elements based on user level.
+           Each tier's effects layer on top of the previous (Diamond gets
+           everything). Effects are deliberately subtle — they should feel
+           prestigious, not gaudy.
+        */
+
+        /* L2 BRONZE — warm copper border glow on activity cards.
+           Subtle stationary halo, not animated. Lowest-prestige tier. */
+        .tier-bronze-card {
+          border-color: rgba(205,127,50,0.45) !important;
+          box-shadow: 0 0 0 1px rgba(205,127,50,0.20), 0 2px 18px rgba(205,127,50,0.18);
+        }
+
+        /* L3 SILVER — rotating silver halo around profile avatar.
+           This is the "moving picture" effect. Two concentric conic-gradient
+           rings rotate at different speeds for depth. The avatar itself stays
+           still — only the ring around it moves. Animation is slow + smooth
+           (8s) so it never feels distracting. */
+        .tier-silver-avatar-wrap {
+          position: relative;
+          padding: 4px;
+          border-radius: 50%;
+          background: conic-gradient(
+            from 0deg,
+            #6B7280 0%,
+            #E8E8F0 25%,
+            #F5F5FA 50%,
+            #C0C0C0 75%,
+            #6B7280 100%
+          );
+          animation: tierSilverRingSpin 8s linear infinite;
+          box-shadow: 0 0 22px rgba(220,220,235,0.35);
+        }
+        .tier-silver-avatar-wrap::after {
+          /* Inner soft glow ring spinning the OTHER direction.
+             Creates a "shimmery" depth effect without being chaotic. */
+          content: '';
+          position: absolute;
+          inset: -3px;
+          border-radius: 50%;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0%,
+            rgba(255,255,255,0.4) 30%,
+            transparent 60%,
+            rgba(255,255,255,0.3) 90%,
+            transparent 100%
+          );
+          animation: tierSilverRingSpinReverse 12s linear infinite;
+          pointer-events: none;
+          z-index: -1;
+        }
+        @keyframes tierSilverRingSpin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes tierSilverRingSpinReverse {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(-360deg); }
+        }
+
+        /* L4 GOLD — gold shimmer that sweeps across the profile NAME.
+           Gold gradient text + a moving highlight band. */
+        .tier-gold-name {
+          background: linear-gradient(
+            90deg,
+            #B8860B 0%,
+            #FFD700 25%,
+            #FFF8DC 50%,
+            #FFD700 75%,
+            #B8860B 100%
+          );
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: tierGoldShimmer 4s ease-in-out infinite;
+          filter: drop-shadow(0 0 8px rgba(255,215,0,0.4));
+        }
+        @keyframes tierGoldShimmer {
+          0%,100% { background-position: 0% 50%; }
+          50%     { background-position: 100% 50%; }
+        }
+        /* L4 GOLD — gentle gold glow on activity cards (in addition to bronze) */
+        .tier-gold-card {
+          border-color: rgba(255,215,0,0.45) !important;
+          box-shadow: 0 0 0 1px rgba(255,215,0,0.22), 0 2px 22px rgba(255,215,0,0.22);
+        }
+
+        /* L5 EMERALD — pulsing green glow on activity cards.
+           Slow breathing pulse — gentle, not flashy. */
+        .tier-emerald-card {
+          border-color: rgba(16,185,129,0.55) !important;
+          animation: tierEmeraldPulse 4.5s ease-in-out infinite;
+        }
+        @keyframes tierEmeraldPulse {
+          0%,100% { box-shadow: 0 0 0 1px rgba(16,185,129,0.30), 0 2px 18px rgba(16,185,129,0.20); }
+          50%     { box-shadow: 0 0 0 1px rgba(16,185,129,0.55), 0 2px 32px rgba(16,185,129,0.45); }
+        }
+
+        /* L6 DIAMOND — holographic shifting name (like rainbow chrome).
+           Reserved for max level — most prestigious effect. */
+        .tier-diamond-name {
+          background: linear-gradient(
+            90deg,
+            #67E8F9 0%,
+            #E879F9 20%,
+            #FCD34D 40%,
+            #6EE7B7 60%,
+            #A78BFA 80%,
+            #67E8F9 100%
+          );
+          background-size: 250% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: tierDiamondHolo 6s linear infinite;
+          filter: drop-shadow(0 0 10px rgba(103,232,249,0.5));
+        }
+        @keyframes tierDiamondHolo {
+          0%   { background-position: 0% 50%; }
+          100% { background-position: 250% 50%; }
+        }
+
+        /* Diamond shimmer effect for activity cards. Subtle cyan light streak
+           that sweeps across without obscuring text.
+           Activated by adding the diamond-shimmer-card class (gated to L6). */
+        .diamond-shimmer-card { position: relative; }
+        .diamond-shimmer-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(115deg, transparent 40%, rgba(103,232,249,0.20) 48%, rgba(186,230,253,0.45) 50%, rgba(103,232,249,0.20) 52%, transparent 60%);
+          transform: translateX(-120%);
+          animation: diamondShimmerSweep 4s ease-in-out infinite;
+          pointer-events: none;
+          z-index: 3;
+        }
+        @keyframes diamondShimmerSweep {
+          0% { transform: translateX(-120%); }
+          55% { transform: translateX(120%); }
+          100% { transform: translateX(120%); }
+        }
+        @media (max-width: 767px) {
+          .profile-layout {
+            display: flex !important;
+            flex-direction: column !important;
+            grid-template-columns: unset !important;
+            padding: 0 !important;
+            gap: 12px !important;
+          }
+          .profile-layout > * { width: 100% !important; min-width: unset !important; max-width: 100% !important; }
+          .profile-header-wrap { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 0 !important; }
+          /* Lift avatar enough that it cleanly overlaps the bottom edge of the banner.
+             Avatar is 184px so we lift -92px to half-overlap. margin-bottom: 100px
+             reserves space for the bottom half of the avatar circle so the
+             "Edit Profile" button below it has clearance and doesn't get covered. */
+          .profile-avatar-col { order: 2 !important; margin-top: 16px !important; margin-bottom: 16px !important; z-index: 5 !important; position: relative !important; padding: 0 !important; width: 100% !important; align-items: center !important; display: flex !important; flex-direction: column !important; }
+          .profile-banner-block { order: 1 !important; min-width: unset !important; width: 100% !important; border-radius: 0 !important; }
+          /* Shorter banner on mobile — 320px was eating half the viewport */
+          .profile-banner-label { border-radius: 0 !important; height: 180px !important; }
+          .profile-outer { padding: 0 0 100px !important; max-width: 100% !important; margin: 0 !important; }
+          .profile-stats-bio { padding: 16px !important; width: 100% !important; box-sizing: border-box !important; }
+          /* Stats row — keep the two big numbers on one horizontal line, tighter */
+          .profile-stats-row { gap: 8px !important; margin-top: 12px !important; }
+          /* Hide desktop-only hover affordances on touch screens.
+             Reposition buttons require hover on desktop; on mobile they just
+             sit there cluttering the layout. Users can long-press the image
+             later — for now, hide them on the touch-primary breakpoint. */
+          .hide-on-mobile { display: none !important; }
+        }
+        @media (min-width: 768px) and (max-width: 1100px) {
+          .profile-layout {
+            grid-template-columns: 200px 1fr 200px !important;
+            gap: 16px !important;
+          }
+        }
+        .highlight-slot:hover .highlight-remove { opacity: 1 !important; }
+      `}</style>
+
+      {/* ── Highlight Picker Modal ── */}
+      {showHighlightPicker && (
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={()=>setShowHighlightPicker(false)}>
+          <div style={{background:C.white,borderRadius:"0 0 24px 24px",padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+            <div>
+              <div style={{fontWeight:900,fontSize:18,color:C.text}}>Choose a Highlight</div>
+              <div style={{fontSize:12,color:C.sub,marginTop:2}}>Tap any photo to add it to highlights</div>
+            </div>
+            <button onClick={()=>setShowHighlightPicker(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#2D1F52",color:C.text,fontSize:20,cursor:"pointer"}}>×</button>
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:"16px 20px 32px"}} onClick={e=>e.stopPropagation()}>
+            {feedPhotos.length === 0 ? (
+              <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
+                <div style={{fontSize:40,marginBottom:12}}>📭</div>
+                <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No media yet</div>
+                <div style={{fontSize:13}}>Post photos or videos to your feed first, then add them as highlights</div>
+              </div>
+            ) : (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                {feedPhotos.map((src,idx)=>{
+                  const alreadyAdded = highlights.includes(src);
+                  return (
+                    <button key={idx} onClick={async ()=>{
+                      if(alreadyAdded) return;
+                      // Add directly from feed URL — no re-upload needed.
+                      // CRITICAL: we have to save to DB here. Previously this
+                      // only updated local state + localStorage, so on refresh
+                      // the highlight disappeared.
+                      const next = [...highlights, src];
+                      setHighlights(next);
+                      setShowHighlightPicker(false);
+                      const ok = await persistHighlights(next);
+                      if (!ok) {
+                        // Roll back if save failed
+                        setHighlights(prev => prev.filter(u => u !== src));
+                        alert("Couldn't add that highlight. Try again.");
+                      }
+                    }} style={{padding:0,border:`3px solid ${alreadyAdded?C.purple:C.purpleMid}`,borderRadius:14,overflow:"hidden",cursor:alreadyAdded?"default":"pointer",background:"#000",aspectRatio:"1",position:"relative"}}>
+                      {/* Render video preview for video URLs (muted, no
+                          autoplay) so users can pick clips for highlights.
+                          isVideoUrl checks file extension. */}
+                      {isVideoUrl(src) ? (
+                        <video src={src} muted playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      ) : (
+                        <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt=""/>
+                      )}
+                      {isVideoUrl(src) && (
+                        <div style={{position:"absolute",bottom:6,left:6,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:99}}>▶</div>
+                      )}
+                      {alreadyAdded && (
+                        <div style={{position:"absolute",inset:0,background:"rgba(22,163,74,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <span style={{fontSize:28}}>✓</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {/* Also allow uploading from camera roll */}
+            <label style={{display:"flex",alignItems:"center",gap:10,marginTop:20,padding:"14px 16px",borderRadius:16,border:`1.5px dashed ${C.purpleMid}`,background:"#1A1230",cursor:"pointer",justifyContent:"center"}}>
+              <span style={{fontSize:20}}>📷</span>
+              <span style={{fontWeight:700,fontSize:14,color:C.purple}}>Upload from camera roll</span>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
+                const f=e.target.files?.[0]; if(!f) return;
+                const r=new FileReader();
+                r.onload=async ev=>{
+                  const dataUrl=ev.target!.result as string;
+                  setShowHighlightPicker(false);
+                  if(!user) return;
+                  // Show base64 preview while upload happens
+                  setHighlights(h => [...h, dataUrl]);
+                  const {uploadPhoto:up}=await import('@/lib/uploadPhoto');
+                  const {compressImage:ci}=await import('@/lib/compressImage');
+                  const compressed = await ci(dataUrl);
+                  const publicUrl=await up(compressed,'avatars',`${user.id}/highlights/${Date.now()}.jpg`);
+                  if(!publicUrl || !publicUrl.startsWith('http')){
+                    setHighlights(h => h.filter(u => u !== dataUrl));
+                    alert("Couldn't upload that image. Try again.");
+                    return;
+                  }
+                  // Swap base64 preview for real URL and save to DB
+                  setHighlights(h => {
+                    const next = h.map(u => u === dataUrl ? publicUrl : u);
+                    persistHighlights(next);
+                    return next;
+                  });
+                };
+                r.readAsDataURL(f); e.target.value="";
+              }}/>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* ── Followers / Following Modal ── */}
+      {socialModal && (
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setSocialModal(null)}>
+          <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:440,maxHeight:"75vh",overflow:"hidden",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px",borderBottom:`2px solid ${C.purpleMid}`}}>
+              <div style={{fontWeight:900,fontSize:18,color:C.text}}>{socialModal==="followers"?"👥 Followers":"➡️ Following"}</div>
+              <button onClick={()=>setSocialModal(null)} style={{width:34,height:34,borderRadius:"50%",border:"none",background:"#2D1F52",color:C.sub,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"12px 16px"}}>
+              {socialLoading ? (
+                <div style={{textAlign:"center",padding:"32px 0",color:C.sub}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",border:`4px solid ${C.purpleMid}`,borderTopColor:C.purple,animation:"spin 0.8s linear infinite",margin:"0 auto 10px"}}/>
+                  <div style={{fontSize:13}}>Loading...</div>
+                </div>
+              ) : socialList.length === 0 ? (
+                <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
+                  <div style={{fontSize:40,marginBottom:10}}>👤</div>
+                  <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No one here yet</div>
+                  <div style={{fontSize:13}}>{socialModal==="followers"?"No followers yet":"Not following anyone yet"}</div>
+                </div>
+              ) : (
+                socialList.map(u=>(
+                  <div key={u.id} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 8px",borderRadius:16,cursor:"pointer",transition:"background 0.15s"}}
+                    onMouseEnter={e=>(e.currentTarget.style.background="#2D1F52")}
+                    onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
+                    onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
+                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
+                      {u.avatar_url ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:14,color:C.text}}>{u.full_name}</div>
+                      <div style={{fontSize:12,color:C.sub}}>@{u.username}</div>
+                    </div>
+                    {/* Inline follow/unfollow — stop propagation so clicks here
+                        don't ALSO navigate to the profile. */}
+                    <div onClick={e => e.stopPropagation()}>
+                      <FollowButton targetUserId={u.id} size="sm" />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast ── */}
+      {badgeToast && (
+        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(124,58,237,0.35)",pointerEvents:"none"}}>
+          {badgeToast}
+        </div>
+      )}
+
+      {/* ── Badge Modal ── */}
+      {showBadgeModal && (() => {
+        // Filter manual badges by category + search query so the user can find
+        // theirs in the long list. Search matches label or description.
+        const cats = Array.from(new Set(manualBadges.map(b => b.category)));
+        const q = badgeSearch.trim().toLowerCase();
+        const filtered = manualBadges.filter(b => {
+          if (badgeCategoryFilter !== "all" && b.category !== badgeCategoryFilter) return false;
+          if (q && !(b.label.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q))) return false;
+          return true;
+        });
+
+        // Visual style per category — gives each badge group a distinct color
+        // so the modal doesn't look like 150 identical purple cards.
+        const catStyle: Record<string, { bg: string; border: string; chip: string }> = {
+          strength:    { bg: "linear-gradient(135deg,#7C2D12,#9A3412)", border: "#EA580C", chip: "#FED7AA" },
+          cardio:      { bg: "linear-gradient(135deg,#831843,#9F1239)", border: "#E11D48", chip: "#FECACA" },
+          consistency: { bg: "linear-gradient(135deg,#713F12,#854D0E)", border: "#CA8A04", chip: "#FDE68A" },
+          wellness:    { bg: "linear-gradient(135deg,#14532D,#166534)", border: "#16A34A", chip: "#BBF7D0" },
+          nutrition:   { bg: "linear-gradient(135deg,#365314,#3F6212)", border: "#65A30D", chip: "#D9F99D" },
+          challenges:  { bg: "linear-gradient(135deg,#1E3A8A,#1D4ED8)", border: "#3B82F6", chip: "#BFDBFE" },
+          social:      { bg: "linear-gradient(135deg,#581C87,#6B21A8)", border: "#A855F7", chip: "#E9D5FF" },
+          special:     { bg: "linear-gradient(135deg,#831843,#86198F)", border: "#D946EF", chip: "#F5D0FE" },
+        };
+        const fallbackStyle = { bg: "#1A1A1A", border: C.purpleMid, chip: C.purple };
+
+        return (
+        <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.white,borderRadius:28,padding:0,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.18)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"28px 28px 16px"}}>
+              <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:6}}>Report an Achievement</div>
+              <div style={{fontSize:13,color:C.sub,marginBottom:16}}>Honor system — we trust you. Earn it for real 💪</div>
+
+              {/* Search */}
+              <input value={badgeSearch} onChange={e=>setBadgeSearch(e.target.value)} placeholder="Search achievements..." style={{width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
+
+              {/* Category chips */}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <button onClick={()=>setBadgeCategoryFilter("all")} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter==="all"?C.purple:C.purpleMid}`,background:badgeCategoryFilter==="all"?"#2D1F52":"transparent",color:badgeCategoryFilter==="all"?"#E9D5FF":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>All</button>
+                {cats.map(cat => (
+                  <button key={cat} onClick={()=>setBadgeCategoryFilter(cat)} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter===cat?C.purple:C.purpleMid}`,background:badgeCategoryFilter===cat?"#2D1F52":"transparent",color:badgeCategoryFilter===cat?"#E9D5FF":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>{cat}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Scrollable badge list — separate scroll so cancel/claim stay visible */}
+            <div style={{flex:1,overflowY:"auto",padding:"0 28px",display:"flex",flexDirection:"column",gap:10}}>
+              {filtered.length === 0 ? (
+                <div style={{padding:"32px 0",textAlign:"center",color:C.sub,fontSize:14}}>No badges match.</div>
+              ) : filtered.map(b => {
+                // For ladder entry badges, count how many in the family the user has —
+                // shows progress in the modal so they know what tier they're at.
+                const ladderFamily = findManualBadgeFamily(b.id);
+                const ladderCount = ladderFamily
+                  ? earnedBadges.filter(eb => ladderFamily.tiers.includes(eb.badge_id)).length
+                  : 0;
+                const ladderMaxed = ladderFamily && ladderCount >= 20;
+                // Standalone badges: earned = locked. Ladder badges: never lock unless maxed.
+                const earned = ladderFamily
+                  ? ladderMaxed
+                  : earnedBadges.some(eb => eb.badge_id === b.id);
+                const sel = selectedBadge === b.id;
+                const cs = catStyle[b.category] || fallbackStyle;
+                return (
+                  <button key={b.id} onClick={()=>setSelectedBadge(b.id)} disabled={earned}
+                    style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,border:`2px solid ${sel?C.purple:cs.border}`,background:sel?cs.bg:`${cs.bg}99`,cursor:earned?"not-allowed":"pointer",textAlign:"left",opacity:earned?0.45:1,boxShadow:sel?`0 0 0 3px ${C.purple}33`:"none",transition:"all 0.12s"}}>
+                    <span style={{fontSize:30,flexShrink:0}}>{b.emoji}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:14,color:"#fff",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        {b.label}
+                        {ladderFamily && ladderCount > 0 && (
+                          <span style={{fontSize:10,fontWeight:800,background:cs.chip,color:"#000",borderRadius:8,padding:"2px 8px"}}>
+                            {ladderMaxed ? "👑 MAXED" : `${ladderCount} done`}
+                          </span>
+                        )}
+                        {!ladderFamily && earned && <span style={{fontSize:10,fontWeight:700,background:"#D1FAE5",color:"#065F46",borderRadius:8,padding:"2px 8px"}}>✓ Earned</span>}
+                      </div>
+                      <div style={{fontSize:11,color:cs.chip,marginTop:2,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{b.category}</div>
+                      <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:3}}>
+                        {ladderFamily ? `Tap to report another · earns ${ladderFamily.tiers.length} tiers (1/3/5/10/20)` : b.desc}
+                      </div>
+                    </div>
+                    <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.purple:"rgba(255,255,255,0.5)"}`,background:sel?C.purple:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      {sel && <div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{padding:"16px 28px 28px",borderTop:`1px solid ${C.purpleMid}`}}>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,fontWeight:700,color:C.sub,display:"block",marginBottom:6}}>Tell us about it (optional)</label>
+                <textarea value={badgeNote} onChange={e=>setBadgeNote(e.target.value)} rows={2} placeholder="Share your story..." style={{width:"100%",background:"#0D0D0D",border:"1.5px solid #3D2A6E",borderRadius:14,padding:"11px 15px",fontSize:14,color:C.text,outline:"none",resize:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div style={{display:"flex",gap:12}}>
+                <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");setBadgeSearch("");setBadgeCategoryFilter("all");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+                <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#A78BFA)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* ── All Badges Modal ── */}
+      {/* Pin badge action sheet — opens when user taps the ⋯ button on
+          any badge tile. Lets them pick a slot 1-5 or unpin. The cap of
+          5 pinned is enforced here: if all slots are full and the user
+          tries to pin a new one, we explain the swap behavior. */}
+      {pinMenuFor && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setPinMenuFor(null)}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "#0D0820", borderRadius: 22, padding: 22, width: "100%", maxWidth: 400,
+            border: "1px solid #3D2A6E",
+          }}>
+            <div style={{ fontWeight: 900, fontSize: 17, color: "#F0F0F0", marginBottom: 4 }}>📌 Pin Badge</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 18 }}>{pinMenuFor.label}</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[1, 2, 3, 4, 5].map(slot => {
+                const isCurrent = pinMenuFor.currentSlot === slot;
+                // Find what (if anything) is pinned in this slot
+                const occupant = earnedBadges.find(b => b.pin_slot === slot && b.id !== pinMenuFor.badgeRowId);
+                return (
+                  <button
+                    key={slot}
+                    onClick={() => setPin(pinMenuFor.badgeRowId, slot)}
+                    style={{
+                      padding: "12px 14px", borderRadius: 12,
+                      background: isCurrent ? "#7C3AED" : "#1A1228",
+                      border: `1px solid ${isCurrent ? "#7C3AED" : "#3D2A6E"}`,
+                      color: isCurrent ? "#fff" : "#F0F0F0",
+                      fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}
+                  >
+                    <span>Slot {slot} {isCurrent && "· current"}</span>
+                    <span style={{ fontSize: 11, color: isCurrent ? "rgba(255,255,255,0.8)" : "#9CA3AF" }}>
+                      {occupant ? "Will swap" : "Available"}
+                    </span>
+                  </button>
+                );
+              })}
+              {pinMenuFor.currentSlot != null && (
+                <button
+                  onClick={() => setPin(pinMenuFor.badgeRowId, null)}
+                  style={{
+                    padding: "12px 14px", borderRadius: 12,
+                    background: "transparent", border: "1.5px solid #3D2A6E",
+                    color: "#F87171", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    marginTop: 4,
+                  }}
+                >Unpin</button>
+              )}
+              <button
+                onClick={() => setPinMenuFor(null)}
+                style={{
+                  padding: "12px 14px", borderRadius: 12,
+                  background: "transparent", border: "1.5px solid #3D2A6E",
+                  color: "#9CA3AF", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAllBadgesModal && (() => {
+        // Group fitness badges — three render types: progression, credential, yearly.
+        const grouped: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
+        const fitnessCount = grouped.length;
+        const rivalryCount = rivalryBadges.length;
+
+        return (
+        <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.white,borderRadius:28,width:"100%",maxWidth:560,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
+            {/* Holographic shimmer + birthday sparkle + metallic shine keyframes */}
+            <style>{`
+              @keyframes holoShimmer {
+                0%   { background-position: 0% 50%; }
+                50%  { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+              @keyframes birthdayPulse {
+                0%,100% { box-shadow: 0 0 20px rgba(255,182,193,0.5), 0 0 40px rgba(135,206,235,0.3); }
+                50%     { box-shadow: 0 0 30px rgba(255,182,193,0.8), 0 0 60px rgba(135,206,235,0.5); }
+              }
+              /* badgeShimmer — moves a diagonal white band across the tile. Paired
+                 with backgroundSize:"200% 100%" the band slides from left to right
+                 and loops. Speed varies per tier in BadgeTile component. */
+              @keyframes badgeShimmer {
+                0%   { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
+              }
+              /* Spin animations for tier ornament bursts (Diamond+) */
+              @keyframes badgeBurstSpin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+              }
+              @keyframes badgeBurstSpinReverse {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(-360deg); }
+              }
+              /* Sparkle dot orbit for tier 5+ — circles the badge */
+              @keyframes badgeSparkleOrbit {
+                0%   { transform: rotate(0deg) translateX(38px) rotate(0deg); }
+                100% { transform: rotate(360deg) translateX(38px) rotate(-360deg); }
+              }
+            `}</style>
+
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 28px 16px",borderBottom:`2px solid ${C.purpleMid}`}}>
+              <div>
+                <div style={{fontWeight:900,fontSize:20,color:C.text}}>🏆 All Badges</div>
+                <div style={{fontSize:12,color:C.sub,marginTop:2}}>
+                  {badgesTab === "fitness"
+                    ? `${fitnessCount} achievement${fitnessCount === 1 ? "" : "s"} unlocked`
+                    : `${rivalryCount} rival badge${rivalryCount === 1 ? "" : "s"} earned`}
+                </div>
+              </div>
+              <button onClick={()=>setShowAllBadgesModal(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#2D1F52",color:C.text,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{display:"flex",gap:0,padding:"0 28px",borderBottom:`1px solid ${C.purpleMid}`}}>
+              {([
+                { id: "fitness", label: "💪 Fitness", count: fitnessCount },
+                { id: "rivals",  label: "⚔️ Rivals",  count: rivalryCount },
+              ] as const).map(tab => {
+                const isActive = badgesTab === tab.id;
+                return (
+                  <button key={tab.id} onClick={()=>setBadgesTab(tab.id)}
+                    style={{flex:1,padding:"12px 16px",background:"none",border:"none",
+                      borderBottom:`2px solid ${isActive ? C.purple : "transparent"}`,
+                      color: isActive ? C.text : C.sub, fontWeight: isActive ? 900 : 700,
+                      fontSize: 14, cursor:"pointer",fontFamily:"inherit",
+                      display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                    {tab.label}
+                    <span style={{fontSize:11,padding:"2px 8px",borderRadius:99,
+                      background: isActive ? C.purple : "#2D1F52",
+                      color: isActive ? "#fff" : C.sub, fontWeight: 800}}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Content */}
+            <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
+              {badgesTab === "fitness" && (
+                fitnessCount === 0 && completedChallenges.length === 0 ? (
+                  <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
+                    <div style={{fontSize:40,marginBottom:12}}>🏆</div>
+                    <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No badges earned yet</div>
+                    <div style={{fontSize:13}}>Complete fitness milestones to earn badges and unlock achievements</div>
+                  </div>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
+                    {grouped.map(g => {
+                      // ── CREDENTIAL: holographic prestige look ──
+                      if (g.renderType === "credential") {
+                        return (
+                          <div key={g.key} style={{
+                            borderRadius:16,
+                            padding:"16px 10px",
+                            textAlign:"center",
+                            position:"relative",
+                            overflow:"hidden",
+                            border:"2px solid transparent",
+                            background: `
+                              linear-gradient(#0A0A14, #0A0A14) padding-box,
+                              linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
+                            `,
+                            boxShadow:"0 0 24px rgba(120, 115, 245, 0.4)",
+                          }}>
+                            {/* Holographic overlay */}
+                            <div style={{
+                              position:"absolute",inset:0,pointerEvents:"none",
+                              background:"linear-gradient(125deg, rgba(255,110,196,0.08), rgba(120,115,245,0.12), rgba(74,222,128,0.08), rgba(250,204,21,0.1))",
+                              backgroundSize:"200% 200%",
+                              animation:"holoShimmer 5s ease infinite",
+                            }} />
+                            <div style={{position:"relative"}}>
+                              <div style={{fontSize:34,marginBottom:6}}>{g.emoji}</div>
+                              <div style={{fontWeight:900,fontSize:13,color:"#F0F0F0",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
+                              <div style={{fontSize:10,color:"#A78BFA",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+                              <div style={{display:"inline-block",
+                                background:"linear-gradient(90deg, #ff6ec4, #7873f5, #4ade80, #facc15)",
+                                backgroundSize:"200% 200%",
+                                animation:"holoShimmer 5s ease infinite",
+                                borderRadius:99,padding:"2px 10px",
+                                fontSize:9,fontWeight:900,color:"#0A0A14",letterSpacing:0.8}}>
+                                CREDENTIAL
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // ── YEARLY: year-stamped birthday/etc badges ──
+                      if (g.renderType === "yearly") {
+                        return (
+                          <div key={g.key} style={{
+                            borderRadius:16,
+                            padding:"16px 10px",
+                            textAlign:"center",
+                            position:"relative",
+                            overflow:"hidden",
+                            border:"2px solid #F472B6",
+                            background:"linear-gradient(135deg, #4C1D4D, #2B1550, #183B4E)",
+                            animation:"birthdayPulse 3s ease-in-out infinite",
+                          }}>
+                            {/* Big year stamp */}
+                            {g.year && (
+                              <div style={{position:"absolute",top:6,right:8,
+                                fontSize:11,fontWeight:900,
+                                color:"#FFD1E6",letterSpacing:1,
+                                textShadow:"0 0 8px rgba(244,114,182,0.6)"}}>
+                                {g.year}
+                              </div>
+                            )}
+                            <div style={{fontSize:34,marginBottom:6}}>{g.emoji}</div>
+                            <div style={{fontWeight:900,fontSize:12,color:"#FFE5F1",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
+                            <div style={{fontSize:10,color:"#F9A8D4",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+                            <div style={{display:"inline-block",
+                              background:"rgba(244,114,182,0.25)",
+                              borderRadius:99,padding:"2px 10px",
+                              fontSize:9,fontWeight:900,color:"#FFD1E6",letterSpacing:0.8}}>
+                              🎂 YEARLY
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // ── PROGRESSION: tiered bronze/silver/gold/platinum/etc ──
+                      // Rendered via the BadgeTile component (see components/BadgeTile.tsx)
+                      // which adds per-category sigil patterns, tier ornamentation rings,
+                      // continuous shimmer, and orbiting sparkles on high tiers.
+                      // Wrapped in a button so tapping opens the pin-menu sheet.
+                      return (
+                        <div key={g.key} style={{ position: "relative" }}>
+                          {g.badge_row_id && (
+                            <button
+                              aria-label="Pin options"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPinMenuFor({
+                                  badgeRowId: g.badge_row_id!,
+                                  currentSlot: g.pin_slot ?? null,
+                                  label: g.label,
+                                });
+                              }}
+                              style={{
+                                position: "absolute", top: 6, right: 6, zIndex: 5,
+                                width: 26, height: 26, borderRadius: 999,
+                                background: g.pin_slot != null ? "#7C3AED" : "rgba(0,0,0,0.55)",
+                                border: "none", color: "#fff",
+                                cursor: "pointer", fontSize: 13, lineHeight: 1,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >{g.pin_slot != null ? "📌" : "⋯"}</button>
+                          )}
+                          <BadgeTile
+                            tier={g.tier ?? 1}
+                            emoji={g.emoji}
+                            label={g.label}
+                            desc={g.desc}
+                            category={g.category}
+                            earnedCount={g.earnedCount}
+                            maxTier={g.maxTier}
+                            progress={
+                              g.currentValue !== undefined && g.progressLabel
+                                ? {
+                                    current: g.currentValue,
+                                    next: g.nextThreshold ?? null,
+                                    label: g.progressLabel,
+                                    isMaxed: g.isMaxed ?? false,
+                                  }
+                                : undefined
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                    {/* Challenge completion badges still get their own gold tiles */}
+                    {completedChallenges.map((cp: any, i: number) => {
+                      const ch = cp.challenges;
+                      if (!ch) return null;
+                      const style = TIER_STYLES[3];
+                      return (
+                        <div key={`challenge-${i}`} style={{
+                          borderRadius:16,
+                          padding:"16px 10px",
+                          textAlign:"center",
+                          border:`1.5px solid ${style.border}`,
+                          background: style.gradient,
+                          boxShadow:`0 0 16px ${style.glow}`,
+                          display:"flex",flexDirection:"column",
+                          alignItems:"center",justifyContent:"center",
+                        }}>
+                          <div style={{fontSize:32,marginBottom:6}}>{ch.emoji || '🏆'}</div>
+                          <div style={{fontWeight:800,fontSize:11,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{ch.name}</div>
+                          <div style={{fontSize:9,color:style.accentColor,lineHeight:1.3}}>Score: {cp.score}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {badgesTab === "rivals" && (
+                rivalryCount === 0 ? (
+                  <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
+                    <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
+                    <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No rival badges yet</div>
+                    <div style={{fontSize:13}}>Badges earned in 1v1 rivalries will show here. One person per badge per rivalry.</div>
+                  </div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {rivalryBadges.map(rb => {
+                      // Rivalry badges use a fixed crimson/purple style (from the rivals page catalog)
+                      return (
+                        <div key={rb.id} style={{
+                          borderRadius:16,
+                          padding:"14px 16px",
+                          border:"1.5px solid #B91C1C",
+                          background:"linear-gradient(135deg,#1A0000,#3B0A0A)",
+                          boxShadow:"0 0 16px rgba(239,68,68,0.3)",
+                          display:"flex",alignItems:"center",gap:14,
+                        }}>
+                          <div style={{
+                            width:48,height:48,borderRadius:12,flexShrink:0,
+                            background:"rgba(239,68,68,0.15)",
+                            border:"1px solid rgba(239,68,68,0.4)",
+                            display:"flex",alignItems:"center",justifyContent:"center",
+                            fontSize:22,
+                          }}>
+                            {rivalryBadgeEmoji(rb.badge_key)}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:900,fontSize:13,color:"#FCA5A5",marginBottom:2}}>
+                              {rivalryBadgeLabel(rb.badge_key)}
+                            </div>
+                            <div style={{fontSize:11,color:"#9CA3AF",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                              vs {rb.opponent_name} · {rb.category}
+                            </div>
+                            <div style={{fontSize:10,color:"#6B7280"}}>
+                              {new Date(rb.earned_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* Customizations Modal — shows unlocked rewards across all 6 levels */}
+      {showCustomizations && (() => {
+        const userLvl = progressInfo?.level ?? 1;
+        // ── Cosmetic Level Rewards ──────────────────────────────────────────
+        // Themed metal/gem progression — each tier unlocks a visual effect on
+        // the profile UI (avatar ring, name treatment, or activity cards).
+        // Effects are gated on `userLvl >= reward.level` and applied via
+        // conditional CSS classes throughout this component.
+        // The level 3 "animated avatar ring" is the closest the app gets to
+        // your "Harry Potter moving picture" idea — a slow rotating gradient.
+        const REWARDS: Array<{ level: number; title: string; desc: string; emoji: string; preview: string; color: string }> = [
+          { level: 2, title: "Bronze Tier",    desc: "Bronze-tinted glow on activity log cards. Your first metal.",                                emoji: "🥉", preview: "bronze",  color: "#CD7F32" },
+          { level: 3, title: "Silver Halo",    desc: "Animated silver ring orbits your profile picture — a gentle motion that catches the eye.",  emoji: "🥈", preview: "silver",  color: "#C0C0C0" },
+          { level: 4, title: "Golden Glow",    desc: "Warm gold shimmer sweeps across your name and activity cards.",                              emoji: "🥇", preview: "gold",    color: "#FFD700" },
+          { level: 5, title: "Emerald Shine",  desc: "Emerald-green light pulses through your activity cards. Rare territory.",                    emoji: "💚", preview: "emerald", color: "#10B981" },
+          { level: 6, title: "Diamond Crown",  desc: "MAX. Diamond shimmer on cards + holographic name — the Livelee elite mark.",                emoji: "💎", preview: "diamond", color: "#67E8F9" },
+        ];
+        return (
+          <div onClick={() => { setShowCustomizations(false); setCustomizationDetail(null); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          >
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ background: "#0E0820", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "20px 20px 32px", width: "100%", maxWidth: 540, maxHeight: "85vh", overflowY: "auto", border: "1px solid #2D1F52" }}
+            >
+              {/* Drag handle */}
+              <div style={{ width: 40, height: 4, background: "#2D1F52", borderRadius: 99, margin: "0 auto 16px" }} />
+
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 22, color: C.text }}>✨ Customizations</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>Auto-applied as you level up.</div>
+                </div>
+                <button onClick={() => setShowCustomizations(false)} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.10)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>x</button>
+              </div>
+
+              {/* Detail view */}
+              {customizationDetail !== null ? (() => {
+                const reward = REWARDS.find(r => r.level === customizationDetail);
+                if (!reward) return null;
+                const unlocked = userLvl >= reward.level;
+                return (
+                  <div>
+                    <button onClick={() => setCustomizationDetail(null)} style={{ background: "none", border: "none", color: "#A78BFA", fontSize: 13, fontWeight: 700, padding: 0, marginBottom: 16, cursor: "pointer" }}>
+                      ← Back to all rewards
+                    </button>
+                    <div style={{ background: unlocked ? `linear-gradient(135deg, ${reward.color}33, ${reward.color}11)` : "rgba(255,255,255,0.04)", borderRadius: 18, padding: 24, border: `1.5px solid ${unlocked ? reward.color : "#2D1F52"}`, marginBottom: 16 }}>
+                      <div style={{ fontSize: 48, textAlign: "center", marginBottom: 12 }}>{reward.emoji}</div>
+                      <div style={{ fontWeight: 900, fontSize: 20, color: C.text, textAlign: "center", marginBottom: 6 }}>{reward.title}</div>
+                      <div style={{ fontSize: 13, color: C.sub, textAlign: "center", marginBottom: 16 }}>Unlocks at Level {reward.level}</div>
+                      <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6, textAlign: "center" }}>{reward.desc}</div>
+                    </div>
+                    {unlocked ? (
+                      <div style={{ background: "rgba(16,185,129,0.12)", border: "1.5px solid #10B981", borderRadius: 14, padding: "14px 18px", textAlign: "center" }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#34D399" }}>✓ Unlocked & active</div>
+                      </div>
+                    ) : (
+                      <div style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid #2D1F52", borderRadius: 14, padding: "14px 18px", textAlign: "center" }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#9CA3AF" }}>🔒 Reach Level {reward.level} to unlock</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+                /* List view */
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {REWARDS.map(reward => {
+                    const unlocked = userLvl >= reward.level;
+                    return (
+                      <button key={reward.level} onClick={() => setCustomizationDetail(reward.level)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
+                          background: unlocked ? `linear-gradient(135deg, ${reward.color}1F, ${reward.color}0A)` : "rgba(255,255,255,0.03)",
+                          border: `1.5px solid ${unlocked ? reward.color : "#2D1F52"}`,
+                          borderRadius: 14, cursor: "pointer", textAlign: "left" as const,
+                          opacity: unlocked ? 1 : 0.65,
+                        }}
+                      >
+                        <div style={{ fontSize: 28, flexShrink: 0, filter: unlocked ? "none" : "grayscale(100%)" }}>{reward.emoji}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                            <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{reward.title}</div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: unlocked ? reward.color : "#6B7280", padding: "2px 7px", borderRadius: 99, background: unlocked ? `${reward.color}22` : "rgba(255,255,255,0.06)" }}>
+                              LVL {reward.level}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.4 }}>{reward.desc}</div>
+                        </div>
+                        <div style={{ fontSize: 16, color: unlocked ? "#10B981" : "#6B7280", flexShrink: 0 }}>
+                          {unlocked ? "✓" : "🔒"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <div style={{ fontSize: 11, color: C.sub, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>
+                    More cosmetic rewards coming soon.<br/>
+                    Got an idea? Send feedback from Settings.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Level Progress Modal — v2 (6-level XP + challenges system) */}
+      {showLevelModal && progressInfo && counterData && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
+          display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={e=>{if(e.target===e.currentTarget)setShowLevelModal(false);}}>
+          <div style={{background:"#111118",borderRadius:"24px 24px 0 0",width:"100%",
+            maxWidth:560,maxHeight:"85vh",overflowY:"auto",padding:"24px 20px 48px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontWeight:900,fontSize:22,color:"#F0F0F0"}}>⚡ Your Level</div>
+              <button onClick={()=>setShowLevelModal(false)} style={{background:"none",border:"none",
+                color:"#6B7280",fontSize:26,cursor:"pointer",lineHeight:1}}>×</button>
+            </div>
+
+            {/* ── Current level + XP bar ─────────────────────────────────── */}
+            {(() => {
+              const lvlColors = LEVEL_COLORS[progressInfo.level];
+              const xpNeeded = progressInfo.xpNeeded;
+              return (
+                <div style={{
+                  background: `linear-gradient(135deg, ${lvlColors.badge}, #0E0820)`,
+                  borderRadius: 16, padding: "20px",
+                  border: `1px solid ${lvlColors.border}`,
+                  marginBottom: 18, textAlign: "center" as const,
+                  boxShadow: `0 0 32px ${lvlColors.glow}`,
+                }}>
+                  <div style={{fontSize:13,color:"#9CA3AF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase" as const}}>Current Level</div>
+                  <div style={{fontSize:54,fontWeight:900,color:lvlColors.accent,lineHeight:1,marginTop:4}}>
+                    {progressInfo.level}
+                  </div>
+                  {progressInfo.isMaxLevel ? (
+                    <div style={{marginTop:12,fontSize:14,fontWeight:800,color:lvlColors.badgeText}}>
+                      💀 MAX LEVEL — Legendary Status
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{margin:"14px 0 6px",height:10,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:99,background:lvlColors.accent,
+                          width:`${progressInfo.xpPercent}%`,transition:"width 0.5s ease"}}/>
+                      </div>
+                      <div style={{fontSize:13,color:"#F0F0F0",fontWeight:700}}>
+                        {progressInfo.xpInLevel} <span style={{color:"#9CA3AF",fontWeight:600}}>/ {xpNeeded} XP</span>
+                      </div>
+                      <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>toward Level {progressInfo.level + 1}</div>
+                      {progressInfo.readyToLevelUp && (
+                        <div style={{marginTop:10,padding:"8px 12px",background:"rgba(16,185,129,0.15)",
+                          border:"1px solid #10B981",borderRadius:10,fontSize:12,color:"#10B981",fontWeight:800}}>
+                          ✨ Ready to level up!
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── How to earn XP ─────────────────────────────────────────── */}
+            <div style={{background:"#1A1228",borderRadius:14,padding:"14px 16px",
+              border:"1px solid #2D1F52",marginBottom:18}}>
+              <div style={{fontWeight:800,fontSize:13,color:"#F0F0F0",marginBottom:10}}>
+                🎯 How to earn XP
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {XP_CATEGORIES.map(cat => {
+                  const done = todayXpCategories.has(cat.key);
+                  return (
+                    <div key={cat.key} style={{
+                      display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"7px 10px",
+                      background: done ? "linear-gradient(135deg, rgba(124,58,237,0.45), rgba(167,139,250,0.30))" : "#0E0820",
+                      borderRadius:8,
+                      border: done ? "1px solid #A78BFA" : "1px solid #2D1F52",
+                      boxShadow: done ? "0 0 8px rgba(167,139,250,0.35)" : "none",
+                      transition: "all 0.2s",
+                    }}>
+                      <span style={{fontSize:12,color:"#F0F0F0",fontWeight:done?700:400}}>
+                        {cat.icon} {cat.label} {done && <span style={{fontSize:11,marginLeft:4}}>✓</span>}
+                      </span>
+                      <span style={{fontSize:11,fontWeight:800,color:done?"#FFFFFF":"#A78BFA"}}>+{cat.xp}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:10,color:"#6B7280",marginTop:8,textAlign:"center" as const}}>
+                Max 3 XP per category per day · 15 XP/day max · XP resets on level up
+              </div>
+            </div>
+
+            {/* ── Level navigator (1-6) ──────────────────────────────────── */}
+            <div style={{fontWeight:800,fontSize:13,color:"#9CA3AF",marginBottom:8,letterSpacing:"0.06em",textTransform:"uppercase" as const}}>
+              Level Breakdown
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" as const}}>
+              {([1,2,3,4,5,6] as Level[]).map(lvl => {
+                const isCurrent = lvl === progressInfo.level;
+                const isComplete = lvl < progressInfo.level;
+                const isSelected = lvl === modalSelectedLevel;
+                const lvlColors = LEVEL_COLORS[lvl];
+                return (
+                  <button key={lvl} onClick={()=>setModalSelectedLevel(lvl)} style={{
+                    flex:"1 0 auto",minWidth:50,padding:"10px 4px",borderRadius:10,cursor:"pointer",
+                    background: isSelected ? lvlColors.badge : "#0E0820",
+                    border: `2px solid ${isSelected ? lvlColors.accent : isCurrent ? lvlColors.accent : "#2D1F52"}`,
+                    color: isSelected ? lvlColors.accent : isCurrent ? lvlColors.accent : "#9CA3AF",
+                    fontSize:14, fontWeight:900, position:"relative" as const,
+                    transition: "all 0.15s",
+                  }}>
+                    {lvl}
+                    {isComplete && (
+                      <div style={{position:"absolute" as const,top:2,right:4,fontSize:9,color:"#10B981"}}>✓</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Selected level details ─────────────────────────────────── */}
+            {modalSelectedLevel && (() => {
+              const sel = modalSelectedLevel;
+              const isPureXp = sel <= 2;
+              const xpForReachingThis = sel === 1 ? 0 : (XP_FOR_NEXT[(sel - 1) as Level] ?? 0);
+              const challenges = sel >= 3 && sel <= 6 ? LEVEL_CHALLENGES[sel as 3|4|5|6] : [];
+              const showLiveProgress = sel === progressInfo.level + 1; // only "next level" gets live data
+              const lvlColors = LEVEL_COLORS[sel];
+              const reached = sel <= progressInfo.level;
+              return (
+                <div style={{background:"#0E0820",borderRadius:14,padding:"16px",
+                  border:`1.5px solid ${lvlColors.border}`,marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <div style={{fontWeight:900,fontSize:16,color:lvlColors.accent}}>
+                      Level {sel} {sel === 6 && "— MAX"}
+                    </div>
+                    {reached ? (
+                      <div style={{padding:"3px 10px",borderRadius:99,background:"rgba(16,185,129,0.15)",
+                        color:"#10B981",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>REACHED</div>
+                    ) : showLiveProgress ? (
+                      <div style={{padding:"3px 10px",borderRadius:99,background:lvlColors.badge,
+                        color:lvlColors.accent,fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>NEXT UP</div>
+                    ) : (
+                      <div style={{padding:"3px 10px",borderRadius:99,background:"#1A1228",
+                        color:"#6B7280",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>LOCKED</div>
+                    )}
+                  </div>
+
+                  {sel === 1 && (
+                    <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>
+                      Starting level. Earn 36 XP to reach Level 2.
+                    </div>
+                  )}
+                  {sel === 2 && (
+                    <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>
+                      Need <strong style={{color:"#F0F0F0"}}>60 XP</strong> from Level 2 to advance to Level 3.
+                      No challenges yet — pure XP.
+                    </div>
+                  )}
+                  {sel >= 3 && (
+                    <>
+                      <div style={{fontSize:12,color:"#9CA3AF",marginBottom:12,lineHeight:1.5}}>
+                        Need <strong style={{color:"#F0F0F0"}}>{xpForReachingThis} XP</strong> from Level {sel - 1}{" "}
+                        AND complete all challenges below:
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column" as const,gap:6}}>
+                        {challenges.map(ch => {
+                          // Show live progress only for the level user is currently working toward
+                          const live = showLiveProgress && counterData ? ch.progress(counterData) : null;
+                          const have = live?.have ?? 0;
+                          const need = live?.need ?? 1;
+                          const complete = live ? have >= need : false;
+                          return (
+                            <div key={ch.key} style={{
+                              display:"flex",alignItems:"center",gap:10,
+                              padding:"9px 12px",
+                              background: complete ? "rgba(16,185,129,0.1)" : "#1A1228",
+                              border: `1px solid ${complete ? "#10B981" : "#2D1F52"}`,
+                              borderRadius:10,
+                            }}>
+                              <div style={{
+                                width:22,height:22,borderRadius:"50%",flexShrink:0,
+                                display:"flex",alignItems:"center",justifyContent:"center",
+                                background: complete ? "#10B981" : "#2D1F52",
+                                color: complete ? "#0E0820" : "#9CA3AF",
+                                fontSize:11, fontWeight:900,
+                              }}>{complete ? "✓" : ch.icon}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:700,color:"#F0F0F0"}}>{ch.label}</div>
+                                {live && (
+                                  <div style={{marginTop:3,height:4,borderRadius:99,background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
+                                    <div style={{
+                                      height:"100%",borderRadius:99,
+                                      background: complete ? "#10B981" : lvlColors.accent,
+                                      width: `${Math.min(100, Math.round((have/need)*100))}%`,
+                                      transition:"width 0.5s ease",
+                                    }}/>
+                                  </div>
+                                )}
+                              </div>
+                              {live && (
+                                <div style={{flexShrink:0,fontSize:11,fontWeight:800,
+                                  color: complete ? "#10B981" : "#A78BFA",fontVariantNumeric:"tabular-nums" as any}}>
+                                  {have}/{need}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {editProfile && (
+        <div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.white,borderRadius:28,padding:32,width:"100%",maxWidth:440,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:20}}>Edit Profile</div>
+            <input style={inputStyle} value={profile.name} onChange={e=>setProfile(p=>({...p,name:e.target.value}))} placeholder="Full Name"/>
+            <input style={inputStyle} value={profile.username} onChange={e=>setProfile(p=>({...p,username:e.target.value}))} placeholder="Username"/>
+            <textarea style={{...inputStyle,resize:"none"}} rows={3} value={profile.bio} onChange={e=>setProfile(p=>({...p,bio:e.target.value}))} placeholder="Bio"/>
+            <input style={inputStyle} value={profile.city} onChange={e=>setProfile(p=>({...p,city:e.target.value}))} placeholder="City (e.g. Las Vegas, NV)"/>
+            {(user?.profile as any)?.account_type === 'business' && (
+              <>
+                <input style={inputStyle} value={(user?.profile as any)?.business_name || ''} readOnly placeholder="Business Name" />
+                <input style={inputStyle} value={(user?.profile as any)?.business_website || ''} readOnly placeholder="Website URL" />
+              </>
+            )}
+            <div style={{display:"flex",gap:12,marginTop:8}}>
+              <button onClick={()=>setEditProfile(false)} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+              <button onClick={async()=>{
+                if(!user)return;
+                await supabase.from('users').update({full_name:profile.name,username:profile.username,bio:profile.bio,city:profile.city} as any).eq('id',user.id);
+                await refreshProfile();
+                setEditProfile(false);
+              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {highlightLb && (
+        <Lightbox
+          src={highlightLb}
+          photos={feedPhotos}
+          onChange={(s) => setHighlightLb(s)}
+          onClose={() => setHighlightLb(null)}
+        />
+      )}
+
+      {showAllPhotos && (
+        <AllPhotosModal
+          photos={feedPhotos}
+          onClose={() => setShowAllPhotos(false)}
+          onSelectPhoto={(p) => setHighlightLb(p)}
+        />
+      )}
+
+      {showTaggedPosts && user && (
+        <TaggedPostsModal
+          userId={user.id}
+          displayName={profile.name || user.email || "You"}
+          isOwnProfile={true}
+          onClose={() => setShowTaggedPosts(false)}
+        />
+      )}
+
+      <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
+
+        {/* Profile header */}
+        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:24,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
+          {/* Avatar */}
+          {/* Desktop-only nudge: shifted left/down to improve visual balance
+              with the banner. Mobile centering is unchanged.
+              Children stack with alignItems: "center" so name/handle/city
+              text sits centered under the round profile photo. */}
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:-60,marginTop:isMobile?0:96}}>
+            {/* Silver halo wrap — slow rotating conic-gradient ring around the
+                avatar at Level 3+. Adds the "moving picture" magic without
+                requiring video uploads. Wrap is conditional so lower-level
+                users see a clean avatar with no extra padding. */}
+            <div className={(progressInfo?.level ?? 1) >= 3 ? "tier-silver-avatar-wrap" : ""} style={{
+              position:"relative",
+              cursor: avatarRepositionMode ? "ns-resize" : (profileImg ? "pointer" : "default"),
+              userSelect:"none",
+            }}
+              onMouseDown={handleAvatarMouseDown}
+              onMouseMove={handleAvatarMouseMove}
+              onMouseUp={handleAvatarMouseUp}
+              onMouseLeave={handleAvatarMouseUp}
+              onClick={() => {
+                // Tap-to-view-full. Skipped while repositioning (the
+                // mouseDown/Move/Up handlers above already drive that
+                // gesture and the click that fires on mouseUp without
+                // significant drag would otherwise pop the lightbox
+                // mid-reposition). Also skipped when there's no image
+                // — the upload label inside takes care of that case.
+                if (avatarRepositionMode) return;
+                if (profileImg) setPageLb(profileImg);
+              }}
+            >
+              <TierFrame tier={userTier} size={avatarSize}>
+              {profileImg
+                ? <img src={ImagePresets.full(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,transform:`scale(${avatarScale/100})`,transformOrigin:"center center",display:"block",pointerEvents:"none",transition:avatarDragState?"none":"transform 0.1s, object-position 0.1s"}} alt="Profile"/>
+                : <div style={{width:avatarSize-32,height:avatarSize-32,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+              </TierFrame>
+              {/* When no image, make whole circle a label */}
+              {!profileImg && !avatarRepositionMode && (
+                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+                  <span style={{fontSize:13}}>📷</span>
+                </label>
+              )}
+              {/* Camera button always visible at bottom right when not repositioning.
+                  stopPropagation so a click on the camera doesn't ALSO open the
+                  lightbox (the wrapper's onClick would otherwise fire). */}
+              {!avatarRepositionMode && (
+                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+                  📷
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+                </label>
+              )}
+              {/* Reposition button — show when image exists and not in reposition mode.
+                  Hidden on mobile via .hide-on-mobile — touch UX will handle this differently later. */}
+              {profileImg && !avatarRepositionMode && user && (
+                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(true);}}
+                  style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
+                  <span style={{fontSize:11}}>↕</span>
+                  <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
+                </button>
+              )}
+              {/* Reposition mode controls — bottom of avatar circle. Slider
+                  lives BELOW the avatar (in the column wrapper) so it
+                  doesn't overlay the image. */}
+              {avatarRepositionMode && (
+                <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,borderRadius:"50%",background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px",zIndex:10,pointerEvents:"none"}}>
+                  <div style={{background:"rgba(0,0,0,0.7)",borderRadius:20,padding:"4px 12px",color:"#fff",fontSize:10,fontWeight:700}}>↕ Drag to move</div>
+                </div>
+              )}
+            </div>
+            {/* Avatar zoom + save controls — outside the circle so the
+                slider has room. Only shown in reposition mode. */}
+            {avatarRepositionMode && (
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%",maxWidth:300}}>
+                <div style={{background:"rgba(0,0,0,0.85)",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:8,width:"100%"}}>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarScale(s=>Math.max(100,s-10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 4px",lineHeight:1}}>−</button>
+                  <input type="range" min={100} max={300} step={1} value={avatarScale} onChange={e=>setAvatarScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#7C3AED"}}/>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarScale(s=>Math.min(300,s+10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 4px",lineHeight:1}}>+</button>
+                  <span style={{color:"#fff",fontSize:10,fontWeight:700,minWidth:32,textAlign:"right"}}>{Math.round(avatarScale)}%</span>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarPosition(50);setAvatarScale(100);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 10px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Reset</button>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(false);setAvatarDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Cancel</button>
+                </div>
+              </div>
+            )}
+            <div style={{textAlign:"center",width:"100%"}}>
+              {/* Profile name with tier treatments. L4 Gold gets a shimmering
+                  gold gradient. L6 Diamond gets a holographic chrome effect.
+                  L1-L3 + L5 use the plain white text. The CSS classes apply
+                  background-clip text fill — the actual text content stays
+                  the user's name. */}
+              {(() => {
+                const lvl = progressInfo?.level ?? 1;
+                const nameClass =
+                  lvl >= 6 ? "tier-diamond-name" :
+                  lvl >= 4 ? "tier-gold-name"   : "";
+                return (
+                  <div className={nameClass} style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>
+                    {profile.name}
+                  </div>
+                );
+              })()}
+              {profile.username && (
+                <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
+              )}
+              {/* LEVEL pill removed — already shown in floating XP badge */}
+              {profile.city && (
+                <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
+              )}
+
+              {(user?.profile as any)?.account_type === 'business' && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
+                  <span style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
+                    🏢 {(user?.profile as any)?.business_type || 'Business'}
+                  </span>
+                  {(user?.profile as any)?.business_website && (
+                    <a href={(user?.profile as any)?.business_website} target="_blank" rel="noopener noreferrer"
+                      style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
+                      🔗 Website
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Banner + stats */}
+          <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
+            <div
+              className="profile-banner-label"
+              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":(bannerImg?"pointer":"default"),userSelect:"none"}}
+              onMouseEnter={()=>setBannerHovered(true)}
+              onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
+              onMouseDown={handleBannerMouseDown}
+              onMouseMove={handleBannerMouseMove}
+              onMouseUp={handleBannerMouseUp}
+              onTouchStart={e=>{ if(!repositionMode)return; setDragState({startY:e.touches[0].clientY,startPos:bannerPosition}); }}
+              onTouchMove={handleBannerTouchMove}
+              onTouchEnd={()=>setDragState(null)}
+              onClick={() => {
+                // Tap-to-view-full for the banner. Same logic as the
+                // avatar: skipped during repositioning, no-op when no
+                // banner has been uploaded.
+                if (repositionMode) return;
+                if (bannerImg) setPageLb(bannerImg);
+              }}
+            >
+              {bannerImg
+                ? <img src={ImagePresets.full(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transform:`scale(${bannerScale/100})`,transformOrigin:"center center",transition:dragState?"none":"transform 0.1s, object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
+                : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
+              {/* Reposition button — show on hover or when in reposition mode.
+                  Hidden on mobile via .hide-on-mobile (touch UX later).
+                  stopPropagation so the wrapper's onClick doesn't ALSO
+                  open the lightbox when this is tapped. */}
+              {bannerImg && !repositionMode && (bannerHovered || true) && user && (
+                <button
+                  className="hide-on-mobile"
+                  onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(true);}}
+                  style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:6,zIndex:5}}
+                >
+                  <span style={{fontSize:12}}>↕</span>
+                  <span style={{color:"#fff",fontSize:11,fontWeight:700}}>Reposition</span>
+                </button>
+              )}
+              {/* Reposition mode controls */}
+              {repositionMode && (
+                <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",zIndex:10,pointerEvents:"none"}}>
+                  <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"4px 14px",color:"#fff",fontSize:11,fontWeight:700}}>↕ Drag to reposition</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"all",width:"100%",maxWidth:360}}>
+                    {/* Zoom slider — 100% to 300%. Click increments via the
+                        − / + buttons for precise control. */}
+                    <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,width:"100%"}}>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerScale(s=>Math.max(100,s-10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 6px",lineHeight:1}}>−</button>
+                      <input type="range" min={100} max={300} step={1} value={bannerScale} onChange={e=>setBannerScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#7C3AED"}}/>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerScale(s=>Math.min(300,s+10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 6px",lineHeight:1}}>+</button>
+                      <span style={{color:"#fff",fontSize:11,fontWeight:700,minWidth:36,textAlign:"right"}}>{Math.round(bannerScale)}%</span>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerPosition(50);setBannerScale(100);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Reset</button>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#7C3AED",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(false);setDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Done</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Always-visible camera button overlay for banner.
+                  stopPropagation so click doesn't open the lightbox. */}
+              {!repositionMode && (
+                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
+                  <span style={{fontSize:16}}>📷</span>
+                  <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
+                </label>
+              )}
+            </div>
+
+            <div className="profile-stats-bio">
+            {profile.bio && (
+              <div style={{
+                position:"relative",
+                fontSize:16,
+                fontWeight:500,
+                color:C.text,
+                lineHeight:1.55,
+                marginBottom:18,
+                padding:"14px 16px 14px 20px",
+                background:"#1A1228",
+                borderRadius:14,
+                borderLeft:`3px solid ${C.purple}`,
+              }}>
+                {profile.bio}
+              </div>
+            )}
+
+            <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:14,borderRadius:16,overflow:"hidden",border:"1px solid #2A3A2A"}}>
+              {[
+                {l:"Followers",v:user?.profile?.followers_count??0,onClick:()=>openSocialModal("followers")},
+                {l:"Following",v:user?.profile?.following_count??0,onClick:()=>openSocialModal("following")},
+              ].map((s,i)=>(
+                <div key={s.l} onClick={s.onClick}
+                  style={{flex:1,textAlign:"center",cursor:"pointer",padding:"14px 10px",background:"#111811",transition:"background 0.15s",position:"relative",borderLeft:i>0?"1px solid #2A3A2A":"none"}}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.background="#1A2A1A"}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background="#111811"}}>
+                  <div style={{fontSize:26,fontWeight:900,color:C.purple,lineHeight:1,letterSpacing:-1}}>{s.v.toLocaleString()}</div>
+                  <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"flex", gap:8, width:"100%"}}>
+              <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
+                onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
+                onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
+                ✏️ Edit Profile
+              </button>
+              <button onClick={shareProfile} aria-label="Share profile" style={{
+                padding:"11px 14px", borderRadius:14, border:`1.5px solid ${C.purple}`,
+                background: "transparent", color: C.purple,
+                fontWeight: 800, fontSize: 14, cursor: "pointer",
+                flexShrink: 0, transition: "all 0.15s",
+              }}>
+                {profileShareCopied ? "✓ Copied" : "🔗 Share"}
+              </button>
+            </div>
+            </div>{/* end profile-stats-bio */}
+          </div>
+        </div>
+
+        {/* 3-column */}
+        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(200px,240px) 1fr minmax(200px,240px)",gap:16,alignItems:"start"}}>
+
+          {/* LEFT — Highlights + Level Progress */}
+          <div style={{paddingTop:44}}>
+            {/* Level progress card — v2 (6-level system) */}
+            <button onClick={()=>setShowLevelModal(true)} style={{
+              width:"100%",marginBottom:12,
+              background: progressInfo
+                ? `linear-gradient(135deg, ${LEVEL_COLORS[progressInfo.level].badge}, rgba(14,8,32,0.8))`
+                : "rgba(124,58,237,0.10)",
+              border: progressInfo
+                ? `1.5px solid ${LEVEL_COLORS[progressInfo.level].border}`
+                : "1.5px solid rgba(124,58,237,0.35)",
+              borderRadius:16,padding:"14px 16px",cursor:"pointer",textAlign:"left" as const,
+              boxShadow: progressInfo ? `0 0 16px ${LEVEL_COLORS[progressInfo.level].glow}` : "none",
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:13,color:C.text}}>
+                  ⚡ Level {progressInfo?.level ?? 1} Progress
+                </div>
+                <span style={{fontSize:11,fontWeight:700,
+                  color: progressInfo ? LEVEL_COLORS[progressInfo.level].accent : "#7C3AED"}}>
+                  {progressInfo?.isMaxLevel ? "MAX" : `${progressInfo?.xpInLevel ?? 0}/${progressInfo?.xpNeeded ?? 36} XP`}
+                </span>
+              </div>
+              <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden",marginBottom:6}}>
+                <div style={{height:"100%",borderRadius:99,
+                  background: progressInfo
+                    ? `linear-gradient(90deg, ${LEVEL_COLORS[progressInfo.level].accent}, #A78BFA)`
+                    : "linear-gradient(90deg,#7C3AED,#A78BFA)",
+                  width:`${progressInfo?.xpPercent ?? 0}%`,transition:"width 0.5s ease"}}/>
+              </div>
+              {progressInfo?.readyToLevelUp ? (
+                <div style={{fontSize:10,color:"#10B981",fontWeight:800,textAlign:"center" as const}}>
+                  ✨ Ready to level up — tap to confirm
+                </div>
+              ) : progressInfo?.isMaxLevel ? (
+                <div style={{fontSize:10,color:LEVEL_COLORS[6].accent,fontWeight:700,textAlign:"center" as const}}>
+                  MAX LEVEL ✦ Tap for details
+                </div>
+              ) : (
+                <div style={{fontSize:10,color:C.sub,textAlign:"center" as const}}>
+                  Tap to see what's needed for next level →
+                </div>
+              )}
+            </button>
+
+            {/* Customizations panel — shows what's unlocked at each level */}
+            <button
+              onClick={() => setShowCustomizations(true)}
+              style={{
+                width: "100%",
+                marginBottom: 12,
+                background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(167,139,250,0.10))",
+                border: "1.5px solid rgba(167,139,250,0.45)",
+                borderRadius: 16,
+                padding: "14px 16px",
+                cursor: "pointer",
+                textAlign: "left" as const,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: C.text }}>
+                  ✨ Customizations
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA" }}>
+                  {(() => {
+                    const lvl = progressInfo?.level ?? 1;
+                    const unlockedCount = [2, 3, 4, 5, 6].filter(l => lvl >= l).length;
+                    return `${unlockedCount}/5 unlocked`;
+                  })()}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: C.sub }}>
+                Tap to see your unlocked profile rewards →
+              </div>
+            </button>
+
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+              {/* Title row — just the heading + Edit toggle. The three
+                  navigation buttons (All Photos / Tagged In / Recaps) used
+                  to live here too, but with three of them the row wrapped
+                  awkwardly in the narrow profile column. They moved to a
+                  dedicated row below (see next div). */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights {highlights.length > 0 && <span style={{fontSize:12,color:C.sub,fontWeight:600,marginLeft:6}}>{highlights.length}</span>}</div>
+                <div style={{display:"flex",gap:6}}>
+                  {highlights.length > 0 && (
+                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
+                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
+                    </button>
+                  )}
+                  {highlights.length < HIGHLIGHT_SLOTS && (
+                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",border:"none",cursor:"pointer"}}>
+                      + Add
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Nav buttons row */}
+              <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+                <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
+                <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
+                <a href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</a>
+              </div>
+              {/* Highlights strip — horizontal scroll. Same component used by
+                  group highlights (HighlightsStrip from GroupHighlights.tsx).
+                  Auto-plays videos when scrolled into view, supports tap-to-
+                  unmute, opens lightbox on tap. We render an edit overlay on
+                  top when editingHighlights is true so users can remove items
+                  without losing the strip's visual flow. */}
+              {highlights.length === 0 ? (
+                <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(124,58,237,0.06)",color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:24}}>+</span>
+                  <span>Add highlights — photos and videos from your posts</span>
+                </button>
+              ) : editingHighlights ? (
+                // Edit mode: show items as small thumbnails with × buttons.
+                // We don't autoplay here so the user can focus on managing
+                // the list. Videos still show their first frame as a poster.
+                <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6}}>
+                  {highlights.map((src, idx) => {
+                    const isVid = isVideoUrl(src);
+                    return (
+                      <div key={src+idx} style={{position:"relative",flexShrink:0,width:96,height:96,borderRadius:10,overflow:"hidden",border:`1px solid ${C.purpleMid}`,background:"#000"}}>
+                        {isVid ? (
+                          <video src={src} muted playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        ) : (
+                          <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        )}
+                        {isVid && (
+                          <div style={{position:"absolute",bottom:4,right:4,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,fontWeight:800,padding:"1px 5px",borderRadius:99}}>▶</div>
+                        )}
+                        <button onClick={()=>removeHighlight(idx)} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.85)",border:"none",color:"#fff",fontSize:14,lineHeight:"22px",cursor:"pointer",padding:0}}>×</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <HighlightsStrip urls={highlights} />
+              )}
+            </div>
+
+            {/* Goals card — shows up to 5 active or past goals with progress
+                bars. Has Active/Past sub-toggle. +New opens an inline
+                creation modal (CreateGoalModal mounted at bottom of page).
+                Empty-state nudges the user to set their first goal. */}
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontWeight:900,fontSize:17,color:C.text}}>🎯 Goals</div>
+                <button
+                  onClick={()=>setShowGoalCreate(true)}
+                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}
+                >+ New</button>
+              </div>
+
+              {/* Active/Past toggle */}
+              <div style={{display:"flex",gap:4,marginBottom:14,background:"#0D0820",borderRadius:8,padding:3}}>
+                {([
+                  {key:"active",label:`Active${profileGoals.length?` (${profileGoals.length})`:""}`},
+                  {key:"past",  label:`Past${profilePastGoals.length?` (${profilePastGoals.length})`:""}`},
+                ] as const).map(t=>(
+                  <button key={t.key} onClick={()=>setProfileGoalsHistoryTab(t.key)} style={{
+                    flex:1,padding:"6px 4px",borderRadius:6,border:"none",cursor:"pointer",
+                    fontWeight:700,fontSize:11,
+                    background:profileGoalsHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                    color:profileGoalsHistoryTab===t.key?"#fff":"#9CA3AF",
+                  }}>{t.label}</button>
+                ))}
+              </div>
+
+              {(() => {
+                const list = profileGoalsHistoryTab === "active" ? profileGoals : profilePastGoals;
+                if (list.length === 0) {
+                  return (
+                    <div style={{textAlign:"center",padding:"16px 8px",color:C.sub,fontSize:12,lineHeight:1.5}}>
+                      {profileGoalsHistoryTab === "active"
+                        ? <>No active goals.<br/>Tap + New to set one.</>
+                        : <>No past goals yet.</>}
+                    </div>
+                  );
+                }
+                return (
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {list.slice(0, 5).map(g => {
+                      const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
+                      const isPast = profileGoalsHistoryTab === "past";
+                      const completedSuccessfully = g.is_completed === true;
+                      return (
+                        <div key={g.id} style={{
+                          background: isPast && completedSuccessfully ? "rgba(74,222,128,0.08)" : "#1A1228",
+                          borderRadius:14, padding:"10px 12px",
+                          border:`1px solid ${isPast && completedSuccessfully ? "#4ADE80" : "#3D2A6E"}`,
+                          opacity: isPast && !completedSuccessfully ? 0.7 : 1,
+                        }}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                            <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
+                            <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              {g.title}
+                            </div>
+                            <div style={{fontSize:10,fontWeight:800,color: completedSuccessfully ? "#4ADE80" : C.purple,flexShrink:0}}>
+                              {completedSuccessfully ? "✓ Done" : `${Math.round(g.current)}/${g.target}`}
+                            </div>
+                          </div>
+                          <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
+                            <div style={{
+                              height:"100%",
+                              width:`${pct}%`,
+                              background: completedSuccessfully
+                                ? "linear-gradient(90deg, #4ADE80, #22C55E)"
+                                : `linear-gradient(90deg, ${C.purple}, #A78BFA)`,
+                              borderRadius:99,
+                            }}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Templates card — Halo-3-file-share-style gallery of the
+                user's saved workout templates. Same visual rhythm as
+                Goals + Highlights. The TemplateGallery component owns
+                the card grid + preview modal; this wrapper just adds
+                the card chrome. + New routes to the post page where
+                the Build Template modal lives. */}
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontWeight:900,fontSize:17,color:C.text}}>💪 Templates</div>
+                <button
+                  onClick={() => router.push("/post?openBuilder=1")}
+                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",border:"none",cursor:"pointer"}}
+                >+ New</button>
+              </div>
+              {user && (
+                <TemplateGallery
+                  ownerId={user.id}
+                  isOwner={true}
+                  onCreateNew={() => router.push("/post?openBuilder=1")}
+                  onUseDay={(template, dayIndex) => {
+                    // Stash the picked day in sessionStorage and bounce
+                    // to /post — the post page reads it on mount and
+                    // pre-fills the workout form. Easier than
+                    // serializing all the exercises into the URL.
+                    try {
+                      sessionStorage.setItem("__template_pick", JSON.stringify({
+                        templateId: template.id,
+                        dayIndex,
+                      }));
+                    } catch {}
+                    router.push("/post?useTemplate=1");
+                  }}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* CENTER */}
+          <div>
+            <div style={{fontWeight:900,fontSize:20,color:C.text,marginBottom:16}}>Activity Log</div>
+            {loadingLogs ? (
+              <div style={{textAlign:"center",padding:"40px 0",color:C.sub}}>
+                <div style={{width:36,height:36,borderRadius:"50%",border:`4px solid ${C.purpleMid}`,borderTopColor:C.purple,animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}}/>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                <div style={{fontSize:14}}>Loading activity log...</div>
+              </div>
+            ) : (
+              <>
+                {/* Workout Progress Graphs — uses rawWorkoutLogs so each
+                    individual workout counts (multi-per-day no longer
+                    collapses to 1). The component handles month filtering
+                    internally. */}
+                {rawWorkoutLogs.length > 0 && (
+                  <div style={{background:C.white,borderRadius:16,padding:16,border:`1px solid ${C.purpleMid}`,marginBottom:20}}>
+                    <Suspense fallback={
+                      <div style={{
+                        height: 280,
+                        background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                        backgroundSize: "200% 100%",
+                        animation: "skeletonShimmer 1.4s ease-in-out infinite",
+                        borderRadius: 12,
+                      }} />
+                    }>
+                      <WorkoutProgressGraphs workouts={rawWorkoutLogs} />
+                    </Suspense>
+                  </div>
+                )}
+                {(()=>{
+                  const days = realDays.length > 0 ? realDays : DAYS;
+                  const isReal = realDays.length > 0;
+                  const now = new Date();
+                  const cutoff7 = new Date(now); cutoff7.setDate(now.getDate() - 7);
+                  const recent = days.filter((d:any) => new Date((d as any)._date || 0) >= cutoff7);
+                  const older  = days.filter((d:any) => new Date((d as any)._date || 0) < cutoff7);
+
+                  const makeCard = (day: any) => (
+                    <DayCard
+                      key={day.id}
+                      day={day as any}
+                      workoutLogId={(day as any)._workoutLogId}
+                      nutritionLogIds={(day as any)._nutritionLogIds}
+                      // wellnessLogIds was previously missing here, which forced
+                      // saveWellness in DayCard to always fall into the INSERT
+                      // branch — creating phantom duplicate rows on every edit.
+                      // Wiring it through means edits actually update existing
+                      // rows.
+                      wellnessLogIds={(day as any)._wellnessLogIds}
+                      earnedBadges={earnedBadges.map(b => b.badge_id)}
+                      userLevel={progressInfo?.level ?? 1}
+                      // Refresh the profile's goal panel after a save so the
+                      // user sees their goals tick up immediately. Without
+                      // this the server recomputes correctly but the UI
+                      // shows the stale cached values until next page nav.
+                      onLogSaved={reloadProfileGoals}
+                      onDelete={isReal ? async () => {
+                        // Delete every log row tied to this card. With multi-
+                        // workout merging, _workoutLogIds may contain >1 entry.
+                        const wids: string[] = (day as any)._workoutLogIds || ((day as any)._workoutLogId ? [(day as any)._workoutLogId] : []);
+                        const nids: string[] = (day as any)._nutritionLogIds || [];
+                        const wellIds: string[] = (day as any)._wellnessLogIds || [];
+                        const allIds = [...wids, ...nids, ...wellIds];
+                        if (allIds.length > 0) {
+                          await supabase.from('activity_logs').delete().in('id', allIds);
+                        }
+                        setRealDays(prev => prev.filter(d => d.id !== day.id));
+                      } : undefined}
+                    />
+                  );
+
+                  // Group older days by year → month
+                  const byMonth: Record<string, any[]> = {};
+                  older.forEach(d => {
+                    const dt = new Date((d as any)._date || 0);
+                    const mk = `${dt.getFullYear()}-${String(dt.getMonth()).padStart(2,"0")}`;
+                    if (!byMonth[mk]) byMonth[mk] = [];
+                    byMonth[mk].push(d);
+                  });
+                  const byYear: Record<string, string[]> = {};
+                  Object.keys(byMonth).forEach(mk => {
+                    const yr = mk.split("-")[0];
+                    if (!byYear[yr]) byYear[yr] = [];
+                    byYear[yr].push(mk);
+                  });
+                  const currentYear = now.getFullYear().toString();
+
+                  return (
+                    <>
+                      {recent.map(makeCard)}
+                      {older.length > 0 && (
+                        <div style={{marginTop:16}}>
+                          {Object.entries(byYear).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr, mks]) => (
+                            <div key={yr}>
+                              {yr !== currentYear && (
+                                <div style={{display:"flex",alignItems:"center",gap:10,margin:"20px 0 12px"}}>
+                                  <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                                  <span style={{fontSize:12,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:1.5}}>{yr}</span>
+                                  <div style={{flex:1,height:1,background:C.purpleMid}}/>
+                                </div>
+                              )}
+                              {mks.sort((a,b)=>b.localeCompare(a)).map(mk => (
+                                <MonthCard key={mk} mDays={byMonth[mk]} makeCard={makeCard}/>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+
+          {/* RIGHT */}
+          <div style={{paddingTop:44}}>
+            {/* Streak section — three strict-math streaks. Sits above
+                Badges since streaks reflect current behavior and badges
+                reflect lifetime achievements; current state should be more
+                prominent. */}
+            {user && <StreakSection userId={user.id} theme="purple" />}
+
+            {/* Badges & Awards */}
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
+              <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
+              {(() => {
+                // Use the same family grouping the modal uses, so the preview
+                // grid matches the new badge design (BadgeTile with sigils,
+                // tier ornaments, shimmer) instead of the old hand-rolled
+                // gold-bordered tiles which referenced renamed badge IDs.
+                const previewFamilies: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
+                const totalBadges = previewFamilies.length + completedChallenges.length;
+
+                if (totalBadges === 0) {
+                  return (
+                    <div style={{textAlign:"center",padding:"28px 16px",background:"#1A1230",borderRadius:16,marginBottom:16}}>
+                      <div style={{fontSize:36,marginBottom:8}}>🏆</div>
+                      <div style={{fontSize:14,fontWeight:700,color:C.sub,lineHeight:1.5}}>Complete fitness milestones to earn badges</div>
+                    </div>
+                  );
+                }
+
+                // Show first 6 families. Modal shows them all.
+                const previewSlice = previewFamilies.slice(0, 6);
+
+                return (
+                  <>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                      {previewSlice.map(g => {
+                        // ── CREDENTIAL: holographic prestige look (compact) ──
+                        if (g.renderType === "credential") {
+                          return (
+                            <div key={g.key} style={{
+                              borderRadius:14,
+                              padding:"12px 6px",
+                              textAlign:"center",
+                              position:"relative",
+                              overflow:"hidden",
+                              border:"2px solid transparent",
+                              background: `
+                                linear-gradient(#0A0A14, #0A0A14) padding-box,
+                                linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
+                              `,
+                              boxShadow:"0 0 12px rgba(120, 115, 245, 0.3)",
+                            }}>
+                              <div style={{
+                                position:"absolute",inset:0,pointerEvents:"none",
+                                background:"linear-gradient(125deg, rgba(255,110,196,0.08), rgba(120,115,245,0.12), rgba(74,222,128,0.08), rgba(250,204,21,0.1))",
+                                backgroundSize:"200% 200%",
+                                animation:"holoShimmer 5s ease infinite",
+                              }} />
+                              <div style={{position:"relative"}}>
+                                <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                                <div style={{fontWeight:800,fontSize:10,color:"#F0F0F0",lineHeight:1.2}}>{g.label}</div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // ── YEARLY: year-stamped (compact) ──
+                        if (g.renderType === "yearly") {
+                          return (
+                            <div key={g.key} style={{
+                              borderRadius:14,
+                              padding:"12px 6px",
+                              textAlign:"center",
+                              position:"relative",
+                              overflow:"hidden",
+                              border:"2px solid #F472B6",
+                              background:"linear-gradient(135deg, #4C1D4D, #2B1550, #183B4E)",
+                              animation:"birthdayPulse 3s ease-in-out infinite",
+                            }}>
+                              {g.year && (
+                                <div style={{position:"absolute",top:3,right:5,
+                                  fontSize:8,fontWeight:900,
+                                  color:"#FFD1E6",letterSpacing:0.5,
+                                  textShadow:"0 0 6px rgba(244,114,182,0.6)"}}>
+                                  {g.year}
+                                </div>
+                              )}
+                              <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                              <div style={{fontWeight:900,fontSize:10,color:"#FFE5F1",lineHeight:1.2}}>{g.label}</div>
+                            </div>
+                          );
+                        }
+
+                        // ── PROGRESSION: BadgeTile component (proper sigils, tier rings, shimmer) ──
+                        return (
+                          <BadgeTile
+                            key={g.key}
+                            tier={g.tier ?? 1}
+                            emoji={g.emoji}
+                            label={g.label}
+                            desc={g.desc}
+                            category={g.category}
+                            earnedCount={g.earnedCount}
+                            maxTier={g.maxTier}
+                            compact
+                          />
+                        );
+                      })}
+                    </div>
+                    {totalBadges > 6 && (
+                      <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:"#2D1F52",color:"#A78BFA",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                        👀 View all {totalBadges} badges
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
+                🏆 Report an Achievement
+              </button>
+            </div>
+
+            {/* Body Weight Tracker */}
+            {user && <WeightTracker userId={user.id} />}
+
+            <EditableList title="Favorite Brands" items={brands} onSave={setBrands} emptyItem={{emoji:"👟",name:"New Brand"}}
+              renderItem={(item,i,setList)=>(
+                <div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <input style={{width:48,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 4px",textAlign:"center",fontSize:18,outline:"none",background:"#0D0D0D"}} value={item.emoji} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,emoji:e.target.value}:x))}/>
+                  <input style={{flex:1,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 12px",fontSize:14,color:C.text,outline:"none",background:"#0D0D0D"}} value={item.name} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,name:e.target.value}:x))}/>
+                  <button onClick={()=>setList(l=>l.filter((_:any,j:number)=>j!==i))} style={{width:28,height:28,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer"}}>×</button>
+                </div>
+              )}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Goal-create modal — opened from the Goals card +New button.
+          Lives at this level so the create flow is fully self-contained
+          on /profile (no need to navigate away to /post anymore). */}
+      {showGoalCreate && user && (
+        <CreateGoalModal
+          userId={user.id}
+          onClose={() => setShowGoalCreate(false)}
+          onCreated={() => { setShowGoalCreate(false); reloadProfileGoals(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+
