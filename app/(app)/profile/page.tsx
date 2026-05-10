@@ -163,7 +163,14 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
       {hasNext && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
       )}
-      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      {/* Use ImagePresets.full() (not .thumb) so the lightbox shows the
+          image at its natural aspect ratio. .thumb() returns a small
+          square-cropped variant which looked correct on the 108×108
+          tile but rendered as a weirdly portrait-cropped strip when
+          stretched to 85vh in the lightbox — Joey's note: "Nutrition
+          on the profile page is having the same issue we were having
+          with the profile page. Its aspect ratio is weird." */}
+      <img src={ImagePresets.full(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
