@@ -91,9 +91,9 @@ export async function forceSyncAllProgress(userId: string): Promise<void> {
       }).catch(() => {}),
       // Rivalry badges — scan-all mode (no logId). Walks every active
       // rivalry the user is in, scans all their logs in the rivalry
-      // window, and awards any missed badges (first_blood, dominant,
-      // early_bird, comeback). Idempotent on the rivalry_badges unique
-      // constraint.
+      // window, and awards any missed badges (first_blood, early_bird,
+      // night_owl, perfect_week, quick_strike, comeback). Idempotent on
+      // the rivalry_badges unique constraint.
       fetch("/api/db", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
