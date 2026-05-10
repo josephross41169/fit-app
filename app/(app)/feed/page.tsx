@@ -1017,13 +1017,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
             const timeStr = e.loggedAt ? (() => {
               try { return new Date(e.loggedAt!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
             })() : "";
-            // Convert raw minutes into "Xh Ym" / "Xh" / "Xm" so long
-            // sessions like fasting (often 12-24h) read sensibly. "1260
-            // min" is gibberish at a glance; "21h" tells you the story.
-            const durMin = typeof e.duration === 'number' ? e.duration : 0;
-            const dur = durMin > 0
-              ? (durMin < 60 ? `${durMin}m` : (durMin % 60 === 0 ? `${Math.floor(durMin / 60)}h` : `${Math.floor(durMin / 60)}h ${durMin % 60}m`))
-              : null;
+            const dur = e.duration ? `${e.duration} min` : null;
             return (
               <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
                 <div style={{ width:38, height:38, borderRadius:11, background:`${accent}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, border:`1.5px solid ${accent}55` }}>{emoji}</div>
@@ -1602,11 +1596,22 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                   loading="lazy"
                   decoding="async"
                   style={{
-                    width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",
-                    // Apply per-photo crop position. Falls back to centered (50)
-                    // if the post predates this column or the array is shorter
-                    // than expected. Old posts with no media_positions render
-                    // exactly as before.
+                    width:"100%",height:"100%",
+                    // objectFit: contain (was: cover) — show the whole
+                    // photo. cover was center-cropping every non-square
+                    // photo to the 1:1 container, which made tall iPhone
+                    // portraits look like "zoomed in" middle bands of
+                    // hair/torso/etc. With contain the entire image is
+                    // visible; letterbox space falls back to the
+                    // gradient background on the parent container so
+                    // it doesn't read as a bug.
+                    objectFit:"contain",
+                    cursor:"pointer",
+                    // objectPosition no longer crops anything since the
+                    // whole image shows now, but we keep it so user-set
+                    // positions don't 404 — it's just a hint when the
+                    // image happens to fit perfectly. Old positions
+                    // remain in the data and render harmlessly.
                     objectPosition: `center ${(post as any).mediaPositions?.[currentPhoto] ?? 50}%`,
                   }}
                   alt=""
