@@ -2196,14 +2196,28 @@ export default function FeedPage() {
   //
   // No nested comments join — that hits RLS edge cases. Comments load
   // lazily per post when expanded.
-  async function fetchPosts(page: number, append = false) {
-    if (page === 0) setLoadingFeed(true);
-    else setLoadingMorePosts(true);
+  async function fetchPosts(page: number, append = false, silentRefresh = false) {
+    // PERF: When we already have cached posts on screen (cache-hit path
+    // in the mount effect set loadingFeed=false then immediately called
+    // this), skip the spinner so the user keeps seeing posts while we
+    // revalidate in the background. Avoids a "load → flash blank → load"
+    // double-flicker on every navigation back to /feed.
+    if (page === 0 && !silentRefresh) setLoadingFeed(true);
+    else if (page > 0) setLoadingMorePosts(true);
 
     let data: any[] | null = null;
 
     try {
-      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 4, 60);
+      // PERF: tighter oversample. Was (page+1) * PAGE_SIZE * 4 = 40 on
+      // page 0 (PAGE_SIZE=10), bumped to a 60-row floor — 6x more rows
+      // than we display. The over-fetch exists so the bucket-ranker has
+      // enough candidates to surface follows/local posts above
+      // strangers, but 30 is plenty: a user with 0 follows and 0
+      // local-city neighbors still gets 10 displayed posts on page 0,
+      // and oversampling diminishes anyway since later pages query the
+      // same window. Halving the oversample roughly halves the bytes
+      // over the wire on the cold load.
+      const FETCH_LIMIT = Math.max((page + 1) * PAGE_SIZE * 3, 30);
 
       // PERF: fire posts + follows + viewer-city in PARALLEL. None of them
       // depend on each other; previously we waited for posts to finish
@@ -2269,103 +2283,102 @@ export default function FeedPage() {
 
         const pageRows = ranked.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-        // Hydrate _liked client-side
-        let likedPostIds: Set<string> = new Set();
-        if (user && pageRows.length > 0) {
-          try {
-            const postIds = pageRows.map((p: any) => p.id);
-            const { data: likeData } = await supabase
-              .from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds);
-            if (likeData) likedPostIds = new Set(likeData.map((l: any) => l.post_id));
-          } catch (likeErr) {
-            console.warn('[feed] couldnt fetch likes:', likeErr);
-          }
-        }
+        // PERF: previously we ran likes → comments → blocks serially.
+        // None of them depend on each other (all three only need
+        // pageRows + user.id, which are already resolved). Fire them
+        // in parallel and wait once. On a cold load this saves one or
+        // two full network round trips of wall time, which is what the
+        // user perceives as "feed taking forever to load."
+        const postIds = pageRows.map((p: any) => p.id);
 
-        // PERF: Batch-load comments for ALL visible posts in ONE query
-        // instead of N separate /api/db calls. The previous version fired
-        // 10 parallel HTTP requests (browser → Vercel → Supabase → back) —
-        // even in parallel, the slowest one bottlenecks page load. Direct
-        // Supabase query with .in() does the same work in 1 request.
-        //
-        // We then group results by post_id client-side and only show the
-        // most-recent comment per post in the feed preview (PostCard limits
-        // display, but having all of them in state means tapping "show more"
-        // is instant).
-        const postCommentsMap: Record<string, any[]> = {};
-        if (pageRows.length > 0) {
-          try {
-            const postIds = pageRows.map((p: any) => p.id);
-            const { data: allComments } = await supabase
-              .from('comments')
+        const likesPromise: Promise<Set<string>> = (user && pageRows.length > 0)
+          ? supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds)
+              .then(({ data: likeData }) => new Set<string>((likeData || []).map((l: any) => l.post_id)))
+              .catch(likeErr => {
+                console.warn('[feed] couldnt fetch likes:', likeErr);
+                return new Set<string>();
+              })
+          : Promise.resolve(new Set<string>());
+
+        const commentsPromise: Promise<Record<string, any[]>> = (pageRows.length > 0)
+          ? supabase.from('comments')
               .select('id, content, created_at, user_id, post_id, users:user_id(id, username, full_name, avatar_url)')
               .in('post_id', postIds)
-              .order('created_at', { ascending: false });
+              .order('created_at', { ascending: false })
+              .then(({ data: allComments }) => {
+                const map: Record<string, any[]> = {};
+                (allComments || []).forEach((c: any) => {
+                  const pid = c.post_id;
+                  if (!pid) return;
+                  const cu = c.users || {};
+                  const cname = cu.full_name || cu.username || 'User';
+                  const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+                  const t = (() => {
+                    if (!c.created_at) return '';
+                    const d = new Date(c.created_at);
+                    if (isNaN(d.getTime())) return '';
+                    const diff = Date.now() - d.getTime();
+                    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+                    if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+                    return d.toLocaleDateString();
+                  })();
+                  const display = {
+                    id: c.id,
+                    user: cname,
+                    avatar: cu.avatar_url || cini,
+                    text: c.content || '',
+                    time: t,
+                    user_id: c.user_id,
+                  };
+                  if (!map[pid]) map[pid] = [];
+                  map[pid].push(display);
+                });
+                // Comments came in DESC for the .in() — reverse per-post
+                // so they display oldest-first like the previous code did.
+                Object.keys(map).forEach(pid => { map[pid].reverse(); });
+                return map;
+              })
+              .catch(cmtErr => {
+                console.warn('[feed] batch comments fetch failed:', cmtErr);
+                return {} as Record<string, any[]>;
+              })
+          : Promise.resolve({} as Record<string, any[]>);
 
-            (allComments || []).forEach((c: any) => {
-              const pid = c.post_id;
-              if (!pid) return;
-              const cu = c.users || {};
-              const cname = cu.full_name || cu.username || 'User';
-              const cini = cname.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-              const t = (() => {
-                if (!c.created_at) return '';
-                const d = new Date(c.created_at);
-                if (isNaN(d.getTime())) return '';
-                const diff = Date.now() - d.getTime();
-                if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-                if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-                return d.toLocaleDateString();
-              })();
-              const display = {
-                id: c.id,
-                user: cname,
-                avatar: cu.avatar_url || cini,
-                text: c.content || '',
-                time: t,
-                user_id: c.user_id,
-              };
-              if (!postCommentsMap[pid]) postCommentsMap[pid] = [];
-              postCommentsMap[pid].push(display);
-            });
-            // Comments came in DESC for the .in() — reverse per-post so
-            // they display oldest-first like the previous code did.
-            Object.keys(postCommentsMap).forEach(pid => {
-              postCommentsMap[pid].reverse();
-            });
-          } catch (cmtErr) {
-            console.warn('[feed] batch comments fetch failed:', cmtErr);
-          }
-        }
+        // Blocked users — separately fired so it overlaps with the above.
+        // loadBlockedUsers() is itself memoized in lib/blocks.ts after the
+        // first session call, so subsequent fetchPosts calls hit the cache.
+        const blocksPromise: Promise<Set<string>> = user
+          ? loadBlockedUsers(user.id).catch(() => new Set<string>())
+          : Promise.resolve(new Set<string>());
 
-        data = pageRows.map((p: any) => ({
+        const [likedPostIds, postCommentsMap, blocks] = await Promise.all([
+          likesPromise, commentsPromise, blocksPromise,
+        ]);
+
+        const enriched = pageRows.map((p: any) => ({
           ...p,
           _liked: likedPostIds.has(p.id),
           comments: postCommentsMap[p.id] || [],
         }));
+        // Apply block filter inline so we don't need another pass after
+        // the try/catch lands.
+        data = blocks.size > 0
+          ? enriched.filter((p: any) => !blocks.has(p.user_id))
+          : enriched;
       }
     } catch (err) {
       console.error('[feed] fetchPosts unexpected error:', err);
     }
 
     if (data) {
-      let filtered = data;
-      if (user) {
-        try {
-          const blocks = await loadBlockedUsers(user.id);
-          if (blocks.size > 0) {
-            filtered = data.filter((p: any) => !blocks.has(p.user_id));
-          }
-        } catch {}
-      }
+      // Block filter was already applied inside the try block. Just stage.
       console.log('[feed] fetchPosts complete:', {
-        rawCount: data.length,
-        filteredCount: filtered.length,
+        count: data.length,
         page,
-        firstPostId: filtered[0]?.id,
+        firstPostId: data[0]?.id,
       });
-      if (append) setDbPosts(prev => [...prev, ...filtered]);
-      else setDbPosts(filtered);
+      if (append) setDbPosts(prev => [...prev, ...data!]);
+      else setDbPosts(data);
       setDbPostsHasMore(data.length === PAGE_SIZE);
       setDbPostsPage(page);
       // PERF: cache page 0 of the feed for back/forward navigation. We
@@ -2373,13 +2386,13 @@ export default function FeedPage() {
       // round trip and that's fine. 30s TTL is enough for the user to
       // hop to a profile and back without seeing a stale feed.
       if (page === 0 && user?.id) {
-        setCached(`feed:${user.id}`, filtered);
+        setCached(`feed:${user.id}`, data);
       }
     } else {
       console.warn('[feed] fetchPosts ended with no data');
     }
-    if (page === 0) setLoadingFeed(false);
-    else setLoadingMorePosts(false);
+    if (page === 0 && !silentRefresh) setLoadingFeed(false);
+    else if (page > 0) setLoadingMorePosts(false);
   }
 
 
@@ -2397,6 +2410,11 @@ export default function FeedPage() {
       if (cached && cached.length > 0) {
         setDbPosts(cached);
         setLoadingFeed(false);
+        // Refresh in the background without flashing the spinner.
+        // The cached posts stay on screen; when the network response
+        // lands, posts swap to the fresh version.
+        fetchPosts(0, false, true);
+        return;
       }
     }
     fetchPosts(0);
