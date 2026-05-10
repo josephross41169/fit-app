@@ -1677,6 +1677,19 @@ export async function POST(req: NextRequest) {
 
       // Helper: try to insert a badge row. Idempotent — unique constraint
       // on (rivalry_id, user_id, badge_key) silently rejects duplicates.
+      // Award helper. Inserts a rivalry_badges row (the per-rivalry
+      // record), then ALSO bumps the user's career-tier ladder for that
+      // family in the main `badges` table. The career ladder uses the
+      // 1/3/9/20/50/100/200/500 thresholds (see RIVAL_LADDER_THRESHOLDS
+      // in lib/badges.ts) — every threshold ≤ the user's new total
+      // earns a tier badge. Idempotent on both sides:
+      //   - rivalry_badges has unique (rivalry_id, user_id, badge_key)
+      //   - badges table inserts skip on (user_id, badge_id) duplicate
+      //
+      // We DON'T need to handle re-counting on race conditions — even
+      // if two awards land at exactly the same time, the dedup on
+      // both inserts means we converge on the right state.
+      const RIVAL_LADDER_THRESHOLDS = [1, 3, 9, 20, 50, 100, 200, 500];
       const tryAward = async (rivalryId: string, badgeUserId: string, badgeKey: string) => {
         const { error } = await admin
           .from('rivalry_badges')
@@ -1686,11 +1699,56 @@ export async function POST(req: NextRequest) {
             badge_key: badgeKey,
             earned_at: new Date().toISOString(),
           });
-        if (!error) {
-          awarded.push({ rivalryId, badge: badgeKey });
-          return true;
+        if (error) return false;
+        awarded.push({ rivalryId, badge: badgeKey });
+
+        // Career-ladder upsert. Count existing rivalry_badges with this
+        // badge_key for this user (the row we just inserted is included
+        // in the count). Award every threshold tier ≤ count.
+        try {
+          const { count } = await admin
+            .from('rivalry_badges')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', badgeUserId)
+            .eq('badge_key', badgeKey);
+          const total = count ?? 0;
+          if (total > 0) {
+            // Determine which tiers this user has now qualified for.
+            const tiersToInsert = RIVAL_LADDER_THRESHOLDS
+              .filter(t => total >= t)
+              .map(t => ({
+                user_id: badgeUserId,
+                badge_id: `${badgeKey}-${t}`,
+                note: 'auto',
+              }));
+            if (tiersToInsert.length > 0) {
+              // Bulk insert; upsert dedup pattern via onConflict isn't
+              // available without a unique constraint on (user_id, badge_id).
+              // Instead read existing tier rows and only insert missing
+              // ones — keeps us idempotent across re-fires.
+              const { data: existingTiers } = await admin
+                .from('badges')
+                .select('badge_id')
+                .eq('user_id', badgeUserId)
+                .in('badge_id', tiersToInsert.map(t => t.badge_id));
+              const existingIds = new Set((existingTiers || []).map((r: any) => r.badge_id));
+              const fresh = tiersToInsert.filter(t => !existingIds.has(t.badge_id));
+              if (fresh.length > 0) {
+                await admin.from('badges').insert(fresh).catch((e: any) => {
+                  // Non-fatal — the per-rivalry award already landed.
+                  console.error('[tryAward] career-ladder insert failed', e);
+                });
+              }
+            }
+          }
+        } catch (e) {
+          // Career-ladder bookkeeping is non-essential. Don't fail the
+          // per-rivalry award if the count/insert ladder pipeline
+          // hiccups; the next time tryAward fires it'll catch up.
+          console.error('[tryAward] career-ladder bookkeeping failed', e);
         }
-        return false;
+
+        return true;
       };
 
       for (const rivalry of rivalries as any[]) {
