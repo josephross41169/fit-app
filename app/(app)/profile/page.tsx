@@ -1561,6 +1561,11 @@ export default function ProfilePage() {
   }, []);
   const avatarSize = isMobile ? 220 : 280;
 
+  // Page-level lightbox source for the full-screen avatar/banner viewer.
+  // Separate from DayCard's internal `lb` state so the avatar/banner
+  // viewer works regardless of which day card (if any) is open.
+  const [pageLb, setPageLb] = useState<string | null>(null);
+
   const [profile,setProfile] = useState({
     name: "",
     username: "",
@@ -2731,6 +2736,11 @@ export default function ProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
+      {/* Page-level lightbox for the avatar + banner viewers. Opened by
+          tapping the avatar circle or the banner; closes on backdrop click
+          via the Lightbox component's onClose handler. Independent of any
+          DayCard's own internal lightbox state. */}
+      {pageLb && <Lightbox src={pageLb} onClose={() => setPageLb(null)} />}
 
       <style jsx global>{`
         /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
@@ -3921,13 +3931,23 @@ export default function ProfilePage() {
                 users see a clean avatar with no extra padding. */}
             <div className={(progressInfo?.level ?? 1) >= 3 ? "tier-silver-avatar-wrap" : ""} style={{
               position:"relative",
-              cursor:avatarRepositionMode?"ns-resize":"default",
+              cursor: avatarRepositionMode ? "ns-resize" : (profileImg ? "pointer" : "default"),
               userSelect:"none",
             }}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
+              onClick={() => {
+                // Tap-to-view-full. Skipped while repositioning (the
+                // mouseDown/Move/Up handlers above already drive that
+                // gesture and the click that fires on mouseUp without
+                // significant drag would otherwise pop the lightbox
+                // mid-reposition). Also skipped when there's no image
+                // — the upload label inside takes care of that case.
+                if (avatarRepositionMode) return;
+                if (profileImg) setPageLb(profileImg);
+              }}
             >
               <TierFrame tier={userTier} size={avatarSize}>
               {profileImg
@@ -3936,14 +3956,16 @@ export default function ProfilePage() {
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
-                <label style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                   <span style={{fontSize:13}}>📷</span>
                 </label>
               )}
-              {/* Camera button always visible at bottom right when not repositioning */}
+              {/* Camera button always visible at bottom right when not repositioning.
+                  stopPropagation so a click on the camera doesn't ALSO open the
+                  lightbox (the wrapper's onClick would otherwise fire). */}
               {!avatarRepositionMode && (
-                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
@@ -3951,7 +3973,7 @@ export default function ProfilePage() {
               {/* Reposition button — show when image exists and not in reposition mode.
                   Hidden on mobile via .hide-on-mobile — touch UX will handle this differently later. */}
               {profileImg && !avatarRepositionMode && user && (
-                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
+                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(true);}}
                   style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
                   <span style={{fontSize:11}}>↕</span>
                   <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
@@ -4028,7 +4050,7 @@ export default function ProfilePage() {
           <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
+              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":(bannerImg?"pointer":"default"),userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
@@ -4037,16 +4059,25 @@ export default function ProfilePage() {
               onTouchStart={e=>{ if(!repositionMode)return; setDragState({startY:e.touches[0].clientY,startPos:bannerPosition}); }}
               onTouchMove={handleBannerTouchMove}
               onTouchEnd={()=>setDragState(null)}
+              onClick={() => {
+                // Tap-to-view-full for the banner. Same logic as the
+                // avatar: skipped during repositioning, no-op when no
+                // banner has been uploaded.
+                if (repositionMode) return;
+                if (bannerImg) setPageLb(bannerImg);
+              }}
             >
               {bannerImg
                 ? <img src={ImagePresets.full(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transform:`scale(${bannerScale/100})`,transformOrigin:"center center",transition:dragState?"none":"transform 0.1s, object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
               {/* Reposition button — show on hover or when in reposition mode.
-                  Hidden on mobile via .hide-on-mobile (touch UX later). */}
+                  Hidden on mobile via .hide-on-mobile (touch UX later).
+                  stopPropagation so the wrapper's onClick doesn't ALSO
+                  open the lightbox when this is tapped. */}
               {bannerImg && !repositionMode && (bannerHovered || true) && user && (
                 <button
                   className="hide-on-mobile"
-                  onClick={e=>{e.preventDefault();setRepositionMode(true);}}
+                  onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(true);}}
                   style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:6,zIndex:5}}
                 >
                   <span style={{fontSize:12}}>↕</span>
@@ -4074,9 +4105,10 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
-              {/* Always-visible camera button overlay for banner */}
+              {/* Always-visible camera button overlay for banner.
+                  stopPropagation so click doesn't open the lightbox. */}
               {!repositionMode && (
-                <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
+                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
                   <span style={{fontSize:16}}>📷</span>
                   <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
