@@ -1248,6 +1248,21 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
     if (currentPhoto > post.photos.length - 1) setCurrentPhoto(Math.max(0, post.photos.length - 1));
   }, [post.photos.length, currentPhoto]);
   const [lightbox, setLightbox] = useState<string|null>(null);
+  // Variable post height — Instagram-style. The photo container's
+  // aspectRatio is set from the first photo's natural dimensions
+  // (read off the img on load), clamped to [0.8, 1.91] (4:5 portrait
+  // min, 1.91:1 landscape max). Photos within those bounds render at
+  // their true aspect; photos outside (e.g. 9:16 phone screenshots)
+  // get center-cropped to the nearest bound. We use the FIRST photo's
+  // aspect for the whole carousel so swiping between photos doesn't
+  // cause a layout jump — subsequent photos with different aspects
+  // crop via objectFit:cover. This matches Instagram (which forces
+  // a single aspect for multi-photo posts at upload time).
+  // Default null → use 1:1 while the image is still loading; that
+  // gives us a stable box during render until naturalWidth lands.
+  const [postAspect, setPostAspect] = useState<number | null>(null);
+  // Reset when the photo set changes (post edited, swap of media).
+  useEffect(() => { setPostAspect(null); }, [post.photos[0]]);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
@@ -1517,7 +1532,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
           <div
-            style={{ position:"relative",width:"100%",aspectRatio:"1/1",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
+            style={{ position:"relative",width:"100%",aspectRatio: postAspect ?? 1,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
             // Swipe support — uses Pointer Events instead of Touch Events for
             // iOS reliability. iOS Safari has a quirk where touch-action: pan-y
             // can absorb touch sequences if iOS detects any vertical component,
@@ -1597,26 +1612,40 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                   decoding="async"
                   style={{
                     width:"100%",height:"100%",
-                    // objectFit: contain (was: cover) — show the whole
-                    // photo. cover was center-cropping every non-square
-                    // photo to the 1:1 container, which made tall iPhone
-                    // portraits look like "zoomed in" middle bands of
-                    // hair/torso/etc. With contain the entire image is
-                    // visible; letterbox space falls back to the
-                    // gradient background on the parent container so
-                    // it doesn't read as a bug.
-                    objectFit:"contain",
+                    // objectFit: cover — but the container's aspectRatio
+                    // is already sized to the FIRST photo's natural
+                    // aspect (clamped to [0.8, 1.91]). For a single-photo
+                    // post or the first photo of a carousel, cover is
+                    // a no-op (container matches photo). For subsequent
+                    // photos in a carousel with different aspects, cover
+                    // crops to fill rather than letterbox — Instagram
+                    // does the same and forces uploaders to crop their
+                    // multi-photo posts to a single aspect at upload.
+                    objectFit:"cover",
                     cursor:"pointer",
-                    // objectPosition no longer crops anything since the
-                    // whole image shows now, but we keep it so user-set
-                    // positions don't 404 — it's just a hint when the
-                    // image happens to fit perfectly. Old positions
-                    // remain in the data and render harmlessly.
                     objectPosition: `center ${(post as any).mediaPositions?.[currentPhoto] ?? 50}%`,
                   }}
                   alt=""
                   onClick={() => { if (justSwipedRef.current) { justSwipedRef.current = false; return; } setLightbox(currentUrl); }}
                   onError={() => { setBrokenImage(true); }}
+                  // ── Aspect detection ────────────────────────────────
+                  // Only the first photo drives the container size.
+                  // naturalWidth/Height land once the image decodes.
+                  // Clamp to Instagram's bounds: 4:5 (=0.8) portrait min,
+                  // 1.91:1 (=1.91) landscape max. Photos outside still
+                  // render via cover-crop, so nothing breaks visually,
+                  // but the container's aspect stays sensible for the
+                  // feed rhythm.
+                  onLoad={(e) => {
+                    if (currentPhoto !== 0) return;
+                    if (postAspect != null) return;
+                    const img = e.currentTarget;
+                    if (img.naturalWidth && img.naturalHeight) {
+                      const raw = img.naturalWidth / img.naturalHeight;
+                      const clamped = Math.max(0.8, Math.min(1.91, raw));
+                      setPostAspect(clamped);
+                    }
+                  }}
                 />
               );
             })()}
