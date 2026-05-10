@@ -163,14 +163,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
       {hasNext && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
       )}
-      {/* Use ImagePresets.full() (not .thumb) so the lightbox shows the
-          image at its natural aspect ratio. .thumb() returns a small
-          square-cropped variant which looked correct on the 108×108
-          tile but rendered as a weirdly portrait-cropped strip when
-          stretched to 85vh in the lightbox — Joey's note: "Nutrition
-          on the profile page is having the same issue we were having
-          with the profile page. Its aspect ratio is weird." */}
-      <img src={ImagePresets.full(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
@@ -235,23 +228,6 @@ function formatTimeOfDay(iso: string | null | undefined): string {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   } catch { return ""; }
-}
-
-// Convert a raw minute count into a human-friendly label. Splits into
-// hours + minutes once we cross 60 minutes — "1260 min" reads as
-// gibberish to anyone glancing at a fasting card, "21h" tells you
-// exactly what you did. Falls back to "Xm" under 60 so quick wellness
-// sessions (5-min breathwork, etc.) still read naturally.
-//   < 60       → "45m"
-//   exactly 60 → "1h"
-//   > 60 even  → "2h"
-//   > 60 + rem → "1h 23m"
-function formatDurationMin(min: number | null | undefined): string {
-  if (min == null || min <= 0) return "";
-  if (min < 60) return `${min}m`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 type WellnessEntry = {
@@ -1412,7 +1388,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
                             background:`${style.accent}22`,color:style.accent,
                             letterSpacing:0.3,
-                          }}>{formatDurationMin(dur)}</span>
+                          }}>{dur} min</span>
                         )}
                         {time && (
                           <span style={{
@@ -1584,16 +1560,6 @@ export default function ProfilePage() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const avatarSize = isMobile ? 220 : 280;
-
-  // Page-level lightbox source for the full-screen avatar/banner viewer.
-  // Avatar payloads carry the user's saved position + scale so the
-  // viewer shows EXACTLY the cropped circle they have on their profile
-  // (just bigger). Banner payloads stay rectangular. Separate from
-  // DayCard's internal `lb` state.
-  type PageLightboxState =
-    | { src: string; kind: 'banner' }
-    | { src: string; kind: 'avatar'; position: number; scale: number };
-  const [pageLb, setPageLb] = useState<PageLightboxState | null>(null);
 
   const [profile,setProfile] = useState({
     name: "",
@@ -2090,6 +2056,44 @@ export default function ProfilePage() {
           setProfileGoals(data.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
         }
       });
+  }, [user]);
+
+  // Recompute trackers AFTER an activity_log delete. Mirrors the save-side
+  // fireTrackers in DayCard but without the log-specific bits (PR
+  // detection, rivalry badges) — earned PRs and badges aren't retroactively
+  // un-awarded just because the underlying log got deleted.
+  //
+  // Why: previously deleting a workout from the profile page just dropped
+  // the activity_logs row but never re-ran the trackers that cache derived
+  // state. Result: a deleted run still counted toward the running goal,
+  // group goals, war/buddy progress, and member challenges. Joey reported
+  // this on FIT-50: "I deleted a run yesterday from the workout on the
+  // profile page and it didnt take away progress from the goals tracker."
+  const fireTrackersAfterDelete = useCallback(async (kind: 'workout' | 'nutrition' | 'wellness') => {
+    if (!user) return;
+    try {
+      const triggers: Array<Promise<any>> = [
+        // logId omitted — server now treats that as "recompute every
+        // active goal from current activity_logs." Self-correcting.
+        fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update_goals_from_log', payload: { userId: user.id } }),
+        }).catch(() => {}),
+        syncGroupChallengeProgressFor(user.id).catch(() => {}),
+        syncMemberChallengeProgressFor(user.id).catch(() => {}),
+      ];
+      if (kind === 'workout') {
+        // Buddy + war recompute. Already keyed by userId only, recomputes
+        // every active match from the user's current logs.
+        triggers.push(fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'buddy_update_from_log', payload: { userId: user.id } }),
+        }).catch(() => {}));
+      }
+      await Promise.allSettled(triggers);
+    } catch { /* best-effort */ }
   }, [user]);
 
   useEffect(() => {
@@ -2765,64 +2769,6 @@ export default function ProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
-      {/* Page-level lightbox for the avatar + banner viewers. Avatars
-          render in a circular viewer (matching the profile picture's
-          framing exactly — same crop, same zoom, just bigger). Banners
-          use the standard rectangular Lightbox. Joey reported the
-          rectangular default felt wrong for avatars: "When I click on
-          the profile picture it loads kinda weird sizing. it should
-          just be circular like the profile picture." */}
-      {pageLb && pageLb.kind === 'avatar' && (
-        <div
-          onClick={() => setPageLb(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 99999,
-            background: "rgba(0,0,0,0.92)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 24,
-          }}
-        >
-          <button
-            onClick={() => setPageLb(null)}
-            aria-label="Close"
-            style={{
-              position: "absolute", top: 16, right: 20,
-              width: 44, height: 44, borderRadius: "50%",
-              background: "rgba(255,255,255,0.12)", border: "none",
-              color: "#fff", fontSize: 24, cursor: "pointer", lineHeight: 1, zIndex: 2,
-            }}
-          >×</button>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "min(70vw, 70vh)",
-              height: "min(70vw, 70vh)",
-              borderRadius: "50%",
-              overflow: "hidden",
-              background: "#000",
-              boxShadow: "0 12px 60px rgba(0,0,0,0.6)",
-            }}
-          >
-            <img
-              src={ImagePresets.full(pageLb.src)}
-              loading="eager"
-              decoding="async"
-              alt=""
-              style={{
-                width: "100%", height: "100%",
-                objectFit: "cover",
-                objectPosition: `center ${pageLb.position}%`,
-                transform: `scale(${pageLb.scale / 100})`,
-                transformOrigin: "center center",
-                display: "block",
-              }}
-            />
-          </div>
-        </div>
-      )}
-      {pageLb && pageLb.kind === 'banner' && (
-        <Lightbox src={pageLb.src} onClose={() => setPageLb(null)} />
-      )}
 
       <style jsx global>{`
         /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
@@ -4013,33 +3959,13 @@ export default function ProfilePage() {
                 users see a clean avatar with no extra padding. */}
             <div className={(progressInfo?.level ?? 1) >= 3 ? "tier-silver-avatar-wrap" : ""} style={{
               position:"relative",
-              cursor: avatarRepositionMode ? "ns-resize" : (profileImg ? "pointer" : "default"),
+              cursor:avatarRepositionMode?"ns-resize":"default",
               userSelect:"none",
             }}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
-              onClick={() => {
-                // Tap-to-view-full. Skipped while repositioning (the
-                // mouseDown/Move/Up handlers above already drive that
-                // gesture and the click that fires on mouseUp without
-                // significant drag would otherwise pop the lightbox
-                // mid-reposition). Also skipped when there's no image
-                // — the upload label inside takes care of that case.
-                // Pass the current avatarPosition + avatarScale state
-                // so the viewer renders the EXACT crop shown on the
-                // profile, just larger.
-                if (avatarRepositionMode) return;
-                if (profileImg) {
-                  setPageLb({
-                    src: profileImg,
-                    kind: 'avatar',
-                    position: avatarPosition,
-                    scale: avatarScale,
-                  });
-                }
-              }}
             >
               <TierFrame tier={userTier} size={avatarSize}>
               {profileImg
@@ -4048,16 +3974,14 @@ export default function ProfilePage() {
               </TierFrame>
               {/* When no image, make whole circle a label */}
               {!profileImg && !avatarRepositionMode && (
-                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <label style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                   <span style={{fontSize:13}}>📷</span>
                 </label>
               )}
-              {/* Camera button always visible at bottom right when not repositioning.
-                  stopPropagation so a click on the camera doesn't ALSO open the
-                  lightbox (the wrapper's onClick would otherwise fire). */}
+              {/* Camera button always visible at bottom right when not repositioning */}
               {!avatarRepositionMode && (
-                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
@@ -4065,7 +3989,7 @@ export default function ProfilePage() {
               {/* Reposition button — show when image exists and not in reposition mode.
                   Hidden on mobile via .hide-on-mobile — touch UX will handle this differently later. */}
               {profileImg && !avatarRepositionMode && user && (
-                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(true);}}
+                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
                   style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
                   <span style={{fontSize:11}}>↕</span>
                   <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
@@ -4142,7 +4066,7 @@ export default function ProfilePage() {
           <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":(bannerImg?"pointer":"default"),userSelect:"none"}}
+              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
@@ -4151,26 +4075,16 @@ export default function ProfilePage() {
               onTouchStart={e=>{ if(!repositionMode)return; setDragState({startY:e.touches[0].clientY,startPos:bannerPosition}); }}
               onTouchMove={handleBannerTouchMove}
               onTouchEnd={()=>setDragState(null)}
-              onClick={() => {
-                // Tap-to-view-full for the banner. Same logic as the
-                // avatar: skipped during repositioning, no-op when no
-                // banner has been uploaded. Banners stay rectangular
-                // so we just pass kind: 'banner'.
-                if (repositionMode) return;
-                if (bannerImg) setPageLb({ src: bannerImg, kind: 'banner' });
-              }}
             >
               {bannerImg
                 ? <img src={ImagePresets.full(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transform:`scale(${bannerScale/100})`,transformOrigin:"center center",transition:dragState?"none":"transform 0.1s, object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
               {/* Reposition button — show on hover or when in reposition mode.
-                  Hidden on mobile via .hide-on-mobile (touch UX later).
-                  stopPropagation so the wrapper's onClick doesn't ALSO
-                  open the lightbox when this is tapped. */}
+                  Hidden on mobile via .hide-on-mobile (touch UX later). */}
               {bannerImg && !repositionMode && (bannerHovered || true) && user && (
                 <button
                   className="hide-on-mobile"
-                  onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(true);}}
+                  onClick={e=>{e.preventDefault();setRepositionMode(true);}}
                   style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:6,zIndex:5}}
                 >
                   <span style={{fontSize:12}}>↕</span>
@@ -4198,10 +4112,9 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
-              {/* Always-visible camera button overlay for banner.
-                  stopPropagation so click doesn't open the lightbox. */}
+              {/* Always-visible camera button overlay for banner */}
               {!repositionMode && (
-                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
+                <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
                   <span style={{fontSize:16}}>📷</span>
                   <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
@@ -4589,6 +4502,21 @@ export default function ProfilePage() {
                           await supabase.from('activity_logs').delete().in('id', allIds);
                         }
                         setRealDays(prev => prev.filter(d => d.id !== day.id));
+
+                        // Recompute trackers — without this, deleted logs
+                        // still showed up on the goals tracker, group
+                        // challenges, war/buddy progress (they all cache
+                        // derived state). Fire kinds in parallel; if a
+                        // day had both a workout AND nutrition both get
+                        // recomputed.
+                        const kinds: Array<'workout' | 'nutrition' | 'wellness'> = [];
+                        if (wids.length > 0) kinds.push('workout');
+                        if (nids.length > 0) kinds.push('nutrition');
+                        if (wellIds.length > 0) kinds.push('wellness');
+                        await Promise.allSettled(kinds.map(k => fireTrackersAfterDelete(k)));
+                        // Refresh the on-screen Goals card from DB so the
+                        // user sees the corrected progress immediately.
+                        reloadProfileGoals();
                       } : undefined}
                     />
                   );
