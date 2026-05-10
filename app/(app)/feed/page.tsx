@@ -1017,7 +1017,13 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
             const timeStr = e.loggedAt ? (() => {
               try { return new Date(e.loggedAt!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
             })() : "";
-            const dur = e.duration ? `${e.duration} min` : null;
+            // Convert raw minutes into "Xh Ym" / "Xh" / "Xm" so long
+            // sessions like fasting (often 12-24h) read sensibly. "1260
+            // min" is gibberish at a glance; "21h" tells you the story.
+            const durMin = typeof e.duration === 'number' ? e.duration : 0;
+            const dur = durMin > 0
+              ? (durMin < 60 ? `${durMin}m` : (durMin % 60 === 0 ? `${Math.floor(durMin / 60)}h` : `${Math.floor(durMin / 60)}h ${durMin % 60}m`))
+              : null;
             return (
               <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
                 <div style={{ width:38, height:38, borderRadius:11, background:`${accent}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, border:`1.5px solid ${accent}55` }}>{emoji}</div>
