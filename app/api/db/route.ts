@@ -1680,6 +1680,15 @@ export async function POST(req: NextRequest) {
 
       // Helper: try to insert a badge row. Idempotent — unique constraint
       // on (rivalry_id, user_id, badge_key) silently rejects duplicates.
+      // Award helper. Inserts a rivalry_badges row (the per-rivalry
+      // record), then ALSO bumps the user's career-tier ladder for that
+      // family in the main `badges` table. The career ladder uses the
+      // 1/3/9/20/50/100/200/500 thresholds (see RIVAL_LADDER_THRESHOLDS
+      // in lib/badges.ts) — every threshold ≤ the user's new total
+      // earns a tier badge. Idempotent on both sides:
+      //   - rivalry_badges has unique (rivalry_id, user_id, badge_key)
+      //   - badges table inserts skip on (user_id, badge_id) duplicate
+      const RIVAL_LADDER_THRESHOLDS = [1, 3, 9, 20, 50, 100, 200, 500];
       const tryAward = async (rivalryId: string, badgeUserId: string, badgeKey: string) => {
         const { error } = await admin
           .from('rivalry_badges')
@@ -1689,11 +1698,55 @@ export async function POST(req: NextRequest) {
             badge_key: badgeKey,
             earned_at: new Date().toISOString(),
           });
-        if (!error) {
-          awarded.push({ rivalryId, badge: badgeKey });
-          return true;
+        if (error) return false;
+        awarded.push({ rivalryId, badge: badgeKey });
+
+        // Career-ladder upsert. Count existing rivalry_badges with this
+        // badge_key for this user (the row we just inserted is included
+        // in the count). Award every threshold tier ≤ count via insert
+        // into the regular `badges` table — these tier badges show up
+        // in the user's Badges & Awards gallery alongside fitness ladders.
+        try {
+          const { count } = await admin
+            .from('rivalry_badges')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', badgeUserId)
+            .eq('badge_key', badgeKey);
+          const total = count ?? 0;
+          if (total > 0) {
+            const tiersToInsert = RIVAL_LADDER_THRESHOLDS
+              .filter(t => total >= t)
+              .map(t => ({
+                user_id: badgeUserId,
+                badge_id: `${badgeKey}-${t}`,
+                note: 'auto',
+              }));
+            if (tiersToInsert.length > 0) {
+              // Read existing tier rows; only insert missing ones (no
+              // unique constraint on user_id+badge_id, so we dedup
+              // ourselves to keep this idempotent on retries).
+              const { data: existingTiers } = await admin
+                .from('badges')
+                .select('badge_id')
+                .eq('user_id', badgeUserId)
+                .in('badge_id', tiersToInsert.map(t => t.badge_id));
+              const existingIds = new Set((existingTiers || []).map((r: any) => r.badge_id));
+              const fresh = tiersToInsert.filter(t => !existingIds.has(t.badge_id));
+              if (fresh.length > 0) {
+                await admin.from('badges').insert(fresh).catch((e: any) => {
+                  // Non-fatal — the per-rivalry award already landed.
+                  console.error('[tryAward] career-ladder insert failed', e);
+                });
+              }
+            }
+          }
+        } catch (e) {
+          // Career-ladder bookkeeping is non-essential. Don't fail the
+          // per-rivalry award if it hiccups; next tryAward catches up.
+          console.error('[tryAward] career-ladder bookkeeping failed', e);
         }
-        return false;
+
+        return true;
       };
 
       for (const rivalry of rivalries as any[]) {
@@ -1747,39 +1800,113 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // ── BADGE: dominant ───────────────────────────────────────────────
-        // Past midweek (more than half the rivalry duration elapsed) AND
-        // ahead by 3+ in score. Reuses compute_rivalry_score so the count
-        // matches what shows on the rivalry page.
-        if (!ownsBadge('dominant')) {
-          const totalMs = endsTime - startedTime;
-          // Pivot on "now" in scan-all mode; on the log's timestamp in
-          // single-log mode. Either is a moment-in-time check.
-          const pivotTime = isScanAll ? Date.now() : new Date(thisLog.logged_at).getTime();
-          const elapsedMs = pivotTime - startedTime;
-          const isMidweekOrLater = elapsedMs > totalMs / 2;
-          if (isMidweekOrLater) {
-            const [{ data: myScoreRaw }, { data: theirScoreRaw }] = await Promise.all([
-              admin.rpc('compute_rivalry_score', {
-                uid: userId,
-                p_category: rivalry.category,
-                p_metric: rivalry.competition_type,
-                p_from: rivalry.started_at,
-                p_to: rivalry.ends_at,
-              }),
-              admin.rpc('compute_rivalry_score', {
-                uid: opponentId,
-                p_category: rivalry.category,
-                p_metric: rivalry.competition_type,
-                p_from: rivalry.started_at,
-                p_to: rivalry.ends_at,
-              }),
-            ]);
-            const myScore = Number(myScoreRaw ?? 0);
-            const theirScore = Number(theirScoreRaw ?? 0);
-            if (myScore - theirScore >= 3) {
-              await tryAward(rivalry.id, userId, 'dominant');
+        // ── BADGE: night_owl ───────────────────────────────────────────────
+        // Counterpart to early_bird. Two consecutive calendar days with at
+        // least one workout logged at or after 10pm UTC. Same uniqueness
+        // approach as early_bird — collect days into a set and look for
+        // a delta-of-1 pair. Replaced the old "dominant" badge (Joey
+        // dropped it: "I dont like the dominant one").
+        if (!ownsBadge('night_owl')) {
+          const { data: userLogs } = await admin
+            .from('activity_logs')
+            .select('logged_at')
+            .eq('user_id', userId)
+            .eq('log_type', 'workout')
+            .gte('logged_at', rivalry.started_at)
+            .lte('logged_at', rivalry.ends_at)
+            .order('logged_at', { ascending: true });
+
+          const nightDays = new Set<string>();
+          for (const log of (userLogs || []) as any[]) {
+            const d = new Date(log.logged_at);
+            if (d.getUTCHours() >= 22) {
+              nightDays.add(`${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`);
             }
+          }
+          const sortedKeys = Array.from(nightDays).sort();
+          let foundConsecutive = false;
+          for (let i = 1; i < sortedKeys.length; i++) {
+            const a = sortedKeys[i - 1].split('-').map(Number);
+            const b = sortedKeys[i].split('-').map(Number);
+            const dateA = new Date(Date.UTC(a[0], a[1], a[2]));
+            const dateB = new Date(Date.UTC(b[0], b[1], b[2]));
+            if (Math.round((dateB.getTime() - dateA.getTime()) / 86400000) === 1) {
+              foundConsecutive = true;
+              break;
+            }
+          }
+          if (foundConsecutive) {
+            await tryAward(rivalry.id, userId, 'night_owl');
+          }
+        }
+
+        // ── BADGE: perfect_week ────────────────────────────────────────────
+        // Logged on EVERY calendar day of the rivalry window. Compute the
+        // rivalry's day count by floor-dividing the span in ms by
+        // 86_400_000, then count distinct UTC log-days for this user.
+        // Award when those match (or exceed). Doesn't require continuous
+        // streak across midnight — just one log per UTC day.
+        if (!ownsBadge('perfect_week')) {
+          const totalMs = endsTime - startedTime;
+          const requiredDays = Math.max(1, Math.floor(totalMs / 86_400_000));
+          const { data: userLogsForPerfect } = await admin
+            .from('activity_logs')
+            .select('logged_at')
+            .eq('user_id', userId)
+            .eq('log_type', 'workout')
+            .gte('logged_at', rivalry.started_at)
+            .lte('logged_at', rivalry.ends_at);
+
+          const distinctDays = new Set<string>();
+          for (const log of (userLogsForPerfect || []) as any[]) {
+            const d = new Date(log.logged_at);
+            distinctDays.add(`${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`);
+          }
+          if (distinctDays.size >= requiredDays) {
+            await tryAward(rivalry.id, userId, 'perfect_week');
+          }
+        }
+
+        // ── BADGE: quick_strike ────────────────────────────────────────────
+        // Counter-puncher: user logged a workout within 1 hour AFTER an
+        // opponent log during the rivalry window. Iterate opponent logs
+        // and check whether any user log lands in the (oppT, oppT + 60min]
+        // window. First match is enough.
+        //
+        // Why "after" only: we want to reward RESPONDING to the opponent's
+        // log, not coincidence. A user log before the opponent's is just
+        // a normal workout.
+        if (!ownsBadge('quick_strike')) {
+          const [{ data: oppLogs }, { data: userLogsForQS }] = await Promise.all([
+            admin
+              .from('activity_logs')
+              .select('logged_at')
+              .eq('user_id', opponentId)
+              .eq('log_type', 'workout')
+              .gte('logged_at', rivalry.started_at)
+              .lte('logged_at', rivalry.ends_at)
+              .order('logged_at', { ascending: true }),
+            admin
+              .from('activity_logs')
+              .select('logged_at')
+              .eq('user_id', userId)
+              .eq('log_type', 'workout')
+              .gte('logged_at', rivalry.started_at)
+              .lte('logged_at', rivalry.ends_at)
+              .order('logged_at', { ascending: true }),
+          ]);
+
+          const userTimes = ((userLogsForQS || []) as any[]).map(l => new Date(l.logged_at).getTime());
+          let earned = false;
+          for (const oppLog of (oppLogs || []) as any[]) {
+            const oppT = new Date(oppLog.logged_at).getTime();
+            for (const uT of userTimes) {
+              if (uT > oppT && uT - oppT <= 3_600_000) { earned = true; break; }
+            }
+            if (earned) break;
+          }
+          if (earned) {
+            await tryAward(rivalry.id, userId, 'quick_strike');
           }
         }
 
