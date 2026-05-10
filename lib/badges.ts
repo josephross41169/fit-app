@@ -77,6 +77,31 @@ function hardLadder(opts: {
   }));
 }
 
+// Rival career ladder — career-level tiers earned by accumulating
+// rivalry_badges across ALL rivalries you've ever been in. Joey's
+// requested threshold sequence: 1, 3, 9, 20, 50, 100, 200, 500.
+// Tighter early thresholds (3/9 vs the easy ladder's 5/20) reflect
+// that rival badges are harder to earn — you need a whole 7-day
+// rivalry to qualify for one. Tier names per family stay thematic
+// to that family's narrative.
+export const RIVAL_LADDER_THRESHOLDS = [1, 3, 9, 20, 50, 100, 200, 500] as const;
+function rivalLadder(opts: {
+  prefix: string;
+  emoji: string;
+  baseDesc: string;          // shown on tier 1 ("First log of the rivalry")
+  tierNames: [string, string, string, string, string, string, string, string];
+}): Badge[] {
+  return RIVAL_LADDER_THRESHOLDS.map((t, i) => ({
+    id: `${opts.prefix}-${t}`,
+    emoji: opts.emoji,
+    label: opts.tierNames[i],
+    desc: t === 1
+      ? opts.baseDesc
+      : `Earned ${opts.tierNames[0]} in ${t} rivalries`,
+    category: "rivals",
+  }));
+}
+
 // ── BADGE CATALOG ─────────────────────────────────────────────────────────
 export const BADGES: Badge[] = [
 
@@ -415,6 +440,28 @@ export const BADGES: Badge[] = [
   { id:"macro-master",   emoji:"⚖️", label:"Macro Master",       desc:"Hit all 3 macro goals in a single day", category:"nutrition" },
   { id:"fasting",        emoji:"⏳", label:"Fasting Pro",       desc:"Completed a 24-hour fast",              category:"nutrition" },
   { id:"clean-30",       emoji:"🥦", label:"Clean 30",          desc:"Ate clean for 30 days straight",        category:"nutrition" },
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  RIVAL CAREER LADDERS (8 tiers, auto-awarded on rivalry badge earns)
+  //  Threshold sequence: 1, 3, 9, 20, 50, 100, 200, 500 (per Joey's spec).
+  //  Earned by accumulating that family's rivalry_badges across every
+  //  rivalry you've ever been in. Tier names stay thematic to the
+  //  family's narrative.
+  // ════════════════════════════════════════════════════════════════════════
+  ...rivalLadder({ prefix: "first_blood",  emoji: "⚔️", baseDesc: "First log of a rivalry",
+    tierNames: ["First Blood", "Drawn Sword", "Striker", "Cutthroat", "Warbringer", "Bloodletter", "Reaper", "Apex Striker"] }),
+  ...rivalLadder({ prefix: "early_bird",   emoji: "🌅", baseDesc: "Logged a morning workout 2 days in a row during a rivalry",
+    tierNames: ["Early Bird", "Sunriser", "Dawn Hunter", "First Light", "Sun Chaser", "Dawn Warrior", "Daybreaker", "Eternal Dawn"] }),
+  ...rivalLadder({ prefix: "night_owl",    emoji: "🌙", baseDesc: "Logged a workout after 10pm 2 days in a row during a rivalry",
+    tierNames: ["Night Owl", "Twilight", "Moonlit", "Midnight Rider", "Witching Hour", "Shadow Walker", "Eclipse", "Eternal Night"] }),
+  ...rivalLadder({ prefix: "perfect_week", emoji: "💯", baseDesc: "Logged on every day of a rivalry",
+    tierNames: ["Perfect Week", "Iron Schedule", "Unbroken", "Relentless", "Clockwork", "Flawless", "Perfectionist", "Eternal"] }),
+  ...rivalLadder({ prefix: "quick_strike", emoji: "⚡", baseDesc: "Logged within 1 hour of your rival's log",
+    tierNames: ["Quick Strike", "Counter Punch", "Sharpshooter", "Lightning", "Riposte Master", "Reflex", "Flash", "Instant"] }),
+  ...rivalLadder({ prefix: "comeback",     emoji: "🔄", baseDesc: "Flipped a deficit to a lead in a rivalry",
+    tierNames: ["Comeback", "Resurgence", "Phoenix", "Rallying Cry", "Never Out", "Redemption", "Final Bell", "Inevitable"] }),
+  ...rivalLadder({ prefix: "untouchable",  emoji: "💀", baseDesc: "Won a rivalry without ever being behind",
+    tierNames: ["Untouchable", "Imperial", "Sovereign", "Dominion", "Tyrant", "Conqueror", "Crown", "Throne"] }),
 ];
 
 // ── BADGE CLASSIFICATION HELPERS ─────────────────────────────────────────
@@ -455,10 +502,20 @@ export const STRENGTH_LADDER_PREFIXES = ["bench", "squat", "deadlift"];
 export const STRENGTH_LADDER_WEIGHTS = [200, 300, 400, 500];
 export const TOTAL_LADDER_WEIGHTS = [800, 1000, 1300, 1500];
 
+/** Rival career ladder prefixes — these mirror the rivalry_badges
+ *  badge_key values that the server awards inside a single rivalry.
+ *  When a user earns a rivalry_badges row, the server also auto-awards
+ *  the matching career-tier badge in the user's `badges` table. */
+export const RIVAL_LADDER_PREFIXES = [
+  "first_blood", "early_bird", "night_owl", "perfect_week",
+  "quick_strike", "comeback", "untouchable",
+];
+
 const ALL_KNOWN_PREFIXES = [
   ...EASY_LADDER_PREFIXES,
   ...HARD_LADDER_PREFIXES,
   ...STRENGTH_LADDER_PREFIXES,
+  ...RIVAL_LADDER_PREFIXES,
   "streak", "total",
 ];
 
@@ -484,14 +541,17 @@ const AUTO_AWARDED_SINGLE_BADGE_LIST = [
 ];
 export const AUTO_AWARDED_SINGLE_BADGE_IDS = new Set<string>(AUTO_AWARDED_SINGLE_BADGE_LIST);
 
-/** All easy-ladder + streak + auto-singletons (auto-awarded by post-page engine
- *  or by specific server actions). Used by isManualBadge to hide these from
- *  the claim modal. */
+/** All easy-ladder + streak + auto-singletons + rival-ladder badges
+ *  (everything auto-awarded by the post-page engine, server actions, or
+ *  rival-badge engine). Used by isManualBadge to hide these from the
+ *  manual claim modal — users earn them by doing things, not claiming. */
 export const AUTO_AWARDED_BADGE_IDS = new Set<string>([
   ...BADGES.filter(b => {
     const prefix = getBadgePrefix(b.id);
     return prefix !== null && (
-      EASY_LADDER_PREFIXES.includes(prefix) || prefix === "streak"
+      EASY_LADDER_PREFIXES.includes(prefix)
+      || RIVAL_LADDER_PREFIXES.includes(prefix)
+      || prefix === "streak"
     );
   }).map(b => b.id),
   ...AUTO_AWARDED_SINGLE_BADGE_LIST,
