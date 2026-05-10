@@ -400,6 +400,11 @@ export default function UserProfilePage() {
   const [profile, setProfile]       = useState<any>(null);
   const [loading, setLoading]       = useState(true);
   const [days, setDays]             = useState<any[]>([]);
+  // Lightbox source for the full-screen avatar/banner viewer. When non-null
+  // the Lightbox renders as an overlay; click closes. Page-level state
+  // (separate from the per-day-card lightbox state at line ~156) so the
+  // avatar + banner viewers work even without an open day card.
+  const [pageLb, setPageLb] = useState<string | null>(null);
   // Raw workout logs (NOT merged-by-day) for WorkoutProgressGraphs. The graphs
   // count multi-workout days correctly when given the raw rows.
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
@@ -766,6 +771,10 @@ export default function UserProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
+      {/* Page-level lightbox for the avatar + banner viewers. Re-uses the
+          same Lightbox component the read-only day cards use. Closes on
+          backdrop click via the component's onClose handler. */}
+      {pageLb && <Lightbox src={pageLb} onClose={() => setPageLb(null)} />}
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
         /* Mobile collapse — both the header (avatar + banner) and the 3-column
@@ -971,14 +980,26 @@ export default function UserProfilePage() {
               {/* The avatar circle. Borderless because the tier wrap provides
                   the border halo. At L1 (no wrap class) we add a subtle
                   border so the avatar still has shape. */}
-              <div style={{
-                width: avatarSize, height: avatarSize, borderRadius:"50%",
-                background:`linear-gradient(135deg,${C.blue},#4ADE80)`,
-                border: viewedUserLevel < 3 ? `4px solid ${C.greenMid}` : "none",
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff",
-                overflow:"hidden",position:"relative",zIndex:2,
-              }}>
+              <div
+                onClick={() => {
+                  // Open the lightbox only when there's actually an
+                  // image to show — fall through to no-op for the
+                  // initials placeholder. Public profile is read-only,
+                  // no editing handlers compete for this click, so a
+                  // simple onClick is unambiguous. Pass the raw URL
+                  // (not ImagePresets.full) so the lightbox shows the
+                  // highest-resolution version, not a sized-down one.
+                  if (profile.avatar_url) setPageLb(profile.avatar_url);
+                }}
+                style={{
+                  width: avatarSize, height: avatarSize, borderRadius:"50%",
+                  background:`linear-gradient(135deg,${C.blue},#4ADE80)`,
+                  border: viewedUserLevel < 3 ? `4px solid ${C.greenMid}` : "none",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff",
+                  overflow:"hidden",position:"relative",zIndex:2,
+                  cursor: profile.avatar_url ? "pointer" : "default",
+                }}>
                 {profile.avatar_url
                   ? <img src={ImagePresets.full(profile.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,transform:`scale(${(profile.avatar_scale ?? 100)/100})`,transformOrigin:"center center",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : initials}
@@ -1011,11 +1032,19 @@ export default function UserProfilePage() {
 
           {/* Banner block on RIGHT — banner image + bio + followers/following + Follow/Message buttons */}
           <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
-            <div style={{
-              width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,
-              background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#4ADE80)`,
-              border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center",
-            }}>
+            <div
+              onClick={() => {
+                // Banner viewer: only open when an actual banner exists.
+                // The default-gradient state has nothing meaningful to
+                // show full-screen.
+                if (profile.banner_url) setPageLb(profile.banner_url);
+              }}
+              style={{
+                width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,
+                background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#4ADE80)`,
+                border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center",
+                cursor: profile.banner_url ? "pointer" : "default",
+              }}>
               {profile.banner_url
                 ? <img src={ImagePresets.full(profile.banner_url)} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.banner_position ?? 50}%`,transform:`scale(${(profile.banner_scale ?? 100)/100})`,transformOrigin:"center center"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>{profile.full_name}</span>}
