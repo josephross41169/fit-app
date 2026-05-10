@@ -656,19 +656,26 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Ref to the chat's scrollable container (overflow:auto, height:380).
+  // We scroll it DIRECTLY via .scrollTop instead of using scrollIntoView,
+  // which had a tendency to bubble up the parent chain and nudge the
+  // page window even with block:"nearest". Touching scrollTop on the
+  // container itself can't escape the container.
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   // Track whether this is the FIRST time messages populated for this
-  // rivalry. The auto-scroll-to-bottom effect below was firing on the
-  // initial load (messages goes from [] → populated), which yanked the
-  // entire page past the rival stats / badges section to the chat at
-  // the bottom of the page. Joey's note: "Lets just make it so it
-  // loads the page and does not point you to anywhere on the page in
-  // particular." We skip the first messages update per rivalry; only
-  // genuine NEW messages trigger the scroll.
+  // rivalry, AND the previous messages.length so we can distinguish
+  // "new message arrived" (length grew) from "existing message updated"
+  // (length unchanged — e.g. blur reveal, edit, read receipt). Auto-
+  // scroll should only fire on net additions, never on the initial load
+  // and never on in-place mutations.
   const initialMessagesLoadRef = useRef(true);
+  const lastMessagesLengthRef = useRef(0);
   useEffect(() => {
-    // Reset the flag whenever the rivalry changes — switching to a
-    // different rivalry should also start without auto-scrolling.
+    // Reset both flags whenever the rivalry changes — switching to a
+    // different rivalry should also start at the natural top with no
+    // auto-scroll.
     initialMessagesLoadRef.current = true;
+    lastMessagesLengthRef.current = 0;
   }, [rivalryId]);
 
   // Initial load + realtime subscription
@@ -694,18 +701,25 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
 
   useEffect(() => {
     if (initialMessagesLoadRef.current) {
-      // First populate of messages for this rivalry — don't scroll.
-      // Flip the flag so the next update IS treated as a new-message
-      // arrival (e.g. realtime push, or the user sending a message).
+      // First populate of messages for this rivalry — record the length
+      // baseline and bail without scrolling.
       initialMessagesLoadRef.current = false;
+      lastMessagesLengthRef.current = messages.length;
       return;
     }
-    // block: "nearest" keeps the scroll local to the chat overflow
-    // container — it won't bubble up and yank the window. If the user
-    // is already viewing the chat tail it just keeps them pinned;
-    // if they've scrolled up to read history, the new message lands
-    // below their viewport without forcing a jump.
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // Only react to net additions, not in-place updates. A blur reveal
+    // or message edit fires this effect via setMessages but the array
+    // length doesn't change — there's nothing new to scroll to.
+    if (messages.length <= lastMessagesLengthRef.current) {
+      lastMessagesLengthRef.current = messages.length;
+      return;
+    }
+    lastMessagesLengthRef.current = messages.length;
+    // Scroll the chat container DIRECTLY. Touching .scrollTop on the
+    // overflow:auto element can't bubble up to the window like
+    // scrollIntoView could, so the page never moves.
+    const el = chatScrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   async function handleSendText() {
@@ -753,7 +767,7 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
       <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6 }}>💬 Rival Chat</div>
       <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Talk your trash. Back it up.</div>
       <div style={{ background: "#1A1A1A", borderRadius: 20, border: "1px solid #2D1B69", overflow: "hidden" }}>
-        <div style={{ padding: "16px", height: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div ref={chatScrollRef} style={{ padding: "16px", height: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {messages.length === 0 && (
             <div style={{ margin: "auto", color: "#6B7280", fontSize: 13, textAlign: "center" }}>
               No messages yet. Start the trash talk.
