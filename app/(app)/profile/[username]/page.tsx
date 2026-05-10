@@ -400,11 +400,16 @@ export default function UserProfilePage() {
   const [profile, setProfile]       = useState<any>(null);
   const [loading, setLoading]       = useState(true);
   const [days, setDays]             = useState<any[]>([]);
-  // Lightbox source for the full-screen avatar/banner viewer. When non-null
-  // the Lightbox renders as an overlay; click closes. Page-level state
-  // (separate from the per-day-card lightbox state at line ~156) so the
-  // avatar + banner viewers work even without an open day card.
-  const [pageLb, setPageLb] = useState<string | null>(null);
+  // Lightbox source for the full-screen avatar/banner viewer. Avatar
+  // payloads carry the user's saved position + scale so the viewer
+  // shows EXACTLY the cropped circle they have on their profile,
+  // just bigger — Joey's note: "When I click on the profile picture
+  // it loads kinda weird sizing. it should just be circular like
+  // the profile picture." Banner payloads stay rectangular.
+  type PageLightboxState =
+    | { src: string; kind: 'banner' }
+    | { src: string; kind: 'avatar'; position: number; scale: number };
+  const [pageLb, setPageLb] = useState<PageLightboxState | null>(null);
   // Raw workout logs (NOT merged-by-day) for WorkoutProgressGraphs. The graphs
   // count multi-workout days correctly when given the raw rows.
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
@@ -771,10 +776,69 @@ export default function UserProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
-      {/* Page-level lightbox for the avatar + banner viewers. Re-uses the
-          same Lightbox component the read-only day cards use. Closes on
-          backdrop click via the component's onClose handler. */}
-      {pageLb && <Lightbox src={pageLb} onClose={() => setPageLb(null)} />}
+      {/* Page-level lightbox for the avatar + banner viewers. Avatars
+          render as a circular viewer (matching the profile picture's
+          framing exactly — same crop, same zoom, just bigger). Banners
+          use the standard rectangular Lightbox. The split exists
+          because Joey reported the rectangular Lightbox felt "weird
+          sizing" for avatars — users expect the viewer to look like
+          the profile picture they tapped. */}
+      {pageLb && pageLb.kind === 'avatar' && (
+        <div
+          onClick={() => setPageLb(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 99999,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <button
+            onClick={() => setPageLb(null)}
+            aria-label="Close"
+            style={{
+              position: "absolute", top: 16, right: 20,
+              width: 44, height: 44, borderRadius: "50%",
+              background: "rgba(255,255,255,0.12)", border: "none",
+              color: "#fff", fontSize: 24, cursor: "pointer", lineHeight: 1, zIndex: 2,
+            }}
+          >×</button>
+          {/* Big circle. min(70vw, 70vh) keeps it square + within the
+              viewport on both portrait and landscape orientations. The
+              image inside uses the same objectPosition + transform
+              tricks the avatar circle uses, so the framing is
+              identical to what's on the profile — just larger. */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(70vw, 70vh)",
+              height: "min(70vw, 70vh)",
+              borderRadius: "50%",
+              overflow: "hidden",
+              background: "#000",
+              boxShadow: "0 12px 60px rgba(0,0,0,0.6)",
+            }}
+          >
+            <img
+              src={ImagePresets.full(pageLb.src)}
+              loading="eager"
+              decoding="async"
+              alt=""
+              style={{
+                width: "100%", height: "100%",
+                objectFit: "cover",
+                objectPosition: `center ${pageLb.position}%`,
+                transform: `scale(${pageLb.scale / 100})`,
+                transformOrigin: "center center",
+                display: "block",
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {pageLb && pageLb.kind === 'banner' && (
+        <Lightbox src={pageLb.src} onClose={() => setPageLb(null)} />
+      )}
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
         /* Mobile collapse — both the header (avatar + banner) and the 3-column
@@ -986,10 +1050,17 @@ export default function UserProfilePage() {
                   // image to show — fall through to no-op for the
                   // initials placeholder. Public profile is read-only,
                   // no editing handlers compete for this click, so a
-                  // simple onClick is unambiguous. Pass the raw URL
-                  // (not ImagePresets.full) so the lightbox shows the
-                  // highest-resolution version, not a sized-down one.
-                  if (profile.avatar_url) setPageLb(profile.avatar_url);
+                  // simple onClick is unambiguous. We pass position
+                  // and scale so the viewer renders the same circular
+                  // crop the user has on their profile, just bigger.
+                  if (profile.avatar_url) {
+                    setPageLb({
+                      src: profile.avatar_url,
+                      kind: 'avatar',
+                      position: profile.avatar_position ?? 50,
+                      scale: profile.avatar_scale ?? 100,
+                    });
+                  }
                 }}
                 style={{
                   width: avatarSize, height: avatarSize, borderRadius:"50%",
@@ -1036,8 +1107,11 @@ export default function UserProfilePage() {
               onClick={() => {
                 // Banner viewer: only open when an actual banner exists.
                 // The default-gradient state has nothing meaningful to
-                // show full-screen.
-                if (profile.banner_url) setPageLb(profile.banner_url);
+                // show full-screen. Banners stay rectangular (kind: 'banner')
+                // unlike avatars which render in a circle.
+                if (profile.banner_url) {
+                  setPageLb({ src: profile.banner_url, kind: 'banner' });
+                }
               }}
               style={{
                 width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,
