@@ -1507,7 +1507,10 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         </div>
 
         {/* Caption */}
-        {post.caption && (
+        {post.caption && post.post_type !== 'achievement' && (
+          // Plain caption rendering. Skipped on achievement posts —
+          // the celebration card below visualizes the same content,
+          // so double-rendering would be redundant.
           <div style={{ padding:"0 18px 12px",fontSize:14,color:C.text,lineHeight:1.6 }}>{renderMentions(post.caption)}</div>
         )}
 
@@ -1638,6 +1641,169 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
               )}
             </>)}
           </div>
+        ) : post.post_type === 'achievement' ? (
+          // ── Achievement celebration card ──────────────────────────────
+          // Auto-generated PR posts don't have media (the post-page
+          // engine drops them in caption-only). The standard "Add
+          // Photo / Video" placeholder looks awful on these — it asks
+          // the owner to upload to an auto-celebration post and shows
+          // non-owners "No photo shared", neither of which matches the
+          // moment. Instead we render a styled celebration card that
+          // takes the caption and lays it out big and proud.
+          //
+          // Caption shapes we handle:
+          //   single PR     →  "🏆 Bench 245×5 (+10 lb)"
+          //   first PR      →  "🏆 First Bench 185×8"
+          //   reps PR       →  "🏆 Pull Up 0×12 (+2 reps)"
+          //   multi-PR      →  "3 New PRs!\n🏆 Bench 245×5 (+10 lb)\n🏆 Squat ..."
+          //
+          // For the multi-PR case we show a stacked list of mini cards.
+          // For the single-PR case we go big with the lift name + reps
+          // as the hero. Falls back to plain styled text if parsing
+          // doesn't recognize the format.
+          (() => {
+            const lines = (post.caption || "").split("\n").map(s => s.trim()).filter(Boolean);
+            const isMulti = lines.length > 1 && /new prs/i.test(lines[0]);
+            // Each PR line: "🏆 [First ]<exercise> <weight>×<reps>[ (+N lb)|(+N reps)]"
+            // Build a regex that pulls the parts out. The first capture is
+            // optional "First " for first-ever lifts. Last delta is
+            // optional. We don't need perfection — anything we can't
+            // parse just shows the raw line.
+            const PR_RE = /^🏆\s+(First\s+)?(.+?)\s+(\d+(?:\.\d+)?)×(\d+)(?:\s*\(([^)]+)\))?$/i;
+            const parsed = (isMulti ? lines.slice(1) : lines).map(line => {
+              const m = line.match(PR_RE);
+              if (!m) return { raw: line };
+              return {
+                first: !!m[1],
+                exercise: m[2],
+                weight: m[3],
+                reps: m[4],
+                delta: m[5] || null,
+              };
+            });
+
+            return (
+              <div style={{
+                margin: "0 18px 12px",
+                borderRadius: 18,
+                padding: "24px 20px",
+                background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 50%, #FCD34D 100%)",
+                position: "relative" as const,
+                overflow: "hidden" as const,
+                boxShadow: "0 8px 24px rgba(245,158,11,0.3)",
+                color: "#fff",
+              }}>
+                {/* Sparkle/ray pattern in the corners. Pure CSS radial
+                    gradients — cheap and crisp on any zoom. */}
+                <div style={{
+                  position: "absolute" as const, inset: 0, pointerEvents: "none" as const,
+                  background: `
+                    radial-gradient(circle at 10% 20%, rgba(255,255,255,0.4) 0%, transparent 25%),
+                    radial-gradient(circle at 90% 80%, rgba(255,255,255,0.35) 0%, transparent 25%),
+                    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.25) 0%, transparent 35%)
+                  `,
+                }} />
+                {/* Single PR — hero layout */}
+                {!isMulti && parsed.length === 1 && parsed[0].exercise && (
+                  <div style={{ position: "relative" as const, textAlign: "center" }}>
+                    <div style={{
+                      fontSize: 44, lineHeight: 1, marginBottom: 8,
+                      filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.15))",
+                    }}>🏆</div>
+                    <div style={{
+                      fontSize: 11, fontWeight: 800, letterSpacing: 2,
+                      textTransform: "uppercase" as const, opacity: 0.85, marginBottom: 4,
+                    }}>
+                      {parsed[0].first ? "First-Ever PR" : "New PR"}
+                    </div>
+                    <div style={{
+                      fontSize: 22, fontWeight: 900, lineHeight: 1.15,
+                      textShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                      marginBottom: 6,
+                    }}>
+                      {parsed[0].exercise}
+                    </div>
+                    <div style={{
+                      fontSize: 38, fontWeight: 900, lineHeight: 1,
+                      letterSpacing: -1,
+                      textShadow: "0 3px 10px rgba(0,0,0,0.2)",
+                    }}>
+                      {parsed[0].weight}<span style={{ fontSize: 24, opacity: 0.85, margin: "0 4px" }}>×</span>{parsed[0].reps}
+                    </div>
+                    {parsed[0].delta && (
+                      <div style={{
+                        marginTop: 10, display: "inline-block",
+                        padding: "4px 12px", borderRadius: 99,
+                        background: "rgba(255,255,255,0.25)",
+                        backdropFilter: "blur(4px)",
+                        fontSize: 13, fontWeight: 800,
+                      }}>
+                        {parsed[0].delta}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Multi-PR — stacked mini list with the count headline */}
+                {isMulti && (
+                  <div style={{ position: "relative" as const }}>
+                    <div style={{ textAlign: "center", marginBottom: 14 }}>
+                      <div style={{ fontSize: 36, lineHeight: 1, marginBottom: 4 }}>🏆</div>
+                      <div style={{
+                        fontSize: 20, fontWeight: 900,
+                        textShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                      }}>
+                        {lines[0]}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+                      {parsed.map((pr, i) => (
+                        <div key={i} style={{
+                          padding: "10px 14px",
+                          borderRadius: 12,
+                          background: "rgba(255,255,255,0.22)",
+                          backdropFilter: "blur(4px)",
+                          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+                        }}>
+                          {(pr as any).exercise ? (<>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                                {(pr as any).first ? "First " : ""}{(pr as any).exercise}
+                              </div>
+                              {(pr as any).delta && (
+                                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.85, marginTop: 1 }}>
+                                  {(pr as any).delta}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 16, fontWeight: 900, flexShrink: 0 }}>
+                              {(pr as any).weight}<span style={{ fontSize: 12, opacity: 0.8, margin: "0 2px" }}>×</span>{(pr as any).reps}
+                            </div>
+                          </>) : (
+                            // Unparsed line — render raw, lightly styled.
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{(pr as any).raw}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Fallback — couldn't parse caption at all. Just put
+                    the trophy + caption big and centered. Better than
+                    the empty-photo placeholder under any circumstances. */}
+                {!isMulti && (parsed.length !== 1 || !parsed[0].exercise) && (
+                  <div style={{ position: "relative" as const, textAlign: "center" }}>
+                    <div style={{ fontSize: 44, marginBottom: 10 }}>🏆</div>
+                    <div style={{
+                      fontSize: 18, fontWeight: 900, lineHeight: 1.3,
+                      textShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    }}>
+                      {post.caption}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()
         ) : (
           <label style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,margin:"0 18px 12px",height:340,borderRadius:16,border:"2px dashed #2D1F52",background:"#1A1228",cursor:isOwner?"pointer":"default" }}>
             {isOwner ? (<>
