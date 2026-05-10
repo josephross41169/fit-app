@@ -368,7 +368,13 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
                 const emoji = e.emoji || style.emoji;
                 const accent = style.accent;
                 const timeStr = formatTimeOfDay(e.loggedAt);
-                const dur = e.duration ? `${e.duration} min` : null;
+                // Convert raw minutes to "Xh Ym" / "Xh" / "Xm" — long
+                // sessions like fasting (12-24h) shouldn't display
+                // as "1260 min" which is unreadable at a glance.
+                const durMin = typeof e.duration === 'number' ? e.duration : 0;
+                const dur = durMin > 0
+                  ? (durMin < 60 ? `${durMin}m` : (durMin % 60 === 0 ? `${Math.floor(durMin / 60)}h` : `${Math.floor(durMin / 60)}h ${durMin % 60}m`))
+                  : null;
                 return (
                   <div key={i} style={{background:C.white,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:14,borderLeft:`4px solid ${accent}`,border:`1.5px solid #2A3A2A`,borderLeftWidth:4,borderLeftColor:accent}}>
                     <div style={{width:44,height:44,borderRadius:13,background:`${accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`1.5px solid ${accent}55`}}>{emoji}</div>
