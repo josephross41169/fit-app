@@ -58,23 +58,17 @@ const TIERS: {
 
 // Rivalry-specific badges (separate from app-wide badge catalog).
 // These are the ones you can earn inside a single 7-day rivalry.
-// Ordered by narrative: timing (start → daily) → consistency → mid-fight
-// drama → endgame.
 const RIVALRY_BADGE_CATALOG: { key: string; emoji: string; name: string; desc: string;
   gradient: string; border: string; glow: string; label: string }[] = [
-  { key: "first_blood",   emoji: "⚔️", name: "First Blood",   desc: "First log of the rivalry",
+  { key: "first_blood",  emoji: "⚔️", name: "First Blood",  desc: "First log of the rivalry",
     gradient: "linear-gradient(135deg,#9CA3AF,#E5E7EB)", border: "#9CA3AF", glow: "#9CA3AF44", label: "SILVER" },
-  { key: "early_bird",    emoji: "🌅", name: "Early Bird",    desc: "Logged a morning workout 2 days in a row",
+  { key: "early_bird",   emoji: "🌅", name: "Early Bird",   desc: "Logged a morning workout 2 days in a row",
     gradient: "linear-gradient(135deg,#F5A623,#F59E0B)", border: "#F5A623", glow: "#F5A62344", label: "GOLD" },
-  { key: "night_owl",     emoji: "🌙", name: "Night Owl",     desc: "Logged a workout after 10pm 2 days in a row",
-    gradient: "linear-gradient(135deg,#1E1B4B,#6366F1)", border: "#6366F1", glow: "#6366F144", label: "MIDNIGHT" },
-  { key: "perfect_week",  emoji: "💯", name: "Perfect Week",  desc: "Logged on every day of the rivalry",
-    gradient: "linear-gradient(135deg,#059669,#10B981)", border: "#10B981", glow: "#10B98144", label: "EMERALD" },
-  { key: "quick_strike",  emoji: "⚡", name: "Quick Strike",  desc: "Logged within 1 hour of your rival's log",
-    gradient: "linear-gradient(135deg,#FCD34D,#F59E0B)", border: "#F59E0B", glow: "#F59E0B44", label: "BOLT" },
-  { key: "comeback",      emoji: "🔄", name: "Comeback",      desc: "Flipped a deficit to a lead",
+  { key: "dominant",     emoji: "😤", name: "Dominant",     desc: "Ahead by 3+ sessions by midweek",
+    gradient: "linear-gradient(135deg,#B91C1C,#EF4444)", border: "#B91C1C", glow: "#B91C1C44", label: "CRIMSON" },
+  { key: "comeback",     emoji: "🔄", name: "Comeback",     desc: "Flipped a deficit to a lead",
     gradient: "linear-gradient(135deg,#7C3AED,#A855F7)", border: "#7C3AED", glow: "#7C3AED44", label: "ELECTRIC" },
-  { key: "untouchable",   emoji: "💀", name: "Untouchable",   desc: "Won without ever being behind",
+  { key: "untouchable",  emoji: "💀", name: "Untouchable",  desc: "Won without ever being behind",
     gradient: "linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)", border: "#4338CA", glow: "#4338CA44", label: "COSMIC" },
 ];
 
@@ -662,6 +656,20 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Track whether this is the FIRST time messages populated for this
+  // rivalry. The auto-scroll-to-bottom effect below was firing on the
+  // initial load (messages goes from [] → populated), which yanked the
+  // entire page past the rival stats / badges section to the chat at
+  // the bottom of the page. Joey's note: "Lets just make it so it
+  // loads the page and does not point you to anywhere on the page in
+  // particular." We skip the first messages update per rivalry; only
+  // genuine NEW messages trigger the scroll.
+  const initialMessagesLoadRef = useRef(true);
+  useEffect(() => {
+    // Reset the flag whenever the rivalry changes — switching to a
+    // different rivalry should also start without auto-scrolling.
+    initialMessagesLoadRef.current = true;
+  }, [rivalryId]);
 
   // Initial load + realtime subscription
   useEffect(() => {
@@ -684,7 +692,21 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
     return () => { cancelled = true; unsub(); };
   }, [rivalryId]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    if (initialMessagesLoadRef.current) {
+      // First populate of messages for this rivalry — don't scroll.
+      // Flip the flag so the next update IS treated as a new-message
+      // arrival (e.g. realtime push, or the user sending a message).
+      initialMessagesLoadRef.current = false;
+      return;
+    }
+    // block: "nearest" keeps the scroll local to the chat overflow
+    // container — it won't bubble up and yank the window. If the user
+    // is already viewing the chat tail it just keeps them pinned;
+    // if they've scrolled up to read history, the new message lands
+    // below their viewport without forcing a jump.
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [messages]);
 
   async function handleSendText() {
     const trimmed = input.trim();
