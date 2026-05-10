@@ -1562,9 +1562,14 @@ export default function ProfilePage() {
   const avatarSize = isMobile ? 220 : 280;
 
   // Page-level lightbox source for the full-screen avatar/banner viewer.
-  // Separate from DayCard's internal `lb` state so the avatar/banner
-  // viewer works regardless of which day card (if any) is open.
-  const [pageLb, setPageLb] = useState<string | null>(null);
+  // Avatar payloads carry the user's saved position + scale so the
+  // viewer shows EXACTLY the cropped circle they have on their profile
+  // (just bigger). Banner payloads stay rectangular. Separate from
+  // DayCard's internal `lb` state.
+  type PageLightboxState =
+    | { src: string; kind: 'banner' }
+    | { src: string; kind: 'avatar'; position: number; scale: number };
+  const [pageLb, setPageLb] = useState<PageLightboxState | null>(null);
 
   const [profile,setProfile] = useState({
     name: "",
@@ -2736,11 +2741,64 @@ export default function ProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
-      {/* Page-level lightbox for the avatar + banner viewers. Opened by
-          tapping the avatar circle or the banner; closes on backdrop click
-          via the Lightbox component's onClose handler. Independent of any
-          DayCard's own internal lightbox state. */}
-      {pageLb && <Lightbox src={pageLb} onClose={() => setPageLb(null)} />}
+      {/* Page-level lightbox for the avatar + banner viewers. Avatars
+          render in a circular viewer (matching the profile picture's
+          framing exactly — same crop, same zoom, just bigger). Banners
+          use the standard rectangular Lightbox. Joey reported the
+          rectangular default felt wrong for avatars: "When I click on
+          the profile picture it loads kinda weird sizing. it should
+          just be circular like the profile picture." */}
+      {pageLb && pageLb.kind === 'avatar' && (
+        <div
+          onClick={() => setPageLb(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 99999,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <button
+            onClick={() => setPageLb(null)}
+            aria-label="Close"
+            style={{
+              position: "absolute", top: 16, right: 20,
+              width: 44, height: 44, borderRadius: "50%",
+              background: "rgba(255,255,255,0.12)", border: "none",
+              color: "#fff", fontSize: 24, cursor: "pointer", lineHeight: 1, zIndex: 2,
+            }}
+          >×</button>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(70vw, 70vh)",
+              height: "min(70vw, 70vh)",
+              borderRadius: "50%",
+              overflow: "hidden",
+              background: "#000",
+              boxShadow: "0 12px 60px rgba(0,0,0,0.6)",
+            }}
+          >
+            <img
+              src={ImagePresets.full(pageLb.src)}
+              loading="eager"
+              decoding="async"
+              alt=""
+              style={{
+                width: "100%", height: "100%",
+                objectFit: "cover",
+                objectPosition: `center ${pageLb.position}%`,
+                transform: `scale(${pageLb.scale / 100})`,
+                transformOrigin: "center center",
+                display: "block",
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {pageLb && pageLb.kind === 'banner' && (
+        <Lightbox src={pageLb.src} onClose={() => setPageLb(null)} />
+      )}
 
       <style jsx global>{`
         /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
@@ -3945,8 +4003,18 @@ export default function ProfilePage() {
                 // significant drag would otherwise pop the lightbox
                 // mid-reposition). Also skipped when there's no image
                 // — the upload label inside takes care of that case.
+                // Pass the current avatarPosition + avatarScale state
+                // so the viewer renders the EXACT crop shown on the
+                // profile, just larger.
                 if (avatarRepositionMode) return;
-                if (profileImg) setPageLb(profileImg);
+                if (profileImg) {
+                  setPageLb({
+                    src: profileImg,
+                    kind: 'avatar',
+                    position: avatarPosition,
+                    scale: avatarScale,
+                  });
+                }
               }}
             >
               <TierFrame tier={userTier} size={avatarSize}>
@@ -4062,9 +4130,10 @@ export default function ProfilePage() {
               onClick={() => {
                 // Tap-to-view-full for the banner. Same logic as the
                 // avatar: skipped during repositioning, no-op when no
-                // banner has been uploaded.
+                // banner has been uploaded. Banners stay rectangular
+                // so we just pass kind: 'banner'.
                 if (repositionMode) return;
-                if (bannerImg) setPageLb(bannerImg);
+                if (bannerImg) setPageLb({ src: bannerImg, kind: 'banner' });
               }}
             >
               {bannerImg
