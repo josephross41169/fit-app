@@ -230,6 +230,23 @@ function formatTimeOfDay(iso: string | null | undefined): string {
   } catch { return ""; }
 }
 
+// Convert a raw minute count into a human-friendly label. Splits into
+// hours + minutes once we cross 60 minutes — "1260 min" reads as
+// gibberish to anyone glancing at a fasting card, "21h" tells you
+// exactly what you did. Falls back to "Xm" under 60 so quick wellness
+// sessions (5-min breathwork, etc.) still read naturally.
+//   < 60       → "45m"
+//   exactly 60 → "1h"
+//   > 60 even  → "2h"
+//   > 60 + rem → "1h 23m"
+function formatDurationMin(min: number | null | undefined): string {
+  if (min == null || min <= 0) return "";
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 type WellnessEntry = {
   emoji: string;
   activity: string;
@@ -1388,7 +1405,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
                             background:`${style.accent}22`,color:style.accent,
                             letterSpacing:0.3,
-                          }}>{dur} min</span>
+                          }}>{formatDurationMin(dur)}</span>
                         )}
                         {time && (
                           <span style={{
