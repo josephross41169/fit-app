@@ -58,17 +58,25 @@ const TIERS: {
 
 // Rivalry-specific badges (separate from app-wide badge catalog).
 // These are the ones you can earn inside a single 7-day rivalry.
+// Rivalry-specific badges (separate from app-wide badge catalog).
+// These are the ones you can earn inside a single 7-day rivalry.
+// Ordered by narrative: timing (start → daily) → consistency → mid-fight
+// drama → endgame.
 const RIVALRY_BADGE_CATALOG: { key: string; emoji: string; name: string; desc: string;
   gradient: string; border: string; glow: string; label: string }[] = [
-  { key: "first_blood",  emoji: "⚔️", name: "First Blood",  desc: "First log of the rivalry",
+  { key: "first_blood",   emoji: "⚔️", name: "First Blood",   desc: "First log of the rivalry",
     gradient: "linear-gradient(135deg,#9CA3AF,#E5E7EB)", border: "#9CA3AF", glow: "#9CA3AF44", label: "SILVER" },
-  { key: "early_bird",   emoji: "🌅", name: "Early Bird",   desc: "Logged a morning workout 2 days in a row",
+  { key: "early_bird",    emoji: "🌅", name: "Early Bird",    desc: "Logged a morning workout 2 days in a row",
     gradient: "linear-gradient(135deg,#F5A623,#F59E0B)", border: "#F5A623", glow: "#F5A62344", label: "GOLD" },
-  { key: "dominant",     emoji: "😤", name: "Dominant",     desc: "Ahead by 3+ sessions by midweek",
-    gradient: "linear-gradient(135deg,#B91C1C,#EF4444)", border: "#B91C1C", glow: "#B91C1C44", label: "CRIMSON" },
-  { key: "comeback",     emoji: "🔄", name: "Comeback",     desc: "Flipped a deficit to a lead",
+  { key: "night_owl",     emoji: "🌙", name: "Night Owl",     desc: "Logged a workout after 10pm 2 days in a row",
+    gradient: "linear-gradient(135deg,#1E1B4B,#6366F1)", border: "#6366F1", glow: "#6366F144", label: "MIDNIGHT" },
+  { key: "perfect_week",  emoji: "💯", name: "Perfect Week",  desc: "Logged on every day of the rivalry",
+    gradient: "linear-gradient(135deg,#059669,#10B981)", border: "#10B981", glow: "#10B98144", label: "EMERALD" },
+  { key: "quick_strike",  emoji: "⚡", name: "Quick Strike",  desc: "Logged within 1 hour of your rival's log",
+    gradient: "linear-gradient(135deg,#FCD34D,#F59E0B)", border: "#F59E0B", glow: "#F59E0B44", label: "BOLT" },
+  { key: "comeback",      emoji: "🔄", name: "Comeback",      desc: "Flipped a deficit to a lead",
     gradient: "linear-gradient(135deg,#7C3AED,#A855F7)", border: "#7C3AED", glow: "#7C3AED44", label: "ELECTRIC" },
-  { key: "untouchable",  emoji: "💀", name: "Untouchable",  desc: "Won without ever being behind",
+  { key: "untouchable",   emoji: "💀", name: "Untouchable",   desc: "Won without ever being behind",
     gradient: "linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)", border: "#4338CA", glow: "#4338CA44", label: "COSMIC" },
 ];
 
