@@ -198,13 +198,28 @@ export function getLevelProgress(d: CounterData): LevelProgressInfo {
   const isMax = xpNeeded === null;
   const xpPercent = xpNeeded ? Math.min(100, Math.round((d.xpInLevel / xpNeeded) * 100)) : 100;
 
-  // Challenges live on the level you're working TOWARD if it's 3+.
-  // Working toward L3 from L2? You see L3's challenges.
-  // Working toward L7 doesn't exist (capped at 6).
-  const nextLevel = level + 1;
-  const showChallenges = nextLevel >= 3 && nextLevel <= 6;
+  // Challenges gate advancement FROM the current level. Matches the
+  // logic in computeLevelFromCounters above, which states:
+  //   "L1→2 and L2→3 are pure XP"
+  //   challengesDone = lvl < 3 ? true : LEVEL_CHALLENGES[lvl].every(...)
+  //
+  // So:
+  //   L1 → L2:   no challenges (pure XP)
+  //   L2 → L3:   no challenges (pure XP)
+  //   L3 → L4:   complete L3's challenges + XP
+  //   L4 → L5:   complete L4's challenges + XP
+  //   L5 → L6:   complete L5's challenges + XP
+  //   L6:        max, no advancement
+  //
+  // PREVIOUS BUG: this function indexed challenges off `nextLevel`
+  // (level + 1), which made L2→L3 require completing L3's challenges
+  // before the readyToLevelUp flag would flip. That blocked the
+  // tryLevelUp call entirely, so users hit 60/60 XP at L2 and got
+  // stuck. Joey reported: "I hit the threshold for level 3 but I did
+  // not level up."
+  const showChallenges = level >= 3 && level <= 5;
   const rawChallenges = showChallenges
-    ? LEVEL_CHALLENGES[(nextLevel) as 3 | 4 | 5 | 6]
+    ? LEVEL_CHALLENGES[(level) as 3 | 4 | 5]
     : [];
   const challenges = rawChallenges.map(ch => {
     const { have, need } = ch.progress(d);
