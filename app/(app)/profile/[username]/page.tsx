@@ -881,7 +881,6 @@ export default function UserProfilePage() {
           padding: 4px;
           border-radius: 50%;
           background: conic-gradient(from 0deg,#6B7280 0%,#E8E8F0 25%,#F5F5FA 50%,#C0C0C0 75%,#6B7280 100%);
-          animation: tierSilverRingSpin 8s linear infinite;
           box-shadow: 0 0 22px rgba(220,220,235,0.35);
         }
         .tier-silver-avatar-wrap::after {
@@ -889,7 +888,6 @@ export default function UserProfilePage() {
           position: absolute; inset: -3px;
           border-radius: 50%;
           background: conic-gradient(from 0deg,transparent 0%,rgba(255,255,255,0.4) 30%,transparent 60%,rgba(255,255,255,0.3) 90%,transparent 100%);
-          animation: tierSilverRingSpinReverse 12s linear infinite;
           pointer-events: none; z-index: -1;
         }
         @keyframes tierSilverRingSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
@@ -1081,7 +1079,18 @@ export default function UserProfilePage() {
                   overflow:"hidden",position:"relative",zIndex:2,
                   cursor: profile.avatar_url ? "pointer" : "default",
                 }}>
-                {profile.avatar_url
+                {profile.avatar_video_url ? (
+                  // Video avatar from owner — autoplay muted loop so it
+                  // behaves like a Live Photo. Poster fallback is the
+                  // saved avatar_url still frame (so the circle isn't
+                  // empty while the video buffers).
+                  <video
+                    src={profile.avatar_video_url}
+                    poster={profile.avatar_url || undefined}
+                    autoPlay muted loop playsInline preload="metadata"
+                    style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,transform:`scale(${(profile.avatar_scale ?? 100)/100})`,transformOrigin:"center center",display:"block"}}
+                  />
+                ) : profile.avatar_url
                   ? <img src={ImagePresets.full(profile.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,transform:`scale(${(profile.avatar_scale ?? 100)/100})`,transformOrigin:"center center",display:"block"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : initials}
               </div>
