@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -420,6 +420,25 @@ export default function UserProfilePage() {
     | { src: string; kind: 'banner' }
     | { src: string; kind: 'avatar'; position: number; scale: number };
   const [pageLb, setPageLb] = useState<PageLightboxState | null>(null);
+  // Ref to the public-profile video avatar element (mirrors the owner-
+  // profile's avatarVideoRef). Used by the 20s cycle effect below to
+  // drive the manual replay rhythm Joey wants — play, ~15s pause, play
+  // again, with 20s between starts. The `loop` HTML attribute is
+  // deliberately not set on the <video> tag for this reason.
+  const publicAvatarVideoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (!profile?.avatar_video_url) return;
+    const vid = publicAvatarVideoRef.current;
+    if (!vid) return;
+    const interval = setInterval(() => {
+      try {
+        vid.currentTime = 0;
+        const p = vid.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch { /* ignore */ }
+    }, 20_000);
+    return () => clearInterval(interval);
+  }, [profile?.avatar_video_url]);
   // Raw workout logs (NOT merged-by-day) for WorkoutProgressGraphs. The graphs
   // count multi-workout days correctly when given the raw rows.
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
@@ -1080,14 +1099,16 @@ export default function UserProfilePage() {
                   cursor: profile.avatar_url ? "pointer" : "default",
                 }}>
                 {profile.avatar_video_url ? (
-                  // Video avatar from owner — autoplay muted loop so it
-                  // behaves like a Live Photo. Poster fallback is the
-                  // saved avatar_url still frame (so the circle isn't
-                  // empty while the video buffers).
+                  // Video avatar from owner — autoplay + 20s manual replay
+                  // cycle (see useEffect below). The HTML loop attribute
+                  // is intentionally absent: continuous replay was too
+                  // busy for a profile picture, the user wanted breathing
+                  // room between cycles.
                   <video
+                    ref={publicAvatarVideoRef}
                     src={profile.avatar_video_url}
                     poster={profile.avatar_url || undefined}
-                    autoPlay muted loop playsInline preload="metadata"
+                    autoPlay muted playsInline preload="metadata"
                     style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${profile.avatar_position ?? 50}%`,transform:`scale(${(profile.avatar_scale ?? 100)/100})`,transformOrigin:"center center",display:"block"}}
                   />
                 ) : profile.avatar_url
