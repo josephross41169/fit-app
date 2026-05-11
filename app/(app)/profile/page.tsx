@@ -163,14 +163,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
       {hasNext && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
       )}
-      {/* Use ImagePresets.full() (not .thumb) so the lightbox shows the
-          image at its natural aspect ratio. .thumb() returns a small
-          square-cropped variant which looked correct on the 108×108
-          tile but rendered as a weirdly portrait-cropped strip when
-          stretched to 85vh in the lightbox — Joey's note: "Nutrition
-          on the profile page is having the same issue we were having
-          with the profile page. Its aspect ratio is weird." */}
-      <img src={ImagePresets.full(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <img src={ImagePresets.thumb(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
@@ -235,23 +228,6 @@ function formatTimeOfDay(iso: string | null | undefined): string {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   } catch { return ""; }
-}
-
-// Convert a raw minute count into a human-friendly label. Splits into
-// hours + minutes once we cross 60 minutes — "1260 min" reads as
-// gibberish to anyone glancing at a fasting card, "21h" tells you
-// exactly what you did. Falls back to "Xm" under 60 so quick wellness
-// sessions (5-min breathwork, etc.) still read naturally.
-//   < 60       → "45m"
-//   exactly 60 → "1h"
-//   > 60 even  → "2h"
-//   > 60 + rem → "1h 23m"
-function formatDurationMin(min: number | null | undefined): string {
-  if (min == null || min <= 0) return "";
-  if (min < 60) return `${min}m`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 type WellnessEntry = {
@@ -1412,7 +1388,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
                             background:`${style.accent}22`,color:style.accent,
                             letterSpacing:0.3,
-                          }}>{formatDurationMin(dur)}</span>
+                          }}>{dur} min</span>
                         )}
                         {time && (
                           <span style={{
@@ -1585,16 +1561,6 @@ export default function ProfilePage() {
   }, []);
   const avatarSize = isMobile ? 220 : 280;
 
-  // Page-level lightbox source for the full-screen avatar/banner viewer.
-  // Avatar payloads carry the user's saved position + scale so the
-  // viewer shows EXACTLY the cropped circle they have on their profile
-  // (just bigger). Banner payloads stay rectangular. Separate from
-  // DayCard's internal `lb` state.
-  type PageLightboxState =
-    | { src: string; kind: 'banner' }
-    | { src: string; kind: 'avatar'; position: number; scale: number };
-  const [pageLb, setPageLb] = useState<PageLightboxState | null>(null);
-
   const [profile,setProfile] = useState({
     name: "",
     username: "",
@@ -1615,6 +1581,18 @@ export default function ProfilePage() {
   }, [user]);
   const [bannerImg,setBanner] = useState<string|null>(null);
   const [profileImg,setAvatar]= useState<string|null>(null);
+  // Video avatar URL — when set, the profile page renders a muted/looping
+  // <video> over the poster image. Stored in users.avatar_video_url
+  // (NEW COLUMN — see migration below). The still poster image lives in
+  // avatar_url as before, so every place else in the app (feed, comments,
+  // group lists, etc.) keeps rendering the static photo without changes.
+  // Only the profile page knows about the video. Joey's ask: "have the
+  // option to upload a live photo or a 5 second video for their profile
+  // picture."
+  //
+  // MIGRATION REQUIRED (run in Supabase SQL editor):
+  //   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_video_url text;
+  const [avatarVideoUrl, setAvatarVideoUrl] = useState<string | null>(null);
   const [editProfile,setEditProfile] = useState(false);
   const [showLevelModal,setShowLevelModal] = useState(false);
   // Profile share button state. Shows "✓ Copied" for 2.5s after copy.
@@ -1750,6 +1728,11 @@ export default function ProfilePage() {
     }
     if (user?.profile?.avatar_url && !initedAvatarRef.current) {
       setAvatar(user.profile.avatar_url);
+      // Hydrate video URL if the user has one stored. Cast through any
+      // because the column was added in a recent migration; the typed
+      // user.profile shape doesn't include it yet.
+      const vid = (user.profile as any)?.avatar_video_url;
+      if (vid) setAvatarVideoUrl(vid);
       initedAvatarRef.current = true;
     }
     if (user?.profile?.banner_url && !initedBannerRef.current) {
@@ -2532,6 +2515,14 @@ export default function ProfilePage() {
   // Adjust to fit — uploads directly, photo is displayed with object-fit:cover
   function loadImg(e:React.ChangeEvent<HTMLInputElement>, set:(s:string)=>void, supabasePath?: { bucket: string; path: string; dbField: string }) {
     const f=e.target.files?.[0]; if(!f) return;
+    // Route videos to the avatar-video pipeline. Only the avatar field
+    // accepts video — banner stays image-only. Live Photos exported as
+    // .mov also land here.
+    if (f.type.startsWith('video/') && supabasePath?.dbField === 'avatar_url') {
+      loadAvatarVideo(f, supabasePath);
+      e.target.value = '';
+      return;
+    }
     const r=new FileReader();
     r.onload=async ev=>{
       const dataUrl = ev.target!.result as string;
@@ -2543,6 +2534,15 @@ export default function ProfilePage() {
           if (supabasePath.dbField === "avatar_url") {
             latestUploadedAvatarUrlRef.current = publicUrl;
             initedAvatarRef.current = true;
+            // Uploading a new still avatar clears any video — switching
+            // back to a static photo should drop the video overlay.
+            setAvatarVideoUrl(null);
+            await supabase.from('users').update({
+              avatar_url: publicUrl,
+              avatar_video_url: null,
+            } as any).eq('id', user.id);
+            set(publicUrl);
+            return;
           }
           if (supabasePath.dbField === "banner_url") {
             latestUploadedBannerUrlRef.current = publicUrl;
@@ -2555,6 +2555,106 @@ export default function ProfilePage() {
       }
     };
     r.readAsDataURL(f); e.target.value="";
+  }
+
+  // Upload a video as the avatar. Validates duration ≤ 5 seconds (the
+  // promised cap), extracts the first frame as a still poster image
+  // (uploaded to avatar_url so feed/comments/groups keep rendering a
+  // photo without changes), then uploads the video itself to
+  // avatar_video_url. The profile page renders an autoplay/muted/loop
+  // <video> over the poster — everywhere else just sees the poster.
+  //
+  // Why client-side first-frame extraction: keeps the change to one
+  // ALTER TABLE migration. Server doesn't need to know about videos —
+  // it just stores the URLs. The browser handles all the encoding.
+  async function loadAvatarVideo(file: File, supabasePath: { bucket: string; path: string; dbField: string }) {
+    if (!user) return;
+    const blobUrl = URL.createObjectURL(file);
+    // Probe duration + first frame via a hidden video element.
+    const probe = document.createElement('video');
+    probe.preload = 'metadata';
+    probe.muted = true;
+    probe.playsInline = true;
+    probe.src = blobUrl;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        probe.onloadedmetadata = () => resolve();
+        probe.onerror = () => reject(new Error('Could not read video'));
+        // 10s fallback in case the loadedmetadata event never fires
+        setTimeout(() => reject(new Error('Timed out reading video')), 10_000);
+      });
+    } catch (err) {
+      console.error('[profile] video probe failed:', err);
+      alert("Could not read that video. Try a different file (mp4 or mov works best).");
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
+    if (probe.duration > 5.5) {
+      // Hard cap so the avatar doesn't dominate the page or eat bandwidth.
+      const got = Math.round(probe.duration * 10) / 10;
+      alert(`Avatar videos must be 5 seconds or less. Yours is ${got}s — trim it in your phone's Photos app and try again.`);
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
+    // Show the video preview immediately so the user sees a response.
+    setAvatar(blobUrl);
+    setAvatarVideoUrl(blobUrl);
+
+    // Capture first frame for the poster image.
+    let posterUrl: string | null = null;
+    try {
+      probe.currentTime = 0;
+      await new Promise<void>((resolve) => {
+        probe.onseeked = () => resolve();
+        setTimeout(() => resolve(), 2_000);
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = probe.videoWidth || 600;
+      canvas.height = probe.videoHeight || 600;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
+        const posterData = canvas.toDataURL('image/jpeg', 0.85);
+        const compressed = await compressImage(posterData);
+        posterUrl = await uploadPhoto(compressed, supabasePath.bucket, supabasePath.path);
+      }
+    } catch (err) {
+      console.warn('[profile] poster extraction failed, will use video without poster:', err);
+    }
+
+    // Upload the video itself. Path mirrors the poster path but with .mp4.
+    const videoPath = supabasePath.path.replace(/\.[a-zA-Z0-9]+$/, '.mp4');
+    const videoUrl = await uploadPhoto(file, supabasePath.bucket, videoPath);
+
+    if (videoUrl) {
+      if (posterUrl) {
+        // Both succeeded. Save both URLs.
+        latestUploadedAvatarUrlRef.current = posterUrl;
+        initedAvatarRef.current = true;
+        setAvatar(posterUrl);
+        setAvatarVideoUrl(videoUrl);
+        await supabase.from('users').update({
+          avatar_url: posterUrl,
+          avatar_video_url: videoUrl,
+        } as any).eq('id', user.id);
+      } else {
+        // No poster — fall back to video URL in both slots so something
+        // shows. Browsers display a black square for <img src=mp4> but
+        // the profile page renders <video> when avatarVideoUrl is set,
+        // so the user's profile still works; only other pages will fail.
+        latestUploadedAvatarUrlRef.current = videoUrl;
+        initedAvatarRef.current = true;
+        setAvatarVideoUrl(videoUrl);
+        await supabase.from('users').update({
+          avatar_video_url: videoUrl,
+        } as any).eq('id', user.id);
+      }
+    } else {
+      alert('Video upload failed. Try again or use an image instead.');
+      setAvatar(null);
+      setAvatarVideoUrl(null);
+    }
+    URL.revokeObjectURL(blobUrl);
   }
 
   async function saveBannerPosition() {
@@ -2803,64 +2903,6 @@ export default function ProfilePage() {
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
-      {/* Page-level lightbox for the avatar + banner viewers. Avatars
-          render in a circular viewer (matching the profile picture's
-          framing exactly — same crop, same zoom, just bigger). Banners
-          use the standard rectangular Lightbox. Joey reported the
-          rectangular default felt wrong for avatars: "When I click on
-          the profile picture it loads kinda weird sizing. it should
-          just be circular like the profile picture." */}
-      {pageLb && pageLb.kind === 'avatar' && (
-        <div
-          onClick={() => setPageLb(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 99999,
-            background: "rgba(0,0,0,0.92)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 24,
-          }}
-        >
-          <button
-            onClick={() => setPageLb(null)}
-            aria-label="Close"
-            style={{
-              position: "absolute", top: 16, right: 20,
-              width: 44, height: 44, borderRadius: "50%",
-              background: "rgba(255,255,255,0.12)", border: "none",
-              color: "#fff", fontSize: 24, cursor: "pointer", lineHeight: 1, zIndex: 2,
-            }}
-          >×</button>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "min(70vw, 70vh)",
-              height: "min(70vw, 70vh)",
-              borderRadius: "50%",
-              overflow: "hidden",
-              background: "#000",
-              boxShadow: "0 12px 60px rgba(0,0,0,0.6)",
-            }}
-          >
-            <img
-              src={ImagePresets.full(pageLb.src)}
-              loading="eager"
-              decoding="async"
-              alt=""
-              style={{
-                width: "100%", height: "100%",
-                objectFit: "cover",
-                objectPosition: `center ${pageLb.position}%`,
-                transform: `scale(${pageLb.scale / 100})`,
-                transformOrigin: "center center",
-                display: "block",
-              }}
-            />
-          </div>
-        </div>
-      )}
-      {pageLb && pageLb.kind === 'banner' && (
-        <Lightbox src={pageLb.src} onClose={() => setPageLb(null)} />
-      )}
 
       <style jsx global>{`
         /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
@@ -2882,6 +2924,11 @@ export default function ProfilePage() {
            rings rotate at different speeds for depth. The avatar itself stays
            still — only the ring around it moves. Animation is slow + smooth
            (8s) so it never feels distracting. */
+        /* L3 SILVER — silver ring around avatar. Originally rotated, but
+           Joey reported: "Lol this is just spinning clockwise. Its giving
+           me a headache." Keeping the conic gradient as a static silver
+           halo so the tier reward still feels prestigious without the
+           motion sickness. */
         .tier-silver-avatar-wrap {
           position: relative;
           padding: 4px;
@@ -2894,12 +2941,11 @@ export default function ProfilePage() {
             #C0C0C0 75%,
             #6B7280 100%
           );
-          animation: tierSilverRingSpin 8s linear infinite;
           box-shadow: 0 0 22px rgba(220,220,235,0.35);
         }
         .tier-silver-avatar-wrap::after {
-          /* Inner soft glow ring spinning the OTHER direction.
-             Creates a "shimmery" depth effect without being chaotic. */
+          /* Static inner highlight. Still gives a slight shimmer feel
+             from the gradient but doesn't rotate. */
           content: '';
           position: absolute;
           inset: -3px;
@@ -2912,17 +2958,14 @@ export default function ProfilePage() {
             rgba(255,255,255,0.3) 90%,
             transparent 100%
           );
-          animation: tierSilverRingSpinReverse 12s linear infinite;
           pointer-events: none;
           z-index: -1;
         }
+        /* Spin keyframes left in place but no longer referenced — kept
+           in case we want to opt-in to motion later via a setting. */
         @keyframes tierSilverRingSpin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
-        }
-        @keyframes tierSilverRingSpinReverse {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(-360deg); }
         }
 
         /* L4 GOLD — gold shimmer that sweeps across the profile NAME.
@@ -4051,59 +4094,65 @@ export default function ProfilePage() {
                 users see a clean avatar with no extra padding. */}
             <div className={(progressInfo?.level ?? 1) >= 3 ? "tier-silver-avatar-wrap" : ""} style={{
               position:"relative",
-              cursor: avatarRepositionMode ? "ns-resize" : (profileImg ? "pointer" : "default"),
+              cursor:avatarRepositionMode?"ns-resize":"default",
               userSelect:"none",
             }}
               onMouseDown={handleAvatarMouseDown}
               onMouseMove={handleAvatarMouseMove}
               onMouseUp={handleAvatarMouseUp}
               onMouseLeave={handleAvatarMouseUp}
-              onClick={() => {
-                // Tap-to-view-full. Skipped while repositioning (the
-                // mouseDown/Move/Up handlers above already drive that
-                // gesture and the click that fires on mouseUp without
-                // significant drag would otherwise pop the lightbox
-                // mid-reposition). Also skipped when there's no image
-                // — the upload label inside takes care of that case.
-                // Pass the current avatarPosition + avatarScale state
-                // so the viewer renders the EXACT crop shown on the
-                // profile, just larger.
-                if (avatarRepositionMode) return;
-                if (profileImg) {
-                  setPageLb({
-                    src: profileImg,
-                    kind: 'avatar',
-                    position: avatarPosition,
-                    scale: avatarScale,
-                  });
-                }
-              }}
             >
               <TierFrame tier={userTier} size={avatarSize}>
-              {profileImg
+              {avatarVideoUrl ? (
+                // Video avatar — autoplay/muted/loop/playsInline for the
+                // Live Photo feel. Poster (avatar_url) shows while the
+                // video buffers. Muted is required for iOS autoplay.
+                // pointerEvents:none lets the parent wrapper handle the
+                // reposition + lightbox-open clicks consistently with
+                // the img path.
+                <video
+                  src={avatarVideoUrl}
+                  poster={profileImg || undefined}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  style={{
+                    width: avatarSize, height: avatarSize, borderRadius: "50%",
+                    objectFit: "cover",
+                    objectPosition: `center ${avatarPosition}%`,
+                    transform: `scale(${avatarScale / 100})`,
+                    transformOrigin: "center center",
+                    display: "block",
+                    pointerEvents: "none",
+                    transition: avatarDragState ? "none" : "transform 0.1s, object-position 0.1s",
+                  }}
+                />
+              ) : profileImg
                 ? <img src={ImagePresets.full(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,transform:`scale(${avatarScale/100})`,transformOrigin:"center center",display:"block",pointerEvents:"none",transition:avatarDragState?"none":"transform 0.1s, object-position 0.1s"}} alt="Profile"/>
                 : <div style={{width:avatarSize-32,height:avatarSize-32,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
-              {/* When no image, make whole circle a label */}
-              {!profileImg && !avatarRepositionMode && (
-                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+              {/* When no image, make whole circle a label. accept now
+                  includes video so users can upload a Live Photo /MOV/
+                  short MP4 directly. */}
+              {!profileImg && !avatarVideoUrl && !avatarRepositionMode && (
+                <label style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <input type="file" accept="image/*,video/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                   <span style={{fontSize:13}}>📷</span>
                 </label>
               )}
-              {/* Camera button always visible at bottom right when not repositioning.
-                  stopPropagation so a click on the camera doesn't ALSO open the
-                  lightbox (the wrapper's onClick would otherwise fire). */}
+              {/* Camera button always visible at bottom right when not repositioning */}
               {!avatarRepositionMode && (
-                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
-                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
+                  <input type="file" accept="image/*,video/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
               )}
               {/* Reposition button — show when image exists and not in reposition mode.
                   Hidden on mobile via .hide-on-mobile — touch UX will handle this differently later. */}
               {profileImg && !avatarRepositionMode && user && (
-                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(true);}}
+                <button className="hide-on-mobile" onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
                   style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
                   <span style={{fontSize:11}}>↕</span>
                   <span style={{color:"#fff",fontSize:10,fontWeight:700}}>Reposition</span>
@@ -4180,7 +4229,7 @@ export default function ProfilePage() {
           <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":(bannerImg?"pointer":"default"),userSelect:"none"}}
+              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#DDD6FE)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
@@ -4189,26 +4238,16 @@ export default function ProfilePage() {
               onTouchStart={e=>{ if(!repositionMode)return; setDragState({startY:e.touches[0].clientY,startPos:bannerPosition}); }}
               onTouchMove={handleBannerTouchMove}
               onTouchEnd={()=>setDragState(null)}
-              onClick={() => {
-                // Tap-to-view-full for the banner. Same logic as the
-                // avatar: skipped during repositioning, no-op when no
-                // banner has been uploaded. Banners stay rectangular
-                // so we just pass kind: 'banner'.
-                if (repositionMode) return;
-                if (bannerImg) setPageLb({ src: bannerImg, kind: 'banner' });
-              }}
             >
               {bannerImg
                 ? <img src={ImagePresets.full(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transform:`scale(${bannerScale/100})`,transformOrigin:"center center",transition:dragState?"none":"transform 0.1s, object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
                 : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
               {/* Reposition button — show on hover or when in reposition mode.
-                  Hidden on mobile via .hide-on-mobile (touch UX later).
-                  stopPropagation so the wrapper's onClick doesn't ALSO
-                  open the lightbox when this is tapped. */}
+                  Hidden on mobile via .hide-on-mobile (touch UX later). */}
               {bannerImg && !repositionMode && (bannerHovered || true) && user && (
                 <button
                   className="hide-on-mobile"
-                  onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(true);}}
+                  onClick={e=>{e.preventDefault();setRepositionMode(true);}}
                   style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:6,zIndex:5}}
                 >
                   <span style={{fontSize:12}}>↕</span>
@@ -4236,10 +4275,9 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
-              {/* Always-visible camera button overlay for banner.
-                  stopPropagation so click doesn't open the lightbox. */}
+              {/* Always-visible camera button overlay for banner */}
               {!repositionMode && (
-                <label onClick={(e) => e.stopPropagation()} style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
+                <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
                   <span style={{fontSize:16}}>📷</span>
                   <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
                   <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImg(e,setBanner,user?{bucket:'avatars',path:`${user.id}/banner.jpg`,dbField:'banner_url'}:undefined)}/>
