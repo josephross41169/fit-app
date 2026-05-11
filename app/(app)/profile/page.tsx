@@ -1593,6 +1593,12 @@ export default function ProfilePage() {
   // MIGRATION REQUIRED (run in Supabase SQL editor):
   //   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_video_url text;
   const [avatarVideoUrl, setAvatarVideoUrl] = useState<string | null>(null);
+  // Ref to the video element so we can drive the custom replay cycle.
+  // Joey's spec: "I want it to loop every 20 seconds." So instead of
+  // the HTML `loop` attribute (which replays the instant the video ends),
+  // we play once, wait until 20s has elapsed from play-start, then
+  // replay. For a 5-second video that's a ~15-second pause between cycles.
+  const avatarVideoRef = useRef<HTMLVideoElement | null>(null);
   const [editProfile,setEditProfile] = useState(false);
   const [showLevelModal,setShowLevelModal] = useState(false);
   // Profile share button state. Shows "✓ Copied" for 2.5s after copy.
@@ -2063,6 +2069,33 @@ export default function ProfilePage() {
   const [showGoalCreate, setShowGoalCreate] = useState(false);
 
   // Reusable loader so we can refetch after creating a new goal.
+  // 20-second replay cycle for video avatars. Per Joey: "I want it to
+  // loop every 20 seconds." We deliberately don't use the HTML `loop`
+  // attribute (which restarts the instant the video ends) — that's too
+  // busy for a profile picture. Instead the video plays once via
+  // autoPlay, and this effect schedules a manual replay every 20s.
+  // Cleared on URL change or unmount so navigating away doesn't leave
+  // background timers running. iOS autoplay quirk: muted is required
+  // (we set muted on the element) and the user must have interacted
+  // with the page at least once before sound-policy lets play() succeed,
+  // but autoPlay covers the first play without explicit interaction.
+  useEffect(() => {
+    if (!avatarVideoUrl) return;
+    const vid = avatarVideoRef.current;
+    if (!vid) return;
+    // Kick a manual cycle every 20s. The video plays for its natural
+    // duration (≤5s, hard-capped at upload) then sits paused on its
+    // last frame until the next cycle fires currentTime=0+play.
+    const interval = setInterval(() => {
+      try {
+        vid.currentTime = 0;
+        const p = vid.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch { /* ignore */ }
+    }, 20_000);
+    return () => clearInterval(interval);
+  }, [avatarVideoUrl]);
+
   const reloadProfileGoals = useCallback(() => {
     if (!user) return;
     supabase.from('goals').select('*').eq('user_id', user.id).eq('is_completed', false)
@@ -2522,6 +2555,27 @@ export default function ProfilePage() {
       loadAvatarVideo(f, supabasePath);
       e.target.value = '';
       return;
+    }
+    // HEIC detection — iOS Live Photos picked through Safari's file
+    // picker come through as image/heic or image/heif (just the still
+    // frame, with the motion data stripped). If the user intended their
+    // Live Photo to animate, they need to export it as a video first
+    // in Photos. We tell them once and still upload the still so they
+    // get something visible immediately. Detection is best-effort: not
+    // every iOS file gets the heic mime type, some come through as
+    // jpeg with a .heic extension; checking both.
+    const isHeic = /^image\/hei[cf]$/i.test(f.type)
+      || /\.hei[cf]$/i.test(f.name);
+    if (isHeic && supabasePath?.dbField === 'avatar_url') {
+      alert(
+        "Uploading a Live Photo as a still.\n\n" +
+        "Live Photos can't bring their motion through a browser upload — only the still frame is sent. " +
+        "To use the moving version as your profile picture:\n\n" +
+        "1. Open the Live Photo in iOS Photos\n" +
+        "2. Tap Share → Save as Video\n" +
+        "3. Upload that video here.\n\n" +
+        "Going to use this as a still photo for now."
+      );
     }
     const r=new FileReader();
     r.onload=async ev=>{
@@ -4104,18 +4158,19 @@ export default function ProfilePage() {
             >
               <TierFrame tier={userTier} size={avatarSize}>
               {avatarVideoUrl ? (
-                // Video avatar — autoplay/muted/loop/playsInline for the
-                // Live Photo feel. Poster (avatar_url) shows while the
-                // video buffers. Muted is required for iOS autoplay.
-                // pointerEvents:none lets the parent wrapper handle the
-                // reposition + lightbox-open clicks consistently with
-                // the img path.
+                // Video avatar — autoPlay/muted/playsInline. No `loop`:
+                // the 20-second replay cycle is driven by a setInterval
+                // effect above so there's a pause between plays
+                // (Joey: "I want it to loop every 20 seconds").
+                // Muted is required for iOS autoplay. Poster fallback
+                // is the still avatar_url which displays while the
+                // video buffers and on connections where video fails.
                 <video
+                  ref={avatarVideoRef}
                   src={avatarVideoUrl}
                   poster={profileImg || undefined}
                   autoPlay
                   muted
-                  loop
                   playsInline
                   preload="metadata"
                   style={{
