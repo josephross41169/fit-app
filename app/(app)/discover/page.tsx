@@ -275,6 +275,11 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
   const displayHandle = post.username || userObj?.username || "user";
   const displayAvatar = (typeof post.avatar === 'string' && !post.avatar.startsWith('http')) ? post.avatar : null;
   const avatarUrl     = userObj?.avatar_url || (typeof post.avatar === 'string' && post.avatar.startsWith('http') ? post.avatar : null);
+  // Pull the moving-avatar URL too (avatar_video_url on users). When set,
+  // the avatar circle below renders a looping muted <video> instead of
+  // <img>. Joey's ask: "make it so the moving profile picture works
+  // everywhere your profile picture is seen."
+  const avatarVideoUrl = (userObj as any)?.avatar_video_url || null;
   const avatarIni     = displayName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
 
   // ── Multi-photo carousel data ────────────────────────────────────────
@@ -338,7 +343,9 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             prefetch step. */}
         <Link href={`/profile/${displayHandle}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
-            {avatarUrl
+            {avatarVideoUrl
+              ? <video src={avatarVideoUrl} poster={avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              : avatarUrl
               ? <img src={avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display="none"}}/>
               : (displayAvatar || avatarIni)}
           </div>
@@ -547,7 +554,9 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
                 return (
                   <div key={c.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                     <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#A78BFA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {cu.avatar_url
+                      {cu.avatar_video_url
+                        ? <video src={cu.avatar_video_url} poster={cu.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                        : cu.avatar_url
                         ? <img src={cu.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                         : cini}
                     </div>
@@ -954,7 +963,7 @@ export default function DiscoverPage() {
           .limit(500),
         supabase
           .from('posts')
-          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
           .ilike('location', `%${cityKey}%`)
           .order('created_at', { ascending: false })
           .limit(30),
@@ -970,7 +979,7 @@ export default function DiscoverPage() {
         const inList = locationIds.map((id: string) => `"${id}"`).join(',');
         const { data: combined } = await supabase
           .from('posts')
-          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
           .or(`location.ilike.%${cityKey}%,location_id.in.(${inList})`)
           .order('created_at', { ascending: false })
           .limit(30);
@@ -994,7 +1003,7 @@ export default function DiscoverPage() {
       // rather than fake placeholder content.
       const { data: trending } = await supabase
         .from('posts')
-        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
         .eq('is_public', true)
         .gte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
         .order('likes_count', { ascending: false })
