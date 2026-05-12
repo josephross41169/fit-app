@@ -21,6 +21,13 @@ import {
   type UserRivalryRecord, type RivalryBadge,
   type RivalryStat,
 } from "@/lib/rivalries";
+// Buddy chat counterpart helpers (mirror the rivalries chat API).
+// Schema in migration-buddy-chat.sql — table: buddy_chat_messages.
+import {
+  getBuddyMessages, sendBuddyTextMessage, sendBuddyPhotoMessage,
+  unblurBuddyPhoto, subscribeToBuddyMessages,
+  type BuddyMessage,
+} from "@/lib/buddyChat";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATIC CONFIG (unchanged from original — just the visual catalog)
@@ -826,6 +833,180 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
             placeholder="Say something... 😤" disabled={sending}
             style={{ flex: 1, background: "#0D0D0D", border: "1px solid #2D1B69", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
           <button onClick={handleSendText} disabled={sending || !input.trim()} style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: input.trim() ? "linear-gradient(135deg,#7C3AED,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 16, cursor: sending || !input.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 4px 12px #7C3AED55" : "none" }}>
+            ↑
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUDDY CHAT — mirrors RivalChat but for the workout-buddy pairing.
+//
+// Key differences from RivalChat:
+//   - Talks to buddy_chat_messages instead of rival_messages
+//     (separate table — see migration-buddy-chat.sql)
+//   - Keyed by buddy match.id (matchId), not rivalryId
+//   - Friendlier palette (green/blue gradient instead of red/purple
+//     trash-talk look) since buddies are cooperative
+//   - Default empty-state copy + input placeholder are encouraging,
+//     not antagonistic
+//   - "buddyFirstName" instead of "rivalFirstName" for avatar initials
+//
+// Everything else (auto-scroll-only-on-net-additions, blur photos until
+// reveal, realtime subscription) intentionally identical so users
+// switching between rivals and buddies have a consistent experience.
+// ─────────────────────────────────────────────────────────────────────────────
+function BuddyChat({ matchId, myId, buddyFirstName }: {
+  matchId: string; myId: string; buddyFirstName: string;
+}) {
+  const [messages, setMessages] = useState<BuddyMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Scroll-management refs — same pattern as RivalChat. We scroll the
+  // chat container DIRECTLY via .scrollTop so the page never jumps;
+  // initialMessagesLoadRef skips the first-load scroll; length tracking
+  // ignores in-place updates (blur reveal) so they don't trigger scrolls.
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const initialMessagesLoadRef = useRef(true);
+  const lastMessagesLengthRef = useRef(0);
+  useEffect(() => {
+    initialMessagesLoadRef.current = true;
+    lastMessagesLengthRef.current = 0;
+  }, [matchId]);
+
+  // Initial load + realtime subscription
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const msgs = await getBuddyMessages(matchId);
+      if (!cancelled) setMessages(msgs);
+    }
+    load();
+
+    const unsub = subscribeToBuddyMessages(
+      matchId,
+      (newMsg) => setMessages((prev) => {
+        if (prev.find((m) => m.id === newMsg.id)) return prev; // dedupe
+        return [...prev, newMsg];
+      }),
+      (updated) => setMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m)),
+    );
+
+    return () => { cancelled = true; unsub(); };
+  }, [matchId]);
+
+  useEffect(() => {
+    if (initialMessagesLoadRef.current) {
+      initialMessagesLoadRef.current = false;
+      lastMessagesLengthRef.current = messages.length;
+      return;
+    }
+    if (messages.length <= lastMessagesLengthRef.current) {
+      lastMessagesLengthRef.current = messages.length;
+      return;
+    }
+    lastMessagesLengthRef.current = messages.length;
+    const el = chatScrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  async function handleSendText() {
+    const trimmed = input.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    try {
+      await sendBuddyTextMessage(matchId, trimmed);
+      setInput("");
+    } catch (e) {
+      console.error("Buddy send failed:", e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handlePhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || sending) return;
+    setSending(true);
+    try {
+      await sendBuddyPhotoMessage(matchId, file);
+    } catch (err) {
+      console.error("Buddy photo send failed:", err);
+    } finally {
+      setSending(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleUnblur(messageId: string) {
+    // Optimistic update; revert if server rejects.
+    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, is_blurred: false } : m));
+    try {
+      await unblurBuddyPhoto(messageId);
+    } catch (e) {
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, is_blurred: true } : m));
+      console.error("Buddy unblur failed:", e);
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6 }}>💬 Buddy Chat</div>
+      <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Cheer each other on. Share the wins.</div>
+      <div style={{ background: "#1A1A1A", borderRadius: 20, border: "1px solid #1E40AF44", overflow: "hidden" }}>
+        <div ref={chatScrollRef} style={{ padding: "16px", height: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          {messages.length === 0 && (
+            <div style={{ margin: "auto", color: "#6B7280", fontSize: 13, textAlign: "center" }}>
+              No messages yet. Say hi 👋
+            </div>
+          )}
+          {messages.map((msg) => {
+            const isMe = msg.sender_id === myId;
+            const isBlurredForMe = msg.is_blurred && !isMe;
+            return (
+              <div key={msg.id} style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", alignItems: "flex-end", gap: 8 }}>
+                {!isMe && (
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg,#3B82F6,#4ADE80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: "#fff" }}>
+                    {buddyFirstName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div style={{ maxWidth: "72%" }}>
+                  {msg.photo_url ? (
+                    <div onClick={isBlurredForMe ? () => handleUnblur(msg.id) : undefined} style={{ borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", overflow: "hidden", position: "relative", cursor: isBlurredForMe ? "pointer" : "default", border: isMe ? "2px solid #3B82F666" : "2px solid #2D2D2D", minWidth: 180 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={msg.photo_url} alt="" style={{ display: "block", width: "100%", maxWidth: 240, filter: isBlurredForMe ? "blur(30px)" : "none", transition: "filter 0.3s" }} />
+                      {isBlurredForMe && (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)", color: "#fff", fontWeight: 800, fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+                          <div style={{ fontSize: 24, marginBottom: 4 }}>👁</div>
+                          Tap to reveal
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: "10px 14px", borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isMe ? "linear-gradient(135deg,#3B82F6,#4ADE80)" : "#2D2D2D", color: "#fff", fontSize: 13, lineHeight: 1.5, boxShadow: isMe ? "0 4px 12px #3B82F644" : "none" }}>
+                      {msg.content}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: "#6B7280", marginTop: 4, textAlign: isMe ? "right" : "left" }}>
+                    {new Date(msg.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ padding: "12px 16px", borderTop: "1px solid #1E40AF44", display: "flex", gap: 10, alignItems: "center" }}>
+          <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handlePhotoPick} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={sending} style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid #1E40AF44", background: "#0D0D0D", color: "#9CA3AF", fontSize: 18, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            📷
+          </button>
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendText()}
+            placeholder="Send your buddy a message... 💪" disabled={sending}
+            style={{ flex: 1, background: "#0D0D0D", border: "1px solid #1E40AF44", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
+          <button onClick={handleSendText} disabled={sending || !input.trim()} style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: input.trim() ? "linear-gradient(135deg,#3B82F6,#4ADE80)" : "#2D2D2D", color: "#fff", fontSize: 16, cursor: sending || !input.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 4px 12px #3B82F655" : "none" }}>
             ↑
           </button>
         </div>
@@ -1712,6 +1893,16 @@ function BuddyPanel({ userId }: { userId: string }) {
             </div>
           </div>
         ))}
+
+        {/* Buddy chat — same shape as the rivalry chat below the
+            vs-card on the rivals page, but cooperative palette and
+            copy. Mounted in detail view only since the list view
+            shouldn't fire 1 realtime subscription per buddy card. */}
+        <BuddyChat
+          matchId={selectedMatch.id}
+          myId={userId}
+          buddyFirstName={(buddy?.full_name?.split(' ')[0]) || (buddy?.username) || 'Buddy'}
+        />
 
         {/* Leave button — destructive, kept low-prominence so it's not
             the obvious tap. Confirms before firing. */}
