@@ -84,7 +84,20 @@ function formatTime(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function AvatarCircle({ name, avatarUrl, size = 40 }: { name: string; avatarUrl?: string | null; size?: number }) {
+function AvatarCircle({ name, avatarUrl, avatarVideoUrl, size = 40 }: { name: string; avatarUrl?: string | null; avatarVideoUrl?: string | null; size?: number }) {
+  if (avatarVideoUrl) {
+    // Moving avatar — loops continuously at this size. The 10s cycle
+    // we use on the big profile-page avatar would look glitchy here.
+    return (
+      <video
+        src={avatarVideoUrl}
+        poster={avatarUrl || undefined}
+        autoPlay muted loop playsInline preload="metadata"
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   if (avatarUrl) {
     return (
       <img
@@ -127,7 +140,7 @@ function MessagesPageInner() {
   // Sender info lookup for the active conversation. Populated when the
   // active conv is a group (so we can show "Liam Pavone" above each
   // message). For DMs we don't bother — name's already in the header.
-  const [groupSenders, setGroupSenders] = useState<Record<string, { username: string; full_name: string | null; avatar_url: string | null }>>({});
+  const [groupSenders, setGroupSenders] = useState<Record<string, { username: string; full_name: string | null; avatar_url: string | null; avatar_video_url?: string | null }>>({});
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -324,7 +337,7 @@ function MessagesPageInner() {
       try {
         const { data } = await supabase
           .from('users')
-          .select('id, username, full_name, avatar_url')
+          .select('id, username, full_name, avatar_url, avatar_video_url')
           .in('id', missing);
         if (data) {
           setGroupSenders(prev => {
@@ -438,7 +451,7 @@ function MessagesPageInner() {
       setSearching(true);
       const { data } = await supabase
         .from("users")
-        .select("id, username, full_name, avatar_url")
+        .select("id, username, full_name, avatar_url, avatar_video_url")
         .ilike("username", `%${searchQuery}%`)
         .neq("id", user?.id ?? "")
         .limit(10);
@@ -553,6 +566,7 @@ function MessagesPageInner() {
                 <AvatarCircle
                   name={conv.otherUser.full_name || conv.otherUser.username}
                   avatarUrl={conv.otherUser.avatar_url}
+                  avatarVideoUrl={(conv.otherUser as any).avatar_video_url}
                   size={44}
                 />
                 <div className="flex-1 min-w-0">
@@ -614,6 +628,7 @@ function MessagesPageInner() {
               <AvatarCircle
                 name={activeConv.otherUser.full_name || activeConv.otherUser.username}
                 avatarUrl={activeConv.otherUser.avatar_url}
+                avatarVideoUrl={(activeConv.otherUser as any).avatar_video_url}
                 size={36}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -715,7 +730,14 @@ function MessagesPageInner() {
                         between multiple participants. */}
                     {!isMine && activeConv.isGroup && groupSenders[msg.sender_id] && (
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 4, fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>
-                        {groupSenders[msg.sender_id].avatar_url ? (
+                        {groupSenders[msg.sender_id].avatar_video_url ? (
+                          <video
+                            src={groupSenders[msg.sender_id].avatar_video_url || ""}
+                            poster={groupSenders[msg.sender_id].avatar_url || undefined}
+                            autoPlay muted loop playsInline preload="metadata"
+                            style={{ width: 18, height: 18, borderRadius: "50%", objectFit: "cover" }}
+                          />
+                        ) : groupSenders[msg.sender_id].avatar_url ? (
                           <img
                             src={groupSenders[msg.sender_id].avatar_url || ""}
                             alt=""
@@ -987,7 +1009,7 @@ function MessagesPageInner() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#7C3AED22")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <AvatarCircle name={u.full_name || u.username} avatarUrl={u.avatar_url} size={40} />
+                  <AvatarCircle name={u.full_name || u.username} avatarUrl={u.avatar_url} avatarVideoUrl={(u as any).avatar_video_url} size={40} />
                   <div className="text-left">
                     <div className="font-semibold text-sm" style={{ color: "#E2E8F0" }}>
                       {u.full_name || u.username}
