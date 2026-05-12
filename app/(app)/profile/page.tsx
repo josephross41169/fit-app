@@ -1802,199 +1802,200 @@ export default function ProfilePage() {
   // days count correctly. Each entry is the full activity_logs row.
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  // Lazy-load state. The page initially fetches a small slice (≈7 most
+  // recent days, capped at 50 rows) so it paints fast. When the user
+  // taps "Load older entries" we re-fetch with the full window. The
+  // expanded query takes longer but it's gated behind explicit user
+  // intent, so the cold-load no longer waits on it. Joey's note:
+  // "Just make it so it only loads the most recent 7 activity logs to
+  // speed things up. Then if they want to look at older ones it will
+  // load when they choose to tap on it."
+  const [activityLogsExpanded, setActivityLogsExpanded] = useState(false);
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
+
+  // Pure helper — converts a flat list of activity_logs rows into the
+  // day-card shape rendered by the UI. Pulled out of the loader so we
+  // can reuse it for both the initial load and the lazy "load more"
+  // expansion without duplicating the merge/aggregate logic.
+  const buildDaysFromLogs = useCallback((rows: any[]): typeof DAYS => {
+    const byDate = new Map<string, any[]>();
+    rows.forEach((log: any) => {
+      const d = new Date(log.logged_at);
+      const key = d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      if (!byDate.has(key)) byDate.set(key, []);
+      byDate.get(key)!.push(log);
+    });
+
+    const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
+      const [month, day, year] = dateKey.split('/').map(Number);
+      const date = new Date(year, month - 1, day);
+      const dayName = DAY_NAMES[date.getDay()];
+      const today = new Date();
+      const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+      const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
+
+      const workoutLogs   = logs.filter((l: any) => l.log_type === 'workout');
+      const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
+      const wellnessLogs  = logs.filter((l: any) => l.log_type === 'wellness');
+
+      const sortedWorkouts = [...workoutLogs].sort((a, b) =>
+        new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+      );
+
+      const parts = sortedWorkouts.map((w: any) => ({
+        id: w.id,
+        type: w.workout_type || 'Workout',
+        time: w.logged_at,
+        duration: w.workout_duration_min ? `${w.workout_duration_min} min` : '—',
+        calories: w.workout_calories || 0,
+        exercises: Array.isArray(w.exercises)
+          ? w.exercises.map((e: any) => ({
+              name: e.name || '',
+              sets: parseInt(e.sets) || 0,
+              reps: parseInt(e.reps) || 0,
+              weight: e.weight || '—',
+              weights: Array.isArray(e.weights) ? e.weights : [],
+            }))
+          : [],
+        cardio: Array.isArray(w.cardio)
+          ? w.cardio.map((c: any) => ({
+              type: c.type || 'Cardio',
+              duration: c.duration || '—',
+              distance: c.distance || '',
+            }))
+          : [],
+      }));
+
+      let totalDurationMin = 0;
+      let totalCalories = 0;
+      const allExercises: any[] = [];
+      const allCardio: any[] = [];
+      for (const p of parts) {
+        totalDurationMin += parseInt(String(p.duration)) || 0;
+        totalCalories    += parseInt(String(p.calories)) || 0;
+        for (const e of p.exercises) allExercises.push(e);
+        for (const c of p.cardio) allCardio.push(c);
+      }
+
+      let workout: any = null;
+      if (parts.length > 0) {
+        const extraCount = parts.length - 1;
+        const headline = extraCount > 0 ? `${parts[0].type} (+${extraCount} more)` : parts[0].type;
+        workout = {
+          type: headline,
+          duration: totalDurationMin > 0 ? `${totalDurationMin} min` : '—',
+          calories: totalCalories,
+          exercises: allExercises,
+          cardio: allCardio,
+        };
+      }
+
+      const totalNutCal   = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
+      const totalProtein  = nutritionLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
+      const totalCarbs    = nutritionLogs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
+      const totalFat      = nutritionLogs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
+
+      const nutrition = nutritionLogs.length > 0 ? {
+        calories: Math.round(totalNutCal),
+        protein:  Math.round(totalProtein),
+        carbs:    Math.round(totalCarbs),
+        fat:      Math.round(totalFat),
+        sugar:    0,
+        photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
+        meals: nutritionLogs.map((l: any) => ({
+          key:   l.meal_type || 'Meal',
+          emoji: '🍽️',
+          name:  Array.isArray(l.food_items) && l.food_items.length > 0
+                   ? l.food_items.map((f: any) => f.name).join(', ')
+                   : (l.notes || 'Logged meal'),
+          cal:   l.calories_total || 0,
+        })),
+      } : null;
+
+      const wellness = wellnessLogs.length > 0 ? {
+        entries: wellnessLogs.map((l: any) => ({
+          emoji: l.wellness_emoji || getWellnessStyle(l.wellness_type || '').emoji,
+          activity: l.wellness_type || l.notes || 'Wellness',
+          notes: l.notes || '',
+          photo_url: l.photo_url || null,
+          duration: l.wellness_duration_min ?? null,
+          loggedAt: l.logged_at || l.created_at || null,
+        })),
+      } : null;
+
+      const workoutLogIds = parts.map((p: any) => p.id);
+
+      return {
+        id: dateKey,
+        label: friendlyLabel,
+        emoji: workout ? '💪' : (nutrition ? '🥗' : (wellness ? '🌿' : '🌅')),
+        workout,
+        _workoutParts: parts,
+        nutrition,
+        wellness,
+        _workoutLogId: workoutLogIds[0] || null,
+        _workoutLogIds: workoutLogIds,
+        _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
+        _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
+        photo_url: sortedWorkouts[0]?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
+        _date: date.getTime(),
+      };
+    });
+
+    days.sort((a: any, b: any) => b._date - a._date);
+    return days;
+  }, []);
+
+  // Loader. limit param controls how much we pull — 50 rows for the
+  // initial paint (covers ~7 most recent days even with multi-log days),
+  // 500 when the user taps "Load older entries". Setting realDays
+  // replaces — we don't try to merge new pages with existing because
+  // the 500-row pull is cheap enough to just overwrite once.
+  const loadActivityLogs = useCallback(async (limit: number) => {
+    if (!user) return;
+    try {
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('logged_at', { ascending: false })
+        .limit(limit);
+
+      if (!data || data.length === 0) {
+        setRealDays([]);
+        setRawWorkoutLogs([]);
+        return;
+      }
+      setRawWorkoutLogs(data.filter((l: any) => l.log_type === 'workout'));
+      setRealDays(buildDaysFromLogs(data));
+    } catch (e) {
+      console.error('Failed to load activity logs:', e);
+      setRealDays([]);
+    }
+  }, [user, buildDaysFromLogs]);
 
   useEffect(() => {
     if (!user) return;
-    async function loadLogs() {
-      setLoadingLogs(true);
-      try {
-        // Pull a generous slice so the Workout Progress graphs can show
-        // older calendar months. 60 was too tight — even casual users hit
-        // that in 2 months. 500 covers ~1.5 years of daily activity for
-        // most users without paginating.
-        const { data } = await supabase
-          .from('activity_logs')
-          .select('*')
-          .eq('user_id', user!.id)
-          .order('logged_at', { ascending: false })
-          .limit(500);
+    setLoadingLogs(true);
+    loadActivityLogs(50).finally(() => setLoadingLogs(false));
+  }, [user, loadActivityLogs]);
 
-        if (!data || data.length === 0) {
-          setRealDays([]);
-          setRawWorkoutLogs([]);
-          setLoadingLogs(false);
-          return;
-        }
-
-        // Cache the raw workout rows for the graphs component — this lets
-        // it count individual workouts (including multi-per-day) instead of
-        // days. The day-merged `realDays` view is still used elsewhere for
-        // the activity-log card list.
-        setRawWorkoutLogs(data.filter((l: any) => l.log_type === 'workout'));
-
-        const byDate = new Map<string, any[]>();
-        data.forEach((log: any) => {
-          // Use local date string to correctly bucket by calendar day in user's timezone
-          const d = new Date(log.logged_at);
-          const key = d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); // e.g. "04/02/2026"
-          if (!byDate.has(key)) byDate.set(key, []);
-          byDate.get(key)!.push(log);
-        });
-
-        const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-        // Build one card per calendar date. When multiple workouts are logged
-        // on the same day, the card aggregates totals (calories/duration) but
-        // RENDERS each workout as its own labeled section ("Workout 1", etc.)
-        // so the user can tell them apart.
-        const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
-          // dateKey is "MM/DD/YYYY"
-          const [month, day, year] = dateKey.split('/').map(Number);
-          const date = new Date(year, month - 1, day);
-          const dayName = DAY_NAMES[date.getDay()];
-          const today = new Date();
-          const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-          const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-          const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-          const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
-
-          const workoutLogs   = logs.filter((l: any) => l.log_type === 'workout');
-          const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
-          const wellnessLogs  = logs.filter((l: any) => l.log_type === 'wellness');
-
-          // Sort workouts by their logged_at time, earliest first. The first
-          // becomes "Workout 1", second "Workout 2", etc.
-          const sortedWorkouts = [...workoutLogs].sort((a, b) =>
-            new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
-          );
-
-          // Build per-workout parts (rendered as labeled sections in the card)
-          const parts = sortedWorkouts.map((w: any) => ({
-            id: w.id,
-            type: w.workout_type || 'Workout',
-            time: w.logged_at, // ISO; consumer formats with toLocaleTimeString
-            duration: w.workout_duration_min ? `${w.workout_duration_min} min` : '—',
-            calories: w.workout_calories || 0,
-            exercises: Array.isArray(w.exercises)
-              ? w.exercises.map((e: any) => ({
-                  name: e.name || '',
-                  sets: parseInt(e.sets) || 0,
-                  reps: parseInt(e.reps) || 0,
-                  weight: e.weight || '—',
-                  weights: Array.isArray(e.weights) ? e.weights : [],
-                }))
-              : [],
-            cardio: Array.isArray(w.cardio)
-              ? w.cardio.map((c: any) => ({
-                  type: c.type || 'Cardio',
-                  duration: c.duration || '—',
-                  distance: c.distance || '',
-                }))
-              : [],
-          }));
-
-          // Aggregate totals for the header summary (uses MERGED arrays so
-          // header summary chips like "🔥 X cal" and "⏱ X min" reflect the
-          // whole day's lifting + cardio across all workouts).
-          let totalDurationMin = 0;
-          let totalCalories = 0;
-          const allExercises: any[] = [];
-          const allCardio: any[] = [];
-          for (const p of parts) {
-            totalDurationMin += parseInt(String(p.duration)) || 0;
-            totalCalories    += parseInt(String(p.calories)) || 0;
-            for (const e of p.exercises) allExercises.push(e);
-            for (const c of p.cardio) allCardio.push(c);
-          }
-
-          // Headline: first workout's type, plus "(+N more)" hint when there
-          // are multiple workouts. Sections below the header label them.
-          let workout: any = null;
-          if (parts.length > 0) {
-            const extraCount = parts.length - 1;
-            const headline = extraCount > 0
-              ? `${parts[0].type} (+${extraCount} more)`
-              : parts[0].type;
-            workout = {
-              type: headline,
-              duration: totalDurationMin > 0 ? `${totalDurationMin} min` : '—',
-              calories: totalCalories,
-              exercises: allExercises,
-              cardio: allCardio,
-            };
-          }
-
-          const totalNutCal = nutritionLogs.reduce((s: number, l: any) => s + (l.calories_total || 0), 0);
-          const totalProtein  = nutritionLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
-          const totalCarbs    = nutritionLogs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
-          const totalFat      = nutritionLogs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
-
-          const nutrition = nutritionLogs.length > 0 ? {
-            calories: Math.round(totalNutCal),
-            protein:  Math.round(totalProtein),
-            carbs:    Math.round(totalCarbs),
-            fat:      Math.round(totalFat),
-            sugar:    0,
-            photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
-            meals: nutritionLogs.map((l: any) => ({
-              key:   l.meal_type || 'Meal',
-              emoji: '🍽️',
-              name:  Array.isArray(l.food_items) && l.food_items.length > 0
-                       ? l.food_items.map((f: any) => f.name).join(', ')
-                       : (l.notes || 'Logged meal'),
-              cal:   l.calories_total || 0,
-            })),
-          } : null;
-
-          const wellness = wellnessLogs.length > 0 ? {
-            entries: wellnessLogs.map((l: any) => ({
-              // Emoji is now derived from activity name via the WELLNESS_STYLES
-              // lookup — so users get the right icon (❄️ for cold plunge etc.)
-              // without us storing it on every row. The `wellness_emoji` column
-              // is a legacy fallback.
-              emoji: l.wellness_emoji || getWellnessStyle(l.wellness_type || '').emoji,
-              activity: l.wellness_type || l.notes || 'Wellness',
-              notes: l.notes || '',
-              photo_url: l.photo_url || null,
-              duration: l.wellness_duration_min ?? null,
-              loggedAt: l.logged_at || l.created_at || null,
-            })),
-          } : null;
-
-          // Workout log IDs — array form so delete wipes ALL workouts on a day.
-          const workoutLogIds = parts.map((p: any) => p.id);
-
-          return {
-            id: dateKey,
-            label: friendlyLabel,
-            emoji: workout ? '💪' : (nutrition ? '🥗' : (wellness ? '🌿' : '🌅')),
-            workout,
-            // _workoutParts is read by DayCard. When >1 part, DayCard renders
-            // labeled sections instead of one combined exercise/cardio table.
-            _workoutParts: parts,
-            nutrition,
-            wellness,
-            _workoutLogId: workoutLogIds[0] || null,
-            _workoutLogIds: workoutLogIds,
-            _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
-            _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
-            photo_url: sortedWorkouts[0]?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
-            _date: date.getTime(),
-          };
-        });
-
-        // Sort newest first so today's card is always at the top
-        days.sort((a: any, b: any) => b._date - a._date);
-
-        setRealDays(days);
-      } catch (e) {
-        console.error('Failed to load activity logs:', e);
-        setRealDays([]);
-      }
-      setLoadingLogs(false);
+  // Handler for the "Load older entries" button at the bottom of the
+  // activity log. Re-fetches with the full window and flips the
+  // expanded flag so the button hides afterwards.
+  const handleExpandActivityLogs = useCallback(async () => {
+    setLoadingMoreLogs(true);
+    try {
+      await loadActivityLogs(500);
+      setActivityLogsExpanded(true);
+    } finally {
+      setLoadingMoreLogs(false);
     }
-    loadLogs();
-  }, [user]);
+  }, [loadActivityLogs]);
+
 
   // ── Followers / Following modal ──
   const [socialModal,setSocialModal] = useState<"followers"|"following"|null>(null);
@@ -3266,7 +3267,7 @@ export default function ProfilePage() {
                     onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
                     onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
                     <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
-                      {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                      {u.avatar_url ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:800,fontSize:14,color:C.text}}>{u.full_name}</div>
@@ -4779,6 +4780,32 @@ export default function ProfilePage() {
                     </>
                   );
                 })()}
+                {/* Lazy-load CTA. Hidden after the user clicks (we then
+                    have the full window in memory). Initial load is 50
+                    rows for fast paint; this re-fetches with the full
+                    500-row window when the user wants to scroll deeper. */}
+                {!activityLogsExpanded && realDays.length > 0 && (
+                  <div style={{display:"flex",justifyContent:"center",marginTop:16}}>
+                    <button
+                      onClick={handleExpandActivityLogs}
+                      disabled={loadingMoreLogs}
+                      style={{
+                        background: "transparent",
+                        border: `1.5px solid ${C.purpleMid}`,
+                        color: C.purple,
+                        padding: "10px 22px",
+                        borderRadius: 14,
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: loadingMoreLogs ? "default" : "pointer",
+                        opacity: loadingMoreLogs ? 0.6 : 1,
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      {loadingMoreLogs ? "Loading…" : "Load older entries →"}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
