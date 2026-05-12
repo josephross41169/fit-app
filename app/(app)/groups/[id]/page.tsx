@@ -2888,9 +2888,13 @@ export default function GroupPage() {
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:3 }}>Updated in real-time · Based on challenge scores</div>
                   </div>
                   <div style={{ padding:"8px 0" }}>
-                    {leaderboardGroups[0][1].entries.map((entry:any) => (
+                    {leaderboardGroups[0][1].entries.map((entry:any) => {
+                      const profileHref = entry.username ? `/profile/${entry.username}` : '/profile';
+                      return (
                       <div key={`${entry.challengeId}-${entry.rank}`} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
-                        onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
+                        onClick={() => router.push(profileHref)}
+                        onMouseEnter={() => router.prefetch(profileHref)}
+                        onPointerEnter={() => router.prefetch(profileHref)}>
                         <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#1A2A1A", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                           {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                         </div>
@@ -2906,7 +2910,8 @@ export default function GroupPage() {
                           <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{entry.metric}</div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -2917,9 +2922,13 @@ export default function GroupPage() {
                       <div style={{ fontWeight:900, fontSize:15, color:"#fff" }}>{challengeGroup.emoji} {challengeGroup.name}</div>
                     </div>
                     <div style={{ padding:"8px 0" }}>
-                      {challengeGroup.entries.map((entry:any) => (
+                      {challengeGroup.entries.map((entry:any) => {
+                        const profileHref = entry.username ? `/profile/${entry.username}` : '/profile';
+                        return (
                         <div key={`${challengeKey}-${entry.rank}`} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:`1px solid ${C.blueLight}`, cursor:"pointer" }}
-                          onClick={() => router.push(entry.username ? `/profile/${entry.username}` : '/profile')}>
+                          onClick={() => router.push(profileHref)}
+                          onMouseEnter={() => router.prefetch(profileHref)}
+                          onPointerEnter={() => router.prefetch(profileHref)}>
                           <div style={{ width:32, height:32, borderRadius:"50%", background:entry.rank<=3?`linear-gradient(135deg,${["#F5A623","#9E9E9E","#CD7F32"][entry.rank-1]},${["#FFD700","#BDBDBD","#E8A87C"][entry.rank-1]})`:"#1A2A1A", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:entry.rank<=3?"#fff":C.sub, flexShrink:0 }}>
                             {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                           </div>
@@ -2935,7 +2944,8 @@ export default function GroupPage() {
                             <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{entry.metric}</div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))
@@ -3564,6 +3574,8 @@ export default function GroupPage() {
                   <div key={i} style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"relative" }}>
                     {/* Tapping the body navigates to profile */}
                     <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
+                      onMouseEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
+                      onPointerEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
                       style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0, cursor:"pointer" }}>
                       <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
                       <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
@@ -4423,6 +4435,8 @@ export default function GroupPage() {
                   onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
                 >
                   <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
+                    onMouseEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
+                    onPointerEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
                     style={{ display:"flex", alignItems:"center", gap:11, flex:1, minWidth:0, cursor:"pointer" }}>
                     <div style={{ width:12, fontSize:10, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
                     <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
