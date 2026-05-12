@@ -44,7 +44,7 @@ interface Comment {
   parent_id: string | null;
   content: string;
   created_at: string;
-  users: { username: string; full_name: string; avatar_url: string | null };
+  users: { username: string; full_name: string; avatar_url: string | null; avatar_video_url?: string | null };
 }
 
 type RsvpStatus = "going" | "interested" | null;
@@ -111,7 +111,7 @@ export default function EventDetailPage() {
     // Load creator profile
     const { data: cp } = await supabase
       .from("users")
-      .select("username, full_name, avatar_url, account_type")
+      .select("username, full_name, avatar_url, avatar_video_url, account_type")
       .eq("id", data.creator_id)
       .single();
     setCreatorProfile(cp);
@@ -134,7 +134,7 @@ export default function EventDetailPage() {
     if (!eventId) return;
     const { data } = await supabase
       .from("event_comments")
-      .select("*, users:user_id(username, full_name, avatar_url)")
+      .select("*, users:user_id(username, full_name, avatar_url, avatar_video_url)")
       .eq("event_id", eventId)
       .order("created_at", { ascending: true });
     setComments(data || []);
@@ -213,7 +213,7 @@ export default function EventDetailPage() {
     if (attendees.length > 0) return;
     const { data } = await supabase
       .from("event_rsvps")
-      .select("status, users:user_id(id, username, full_name, avatar_url)")
+      .select("status, users:user_id(id, username, full_name, avatar_url, avatar_video_url)")
       .eq("event_id", eventId)
       .order("created_at", { ascending: true });
     setAttendees(data || []);
@@ -345,7 +345,9 @@ export default function EventDetailPage() {
           <Card title="Hosted by">
             <Link href={`/profile/${creatorProfile.username}`} style={{ display: "flex", gap: 12, alignItems: "center", textDecoration: "none", color: "inherit" }}>
               <div style={{ width: 44, height: 44, borderRadius: 22, background: C.input, overflow: "hidden", flexShrink: 0 }}>
-                {creatorProfile.avatar_url
+                {(creatorProfile as any).avatar_video_url
+                  ? <video src={(creatorProfile as any).avatar_video_url} poster={creatorProfile.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : creatorProfile.avatar_url
                   /* eslint-disable-next-line @next/next/no-img-element */
                   ? <img src={creatorProfile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: C.sub, fontSize: 18 }}>👤</div>
@@ -437,7 +439,9 @@ export default function EventDetailPage() {
                 {attendees.map((a, i) => (
                   <Link key={i} href={`/profile/${a.users.username}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, textDecoration: "none", color: "inherit" }}>
                     <div style={{ width: 36, height: 36, borderRadius: 18, background: C.input, overflow: "hidden", flexShrink: 0 }}>
-                      {a.users.avatar_url
+                      {(a.users as any).avatar_video_url
+                        ? <video src={(a.users as any).avatar_video_url} poster={a.users.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : a.users.avatar_url
                         /* eslint-disable-next-line @next/next/no-img-element */
                         ? <img src={a.users.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.sub }}>👤</div>
@@ -511,7 +515,9 @@ function CommentRow({ comment, isOwn, onDelete, onReply, compact }: { comment: C
     <div style={{ display: "flex", gap: 10 }}>
       <Link href={`/profile/${comment.users.username}`} style={{ flexShrink: 0 }}>
         <div style={{ width: compact ? 28 : 34, height: compact ? 28 : 34, borderRadius: 99, background: C.input, overflow: "hidden" }}>
-          {comment.users.avatar_url
+          {(comment.users as any).avatar_video_url
+            ? <video src={(comment.users as any).avatar_video_url} poster={comment.users.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : comment.users.avatar_url
             /* eslint-disable-next-line @next/next/no-img-element */
             ? <img src={comment.users.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: C.sub }}>👤</div>
