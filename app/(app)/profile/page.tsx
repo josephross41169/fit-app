@@ -1594,10 +1594,10 @@ export default function ProfilePage() {
   //   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_video_url text;
   const [avatarVideoUrl, setAvatarVideoUrl] = useState<string | null>(null);
   // Ref to the video element so we can drive the custom replay cycle.
-  // Joey's spec: "I want it to loop every 20 seconds." So instead of
-  // the HTML `loop` attribute (which replays the instant the video ends),
-  // we play once, wait until 20s has elapsed from play-start, then
-  // replay. For a 5-second video that's a ~15-second pause between cycles.
+  // Joey's spec: "loop every 10 seconds." So instead of the HTML `loop`
+  // attribute (which replays the instant the video ends), we play once,
+  // wait until 10s has elapsed from play-start, then replay. For a
+  // 5-second video that's a ~5-second pause between cycles.
   const avatarVideoRef = useRef<HTMLVideoElement | null>(null);
   const [editProfile,setEditProfile] = useState(false);
   const [showLevelModal,setShowLevelModal] = useState(false);
@@ -2070,7 +2070,7 @@ export default function ProfilePage() {
   const [showGoalCreate, setShowGoalCreate] = useState(false);
 
   // Reusable loader so we can refetch after creating a new goal.
-  // 20-second replay cycle for video avatars. Per Joey: "I want it to
+  // 10-second replay cycle for video avatars. Per Joey: "I want it to
   // loop every 20 seconds." We deliberately don't use the HTML `loop`
   // attribute (which restarts the instant the video ends) — that's too
   // busy for a profile picture. Instead the video plays once via
@@ -2093,7 +2093,7 @@ export default function ProfilePage() {
         const p = vid.play();
         if (p && typeof p.catch === 'function') p.catch(() => {});
       } catch { /* ignore */ }
-    }, 20_000);
+    }, 10_000);
     return () => clearInterval(interval);
   }, [avatarVideoUrl]);
 
@@ -4161,7 +4161,7 @@ export default function ProfilePage() {
               <TierFrame tier={userTier} size={avatarSize}>
               {avatarVideoUrl ? (
                 // Video avatar — autoPlay/muted/playsInline. No `loop`:
-                // the 20-second replay cycle is driven by a setInterval
+                // the 10-second replay cycle is driven by a setInterval
                 // effect above so there's a pause between plays
                 // (Joey: "I want it to loop every 20 seconds").
                 // Muted is required for iOS autoplay. Poster fallback
