@@ -1030,9 +1030,10 @@ export default function UserProfilePage() {
                   return (
                     <div key={u.id}
                       onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}
-                      style={{display:"flex",alignItems:"center",gap:14,padding:"12px 10px",borderRadius:16,cursor:"pointer",transition:"background 0.15s",marginBottom:4}}
-                      onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
+                      onMouseEnter={e=>{(e.currentTarget.style.background=C.greenLight); router.prefetch(`/profile/${u.username}`);}}
+                      onPointerEnter={() => router.prefetch(`/profile/${u.username}`)}
                       onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
+                      style={{display:"flex",alignItems:"center",gap:14,padding:"12px 10px",borderRadius:16,cursor:"pointer",transition:"background 0.15s",marginBottom:4}}
                     >
                       <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
                         {u.avatar_url
