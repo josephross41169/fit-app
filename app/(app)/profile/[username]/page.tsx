@@ -436,7 +436,7 @@ export default function UserProfilePage() {
         const p = vid.play();
         if (p && typeof p.catch === 'function') p.catch(() => {});
       } catch { /* ignore */ }
-    }, 20_000);
+    }, 10_000);
     return () => clearInterval(interval);
   }, [profile?.avatar_video_url]);
   // Raw workout logs (NOT merged-by-day) for WorkoutProgressGraphs. The graphs
