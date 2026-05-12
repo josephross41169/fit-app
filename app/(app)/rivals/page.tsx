@@ -320,9 +320,14 @@ function MatchingScreen({ category, tier, onMatched, onCancel }: {
 // `accent` is the user's side-color (purple for me, red for opponent) which
 // drives the border + glow. `glow` toggles the highlight when this side is
 // currently winning the rivalry.
-function RivalAvatar({ name, url, accent, glow, size = 88 }: {
+function RivalAvatar({ name, url, videoUrl, accent, glow, size = 88 }: {
   name: string;
   url: string | null;
+  /** Optional Live Photo / video URL (avatar_video_url on users).
+   *  When set, renders a looping muted <video> in the same slot as
+   *  the still <img>. Joey: "make it so the moving profile picture
+   *  works everywhere your profile picture is seen." */
+  videoUrl?: string | null;
   accent: string;
   glow: boolean;
   size?: number;
@@ -339,6 +344,12 @@ function RivalAvatar({ name, url, accent, glow, size = 88 }: {
     color: "#fff", fontWeight: 900, fontSize: size * 0.32,
     overflow: "hidden",
   };
+  if (videoUrl) {
+    // Loop continuously rather than the 10s cycle the big profile-page
+    // avatar uses. At this size (88px in the vs card) continuous motion
+    // looks smooth; pause-then-replay would feel like glitching.
+    return <video src={videoUrl} poster={url || undefined} autoPlay muted loop playsInline preload="metadata" style={baseStyle} />;
+  }
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={url} alt={name} style={baseStyle} />;
@@ -350,12 +361,16 @@ function RivalAvatar({ name, url, accent, glow, size = 88 }: {
 // avatar → name + @handle → city pill → record pill → bio.
 // Bio is clamped to 2 lines so a long bio doesn't push the layout around.
 function RivalProfileCard({
-  name, username, avatarUrl, city, bio,
+  name, username, avatarUrl, avatarVideoUrl, city, bio,
   record, accent, glow, scoreLabel, score,
 }: {
   name: string;
   username: string;
   avatarUrl: string | null;
+  /** Optional Live Photo / 5-second video for the avatar. Plumbed down
+   *  to RivalAvatar so the rival's animated profile picture shows on
+   *  the vs card, not just on their profile page. */
+  avatarVideoUrl?: string | null;
   city: string | null;
   bio: string | null;
   record: { wins: number; losses: number };
@@ -368,7 +383,7 @@ function RivalProfileCard({
   const winRate = total > 0 ? Math.round((record.wins / total) * 100) : 0;
   return (
     <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-      <RivalAvatar name={name} url={avatarUrl} accent={accent} glow={glow} />
+      <RivalAvatar name={name} url={avatarUrl} videoUrl={avatarVideoUrl} accent={accent} glow={glow} />
       <div style={{ marginTop: 12, fontWeight: 900, fontSize: 16, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {name}
       </div>
@@ -512,6 +527,10 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
   const myName = myProfile.full_name || "You";
   const myUsername = myProfile.username || "you";
   const myAvatar = myProfile.avatar_url || null;
+  // Same plumbing as the opponent's video URL — pulled from the
+  // current user's profile so the user's own animated avatar shows
+  // on the vs card alongside their opponent's.
+  const myAvatarVideoUrl = (myProfile as any).avatar_video_url || null;
   const myCity = myProfile.city || null;
   const myBio = myProfile.bio || null;
   const opponentFirstName = rivalry.opponent.full_name.split(" ")[0];
@@ -555,6 +574,7 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
             name={myName}
             username={myUsername}
             avatarUrl={myAvatar}
+            avatarVideoUrl={myAvatarVideoUrl}
             city={myCity}
             bio={myBio}
             record={{ wins: myRecord.wins, losses: myRecord.losses }}
@@ -574,6 +594,7 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
             name={rivalry.opponent.full_name}
             username={rivalry.opponent.username}
             avatarUrl={rivalry.opponent.avatar_url}
+            avatarVideoUrl={(rivalry.opponent as any).avatar_video_url}
             city={rivalry.opponent.city}
             bio={rivalry.opponent.bio}
             record={{ wins: theirRecord.wins, losses: theirRecord.losses }}
@@ -1862,7 +1883,10 @@ function BuddyPanel({ userId }: { userId: string }) {
         ].map((row, i) => (
           <div key={i} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              {row.user?.avatar_url ? (
+              {row.user?.avatar_video_url ? (
+                <video src={row.user.avatar_video_url} poster={row.user.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata"
+                  style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
+              ) : row.user?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={row.user.avatar_url} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
               ) : (
