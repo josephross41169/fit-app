@@ -539,7 +539,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
                   <div key={c.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                     <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#A78BFA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                       {cu.avatar_url
-                        ? <img src={ImagePresets.avatarSm(cu.avatar_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                        ? <img src={cu.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                         : cini}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
@@ -1067,7 +1067,7 @@ export default function DiscoverPage() {
                       onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
                       onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
                       <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-                        {u.avatar_url ? <img src={ImagePresets.avatarSm(u.avatar_url)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                        {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                       </div>
                       <div style={{ flex:1,minWidth:0 }}>
                         <div style={{ fontWeight:800,fontSize:14,color:C.text }}>{u.full_name}</div>
