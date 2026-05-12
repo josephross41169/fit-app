@@ -845,7 +845,7 @@ export default function GroupPage() {
           isOwner
             ? supabase
                 .from("events")
-                .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, creator_id, users:creator_id (id, username, full_name, avatar_url)")
+                .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, creator_id, users:creator_id (id, username, full_name, avatar_url, avatar_video_url)")
                 .eq("group_id", data.group.id)
                 .eq("approved", false)
                 .order("created_at", { ascending: false })
@@ -998,7 +998,7 @@ export default function GroupPage() {
       if (allUserIds.length > 0) {
         const { data: users } = await supabase
           .from("users")
-          .select("id,username,full_name,avatar_url")
+          .select("id,username,full_name,avatar_url,avatar_video_url")
           .in("id", allUserIds);
 
         const userMap: Record<string,any> = {};
@@ -1049,7 +1049,7 @@ export default function GroupPage() {
       // Specify foreign key explicitly to avoid ambiguous relationship error
       const { data, error } = await supabase
         .from("group_challenges")
-        .select(`*, group_challenge_members(user_id,contribution,users!group_challenge_members_user_id_fkey(id,username,full_name,avatar_url))`)
+        .select(`*, group_challenge_members(user_id,contribution,users!group_challenge_members_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url))`)
         .eq("creator_group_id", dbId)
         .order("created_at", { ascending: false });
       console.log("loadGroupGoals raw data:", data, "error:", error);
@@ -1413,6 +1413,7 @@ export default function GroupPage() {
       id: n.id, user: n.user?.full_name || n.user?.username || 'Unknown',
       avatar: (n.user?.full_name || n.user?.username || 'U').slice(0,2).toUpperCase(),
       avatarUrl: n.user?.avatar_url || null,
+      avatarVideoUrl: n.user?.avatar_video_url || null,
       time: new Date(n.created_at).toLocaleDateString(), category: n.category, content: n.content, likes: n.likes_count || 0,
       // Carry media through. Detect type from URL extension when the column
       // is missing (legacy notes won't have media_type set).
@@ -1428,6 +1429,7 @@ export default function GroupPage() {
     id: p.id, user: p.user?.full_name || p.user?.username || 'Unknown',
     avatar: (p.user?.full_name || p.user?.username || 'U').slice(0,2).toUpperCase(),
     avatarUrl: p.user?.avatar_url || null,
+      avatarVideoUrl: p.user?.avatar_video_url || null,
     time: new Date(p.created_at).toLocaleDateString(), content: p.content, likes: p.likes_count || 0,
     photo: p.media_url || null,
     // mediaType drives whether the renderer uses <img> or <video>. Posts saved
@@ -1446,6 +1448,7 @@ export default function GroupPage() {
         rank: i + 1,
         avatar: (e.user?.full_name || e.user?.username || 'U').slice(0,2).toUpperCase(),
         avatarUrl: e.user?.avatar_url || null,
+      avatarVideoUrl: e.user?.avatar_video_url || null,
         name: e.user?.full_name || e.user?.username || 'Unknown',
         username: e.user?.username || null,
         score: `${e.score} ${e.metric_label || ''}`,
@@ -1479,6 +1482,7 @@ export default function GroupPage() {
         rank: i + 1,
         avatar: (m.user?.full_name || m.user?.username || 'U').slice(0,2).toUpperCase(),
         avatarUrl: m.user?.avatar_url || null,
+      avatarVideoUrl: m.user?.avatar_video_url || null,
         name: m.user?.full_name || m.user?.username || 'Unknown',
         username: m.user?.username || null,
         userId: m.user_id || null,
@@ -2802,7 +2806,7 @@ export default function GroupPage() {
                 <div key={post.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, marginBottom:18, overflow:"hidden" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px 10px" }}>
                     <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {post.avatarUrl ? <img src={post.avatarUrl} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : post.avatar}
+                      {(post as any).avatarVideoUrl ? <video src={(post as any).avatarVideoUrl} poster={post.avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : post.avatarUrl ? <img src={post.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : post.avatar}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{post.user}</div>
@@ -2899,7 +2903,11 @@ export default function GroupPage() {
                           {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                         </div>
                         <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                          {(entry as any).avatarUrl ? <img src={(entry as any.avatarUrl)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
+                          {(entry as any).avatarVideoUrl
+                            ? <video src={(entry as any).avatarVideoUrl} poster={(entry as any).avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                            : (entry as any).avatarUrl
+                            ? <img src={(entry as any).avatarUrl} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                            : entry.avatar}
                         </div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
@@ -2933,7 +2941,11 @@ export default function GroupPage() {
                             {entry.rank <= 3 ? ["🥇","🥈","🥉"][entry.rank-1] : `#${entry.rank}`}
                           </div>
                           <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                            {(entry as any).avatarUrl ? <img src={(entry as any.avatarUrl)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : entry.avatar}
+                            {(entry as any).avatarVideoUrl
+                            ? <video src={(entry as any).avatarVideoUrl} poster={(entry as any).avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                            : (entry as any).avatarUrl
+                            ? <img src={(entry as any).avatarUrl} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                            : entry.avatar}
                           </div>
                           <div style={{ flex:1 }}>
                             <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{entry.name}</div>
@@ -3042,7 +3054,7 @@ export default function GroupPage() {
                                       <span style={{fontSize:14}}>{["🥇","🥈","🥉"][idx]||"🎖️"}</span>
                                       <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#F5A623,#FFD700)",
                                         display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
-                                        {p.users?.avatar_url?<img src={p.users.avatar_url} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(p.users?.full_name||p.users?.username||"?")[0]}
+                                        {p.users?.avatar_video_url?<video src={p.users.avatar_video_url} poster={p.users.avatar_url||undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:p.users?.avatar_url?<img src={p.users.avatar_url} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(p.users?.full_name||p.users?.username||"?")[0]}
                                       </div>
                                       <span style={{fontSize:13,fontWeight:700,color:"#92400E",flex:1}}>{p.users?.full_name||p.users?.username||"Member"}</span>
                                       <span style={{fontSize:12,fontWeight:800,color:"#F5A623"}}>{p.score} {ch.metric_unit||"pts"}</span>
@@ -3121,7 +3133,7 @@ export default function GroupPage() {
                               <div key={p.user_id || idx} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                                 <span style={{ fontSize:14 }}>{["🥇","🥈","🥉"][idx]||"🎖️"}</span>
                                 <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,#F5A623,#FFD700)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900, color:"#fff", overflow:"hidden", flexShrink:0 }}>
-                                  {p.users?.avatar_url ? <img src={p.users.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (p.users?.full_name||p.users?.username||'?')[0]}
+                                  {p.users?.avatar_video_url ? <video src={p.users.avatar_video_url} poster={p.users.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : p.users?.avatar_url ? <img src={p.users.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (p.users?.full_name||p.users?.username||'?')[0]}
                                 </div>
                                 <span style={{ fontSize:13, fontWeight:700, color:C.text, flex:1 }}>{p.users?.full_name || p.users?.username || 'Member'}</span>
                                 <span style={{ fontSize:12, fontWeight:800, color:"#F5A623" }}>{p.score} {ch.metric_unit||'pts'}</span>
@@ -3265,7 +3277,7 @@ export default function GroupPage() {
                 <div key={note.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                     <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {note.avatarUrl ? <img src={note.avatarUrl} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : note.avatar}
+                      {(note as any).avatarVideoUrl ? <video src={(note as any).avatarVideoUrl} poster={note.avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : note.avatarUrl ? <img src={note.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : note.avatar}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:800, fontSize:13, color:C.text }}>{note.user}</div>
@@ -3519,7 +3531,9 @@ export default function GroupPage() {
                                   <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
                                     background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
                                     display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
-                                    {u?.avatar_url
+                                    {u?.avatar_video_url
+                                      ? <video src={u.avatar_video_url} poster={u.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                                      : u?.avatar_url
                                       ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
                                       : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
                                   </div>
@@ -3578,7 +3592,7 @@ export default function GroupPage() {
                       onPointerEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
                       style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0, cursor:"pointer" }}>
                       <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}</div>
+                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{(m as any).avatarVideoUrl ? <video src={(m as any).avatarVideoUrl} poster={m.avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : m.avatar}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
                         <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
@@ -4338,7 +4352,9 @@ export default function GroupPage() {
                               <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
                                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",
                                 flexShrink:0,overflow:"hidden",border:`2px solid ${sel?"#7C3AED":"transparent"}`}}>
-                                {m.avatarUrl
+                                {m.avatarVideoUrl
+                                  ? <video src={m.avatarVideoUrl} poster={m.avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                                  : m.avatarUrl
                                   ? <img src={m.avatarUrl} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt={name}/>
                                   : name[0]?.toUpperCase()}
                               </div>
@@ -4440,7 +4456,7 @@ export default function GroupPage() {
                     style={{ display:"flex", alignItems:"center", gap:11, flex:1, minWidth:0, cursor:"pointer" }}>
                     <div style={{ width:12, fontSize:10, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
                     <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : m.avatar}
+                      {(m as any).avatarVideoUrl ? <video src={(m as any).avatarVideoUrl} poster={m.avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : m.avatar}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
