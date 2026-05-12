@@ -251,7 +251,7 @@ async function hydrateRivalry(r: Rivalry, myId: string): Promise<RivalryWithOppo
 
   const { data: opp } = await supabase
     .from("users")
-    .select("id, username, full_name, avatar_url, city, bio")
+    .select("id, username, full_name, avatar_url, avatar_video_url, city, bio")
     .eq("id", opponentId)
     .single();
 
