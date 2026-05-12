@@ -8,12 +8,13 @@
 // As features land they get added here. Keep this page lightweight and
 // server-API-driven — no heavy client-side state, no heavy queries.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isBusinessAccount } from "@/lib/businessTypes";
+import { enablePush, disablePush, getPushStatus, type PushStatus } from "@/lib/pushClient";
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -25,6 +26,47 @@ export default function SettingsPage() {
   const [deleteReason, setDeleteReason] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+
+  // ── Push notifications state ───────────────────────────────────────────
+  // Status starts as null while we ask the browser what's already been
+  // permissioned + subscribed. Then it's one of the PushStatus values.
+  // Settings UI renders different buttons depending on the value.
+  const [pushStatus, setPushStatus] = useState<PushStatus | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  // On mount, ask the browser what state we're in.
+  useEffect(() => {
+    getPushStatus().then(setPushStatus).catch(() => setPushStatus('unsupported'));
+  }, []);
+
+  async function handleEnablePush() {
+    if (!user || pushBusy) return;
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      await enablePush(user.id);
+      setPushStatus('subscribed');
+    } catch (err: any) {
+      setPushError(err?.message || 'Failed to enable push notifications.');
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    if (!user || pushBusy) return;
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      await disablePush(user.id);
+      setPushStatus('unsubscribed');
+    } catch (err: any) {
+      setPushError(err?.message || 'Failed to disable push notifications.');
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   // ── Handle delete ──────────────────────────────────────────────────────
   // Pipeline: POST /api/db delete_account → client signOut → redirect home.
@@ -114,6 +156,84 @@ export default function SettingsPage() {
             Privacy Policy →
           </Link>
         </Row>
+      </Section>
+
+      {/* ── SECTION: Notifications ──────────────────────────────────────
+          Push notifications wake the device when you're not in the app
+          and a buddy nudges you, a rival's score changes, etc. iOS-only
+          gotcha: web push on iPhone REQUIRES the user to add Livelee to
+          their Home Screen first — Safari refuses the permission prompt
+          otherwise. We detect that and tell them how to fix it instead
+          of failing silently. */}
+      <Section title="🔔 Notifications">
+        {pushStatus === null && (
+          <div style={{ fontSize: 13, color: "#9CA3AF" }}>Checking…</div>
+        )}
+        {pushStatus === 'unsupported' && (
+          <div style={{ fontSize: 13, color: "#9CA3AF" }}>
+            This browser doesn't support push notifications. Try a recent
+            version of Safari (iOS 16.4+), Chrome, or Firefox.
+          </div>
+        )}
+        {pushStatus === 'needs-install' && (
+          <div style={{ fontSize: 13, color: "#9CA3AF", lineHeight: 1.55 }}>
+            On iPhone, push notifications only work after you install Livelee
+            to your Home Screen:
+            <ol style={{ margin: "10px 0 0 18px", padding: 0, color: "#D1D5DB" }}>
+              <li>Tap the <strong>Share</strong> button at the bottom of Safari</li>
+              <li>Scroll down and tap <strong>“Add to Home Screen”</strong></li>
+              <li>Open Livelee from your Home Screen, then come back here</li>
+            </ol>
+          </div>
+        )}
+        {pushStatus === 'denied' && (
+          <div style={{ fontSize: 13, color: "#9CA3AF", lineHeight: 1.55 }}>
+            Notifications are currently blocked. Go to your phone or
+            browser settings, find Livelee in the notifications list,
+            and allow notifications — then come back and reload this page.
+          </div>
+        )}
+        {pushStatus === 'unsubscribed' && (
+          <Row>
+            <button onClick={handleEnablePush} disabled={pushBusy}
+              style={{
+                background: pushBusy ? "#2A2D3E" : "linear-gradient(135deg,#7C3AED,#A78BFA)",
+                color: "#fff", border: "none", padding: "10px 18px",
+                borderRadius: 12, fontWeight: 800, fontSize: 13,
+                cursor: pushBusy ? "default" : "pointer",
+              }}>
+              {pushBusy ? "Turning on…" : "Turn on push notifications"}
+            </button>
+          </Row>
+        )}
+        {pushStatus === 'subscribed' && (
+          <Row>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#10B981", fontWeight: 700 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B98166" }} />
+                On — you'll get notifications on this device
+              </div>
+              <button onClick={handleDisablePush} disabled={pushBusy}
+                style={{
+                  background: "transparent", border: "1px solid #4B5563",
+                  color: "#9CA3AF", padding: "8px 14px", borderRadius: 10,
+                  fontWeight: 700, fontSize: 12, cursor: pushBusy ? "default" : "pointer",
+                }}>
+                {pushBusy ? "Turning off…" : "Turn off"}
+              </button>
+            </div>
+          </Row>
+        )}
+        {pushError && (
+          <div style={{ fontSize: 12, color: "#EF4444", marginTop: 10, padding: 10, background: "#3F0F0F", borderRadius: 10, lineHeight: 1.5 }}>
+            {pushError}
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: "#6B7280", marginTop: 10, paddingLeft: 4, lineHeight: 1.5 }}>
+          You'll get a banner when someone follows you, comments on your
+          post, sends you a message, or your rivalry / workout buddy
+          activity needs attention. You can turn this off at any time.
+        </div>
       </Section>
 
       {/* ── SECTION: Integrations ──────────────────────────────────── */}
