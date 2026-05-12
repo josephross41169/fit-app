@@ -210,7 +210,6 @@ async function computeContribution(userId: string, challenge: ActiveChallenge): 
  *  Best-effort — errors are logged but not thrown so they can't block saves. */
 export async function syncGroupChallengeProgressFor(userId: string): Promise<void> {
   // Verbose logging so issues are easy to diagnose from the browser console.
-  console.log("[groupGoalSync] START for user:", userId);
   try {
     // 1. Find the groups this user belongs to
     const { data: memberships, error: mErr } = await supabase
@@ -224,7 +223,6 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
     }
 
     const groupIds = (memberships ?? []).map((m: any) => m.group_id).filter(Boolean);
-    console.log("[groupGoalSync] user is in", groupIds.length, "groups:", groupIds);
     if (groupIds.length === 0) return;
 
     // 2. Find every active challenge involving this user's groups —
@@ -263,15 +261,12 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
       return true;
     });
 
-    console.log("[groupGoalSync] found", goals.length, "active challenges (creator + opponent side)");
     if (!goals.length) return;
 
     // 3. For each goal, upsert the user's contribution
     for (const ch of goals as any[]) {
-      console.log("[groupGoalSync] → challenge:", ch.title, "| metric:", ch.metric, "| is_group_goal:", ch.is_group_goal);
 
       if (ch.end_date && ch.end_date < nowIso) {
-        console.log("[groupGoalSync]   skipped (expired)");
         continue;
       }
 
@@ -286,7 +281,6 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
       const isWar = !ch.is_group_goal;
 
       const contribution = await computeContribution(userId, ch);
-      console.log("[groupGoalSync]   computed contribution:", contribution, isWar ? "(war)" : "(goal)");
 
       // Check if enrollment row already exists. Using a read-then-write pattern
       // instead of a raw upsert because group_challenge_members may not have
@@ -307,7 +301,6 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
       // every group member who happens to log a workout would let
       // randoms accidentally join the war and score for it.
       if (isWar && !existing) {
-        console.log("[groupGoalSync]   skipped (war, user not enrolled)");
         continue;
       }
 
@@ -319,7 +312,7 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
           .eq("challenge_id", ch.id)
           .eq("user_id", userId);
         if (updErr) console.error("[groupGoalSync]   UPDATE failed:", updErr);
-        else console.log("[groupGoalSync]   UPDATE ok, contribution =", contribution);
+
       } else {
         // Not enrolled yet → create the row.
         const { error: insErr } = await supabase
@@ -331,7 +324,7 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
             contribution,
           });
         if (insErr) console.error("[groupGoalSync]   INSERT failed:", insErr);
-        else console.log("[groupGoalSync]   INSERT ok, contribution =", contribution);
+
       }
     }
 
@@ -340,7 +333,6 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
     // We only update existing participant rows — never auto-enroll, because
     // that would break the opt-in nature. If a user joined, their score gets
     // auto-computed from activity_logs. If they didn't join, we don't touch them.
-    console.log("[groupGoalSync] → checking enrolled challenges");
     const { data: enrollments, error: enrErr } = await supabase
       .from("challenge_participants")
       .select("challenge_id, challenges!inner(id,metric_key,is_active,deadline,created_at,name,group_id)")
@@ -349,25 +341,20 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
     if (enrErr) {
       console.error("[groupGoalSync] challenge_participants query error:", enrErr);
     } else if (enrollments?.length) {
-      console.log("[groupGoalSync] user is enrolled in", enrollments.length, "challenges");
       for (const row of enrollments as any[]) {
         const ch = row.challenges;
         if (!ch) continue;
-        console.log("[groupGoalSync] → challenge:", ch.name, "| metric_key:", ch.metric_key);
 
         // Only auto-sync challenges that picked a standard metric from the catalog.
         // Custom (manual) challenges have metric_key = null and keep using the
         // log_challenge_progress flow — we leave them alone.
         if (!ch.metric_key) {
-          console.log("[groupGoalSync]   skipped (custom manual challenge)");
           continue;
         }
         if (!ch.is_active) {
-          console.log("[groupGoalSync]   skipped (inactive)");
           continue;
         }
         if (ch.deadline && ch.deadline < nowIso) {
-          console.log("[groupGoalSync]   skipped (past deadline)");
           continue;
         }
 
@@ -379,7 +366,6 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
           end_date: ch.deadline,
           created_at: ch.created_at,
         });
-        console.log("[groupGoalSync]   computed score:", score);
 
         const { error: updErr } = await supabase
           .from("challenge_participants")
@@ -387,7 +373,7 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
           .eq("challenge_id", ch.id)
           .eq("user_id", userId);
         if (updErr) console.error("[groupGoalSync]   UPDATE failed:", updErr);
-        else console.log("[groupGoalSync]   UPDATE ok, score =", score);
+
 
         // Also update leaderboard_entries so the challenge leaderboard reflects it
         const { error: lbErr } = await supabase
@@ -402,10 +388,8 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
         if (lbErr) console.warn("[groupGoalSync]   leaderboard upsert failed (non-fatal):", lbErr);
       }
     } else {
-      console.log("[groupGoalSync] user isn't enrolled in any challenges");
     }
 
-    console.log("[groupGoalSync] DONE");
   } catch (err) {
     console.error("[groupGoalSync] unexpected error:", err);
   }
@@ -429,7 +413,6 @@ export async function syncGroupChallengeProgressFor(userId: string): Promise<voi
  *  right number, no double-counting. Best-effort: errors are logged but
  *  never thrown, can't block a save. */
 export async function syncMemberChallengeProgressFor(userId: string): Promise<void> {
-  console.log("[memberChallengeSync] START for user:", userId);
   try {
     // 1. Find every challenge this user has joined
     const { data: parts, error: pErr } = await supabase
@@ -442,7 +425,6 @@ export async function syncMemberChallengeProgressFor(userId: string): Promise<vo
       return;
     }
     if (!parts || parts.length === 0) {
-      console.log("[memberChallengeSync] user has no challenges");
       return;
     }
 
@@ -468,7 +450,6 @@ export async function syncMemberChallengeProgressFor(userId: string): Promise<vo
       return true;
     });
 
-    console.log("[memberChallengeSync] trackable challenges:", trackable.length);
     if (trackable.length === 0) return;
 
     // 3. For each, recompute and write the new score
@@ -476,7 +457,6 @@ export async function syncMemberChallengeProgressFor(userId: string): Promise<vo
       const from = ch.created_at;
       const to = ch.deadline || new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString();
       const score = await computeMetricContribution(userId, ch.metric_key as MetricKey, from, to);
-      console.log("[memberChallengeSync] →", ch.name, "metric:", ch.metric_key, "score:", score);
 
       const { error: upErr } = await supabase
         .from("challenge_participants")
@@ -506,7 +486,6 @@ export async function syncMemberChallengeProgressFor(userId: string): Promise<vo
       }
     }
 
-    console.log("[memberChallengeSync] DONE");
   } catch (err) {
     console.error("[memberChallengeSync] unexpected error:", err);
   }
