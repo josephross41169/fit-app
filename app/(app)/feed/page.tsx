@@ -386,6 +386,9 @@ interface Story {
   username: string;
   full_name: string | null;
   avatar_url: string | null;
+  /** Optional video URL if the story author uses a Live Photo / 5sec
+   *  video as their profile picture. */
+  avatar_video_url?: string | null;
   media_url: string;
   media_type: 'image' | 'video';
   caption: string | null;
@@ -460,7 +463,9 @@ function StoryViewer({
         {/* Header */}
         <div style={{ position:"absolute",top:18,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:2 }}>
           <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-            {story.avatar_url
+            {story.avatar_video_url
+              ? <video src={story.avatar_video_url} poster={story.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+              : story.avatar_url
               ? <img src={story.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
               : (story.username[0] || "?").toUpperCase()}
           </div>
@@ -1461,17 +1466,22 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
           <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
             <TierFrame tier={post.tier || "default"} size={46}>
-              <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
-                {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-                  ? /* Use the raw avatar URL — routing through
-                        pipes it through the Supabase
-                       image transform endpoint which does a center-square
-                       crop, and that crop looks "zoomed in" when the
-                       subject isn't dead-centered in the source photo
-                       (basically all phone selfies). The sidebar
-                       SideUserBlock uses the raw URL too — keeping these
-                       consistent so a user's face renders the same in
-                       both places. */
+              <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
+                {(post as any).avatarVideoUrl ? (
+                  /* Video avatar — autoplay/muted/loop/playsInline. Loops
+                     continuously here (tiny 46px circle) rather than the
+                     10s cycle the main profile page uses, because the
+                     play-then-pause cycle would look like glitching on
+                     something this small. The big profile picture is
+                     where you actually notice pacing. */
+                  <video src={(post as any).avatarVideoUrl} poster={post.avatar} autoPlay muted loop playsInline preload="metadata"
+                    style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                ) : post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
+                  ? /* Use the raw avatar URL — routing through the Supabase
+                        image transform endpoint does a center-square crop
+                        that looks "zoomed in" when the subject isn't
+                        dead-centered (basically all phone selfies). The
+                        sidebar SideUserBlock uses the raw URL too. */
                     <img src={post.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : post.avatar}
               </div>
@@ -1913,7 +1923,9 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             {visibleComments.map(c => (
               <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
                 <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-                  {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
+                  {(c as any).avatarVideoUrl
+                    ? <video src={(c as any).avatarVideoUrl} poster={c.avatar} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    : c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
                     ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                     : c.avatar}
                 </div>
@@ -2060,7 +2072,9 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
             >
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
               <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
-                {member.avatar_url
+                {(member as any).avatar_video_url
+                  ? <video src={(member as any).avatar_video_url} poster={member.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                  : member.avatar_url
                   ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   : ini}
               </div>
@@ -2226,7 +2240,7 @@ export default function FeedPage() {
       // independently without blocking the others.
       const postsPromise = supabase
         .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, city), locationData:locations(id, name, city, kind)')
+        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, avatar_video_url, city), locationData:locations(id, name, city, kind)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
@@ -2302,7 +2316,7 @@ export default function FeedPage() {
 
         const commentsPromise: Promise<Record<string, any[]>> = (pageRows.length > 0)
           ? supabase.from('comments')
-              .select('id, content, created_at, user_id, post_id, users:user_id(id, username, full_name, avatar_url)')
+              .select('id, content, created_at, user_id, post_id, users:user_id(id, username, full_name, avatar_url, avatar_video_url)')
               .in('post_id', postIds)
               .order('created_at', { ascending: false })
               .then(({ data: allComments }) => {
@@ -2326,6 +2340,7 @@ export default function FeedPage() {
                     id: c.id,
                     user: cname,
                     avatar: cu.avatar_url || cini,
+                    avatarVideoUrl: cu.avatar_video_url || null,
                     text: c.content || '',
                     time: t,
                     user_id: c.user_id,
@@ -2578,7 +2593,7 @@ export default function FeedPage() {
         const followingIds = followData.map(f => f.following_id);
         const { data: fp } = await supabase
           .from('posts')
-          .select('*, users(id, username, full_name, avatar_url), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))')
+          .select('*, users(id, username, full_name, avatar_url, avatar_video_url), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url, avatar_video_url))')
           .in('user_id', followingIds)
           .eq('is_public', true)
           .order('created_at', { ascending: false })
@@ -2757,7 +2772,7 @@ export default function FeedPage() {
     if (page > 0) setLoadingMoreActivity(true);
     let query = supabase
       .from('activity_logs')
-      .select('*, users:user_id(id, username, full_name, avatar_url)')
+      .select('*, users:user_id(id, username, full_name, avatar_url, avatar_video_url)')
       .order('logged_at', { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
     if (filter !== "all") query = query.eq('log_type', filter);
@@ -2810,7 +2825,7 @@ export default function FeedPage() {
       if (false) {
       const { data } = await supabase
         .from('activity_logs')
-        .select('*, users:user_id(id, username, full_name, avatar_url)')
+        .select('*, users:user_id(id, username, full_name, avatar_url, avatar_video_url)')
         .order('logged_at', { ascending: false })
         .limit(20);
       if (data && data.length > 0) {
@@ -2893,7 +2908,7 @@ export default function FeedPage() {
 
       const { data } = await supabase
         .from('users')
-        .select('id, username, full_name, avatar_url, city, followers_count, created_at')
+        .select('id, username, full_name, avatar_url, avatar_video_url, city, followers_count, created_at')
         .neq('id', user?.id ?? '')
         .order('created_at', { ascending: false })
         .limit(30);
@@ -2955,6 +2970,7 @@ export default function FeedPage() {
         username: p.users?.username || "user",
         tier: (p.users?.tier as Tier) || computeTier(p.users?.logs_last_28_days || 0, 0),
         avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
+        avatarVideoUrl: p.users?.avatar_video_url || null,
         time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
@@ -2982,6 +2998,7 @@ export default function FeedPage() {
             user_id: c.user_id,
             user: c.users?.full_name || c.users?.username || "User",
             avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+            avatarVideoUrl: c.users?.avatar_video_url || null,
             text: c.content || "",
             time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
           };
@@ -3340,7 +3357,7 @@ export default function FeedPage() {
               ) : notifications.map(n => (
                 <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                    {(n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} poster={n.from_user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
@@ -3370,6 +3387,7 @@ export default function FeedPage() {
                   user: p.users?.full_name || p.users?.username || "User",
                   username: p.users?.username || "user",
                   avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
+        avatarVideoUrl: p.users?.avatar_video_url || null,
                   time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                   dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
@@ -3392,6 +3410,7 @@ export default function FeedPage() {
                       user_id: c.user_id,
                       user: c.users?.full_name || c.users?.username || "User",
                       avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+            avatarVideoUrl: c.users?.avatar_video_url || null,
                       text: c.content || "",
                       time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                     };
@@ -3609,7 +3628,7 @@ export default function FeedPage() {
             ) : notifications.map(n => (
               <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                 <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                  {(n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} poster={n.from_user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
@@ -3638,6 +3657,7 @@ export default function FeedPage() {
                 user: p.users?.full_name || p.users?.username || "User",
                 username: p.users?.username || "user",
                 avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
+        avatarVideoUrl: p.users?.avatar_video_url || null,
                 time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                 dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
@@ -3657,6 +3677,7 @@ export default function FeedPage() {
                     user_id: c.user_id,
                     user: c.users?.full_name || c.users?.username || "User",
                     avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
+            avatarVideoUrl: c.users?.avatar_video_url || null,
                     text: c.content || "",
                     time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
                   };
