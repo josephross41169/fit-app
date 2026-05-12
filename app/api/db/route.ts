@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { detectStrictPRs, buildHistoricalMaxes, recomputeAllPRs, type ActivityLogRow } from '@/lib/prs';
 import { recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type ActivityLog as GoalActivityLog } from '@/lib/goals';
+// Push notification sender — fire-and-forget. Each notification insert
+// site below also calls this so a banner shows up on the recipient's
+// device. If VAPID env vars aren't set, sendPushToUser is a no-op.
+import { sendPushToUser } from '@/lib/pushServer';
 
 // Mark as dynamic to avoid static collection at build time
 export const dynamic = 'force-dynamic';
@@ -504,14 +508,27 @@ export async function POST(req: NextRequest) {
       const others = (participants || []).filter((p: any) => p.user_id !== senderId);
       if (others.length > 0) {
         const { data: sender } = await admin.from('users').select('full_name,username').eq('id', senderId).single();
+        const senderName = sender?.full_name || sender?.username || 'Someone';
         await admin.from('notifications').insert(others.map((p: any) => ({
           user_id: p.user_id,
           type: 'message',
           from_user_id: senderId,
           reference_id: conversationId,
-          body: `${sender?.full_name || sender?.username || 'Someone'} sent you a message`,
+          body: `${senderName} sent you a message`,
           read: false,
         }))).select(); // ignore errors if table doesn't exist yet
+
+        // Fan out a push to each recipient too. Tag collapses multiple
+        // messages from the same conversation into one banner so a
+        // chatty thread doesn't pile up dozens of lock-screen alerts.
+        for (const p of others) {
+          sendPushToUser(p.user_id, {
+            title: senderName,
+            body: `Sent you a message`,
+            url: `/messages`,
+            tag: `message:${conversationId}`,
+          });
+        }
       }
 
       return NextResponse.json({ message: data });
@@ -661,13 +678,22 @@ export async function POST(req: NextRequest) {
         try {
           const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
           const name = commenter?.full_name || commenter?.username || 'Someone';
+          const snippet = `${content.trim().slice(0, 60)}${content.trim().length > 60 ? '...' : ''}`;
           await admin.from('notifications').insert({
             user_id: postOwnerId,
             from_user_id: commenterId,
             type: 'comment',
             reference_id: postId,
-            body: `${name} commented: "${content.trim().slice(0, 60)}${content.trim().length > 60 ? '...' : ''}"`,
+            body: `${name} commented: "${snippet}"`,
             read: false,
+          });
+          // Tag on the post so a 20-comment dogpile doesn't fan out
+          // into 20 banners — only the latest stays on the lock screen.
+          sendPushToUser(postOwnerId, {
+            title: name,
+            body: `Commented: "${snippet}"`,
+            url: `/post/${postId}`,
+            tag: `post:${postId}`,
           });
         } catch { /* notifications schema may differ — non-fatal */ }
       }
@@ -719,14 +745,23 @@ export async function POST(req: NextRequest) {
       if (cardOwnerId && cardOwnerId !== commenterId) {
         const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
         const name = commenter?.full_name || commenter?.username || 'Someone';
+        const snippet = `${content.slice(0, 60)}${content.length > 60 ? '...' : ''}`;
         await admin.from('notifications').insert({
           user_id: cardOwnerId,
           from_user_id: commenterId,
           type: 'activity_comment',
           reference_id: cardId,
-          body: `${name} commented on your activity: "${content.slice(0, 60)}${content.length > 60 ? '...' : ''}"`,
+          body: `${name} commented on your activity: "${snippet}"`,
           read: false,
         }).catch(() => {}); // don't fail if notifications table isn't ready yet
+        // Activity cards live on the profile page (no dedicated detail
+        // page yet) — best-effort destination.
+        sendPushToUser(cardOwnerId, {
+          title: name,
+          body: `Commented on your activity: "${snippet}"`,
+          url: `/profile`,
+          tag: `activity:${cardId}`,
+        });
       }
 
       // ── @mention notifications in activity comments ─────────────────
@@ -765,6 +800,14 @@ export async function POST(req: NextRequest) {
               body: `${senderName} mentioned you in a comment`,
               read: false,
             }).catch(() => {});
+            // Per-recipient push. Tag scoped to the activity so multiple
+            // mentions in the same thread merge into one banner.
+            sendPushToUser(fu.id, {
+              title: senderName,
+              body: `Mentioned you in a comment`,
+              url: `/profile`,
+              tag: `mention:${cardId}`,
+            });
           }
         }
       } catch { /* best-effort */ }
@@ -812,6 +855,15 @@ export async function POST(req: NextRequest) {
         user_id: userId, from_user_id: fromUserId, type, reference_id: referenceId, body, read: false,
       });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      // Generic catch-all. Caller-supplied body is reused as the push
+      // body; title is the app name since we don't have a sender name
+      // handy at this layer. URL defaults to /feed since the trigger
+      // type isn't standardized.
+      sendPushToUser(userId, {
+        title: 'Livelee',
+        body: body || 'You have a new notification',
+        url: '/feed',
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -1339,6 +1391,15 @@ export async function POST(req: NextRequest) {
             type: 'buddy_matched',
             reference_id: match.id,
             body: `You've been matched with a workout buddy!`,
+          });
+          // Push the waiter — they've been queued possibly for hours
+          // or days and this is the moment they care most about. Tag
+          // by match.id so a rematch (rare) replaces rather than stacks.
+          sendPushToUser(waiter.user_id, {
+            title: 'Livelee',
+            body: `You've been matched with a workout buddy! 💪`,
+            url: `/rivals`,
+            tag: `buddy:${match.id}`,
           });
         } catch { /* notifications table may not have all fields */ }
 
@@ -2697,6 +2758,13 @@ export async function POST(req: NextRequest) {
             body: `Your event ${titleSnip} was approved and is now live`,
             read: false,
           }).catch(() => {});
+          // Push the submitter — they've been waiting for this approval.
+          sendPushToUser((ev as any).creator_id, {
+            title: 'Livelee',
+            body: `Your event ${titleSnip} is approved! 🎉`,
+            url: `/events/${eventId}`,
+            tag: `event:${eventId}`,
+          });
         } catch { /* non-fatal */ }
       }
 
@@ -2762,6 +2830,14 @@ export async function POST(req: NextRequest) {
             body: `${name} RSVP'd to ${titleSnip}`,
             read: false,
           }).catch(() => {});
+          // Tag by event so 50 people RSVP'ing produces 1 banner, not 50.
+          // (User can still see the full list on the event page.)
+          sendPushToUser(creatorId, {
+            title: name,
+            body: `RSVP'd to ${titleSnip}`,
+            url: `/events/${eventId}`,
+            tag: `event:${eventId}`,
+          });
         }
       } catch { /* notifications schema may differ — non-fatal */ }
 
@@ -2832,13 +2908,14 @@ export async function POST(req: NextRequest) {
       try {
         const { data: chRow } = await admin
           .from('challenges')
-          .select('creator_id, name')
+          .select('creator_id, name, group_id')
           .eq('id', challengeId)
           .single();
         if (chRow && (chRow as any).creator_id && (chRow as any).creator_id !== userId) {
           const { data: joiner } = await admin.from('users').select('full_name,username').eq('id', userId).single();
           const name = joiner?.full_name || joiner?.username || 'Someone';
           const chName = (chRow as any).name || 'your challenge';
+          const groupIdForUrl = (chRow as any).group_id;
           await admin.from('notifications').insert({
             user_id: (chRow as any).creator_id,
             from_user_id: userId,
@@ -2847,6 +2924,15 @@ export async function POST(req: NextRequest) {
             body: `${name} joined ${chName}`,
             read: false,
           }).catch(() => {});
+          // Tag by challenge so a flood of joiners doesn't carpet-bomb
+          // the creator's lock screen. URL goes to the group page since
+          // there's no dedicated challenge page yet.
+          sendPushToUser((chRow as any).creator_id, {
+            title: name,
+            body: `Joined ${chName}`,
+            url: groupIdForUrl ? `/groups/${groupIdForUrl}` : '/feed',
+            tag: `challenge:${challengeId}`,
+          });
         }
       } catch { /* non-fatal */ }
 
