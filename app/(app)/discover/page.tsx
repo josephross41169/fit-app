@@ -331,15 +331,24 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
     <div style={{ background:C.white,borderRadius:20,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 24px rgba(124,58,237,0.09)",marginBottom:28,overflow:"hidden" }}>
       {/* Header */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
-        <div onClick={() => router.push(`/profile/${displayHandle}`)} style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
-          {avatarUrl
-            ? <img src={avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display="none"}}/>
-            : (displayAvatar || avatarIni)}
-        </div>
-        <div style={{ flex:1,cursor:"pointer" }} onClick={() => router.push(`/profile/${displayHandle}`)}>
-          <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{displayName}</div>
-          <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} · {post.time || ""}</div>
-        </div>
+        {/* Wrapped in Link so Next.js auto-prefetches the destination
+            profile when this card scrolls into view (mobile) or the
+            user hovers (desktop). Previously these were divs with
+            router.push onClick which navigates fine but skips the
+            prefetch step. */}
+        <Link href={`/profile/${displayHandle}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
+          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
+            {avatarUrl
+              ? <img src={avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display="none"}}/>
+              : (displayAvatar || avatarIni)}
+          </div>
+        </Link>
+        <Link href={`/profile/${displayHandle}`} prefetch style={{ flex: 1, textDecoration: "none", color: "inherit" }}>
+          <div style={{ flex:1,cursor:"pointer" }}>
+            <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{displayName}</div>
+            <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} · {post.time || ""}</div>
+          </div>
+        </Link>
         {userObj?.id && user && userObj.id !== user.id && (
           <FollowButton targetUserId={userObj.id} size="sm" />
         )}
@@ -662,46 +671,49 @@ function BrandCard({ brand, rank }: { brand: typeof TRENDING_BRANDS[0]; rank: nu
 // -- Trending Person Card ------------------------------------------------------
 function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0]; rank: number }) {
   const [following, setFollowing] = useState(false);
-  const router = useRouter();
   return (
-    <div onClick={() => router.push(`/profile/${person.handle.replace("@","")}`)} style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
-      <div style={{ width:14,fontSize:11,fontWeight:900,color:C.darkSub,flexShrink:0,textAlign:"center" }}>#{rank}</div>
-      <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
-        {person.avatar.slice(0,2)}
+    <Link href={`/profile/${person.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
+      <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
+        <div style={{ width:14,fontSize:11,fontWeight:900,color:C.darkSub,flexShrink:0,textAlign:"center" }}>#{rank}</div>
+        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+          {person.avatar.slice(0,2)}
+        </div>
+        <div style={{ flex:1,minWidth:0 }}>
+          <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.name}</div>
+          <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.specialty}</div>
+          <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
+        </div>
+        {/* preventDefault stops the Link navigation when the follow button is tapped */}
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+          {following ? "Following" : "+ Follow"}
+        </button>
       </div>
-      <div style={{ flex:1,minWidth:0 }}>
-        <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.name}</div>
-        <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.specialty}</div>
-        <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
-      </div>
-      <button onClick={() => setFollowing(f=>!f)} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
-        {following ? "Following" : "+ Follow"}
-      </button>
-    </div>
+    </Link>
   );
 }
 
 // -- Suggested Account Card ----------------------------------------------------
 function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
   const [following, setFollowing] = useState(false);
-  const router = useRouter();
   return (
-    <div onClick={() => router.push(`/profile/${account.handle.replace("@","")}`)} style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
-      <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
-        {account.avatar}
-      </div>
-      <div style={{ flex:1,minWidth:0 }}>
-        <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.name}</div>
-        <div style={{ fontSize:10,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.specialty}</div>
-        <div style={{ fontSize:10,color:C.darkSub,marginTop:2 }}>
-          <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers ·
-          <span style={{ color:"#7C3AED",fontWeight:700 }}> {account.mutual} mutual</span>
+    <Link href={`/profile/${account.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
+      <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
+        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
+          {account.avatar}
         </div>
+        <div style={{ flex:1,minWidth:0 }}>
+          <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.name}</div>
+          <div style={{ fontSize:10,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.specialty}</div>
+          <div style={{ fontSize:10,color:C.darkSub,marginTop:2 }}>
+            <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers ·
+            <span style={{ color:"#7C3AED",fontWeight:700 }}> {account.mutual} mutual</span>
+          </div>
+        </div>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+          {following ? "Following" : "+ Follow"}
+        </button>
       </div>
-      <button onClick={() => setFollowing(f=>!f)} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
-        {following ? "Following" : "+ Follow"}
-      </button>
-    </div>
+    </Link>
   );
 }
 
@@ -1062,18 +1074,22 @@ export default function DiscoverPage() {
                   <div style={{ padding:"16px",textAlign:"center",color:C.sub,fontSize:13 }}>No results for "{searchQuery}"</div>
                 ) : (
                   searchResults.map(u => (
-                    <div key={u.id} onClick={()=>{setSearchQuery("");router.push(`/profile/${u.username}`);}}
-                      style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`,transition:"background 0.1s" }}
-                      onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
-                      onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
-                      <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-                        {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                    <Link key={u.id} href={`/profile/${u.username}`} prefetch
+                      onClick={() => setSearchQuery("")}
+                      style={{ textDecoration: "none", color: "inherit" }}>
+                      <div
+                        style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`,transition:"background 0.1s" }}
+                        onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
+                        onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
+                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
+                          {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex:1,minWidth:0 }}>
+                          <div style={{ fontWeight:800,fontSize:14,color:C.text }}>{u.full_name}</div>
+                          <div style={{ fontSize:12,color:C.sub }}>@{u.username}</div>
+                        </div>
                       </div>
-                      <div style={{ flex:1,minWidth:0 }}>
-                        <div style={{ fontWeight:800,fontSize:14,color:C.text }}>{u.full_name}</div>
-                        <div style={{ fontSize:12,color:C.sub }}>@{u.username}</div>
-                      </div>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>
