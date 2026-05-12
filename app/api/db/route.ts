@@ -1570,7 +1570,11 @@ export async function POST(req: NextRequest) {
     // from scratch using strict-PR logic. Used by:
     //   1. Backfill migration when this feature first ships
     //   2. Admin tooling if PRs ever get out of sync
-    //   3. After a user deletes a workout (TODO — not yet wired in)
+    //   3. After a user deletes a workout (now wired in via
+    //      fireTrackersAfterDelete on the profile page — that handler
+    //      fires update_goals_from_log + the challenge/buddy syncs,
+    //      but deliberately does NOT call this PR endpoint; once
+    //      earned a PR shouldn't retroactively un-award).
     //
     // Idempotent: safe to call multiple times. Replaces all existing PRs.
     if (action === 'recompute_user_prs') {
@@ -1628,11 +1632,15 @@ export async function POST(req: NextRequest) {
     //
     // Currently handles:
     //   - first_blood  → first log of the rivalry (by either side)
-    //   - dominant     → ahead by 3+ in score, and we're past midweek
+    //   - early_bird   → 2 consecutive morning workouts during the rivalry
+    //   - night_owl    → 2 consecutive late-night workouts during the rivalry
+    //   - perfect_week → logged on every calendar day of the rivalry
+    //   - quick_strike → logged within 1h after the opponent's log
+    //   - comeback     → was behind, then took the lead (history-aware)
+    //   - untouchable  → never trailed throughout the rivalry (rivalry-end only)
     //
-    // TODO future: early_bird (2 consecutive morning workouts during the
-    // rivalry), comeback (was behind, now ahead — needs progress history
-    // tracking), untouchable (only awarded at rivalry end, not from a log).
+    // All implemented except 'untouchable' which only makes sense at
+    // rivalry-end and we don't have an end-of-rivalry trigger yet.
     if (action === 'unlock_rivalry_badges') {
       const { userId, logId } = payload || {};
       if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
