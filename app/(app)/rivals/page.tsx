@@ -2261,9 +2261,53 @@ export default function RivalsPage() {
 
   // ── AUTH / LOADING GUARDS ──
   if (authLoading || loading) {
+    // Shape-shifting skeleton — matches the rivalry page layout so the
+    // user sees the silhouette of what's about to appear instead of a
+    // blank screen with a "Loading…" label. Same shimmer style as the
+    // profile and groups skeletons so the app feels consistent.
+    const shimmer: React.CSSProperties = {
+      background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+      backgroundSize: "200% 100%",
+      animation: "skeletonShimmer 1.4s ease-in-out infinite",
+    };
     return (
-      <div style={{ background: "#0D0D0D", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "#9CA3AF", fontSize: 14 }}>Loading your rival...</div>
+      <div style={{ background: "#0D0D0D", minHeight: "100vh", paddingBottom: 80 }}>
+        <style jsx global>{`
+          @keyframes skeletonShimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+        `}</style>
+        {/* Sticky header bar */}
+        <div style={{ position: "sticky", top: 0, background: "#0D0D0D", padding: "16px 16px 0", zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ ...shimmer, width: 160, height: 28, borderRadius: 8 }} />
+            <div style={{ ...shimmer, width: 70, height: 22, borderRadius: 11 }} />
+          </div>
+          {/* Rivals / Workout Buddy tab toggle */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <div style={{ ...shimmer, flex: 1, height: 56, borderRadius: 14 }} />
+            <div style={{ ...shimmer, flex: 1, height: 56, borderRadius: 14 }} />
+          </div>
+        </div>
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "8px 16px" }}>
+          {/* You vs Opponent card */}
+          <div style={{ ...shimmer, height: 220, borderRadius: 18, marginBottom: 20 }} />
+          {/* Score row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+            <div style={{ ...shimmer, height: 90, borderRadius: 14 }} />
+            <div style={{ ...shimmer, height: 90, borderRadius: 14 }} />
+          </div>
+          {/* Badge grid header + tiles */}
+          <div style={{ ...shimmer, width: 160, height: 22, borderRadius: 8, marginBottom: 14 }} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 24 }}>
+            {[0, 1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} style={{ ...shimmer, aspectRatio: "1 / 1.1", borderRadius: 14 }} />
+            ))}
+          </div>
+          {/* Chat panel */}
+          <div style={{ ...shimmer, height: 160, borderRadius: 16 }} />
+        </div>
       </div>
     );
   }
