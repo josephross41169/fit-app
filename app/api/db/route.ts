@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
         memCheckRes, cpRes,
       ] = await Promise.all([
         admin.from('group_posts')
-          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)')
+          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)')
           .eq('group_id', gid)
           .order('created_at', { ascending: false })
           .limit(20),
@@ -191,16 +191,16 @@ export async function GET(req: NextRequest) {
           .eq('group_id', gid)
           .order('event_date', { ascending: true }),
         admin.from('challenges')
-          .select('*, challenge_participants(user_id, score, users(full_name, username, avatar_url))')
+          .select('*, challenge_participants(user_id, score, users(full_name, username, avatar_url,avatar_video_url))')
           .eq('group_id', gid)
           .order('created_at', { ascending: false }),
         admin.from('community_notes')
-          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)')
+          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)')
           .eq('group_id', gid)
           .order('created_at', { ascending: false })
           .limit(30),
         admin.from('group_members')
-          .select('*, user:users!group_members_user_id_fkey(id,username,full_name,avatar_url)')
+          .select('*, user:users!group_members_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)')
           .eq('group_id', gid)
           .order('joined_at', { ascending: true }),
         // Membership check — only relevant when we have a userId. When
@@ -269,7 +269,7 @@ export async function GET(req: NextRequest) {
         // Join challenges so we can filter out entries from completed/inactive challenges.
         // `challenges!inner` enforces that the joined row exists — no orphan entries
         // (where the challenge was deleted but leaderboard_entries rows lingered).
-        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url), challenge:challenges!inner(id,name,emoji,metric_label,is_active,deadline)')
+        .select('*, user:users!leaderboard_entries_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url), challenge:challenges!inner(id,name,emoji,metric_label,is_active,deadline)')
         .eq('group_id', groupId)
         .eq('challenge.is_active', true)  // hide entries from ended/deleted challenges
         .order('score', { ascending: false })
@@ -326,7 +326,7 @@ export async function GET(req: NextRequest) {
       if (!cardId) return NextResponse.json({ comments: [] });
       const { data } = await admin
         .from('activity_comments')
-        .select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url)')
+        .select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url,avatar_video_url)')
         .eq('activity_card_id', cardId)
         .order('created_at', { ascending: true });
       return NextResponse.json({ comments: data || [] });
@@ -338,7 +338,7 @@ export async function GET(req: NextRequest) {
       const cityKey = city.split(',')[0].trim();
       const { data } = await admin
         .from('posts')
-        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,city)')
+        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
         .ilike('location', `%${cityKey}%`)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -353,7 +353,7 @@ export async function GET(req: NextRequest) {
       if (!userId) return NextResponse.json({ blocked: [] });
       const { data } = await admin
         .from('user_blocks')
-        .select('created_at, blocked:users!user_blocks_blocked_id_fkey(id, username, full_name, avatar_url)')
+        .select('created_at, blocked:users!user_blocks_blocked_id_fkey(id, username, full_name, avatar_url,avatar_video_url)')
         .eq('blocker_id', userId)
         .order('created_at', { ascending: false });
       return NextResponse.json({ blocked: data || [] });
@@ -542,7 +542,7 @@ export async function POST(req: NextRequest) {
 
         const { data, error } = await admin
           .from('posts')
-          .select(`*, users (id, username, full_name, avatar_url, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+          .select(`*, users (id, username, full_name, avatar_url,avatar_video_url, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url,avatar_video_url))`)
           .eq('is_public', true)
           .in('user_id', followingIds)
           .order('created_at', { ascending: false })
@@ -595,7 +595,7 @@ export async function POST(req: NextRequest) {
       const FETCH_LIMIT = Math.max((PAGE + 1) * PAGE_SIZE * 20, 500);
       const { data: allPosts, error: feedErr } = await admin
         .from('posts')
-        .select(`*, users (id, username, full_name, avatar_url, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url))`)
+        .select(`*, users (id, username, full_name, avatar_url,avatar_video_url, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url,avatar_video_url))`)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
@@ -652,7 +652,7 @@ export async function POST(req: NextRequest) {
       // Fetch full updated comments list for this post (with users joined),
       // using the admin client so RLS doesn't filter rows.
       const { data: comments } = await admin.from('comments')
-        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url)')
+        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url,avatar_video_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -681,7 +681,7 @@ export async function POST(req: NextRequest) {
       const { postId } = payload || {};
       if (!postId) return NextResponse.json({ error: 'Missing postId' }, { status: 400 });
       const { data: comments, error } = await admin.from('comments')
-        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url)')
+        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url,avatar_video_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -711,7 +711,7 @@ export async function POST(req: NextRequest) {
         activity_card_id: cardId,
         commenter_id: commenterId,
         content,
-      }).select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url)').single();
+      }).select('*, commenter:users!activity_comments_commenter_id_fkey(id,username,full_name,avatar_url,avatar_video_url)').single();
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -820,7 +820,7 @@ export async function POST(req: NextRequest) {
       const { userId } = payload;
       const { data, error } = await admin
         .from('notifications')
-        .select('*, from_user:users!notifications_from_user_id_fkey(id,username,full_name,avatar_url)')
+        .select('*, from_user:users!notifications_from_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -851,13 +851,13 @@ export async function POST(req: NextRequest) {
       let convRows: any[] | null = null;
       const groupAware = await admin
         .from('conversations')
-        .select(`id, created_at, group_id, group:groups!conversations_group_id_fkey(id,name,emoji,slug,banner_url,creator_id), conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+        .select(`id, created_at, group_id, group:groups!conversations_group_id_fkey(id,name,emoji,slug,banner_url,creator_id), conversation_participants(user_id, users(id,username,full_name,avatar_url,avatar_video_url)), messages(id,content,created_at,sender_id)`)
         .in('id', convIds);
       if (groupAware.error) {
         // Fall back to legacy schema (no group_id) so DMs still load.
         const legacy = await admin
           .from('conversations')
-          .select(`id, created_at, conversation_participants(user_id, users(id,username,full_name,avatar_url)), messages(id,content,created_at,sender_id)`)
+          .select(`id, created_at, conversation_participants(user_id, users(id,username,full_name,avatar_url,avatar_video_url)), messages(id,content,created_at,sender_id)`)
           .in('id', convIds);
         convRows = legacy.data || [];
       } else {
@@ -1011,8 +1011,8 @@ export async function POST(req: NextRequest) {
           duration_days, status, is_group_goal, goal_category, stakes,
           start_date, end_date, created_at, member_count,
           invite_token_expires_at,
-          creator_group:creator_group_id(id, name, emoji, member_count, avatar_url),
-          group:group_id(id, name, emoji, member_count, avatar_url)
+          creator_group:creator_group_id(id, name, emoji, member_count, avatar_url,avatar_video_url),
+          group:group_id(id, name, emoji, member_count, avatar_url,avatar_video_url)
         `)
         .eq('invite_token', token)
         .maybeSingle();
@@ -1374,7 +1374,7 @@ export async function POST(req: NextRequest) {
     //   { matches: HydratedMatch[], queue: QueueRow | null }
     //
     // HydratedMatch = a buddy_matches row with user_a/user_b expanded from
-    // user IDs to full user objects (id, username, full_name, avatar_url).
+    // user IDs to full user objects (id, username, full_name, avatar_url,avatar_video_url).
     //
     // WHY THIS GOES THROUGH THE ADMIN CLIENT: the ad-hoc buddy_matches
     // table was created without a registered foreign-key relationship to
@@ -1434,7 +1434,7 @@ export async function POST(req: NextRequest) {
       //    so the rendering paths can share types.
       const { data: meRow } = await admin
         .from('users')
-        .select('id, username, full_name, avatar_url, city, bio, current_level, immediate_goal, hobbies')
+        .select('id, username, full_name, avatar_url,avatar_video_url, city, bio, current_level, immediate_goal, hobbies')
         .eq('id', userId)
         .maybeSingle();
 
@@ -2031,7 +2031,7 @@ export async function POST(req: NextRequest) {
       // Fan out the four reads in parallel — they're independent.
       const [userRes, badgesRes, recentRes, goalsRes] = await Promise.all([
         admin.from('users')
-          .select('id, username, full_name, avatar_url, city, bio, current_level, immediate_goal, hobbies')
+          .select('id, username, full_name, avatar_url,avatar_video_url, city, bio, current_level, immediate_goal, hobbies')
           .eq('id', userId)
           .maybeSingle(),
         // Pinned badges — pin_slot != null means it's pinned to the
@@ -2574,7 +2574,7 @@ export async function POST(req: NextRequest) {
       // For uuid[] columns we wrap the uuid in braces to denote a literal array.
       const { data, error } = await admin
         .from('posts')
-        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, created_at, likes_count, tagged_user_ids, users:user_id(id, username, full_name, avatar_url, city)')
+        .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, created_at, likes_count, tagged_user_ids, users:user_id(id, username, full_name, avatar_url,avatar_video_url, city)')
         .contains('tagged_user_ids', [userId])
         .eq('is_public', true)
         .order('created_at', { ascending: false })
@@ -2603,14 +2603,14 @@ export async function POST(req: NextRequest) {
       if (media_type === 'photo' || media_type === 'video') insertRow.media_type = media_type;
 
       let { data, error } = await admin.from('group_posts').insert(insertRow)
-        .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
+        .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)').single();
 
       // Graceful fallback: if `media_type` column doesn't exist yet, retry
       // without it so deploys don't break before the SQL migration runs.
       if (error && /media_type/i.test(error.message || '')) {
         delete insertRow.media_type;
         const retry = await admin.from('group_posts').insert(insertRow)
-          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url)').single();
+          .select('*, user:users!group_posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)').single();
         data = retry.data; error = retry.error;
       }
 
@@ -2909,7 +2909,7 @@ export async function POST(req: NextRequest) {
       if (media_type === 'photo' || media_type === 'video') insertRow.media_type = media_type;
 
       let { data, error } = await admin.from('community_notes').insert(insertRow)
-        .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
+        .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)').single();
 
       // Graceful fallback if media columns don't exist yet — strip them and retry.
       // Lets deploys ship before the migration runs without 500ing every note save.
@@ -2917,7 +2917,7 @@ export async function POST(req: NextRequest) {
         delete insertRow.media_url;
         delete insertRow.media_type;
         const retry = await admin.from('community_notes').insert(insertRow)
-          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url)').single();
+          .select('*, user:users!community_notes_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url)').single();
         data = retry.data; error = retry.error;
       }
 
@@ -3235,10 +3235,10 @@ export async function POST(req: NextRequest) {
         latestPerUser.push(r);
       }
 
-      // Hydrate with user info (username, avatar, full_name)
+      // Hydrate with user info (username, avatar, full_name, avatar_video_url)
       const userIds = latestPerUser.map(s => s.user_id);
       const { data: users } = userIds.length
-        ? await admin.from('users').select('id, username, full_name, avatar_url').in('id', userIds)
+        ? await admin.from('users').select('id, username, full_name, avatar_url, avatar_video_url').in('id', userIds)
         : { data: [] };
       const userMap = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
 
@@ -3248,6 +3248,10 @@ export async function POST(req: NextRequest) {
         username: userMap[s.user_id]?.username ?? 'unknown',
         full_name: userMap[s.user_id]?.full_name ?? null,
         avatar_url: userMap[s.user_id]?.avatar_url ?? null,
+        // Pass through the video URL so the story card can render a
+        // moving profile picture. Falls back to the still avatar_url
+        // when null.
+        avatar_video_url: userMap[s.user_id]?.avatar_video_url ?? null,
         is_you: s.user_id === viewerId,
       }));
       enriched.sort((a, b) => {
