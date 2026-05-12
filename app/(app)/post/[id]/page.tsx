@@ -30,6 +30,10 @@ interface Author {
   username: string;
   full_name: string;
   avatar_url: string | null;
+  // Optional — present when the user uploaded a Live Photo / 5-second
+  // video as their profile picture. When set, the avatar circle renders
+  // <video> instead of <img>.
+  avatar_video_url?: string | null;
 }
 
 interface Comment {
@@ -84,7 +88,7 @@ export default function PostDetailPage() {
         // 2. Fetch the author
         const { data: authorRow } = await supabase
           .from("users")
-          .select("id, username, full_name, avatar_url")
+          .select("id, username, full_name, avatar_url, avatar_video_url")
           .eq("id", postRow.user_id)
           .single();
 
@@ -258,7 +262,10 @@ export default function PostDetailPage() {
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "20px 18px" }}>
         {/* Author */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          {post.user?.avatar_url ? (
+          {(post.user as any)?.avatar_video_url ? (
+            <video src={(post.user as any).avatar_video_url} poster={post.user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata"
+              style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
+          ) : post.user?.avatar_url ? (
             <img src={post.user.avatar_url} loading="lazy" decoding="async" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} alt="" />
           ) : (
             <div style={{ width: 44, height: 44, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.purpleMid})`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff" }}>
@@ -335,7 +342,10 @@ export default function PostDetailPage() {
                 const isMineComment = c.user_id === user?.id;
                 return (
                   <div key={c.id} style={{ display: "flex", gap: 10 }}>
-                    {c.users?.avatar_url ? (
+                    {(c.users as any)?.avatar_video_url ? (
+                      <video src={(c.users as any).avatar_video_url} poster={c.users?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata"
+                        style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                    ) : c.users?.avatar_url ? (
                       <img src={c.users?.avatar_url} loading="lazy" decoding="async" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" />
                     ) : (
                       <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.purple, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
