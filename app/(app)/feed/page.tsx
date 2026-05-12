@@ -1091,9 +1091,17 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           role="link"
         >
           <TierFrame tier={(post as any).tier || "default"} size={44}>
-            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
-              {(post as any).avatarUrl
-                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
+              {(post as any).avatarVideoUrl
+                /* Video avatar — same pattern as the post header up top */
+                ? <video src={(post as any).avatarVideoUrl} poster={(post as any).avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+                : (post as any).avatarUrl
+                /* onError falls back to initials when the URL 404s or
+                   the image fails to decode (e.g. server returned a
+                   non-image MIME). Without this the circle just looks
+                   empty against the gradient. */
+                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 : post.avatar}
             </div>
           </TierFrame>
@@ -3033,6 +3041,12 @@ export default function FeedPage() {
           user: log.users?.full_name || log.users?.username || 'User',
           username: log.users?.username || 'user',
           avatarUrl: log.users?.avatar_url || null,
+          // Forward the video URL too — SideUserBlock renders <video>
+          // when present and falls back to <img>/initials otherwise.
+          // Without this the activity feed avatar was blank for users
+          // with video avatars (the <img> tried to load the .mp4 as
+          // an image and silently failed).
+          avatarVideoUrl: log.users?.avatar_video_url || null,
           avatar: (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
           time: (() => {
             const d = new Date(log.logged_at || log.created_at);
