@@ -463,9 +463,7 @@ function StoryViewer({
         {/* Header */}
         <div style={{ position:"absolute",top:18,left:0,right:0,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,zIndex:2 }}>
           <div style={{ width:36,height:36,borderRadius:"50%",overflow:"hidden",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
-            {story.avatar_video_url
-              ? <video src={story.avatar_video_url} poster={story.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-              : story.avatar_url
+            {story.avatar_url
               ? <img src={story.avatar_url} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
               : (story.username[0] || "?").toUpperCase()}
           </div>
@@ -1091,17 +1089,9 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           role="link"
         >
           <TierFrame tier={(post as any).tier || "default"} size={44}>
-            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
-              {(post as any).avatarVideoUrl
-                /* Video avatar — same pattern as the post header up top */
-                ? <video src={(post as any).avatarVideoUrl} poster={(post as any).avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-                : (post as any).avatarUrl
-                /* onError falls back to initials when the URL 404s or
-                   the image fails to decode (e.g. server returned a
-                   non-image MIME). Without this the circle just looks
-                   empty against the gradient. */
-                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+              {(post as any).avatarUrl
+                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
                 : post.avatar}
             </div>
           </TierFrame>
@@ -1475,21 +1465,12 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
           <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
             <TierFrame tier={post.tier || "default"} size={46}>
               <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
-                {(post as any).avatarVideoUrl ? (
-                  /* Video avatar — autoplay/muted/loop/playsInline. Loops
-                     continuously here (tiny 46px circle) rather than the
-                     10s cycle the main profile page uses, because the
-                     play-then-pause cycle would look like glitching on
-                     something this small. The big profile picture is
-                     where you actually notice pacing. */
-                  <video src={(post as any).avatarVideoUrl} poster={post.avatar} autoPlay muted loop playsInline preload="metadata"
-                    style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                ) : post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-                  ? /* Use the raw avatar URL — routing through the Supabase
-                        image transform endpoint does a center-square crop
-                        that looks "zoomed in" when the subject isn't
-                        dead-centered (basically all phone selfies). The
-                        sidebar SideUserBlock uses the raw URL too. */
+                {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
+                  ? /* Use the raw avatar URL. Avatar uses <img> not <video>
+                     at this size — at 46px the motion isn't perceptible
+                     and rendering many videos on the feed page hammered
+                     mobile performance. Moving avatar still shows on the
+                     full-size profile page where it actually reads. */
                     <img src={post.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : post.avatar}
               </div>
@@ -1931,9 +1912,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             {visibleComments.map(c => (
               <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
                 <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-                  {(c as any).avatarVideoUrl
-                    ? <video src={(c as any).avatarVideoUrl} poster={c.avatar} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                    : c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
+                  {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
                     ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                     : c.avatar}
                 </div>
@@ -2080,9 +2059,7 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
             >
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
               <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
-                {(member as any).avatar_video_url
-                  ? <video src={(member as any).avatar_video_url} poster={member.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
-                  : member.avatar_url
+                {member.avatar_url
                   ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   : ini}
               </div>
@@ -3041,12 +3018,6 @@ export default function FeedPage() {
           user: log.users?.full_name || log.users?.username || 'User',
           username: log.users?.username || 'user',
           avatarUrl: log.users?.avatar_url || null,
-          // Forward the video URL too — SideUserBlock renders <video>
-          // when present and falls back to <img>/initials otherwise.
-          // Without this the activity feed avatar was blank for users
-          // with video avatars (the <img> tried to load the .mp4 as
-          // an image and silently failed).
-          avatarVideoUrl: log.users?.avatar_video_url || null,
           avatar: (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
           time: (() => {
             const d = new Date(log.logged_at || log.created_at);
@@ -3371,7 +3342,7 @@ export default function FeedPage() {
               ) : notifications.map(n => (
                 <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                    {(n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} poster={n.from_user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
@@ -3642,7 +3613,7 @@ export default function FeedPage() {
             ) : notifications.map(n => (
               <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                 <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {(n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} poster={n.from_user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
