@@ -1089,9 +1089,12 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           role="link"
         >
           <TierFrame tier={(post as any).tier || "default"} size={44}>
-            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
-              {(post as any).avatarUrl
-                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
+              {(post as any).avatarVideoUrl
+                /* Video first — see PostCard header for why */
+                ? <video src={(post as any).avatarVideoUrl} poster={(post as any).avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                : (post as any).avatarUrl
+                ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>
                 : post.avatar}
             </div>
           </TierFrame>
@@ -1465,20 +1468,19 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
           <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
             <TierFrame tier={post.tier || "default"} size={46}>
               <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
-                {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-                  ? /* Default path — user has a working still avatar URL.
-                     Use <img> at this size because rendering many <video>
-                     elements on a feed page hammers mobile performance. */
+                {(post as any).avatarVideoUrl
+                  ? /* Video avatar takes priority over still. <img> tags
+                     can't render mp4 sources, and onError-based fallback
+                     fails silently (the broken img just gets hidden, we
+                     never reach the video branch). Putting <video> first
+                     guarantees this user's avatar always renders.
+                     poster=avatar_url shows the still instantly while the
+                     video buffers. preload="metadata" is required for
+                     autoPlay to fire reliably in Safari. */
+                    <video src={(post as any).avatarVideoUrl} poster={post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/')) ? post.avatar : undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                  : post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
+                  ? /* Default — user has a working still avatar URL. */
                     <img src={post.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-                  : (post as any).avatarVideoUrl
-                  ? /* Fallback: user uploaded a video avatar but the
-                     still-frame poster extraction failed (most common
-                     cause: Live Photo HEIC source). Without avatar_url
-                     we'd show just initials. Render <video> here so
-                     they at least appear — small perf cost only because
-                     it triggers exclusively for users in this broken
-                     state, not the general feed. */
-                    <video src={(post as any).avatarVideoUrl} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                   : post.avatar}
               </div>
             </TierFrame>
@@ -1919,11 +1921,11 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             {visibleComments.map(c => (
               <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
                 <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-                  {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
+                  {(c as any).avatarVideoUrl
+                    /* Video first — see PostCard header comment for why */
+                    ? <video src={(c as any).avatarVideoUrl} poster={c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/')) ? c.avatar : undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    : c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
                     ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
-                    : (c as any).avatarVideoUrl
-                    /* Same fallback as post header — video only when no still avatar exists */
-                    ? <video src={(c as any).avatarVideoUrl} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                     : c.avatar}
                 </div>
                 <div style={{ flex:1,background:"#1A1228",borderRadius:14,padding:"9px 13px",border:"1px solid #2D1F52" }}>
@@ -2069,11 +2071,11 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
             >
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
               <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
-                {member.avatar_url
+                {(member as any).avatar_video_url
+                  /* Video first — see PostCard header for the why */
+                  ? <video src={(member as any).avatar_video_url} poster={member.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                  : member.avatar_url
                   ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                  : (member as any).avatar_video_url
-                  /* Fallback for users whose poster extraction failed during upload */
-                  ? <video src={(member as any).avatar_video_url} autoPlay muted loop playsInline preload="none" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
                   : ini}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
@@ -3031,6 +3033,11 @@ export default function FeedPage() {
           user: log.users?.full_name || log.users?.username || 'User',
           username: log.users?.username || 'user',
           avatarUrl: log.users?.avatar_url || null,
+          // Forward the video URL — SideUserBlock prefers it when set so
+          // users like Joey (avatar_url null but avatar_video_url set
+          // because the upload poster extraction failed on his Live
+          // Photo source) still get an avatar.
+          avatarVideoUrl: log.users?.avatar_video_url || null,
           avatar: (log.users?.full_name || log.users?.username || 'U').slice(0, 2).toUpperCase(),
           time: (() => {
             const d = new Date(log.logged_at || log.created_at);
@@ -3355,7 +3362,7 @@ export default function FeedPage() {
               ) : notifications.map(n => (
                 <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                    {(n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} poster={n.from_user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
@@ -3626,7 +3633,7 @@ export default function FeedPage() {
             ) : notifications.map(n => (
               <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                 <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                  {(n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} poster={n.from_user?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
