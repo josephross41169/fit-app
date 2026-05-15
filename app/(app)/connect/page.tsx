@@ -832,7 +832,7 @@ function ConnectPageInner() {
       )}
 
       {/* ── Sticky Header ── */}
-      <div style={{ position:"sticky", top:0, zIndex:100, background:C.white, borderBottom:`2px solid ${C.greenLight}` }}>
+      <div style={{ position:"sticky", top:0, zIndex:100, background:C.white, borderBottom:`2px solid ${C.greenLight}`, paddingTop:"var(--safe-top)" }}>
         <div style={{ maxWidth:1200, margin:"0 auto", padding:"14px 24px 0", display:"flex", alignItems:"center", gap:16 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginRight:8 }}>
             <span style={{ fontSize:20 }}>🤝</span>
