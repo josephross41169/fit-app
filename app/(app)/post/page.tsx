@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -18,7 +18,14 @@ import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
 import MentionInput from "@/components/MentionInput";
-import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
+// TemplateBuilder is the workout-template authoring modal. It's ~600
+// lines of code and only opens when the user explicitly taps "Create
+// Template" — which is a rare action. Lazy-importing it splits those
+// lines into a separate chunk that downloads on demand, shaving real
+// JS off the initial post-page load. Types are imported statically
+// because they're compile-time-only (zero runtime cost).
+import type { Template as BuilderTemplate, TemplateExercise } from "@/components/TemplateBuilder";
+const TemplateBuilder = lazy(() => import("@/components/TemplateBuilder"));
 
 const C = {
   blue: "#7C3AED",
@@ -3710,33 +3717,42 @@ export default function PostPage() {
       {/* Template Builder modal — full-screen, controlled by builderOpen.
           Mounting here keeps it overlaid above all other UI. Pre-fills
           Day 1 from the current workout form when launched via "Save
-          Current as Template"; empty otherwise. */}
-      {user && (
-        <TemplateBuilder
-          open={builderOpen}
-          onClose={() => { setBuilderOpen(false); setBuilderInitialDay1(undefined); }}
-          userId={user.id}
-          initialDay1={builderInitialDay1}
-          onSaved={(saved) => {
-            // Insert at the top of the templates list so the user sees
-            // their fresh template right away in the existing dropdown
-            // (Session 4 will replace this dropdown with a richer Browse
-            // Templates flow). Cast back to the local type — Builder
-            // returns the V2 shape with `days`; legacy callers expect
-            // `exercises` so we surface day-1 there too.
-            const local: WorkoutTemplate = {
-              id: saved.id,
-              name: saved.name,
-              description: saved.description,
-              cover_emoji: saved.cover_emoji,
-              is_public: saved.is_public,
-              use_count: saved.use_count,
-              days: saved.days as any,
-              exercises: (saved.days?.[0]?.exercises as any) || (saved as any).exercises || [],
-            };
-            setTemplates(t => [local, ...t]);
-          }}
-        />
+          Current as Template"; empty otherwise.
+
+          Gated on `builderOpen` so the lazy chunk doesn't even start
+          downloading until the user actually taps the open button. The
+          `<Suspense>` boundary is required by React.lazy; fallback is
+          null because the click also sets state that closes the
+          underlying menus, so the brief gap before the modal appears
+          isn't visible. */}
+      {user && builderOpen && (
+        <Suspense fallback={null}>
+          <TemplateBuilder
+            open={builderOpen}
+            onClose={() => { setBuilderOpen(false); setBuilderInitialDay1(undefined); }}
+            userId={user.id}
+            initialDay1={builderInitialDay1}
+            onSaved={(saved) => {
+              // Insert at the top of the templates list so the user sees
+              // their fresh template right away in the existing dropdown
+              // (Session 4 will replace this dropdown with a richer Browse
+              // Templates flow). Cast back to the local type — Builder
+              // returns the V2 shape with `days`; legacy callers expect
+              // `exercises` so we surface day-1 there too.
+              const local: WorkoutTemplate = {
+                id: saved.id,
+                name: saved.name,
+                description: saved.description,
+                cover_emoji: saved.cover_emoji,
+                is_public: saved.is_public,
+                use_count: saved.use_count,
+                days: saved.days as any,
+                exercises: (saved.days?.[0]?.exercises as any) || (saved as any).exercises || [],
+              };
+              setTemplates(t => [local, ...t]);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
