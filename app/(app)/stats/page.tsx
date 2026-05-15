@@ -1224,7 +1224,7 @@ export default function StatsPage(){
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,paddingBottom:100}}>
 
       {/* Sticky header */}
-      <div style={{position:"sticky",top:0,zIndex:50,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid ${C.border}`,padding:"14px 18px 0"}}>
+      <div style={{position:"sticky",top:0,zIndex:50,background:"#0A0A0F",borderBottom:`1px solid ${C.border}`,padding:"calc(var(--safe-top) + 14px) 18px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
           <div style={{fontWeight:900,fontSize:21,color:C.text}}>📊 Stats</div>
           {tab!=="today"&&tab!=="prs"&&(
