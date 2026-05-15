@@ -1042,8 +1042,7 @@ export default function GroupPage() {
   // ── Group Goals hook (must be before early returns) ─────────────────────────
   const loadGroupGoals = useCallback(async () => {
     const dbId = (dbGroup as any)?.id;
-    if (!dbId) { console.log("loadGroupGoals: no dbId"); return; }
-    console.log("loadGroupGoals: fetching for group", dbId);
+    if (!dbId) return;
     try {
       // Load ALL challenges for this group, filter client-side
       // Specify foreign key explicitly to avoid ambiguous relationship error
@@ -1052,23 +1051,21 @@ export default function GroupPage() {
         .select(`*, group_challenge_members(user_id,contribution,users!group_challenge_members_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url))`)
         .eq("creator_group_id", dbId)
         .order("created_at", { ascending: false });
-      console.log("loadGroupGoals raw data:", data, "error:", error);
       if (error) {
-        // Try without the join if still failing
+        // Try without the join if still failing — kept the warn since
+        // this is a real error path worth keeping in production logs.
         console.warn("Retrying without user join:", error.message);
         const { data: simple, error: e2 } = await supabase
           .from("group_challenges")
           .select(`*, group_challenge_members(user_id,contribution)`)
           .eq("creator_group_id", dbId)
           .order("created_at", { ascending: false });
-        console.log("Simple query result:", simple, e2);
         if (!e2) {
           setGroupGoals((simple || []).filter((c:any) => c.is_group_goal === true));
         }
         return;
       }
       const goals = (data || []).filter((c:any) => c.is_group_goal === true);
-      console.log("loadGroupGoals filtered goals:", goals.length);
       setGroupGoals(goals);
     } catch(e) { console.error("loadGroupGoals exception:", e); }
   }, [dbGroup]);
@@ -1244,7 +1241,6 @@ export default function GroupPage() {
           }))
         );
       }
-      console.log("Group goal created:", goal);
       setShowGoalModal(false);
       setGoalForm({ title:"", metric:"miles_run", target:0, duration_days:7, category:"fitness" });
       await loadGroupGoals();
@@ -1268,7 +1264,6 @@ export default function GroupPage() {
         }),
       });
       const result = await res.json();
-      console.log("Delete result:", result);
       if (result.error) {
         alert("API error: " + result.error);
         return;
