@@ -1466,12 +1466,19 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             <TierFrame tier={post.tier || "default"} size={46}>
               <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
                 {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
-                  ? /* Use the raw avatar URL. Avatar uses <img> not <video>
-                     at this size — at 46px the motion isn't perceptible
-                     and rendering many videos on the feed page hammered
-                     mobile performance. Moving avatar still shows on the
-                     full-size profile page where it actually reads. */
+                  ? /* Default path — user has a working still avatar URL.
+                     Use <img> at this size because rendering many <video>
+                     elements on a feed page hammers mobile performance. */
                     <img src={post.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                  : (post as any).avatarVideoUrl
+                  ? /* Fallback: user uploaded a video avatar but the
+                     still-frame poster extraction failed (most common
+                     cause: Live Photo HEIC source). Without avatar_url
+                     we'd show just initials. Render <video> here so
+                     they at least appear — small perf cost only because
+                     it triggers exclusively for users in this broken
+                     state, not the general feed. */
+                    <video src={(post as any).avatarVideoUrl} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                   : post.avatar}
               </div>
             </TierFrame>
@@ -1914,6 +1921,9 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                 <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
                   {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
                     ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                    : (c as any).avatarVideoUrl
+                    /* Same fallback as post header — video only when no still avatar exists */
+                    ? <video src={(c as any).avatarVideoUrl} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                     : c.avatar}
                 </div>
                 <div style={{ flex:1,background:"#1A1228",borderRadius:14,padding:"9px 13px",border:"1px solid #2D1F52" }}>
@@ -2061,6 +2071,9 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
               <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
                 {member.avatar_url
                   ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  : (member as any).avatar_video_url
+                  /* Fallback for users whose poster extraction failed during upload */
+                  ? <video src={(member as any).avatar_video_url} autoPlay muted loop playsInline preload="none" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
                   : ini}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
@@ -3342,7 +3355,7 @@ export default function FeedPage() {
               ) : notifications.map(n => (
                 <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                    {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
@@ -3613,7 +3626,7 @@ export default function FeedPage() {
             ) : notifications.map(n => (
               <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
                 <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
+                  {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user as any)?.avatar_video_url ? <video src={(n.from_user as any).avatar_video_url} autoPlay muted loop playsInline preload="none" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
