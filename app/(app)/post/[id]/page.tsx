@@ -254,7 +254,7 @@ export default function PostDetailPage() {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, paddingBottom: 100 }}>
       {/* Header */}
-      <div style={{ position: "sticky", top: 0, zIndex: 10, background: "rgba(13,13,13,0.95)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.border}`, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#0D0D0D", borderBottom: `1px solid ${C.border}`, padding: "calc(var(--safe-top) + 14px) 18px 14px", display: "flex", alignItems: "center", gap: 14 }}>
         <button onClick={() => router.back()} style={{ background: "none", border: "none", color: C.text, fontSize: 18, cursor: "pointer", padding: 0 }}>&larr;</button>
         <div style={{ fontWeight: 800, fontSize: 16, color: C.text }}>Post</div>
       </div>
