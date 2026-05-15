@@ -3158,7 +3158,7 @@ export default function FeedPage() {
       `}</style>
 
       {/* ── Sticky Header ── */}
-      <div style={{ position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid #2D1F52` }}>
+      <div style={{ position:"sticky",top:0,zIndex:100,background:"#0A0A0F",borderBottom:`1px solid #2D1F52`,paddingTop:"var(--safe-top)" }}>
         <div className="feed-header-inner" style={{ padding:"14px 20px 12px",display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
             <span style={{ fontSize:20 }}>⚡</span>
