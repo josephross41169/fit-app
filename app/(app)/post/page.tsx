@@ -18,6 +18,7 @@ import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
 import MentionInput from "@/components/MentionInput";
+import CropModal from "@/components/CropModal";
 // TemplateBuilder is the workout-template authoring modal. It's ~600
 // lines of code and only opens when the user explicitly taps "Create
 // Template" — which is a rare action. Lazy-importing it splits those
@@ -559,9 +560,42 @@ export default function PostPage() {
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [postType, setPostType] = useState<PostType>("Workout");
 
-  function loadPhoto(e: React.ChangeEvent<HTMLInputElement>, set: (s: string) => void) {
+  // ── Crop modal state ─────────────────────────────────────────────────
+  // When a user picks a photo for a single-photo upload (workout, meal,
+  // wellness), we read it as a data URL, open the crop modal, and only
+  // pass the cropped result downstream. cropState.src is the data URL
+  // being cropped; cropState.onConfirm is the setter the photo should
+  // end up in after the user taps Apply. null = modal closed.
+  //
+  // Multi-photo feed carousel uploads (the `multiple` inputs) skip
+  // cropping — asking users to crop 5 photos in a row is bad UX. They
+  // can crop individually after by tapping each.
+  const [cropState, setCropState] = useState<{
+    src: string;
+    onConfirm: (croppedDataUrl: string) => void;
+    title?: string;
+  } | null>(null);
+
+  function loadPhoto(e: React.ChangeEvent<HTMLInputElement>, set: (s: string) => void, cropTitle?: string) {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader(); r.onload = ev => set(ev.target!.result as string); r.readAsDataURL(f); e.target.value = "";
+    const r = new FileReader();
+    r.onload = ev => {
+      const src = ev.target!.result as string;
+      // Open the crop modal. set() doesn't get called until the user
+      // confirms — that's what makes this a non-breaking change: every
+      // existing caller still ends up with a data URL in its state, it
+      // just arrives a few taps later.
+      setCropState({
+        src,
+        title: cropTitle,
+        onConfirm: (croppedDataUrl) => {
+          set(croppedDataUrl);
+          setCropState(null);
+        },
+      });
+    };
+    r.readAsDataURL(f);
+    e.target.value = "";
   }
 
   async function ensureProfile() {
@@ -3753,6 +3787,31 @@ export default function PostPage() {
             }}
           />
         </Suspense>
+      )}
+
+      {/* Crop modal — full-screen overlay rendered above all other UI.
+          Opened by loadPhoto(); the data URL inside cropState.src is
+          the image being edited. Apply re-encodes the cropped region
+          and passes it back via cropState.onConfirm. Cancel just
+          closes the modal without touching downstream state. */}
+      {cropState && (
+        <CropModal
+          imageSrc={cropState.src}
+          aspect={1}
+          title={cropState.title || "Crop photo"}
+          onCrop={(file) => {
+            // The existing photo pipeline expects data URLs everywhere
+            // (preview rendering, compressImage, upload). Convert the
+            // cropped File back to a data URL so nothing downstream
+            // needs to change.
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              cropState.onConfirm(ev.target!.result as string);
+            };
+            reader.readAsDataURL(file);
+          }}
+          onCancel={() => setCropState(null)}
+        />
       )}
     </div>
   );
