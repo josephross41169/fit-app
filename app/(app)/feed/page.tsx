@@ -3738,7 +3738,24 @@ export default function FeedPage() {
               <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
                 <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
+                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
+                      {/* Activity card avatar — was previously just rendering
+                          `{item.data.avatar}` as text inside the gradient
+                          circle, which means initials ALWAYS showed (the
+                          mapper for activity logs only computes initials,
+                          not URLs). Now applies the same video-first / img
+                          / initials pattern as the rest of the feed.
+                          Handles both data shapes: sidebarActivityPosts
+                          items have avatarUrl+avatarVideoUrl; displayPosts
+                          items pack the URL into the `avatar` field. */}
+                      {(item.data as any).avatarVideoUrl
+                        ? <video src={(item.data as any).avatarVideoUrl} poster={(item.data as any).avatarUrl || (typeof item.data.avatar === 'string' && item.data.avatar.startsWith('http') ? item.data.avatar : undefined)} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        : (item.data as any).avatarUrl
+                        ? <img src={(item.data as any).avatarUrl} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                        : typeof item.data.avatar === 'string' && item.data.avatar.startsWith('http')
+                        ? <img src={item.data.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                        : item.data.avatar}
+                    </div>
                     <div>
                       <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
                       <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
