@@ -1986,8 +1986,16 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         )}
         <div style={{ padding:"0 18px 16px",display:"flex",gap:10,alignItems:"center" }}>
           <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-            {currentUser?.profile?.avatar_url
-              ? <img src={currentUser.profile.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+            {/* "Add a comment" placeholder avatar — same video-first
+                pattern as the rest of the feed: render <video> first when
+                avatar_video_url exists, fall back to <img>, then initials.
+                Previously this site only checked avatar_url and didn't
+                have onError, so users with a broken still URL (like Joey's
+                "mp4 saved in both slots" case) got a blank white circle. */}
+            {(currentUser?.profile as any)?.avatar_video_url
+              ? <video src={(currentUser!.profile as any).avatar_video_url} poster={currentUser?.profile?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              : currentUser?.profile?.avatar_url
+              ? <img src={currentUser.profile.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
           <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#1A1228",borderRadius:24,padding:"8px 16px",border:"1.5px solid #2D1F52" }}>
