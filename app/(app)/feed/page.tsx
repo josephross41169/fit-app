@@ -1921,10 +1921,12 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             {visibleComments.map(c => (
               <div key={c.id} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
                 <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-                  {(c as any).avatarVideoUrl
-                    /* Video first — see PostCard header comment for why */
-                    ? <video src={(c as any).avatarVideoUrl} poster={c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/')) ? c.avatar : undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                    : c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
+                  {/* Comment avatars use <img> only — no video. At 32px
+                      the motion's not perceptible, and on iOS WebView a
+                      <video> without working autoplay + poster renders as
+                      a black box. The avatar_url (still image) loads
+                      reliably; that's all we need at this size. */}
+                  {c.avatar && (c.avatar.startsWith('http')||c.avatar.startsWith('/'))
                     ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                     : c.avatar}
                 </div>
@@ -1986,15 +1988,11 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         )}
         <div style={{ padding:"0 18px 16px",display:"flex",gap:10,alignItems:"center" }}>
           <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden" }}>
-            {/* "Add a comment" placeholder avatar — same video-first
-                pattern as the rest of the feed: render <video> first when
-                avatar_video_url exists, fall back to <img>, then initials.
-                Previously this site only checked avatar_url and didn't
-                have onError, so users with a broken still URL (like Joey's
-                "mp4 saved in both slots" case) got a blank white circle. */}
-            {(currentUser?.profile as any)?.avatar_video_url
-              ? <video src={(currentUser!.profile as any).avatar_video_url} poster={currentUser?.profile?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              : currentUser?.profile?.avatar_url
+            {/* Img-only — same reasoning as the comment list above. The
+                <video> approach gave us black boxes when poster + autoplay
+                both failed silently on iOS WebView. avatar_url is the
+                still poster jpg, which loads reliably at this size. */}
+            {currentUser?.profile?.avatar_url
               ? <img src={currentUser.profile.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
