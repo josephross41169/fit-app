@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
+import { needsAvatarRepair, repairBrokenAvatar } from "@/lib/avatarRepair";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
@@ -1781,6 +1782,40 @@ export default function ProfilePage() {
       }
     }
   }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
+
+  // ── Auto-repair broken avatar data ───────────────────────────────────
+  // One-shot: if this user's avatar_video_url is set but avatar_url is
+  // missing/broken (most commonly because their original upload's poster
+  // extraction failed on iPhone Live Photo HEIC encoding), grab the first
+  // frame from the video and save it as their new avatar_url. Silent —
+  // user just notices their avatar showing in places it wasn't before
+  // (feed comments, group cards, etc.). Idempotent: needsAvatarRepair()
+  // short-circuits if the data already looks valid.
+  //
+  // Why on profile page mount: this is the page the user is most likely
+  // to revisit, and updating their own users row requires being
+  // authenticated as that user (RLS would block us from fixing other
+  // people's data). Running it elsewhere (e.g. on every page) would
+  // hammer the DB pointlessly for users who don't need repair.
+  const repairRanRef = useRef(false);
+  useEffect(() => {
+    if (repairRanRef.current) return;
+    const p = user?.profile as any;
+    if (!p?.id) return;
+    if (!needsAvatarRepair(p)) return;
+    repairRanRef.current = true;
+
+    (async () => {
+      const newUrl = await repairBrokenAvatar(p);
+      if (newUrl) {
+        // Refresh local state so the page immediately reflects the
+        // repair instead of waiting for a full reload.
+        setAvatar(newUrl);
+        latestUploadedAvatarUrlRef.current = newUrl;
+        initedAvatarRef.current = true;
+      }
+    })();
+  }, [user?.profile]);
   const [showAllPhotos,setShowAllPhotos] = useState(false);
   // Tagged-in modal state — opens when user taps the 🏷️ Tagged In button.
   // Modal lazily fetches its own data from /api/db get_tagged_posts so the
@@ -2658,7 +2693,11 @@ export default function ProfilePage() {
     // Capture first frame for the poster image.
     let posterUrl: string | null = null;
     try {
-      probe.currentTime = 0;
+      // Use 0.1s rather than exactly 0 — some encoders pad the very
+      // first frame with a blank one, and iPhone Live Photos in
+      // particular can return a black canvas at currentTime=0. Seeking
+      // a tiny bit forward lands inside the first real content frame.
+      probe.currentTime = 0.1;
       await new Promise<void>((resolve) => {
         probe.onseeked = () => resolve();
         setTimeout(() => resolve(), 2_000);
@@ -2693,14 +2732,17 @@ export default function ProfilePage() {
           avatar_video_url: videoUrl,
         } as any).eq('id', user.id);
       } else {
-        // No poster — fall back to video URL in both slots so something
-        // shows. Browsers display a black square for <img src=mp4> but
-        // the profile page renders <video> when avatarVideoUrl is set,
-        // so the user's profile still works; only other pages will fail.
+        // Poster extraction failed — store both URLs but use the video
+        // URL in the avatar_url slot too. The avatarRepair pass on the
+        // next profile visit will detect this state and replace the
+        // avatar_url with a real JPEG extracted from the video. This
+        // way the user's data is in a known-recoverable state rather
+        // than half-set (which was the original bug).
         latestUploadedAvatarUrlRef.current = videoUrl;
         initedAvatarRef.current = true;
         setAvatarVideoUrl(videoUrl);
         await supabase.from('users').update({
+          avatar_url: videoUrl,
           avatar_video_url: videoUrl,
         } as any).eq('id', user.id);
       }
