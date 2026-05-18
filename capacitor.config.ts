@@ -44,7 +44,17 @@ const config: CapacitorConfig = {
     },
   },
   ios: {
-    contentInset: 'automatic',
+    // 'never' = iOS doesn't auto-adjust the WebView's content insets.
+    // The WebView extends edge-to-edge AND env(safe-area-inset-top)
+    // returns real values inside the WebView (~47px on Dynamic Island
+    // devices, ~44px on Face ID notch devices). This is what our CSS
+    // safe-area handling expects.
+    //
+    // The previous value 'automatic' caused iOS to handle insets at the
+    // native level, which broke env() inside the WebView on Dynamic Island
+    // phones — sticky headers were positioned at the very top of the
+    // screen (under the island) because var(--safe-top) resolved to 0.
+    contentInset: 'never',
     // The WebView talks to https://liveleeapp.com for /api/*. Don't let the
     // shell try to open that domain in Safari — keep navigation in-app.
     limitsNavigationsToAppBoundDomains: false,
