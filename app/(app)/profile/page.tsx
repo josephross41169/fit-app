@@ -3030,6 +3030,23 @@ export default function ProfilePage() {
           position: relative;
           padding: 4px;
           border-radius: 50%;
+          box-shadow: 0 0 22px rgba(220,220,235,0.35);
+          /* Establish a new stacking context so the ::before pseudo can
+             sit behind the avatar (z-index: -1) without bleeding behind
+             the parent's background or sibling cards. */
+          isolation: isolate;
+        }
+        .tier-silver-avatar-wrap::before {
+          /* This is the ring — rotates. The avatar (a child of the wrap)
+             sits on top of this in normal flow and does NOT rotate, so
+             the visible silver shading appears to spin around a static
+             profile picture. inset:0 covers the full wrap including the
+             4px padding ring area; the avatar covers the center, leaving
+             only the perimeter visible. */
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
           background: conic-gradient(
             from 0deg,
             #6B7280 0%,
@@ -3038,11 +3055,13 @@ export default function ProfilePage() {
             #C0C0C0 75%,
             #6B7280 100%
           );
-          box-shadow: 0 0 22px rgba(220,220,235,0.35);
+          animation: tierSilverRingSpin 14s linear infinite;
+          z-index: -1;
         }
         .tier-silver-avatar-wrap::after {
-          /* Static inner highlight. Still gives a slight shimmer feel
-             from the gradient but doesn't rotate. */
+          /* Static outer halo glow — slightly larger than the wrap so it
+             feathers out beyond the ring perimeter. Symmetrical, doesn't
+             matter that it doesn't rotate. */
           content: '';
           position: absolute;
           inset: -3px;
@@ -3056,10 +3075,17 @@ export default function ProfilePage() {
             transparent 100%
           );
           pointer-events: none;
-          z-index: -1;
+          z-index: -2;
         }
-        /* Spin keyframes left in place but no longer referenced — kept
-           in case we want to opt-in to motion later via a setting. */
+        @media (prefers-reduced-motion: reduce) {
+          .tier-silver-avatar-wrap::before {
+            animation: none;
+          }
+        }
+        /* Used by .tier-silver-avatar-wrap to rotate the whole avatar
+           (ring + photo inside) as a single unit — the "moving portrait"
+           effect Joey originally requested for Level 3. Disabled
+           automatically via prefers-reduced-motion. */
         @keyframes tierSilverRingSpin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
