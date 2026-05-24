@@ -19,6 +19,8 @@ import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
 import MentionInput from "@/components/MentionInput";
 import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
+import FoodFavorites from "@/components/FoodFavorites";
+import { saveFood, saveMeal, type SavedFoodItem } from "@/lib/savedFoods";
 
 const C = {
   blue: "#7C3AED",
@@ -453,6 +455,8 @@ export default function PostPage() {
   // Nutrition state
   const [mealType, setMealType] = useState("Breakfast");
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+  // Bumped after star-to-save so the FoodFavorites bar re-fetches.
+  const [favoritesRefreshKey, setFavoritesRefreshKey] = useState(0);
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
@@ -3192,6 +3196,37 @@ export default function PostPage() {
 
 
 
+                {/* Favorites — one-tap re-log of saved foods + combo meals */}
+                {user?.id ? (
+                  <FoodFavorites
+                    userId={user.id}
+                    currentMealType={mealType}
+                    refreshKey={favoritesRefreshKey}
+                    onAddFood={(food: SavedFoodItem) => {
+                      setFoodItems(f => [...f, {
+                        name: food.name,
+                        calories: String(food.calories ?? ""),
+                        protein: food.protein !== undefined ? String(food.protein) : undefined,
+                        carbs: food.carbs !== undefined ? String(food.carbs) : undefined,
+                        fat: food.fat !== undefined ? String(food.fat) : undefined,
+                        servingSize: food.servingSize,
+                        qty: food.qty || "1",
+                      }]);
+                    }}
+                    onAddCombo={(items: SavedFoodItem[]) => {
+                      setFoodItems(f => [...f, ...items.map(it => ({
+                        name: it.name,
+                        calories: String(it.calories ?? ""),
+                        protein: it.protein !== undefined ? String(it.protein) : undefined,
+                        carbs: it.carbs !== undefined ? String(it.carbs) : undefined,
+                        fat: it.fat !== undefined ? String(it.fat) : undefined,
+                        servingSize: it.servingSize,
+                        qty: it.qty || "1",
+                      }))]);
+                    }}
+                  />
+                ) : null}
+
                 {/* Food search */}
                 <FoodSearchInput
                   onSelect={(food) => {
@@ -3227,6 +3262,14 @@ export default function PostPage() {
                             value={item.calories}
                             onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, calories: e.target.value } : x))}
                           />
+                          <button
+                            onClick={async () => {
+                              if (!user?.id || !item.name?.trim()) return;
+                              const saved = await saveFood(user.id, item as SavedFoodItem, mealType);
+                              if (saved) setFavoritesRefreshKey(k => k + 1);
+                            }}
+                            title="Save as favorite"
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#2D1F52", color: "#F5A623", fontSize: 15, cursor: "pointer", flexShrink: 0 }}>☆</button>
                           <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))}
                             style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>·</button>
                         </div>
@@ -3262,11 +3305,21 @@ export default function PostPage() {
                         </div>
                       </div>
                     )}
+                    {/* Save the whole list as a reusable combo meal favorite */}
+                    {foodItems.length >= 2 && user?.id && (
+                      <button
+                        onClick={async () => {
+                          const name = window.prompt("Name this meal (e.g. \"My usual breakfast\")", mealType + " combo");
+                          if (!name?.trim()) return;
+                          const saved = await saveMeal(user.id, name.trim(), foodItems as SavedFoodItem[], mealType);
+                          if (saved) setFavoritesRefreshKey(k => k + 1);
+                        }}
+                        style={{ fontSize: 12, fontWeight: 800, padding: "9px 14px", borderRadius: 12, border: "1.5px solid #F5A623", background: "transparent", color: "#F5A623", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        ⭐ Save these {foodItems.length} items as a meal favorite
+                      </button>
+                    )}
                   </div>
                 )}
-              </div>
-
-              {/* Macros (manual override / supplement) */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>Total Macros</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>
