@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -18,15 +18,7 @@ import { FitbitActivityCard } from "@/components/FitbitActivityCard";
 import TagPicker, { type TaggedUser } from "@/components/TagPicker";
 import LocationPicker, { type Location as PickedLocation } from "@/components/LocationPicker";
 import MentionInput from "@/components/MentionInput";
-import CropModal from "@/components/CropModal";
-// TemplateBuilder is the workout-template authoring modal. It's ~600
-// lines of code and only opens when the user explicitly taps "Create
-// Template" — which is a rare action. Lazy-importing it splits those
-// lines into a separate chunk that downloads on demand, shaving real
-// JS off the initial post-page load. Types are imported statically
-// because they're compile-time-only (zero runtime cost).
-import type { Template as BuilderTemplate, TemplateExercise } from "@/components/TemplateBuilder";
-const TemplateBuilder = lazy(() => import("@/components/TemplateBuilder"));
+import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
 
 const C = {
   blue: "#7C3AED",
@@ -560,42 +552,9 @@ export default function PostPage() {
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [postType, setPostType] = useState<PostType>("Workout");
 
-  // ── Crop modal state ─────────────────────────────────────────────────
-  // When a user picks a photo for a single-photo upload (workout, meal,
-  // wellness), we read it as a data URL, open the crop modal, and only
-  // pass the cropped result downstream. cropState.src is the data URL
-  // being cropped; cropState.onConfirm is the setter the photo should
-  // end up in after the user taps Apply. null = modal closed.
-  //
-  // Multi-photo feed carousel uploads (the `multiple` inputs) skip
-  // cropping — asking users to crop 5 photos in a row is bad UX. They
-  // can crop individually after by tapping each.
-  const [cropState, setCropState] = useState<{
-    src: string;
-    onConfirm: (croppedDataUrl: string) => void;
-    title?: string;
-  } | null>(null);
-
-  function loadPhoto(e: React.ChangeEvent<HTMLInputElement>, set: (s: string) => void, cropTitle?: string) {
+  function loadPhoto(e: React.ChangeEvent<HTMLInputElement>, set: (s: string) => void) {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => {
-      const src = ev.target!.result as string;
-      // Open the crop modal. set() doesn't get called until the user
-      // confirms — that's what makes this a non-breaking change: every
-      // existing caller still ends up with a data URL in its state, it
-      // just arrives a few taps later.
-      setCropState({
-        src,
-        title: cropTitle,
-        onConfirm: (croppedDataUrl) => {
-          set(croppedDataUrl);
-          setCropState(null);
-        },
-      });
-    };
-    r.readAsDataURL(f);
-    e.target.value = "";
+    const r = new FileReader(); r.onload = ev => set(ev.target!.result as string); r.readAsDataURL(f); e.target.value = "";
   }
 
   async function ensureProfile() {
@@ -1861,35 +1820,50 @@ export default function PostPage() {
       return;
     }
 
-    // Upload all carousel media (mixed image+video supported)
+    // Upload all carousel media (mixed image+video supported).
+    // Runs uploads in PARALLEL via Promise.all — previously this was a
+    // sequential for-loop where photo 2 waited for photo 1 to finish,
+    // etc. For a 3-photo post that was ~3x slower than necessary.
     const itemsToUpload = feedPhotos.length > 0
       ? feedPhotos.map((src, i) => ({ src, type: feedPhotoTypes[i] || 'image' as const }))
       : (feedPhoto ? [{ src: feedPhoto, type: 'image' as const }] : []);
+
+    const uploadResults = await Promise.all(
+      itemsToUpload.map(async (item: { src: string; type: 'image' | 'video' }, idx: number) => {
+        try {
+          if (item.type === 'video') {
+            // Direct-to-Supabase upload bypasses Vercel's body limit. RLS
+            // policy requires the path to start with the user's UUID.
+            const mimeMatch = item.src.match(/^data:(video\/[^;]+)/);
+            const mime = mimeMatch ? mimeMatch[1] : 'video/mp4';
+            const ext = mime.split('/')[1] || 'mp4';
+            const base64 = item.src.split(',')[1] || '';
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const file = new File([bytes], `upload.${ext}`, { type: mime });
+            // idx (not a running counter) keeps filenames unique even
+            // though all uploads fire at once.
+            const path = `${user.id}/posts/${Date.now()}-${idx}.${ext}`;
+            const url = await uploadPhotoDirect(file, 'posts', path);
+            return { url, type: item.type, idx };
+          } else {
+            const compressed = await compressImage(item.src);
+            const url = await uploadPhoto(compressed, 'posts', `${user.id}/${Date.now()}-${idx}.jpg`);
+            return { url, type: item.type, idx };
+          }
+        } catch {
+          return { url: null, type: item.type, idx };
+        }
+      })
+    );
+
+    // Preserve carousel order (Promise.all resolves in input order, but
+    // we sort by idx defensively) and drop any failed uploads.
     const uploadedUrls: string[] = [];
     const uploadedTypes: ('image' | 'video')[] = [];
-    for (const item of itemsToUpload) {
-      let url: string | null = null;
-      if (item.type === 'video') {
-        // Direct-to-Supabase upload bypasses Vercel's body limit. RLS policy
-        // requires the path to start with the user's UUID — see
-        // lib/migration-posts-bucket-rls.sql.
-        const mimeMatch = item.src.match(/^data:(video\/[^;]+)/);
-        const mime = mimeMatch ? mimeMatch[1] : 'video/mp4';
-        const ext = mime.split('/')[1] || 'mp4';
-        const base64 = item.src.split(',')[1] || '';
-        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        const file = new File([bytes], `upload.${ext}`, { type: mime });
-        const path = `${user.id}/posts/${Date.now()}-${uploadedUrls.length}.${ext}`;
-        url = await uploadPhotoDirect(file, 'posts', path);
-      } else {
-        // Images: keep the existing /api/upload route. Compressed JPEGs are <1MB so
-        // Vercel's body limit isn't an issue and we don't need a new RLS path.
-        const compressed = await compressImage(item.src);
-        url = await uploadPhoto(compressed, 'posts', `${user.id}/${Date.now()}-${uploadedUrls.length}.jpg`);
-      }
-      if (url) {
-        uploadedUrls.push(url);
-        uploadedTypes.push(item.type);
+    for (const r of uploadResults.sort((a: { idx: number }, b: { idx: number }) => a.idx - b.idx)) {
+      if (r.url) {
+        uploadedUrls.push(r.url);
+        uploadedTypes.push(r.type);
       }
     }
     // If the user attached media but every upload failed, surface that instead of
@@ -1946,101 +1920,109 @@ export default function PostPage() {
         submittingRef.current = false;
         setSaveError(error.message || "Something went wrong. Please try again.");
       } else {
-        // Track the feed post for analytics. Properties let us see which
-        // post types people are sharing in the PostHog dashboard.
-        track("post_created", {
-          has_photo: !!mediaUrl,
-          photo_count: uploadedUrls.length,
-          has_caption: !!caption,
-          has_location: !!location,
-          tag_count: feedTaggedUsers.length,
-        });
-        // Send a notification to each tagged user. Fire-and-forget — failures
-        // here shouldn't block the user's flow. Each notification carries the
-        // post id so the recipient can tap through to view it.
-        if (feedTaggedUsers.length > 0 && user) {
-          const senderName = (user as any)?.profile?.full_name
-            || (user as any)?.profile?.username
-            || (user as any)?.email
-            || "Someone";
-          for (const tagged of feedTaggedUsers) {
-            fetch('/api/db', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'create_notification',
-                payload: {
-                  userId: tagged.id,
-                  fromUserId: user.id,
-                  type: 'tag',
-                  referenceId: null, // post id not returned from insert; tap goes to feed
-                  body: `${senderName} tagged you in a post`,
-                },
-              }),
-            }).catch(() => { /* best-effort; UI doesn't block on this */ });
-          }
-        }
-        // @mention notifications — parse the caption for any @usernames
-        // not already in the explicit tag list and notify them. We do
-        // this on top of TagPicker tags because users can mention people
-        // they haven't formally tagged. Skips users already in the tag
-        // list to avoid double-notifying.
-        if (caption && user) {
-          try {
-            const re = /(?:^|\s)@([a-zA-Z0-9_]{2,32})/g;
-            const mentioned = new Set<string>();
-            let m: RegExpExecArray | null;
-            while ((m = re.exec(caption)) !== null) {
-              mentioned.add(m[1].toLowerCase());
-            }
-            if (mentioned.size > 0) {
-              const taggedUsernames = new Set(feedTaggedUsers.map(t => t.username?.toLowerCase()).filter(Boolean));
-              const toNotify = Array.from(mentioned).filter(u => !taggedUsernames.has(u));
-              if (toNotify.length > 0) {
-                const { data: foundUsers } = await supabase
-                  .from('users')
-                  .select('id, username')
-                  .in('username', toNotify);
-                const senderName = (user as any)?.profile?.full_name
-                  || (user as any)?.profile?.username
-                  || "Someone";
-                for (const fu of (foundUsers || []) as any[]) {
-                  if (fu.id === user.id) continue; // don't notify self
-                  fetch('/api/db', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      action: 'create_notification',
-                      payload: {
-                        userId: fu.id,
-                        fromUserId: user.id,
-                        type: 'mention',
-                        referenceId: null,
-                        body: `${senderName} mentioned you in a post`,
-                      },
-                    }),
-                  }).catch(() => {});
-                }
-              }
-            }
-          } catch { /* best-effort */ }
-        }
-        // -- Auto-award post badges ------------------------------------------
-        try {
-          const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
-          const postCount = count || 1;
-          if (postCount === 1) {
-            await supabase.from('badges').insert({ user_id: user.id, badge_id: 'first-post' }).match({ user_id: user.id, badge_id: 'first-post' });
-          }
-          if (postCount >= 10) {
-            await supabase.from('badges').insert({ user_id: user.id, badge_id: '10-posts' }).match({ user_id: user.id, badge_id: '10-posts' });
-          }
-        } catch {}
-        // -- Award XP for feed post ----------------------------------------
-        // 3 XP per day max for posting to feed (server enforces cap)
-        try { await awardXp(user.id, "feed_post"); } catch (e) { console.warn("[post] feed_post XP failed:", e); }
+        // The post row exists in the DB now — confirm to the user
+        // IMMEDIATELY. Everything below (analytics, tag/mention
+        // notifications, badge awards, XP) is post-hoc housekeeping that
+        // doesn't need to block the user staring at a spinner. Previously
+        // these ran as sequential awaits before setPosted, adding several
+        // seconds of dead time after the post was already saved.
         setPosted(true);
         // ref stays true · post is done, we never want another submit
+
+        // Fire-and-forget background work. Not awaited — runs after the
+        // user has already been told the post succeeded.
+        (async () => {
+          // Analytics.
+          track("post_created", {
+            has_photo: !!mediaUrl,
+            photo_count: uploadedUrls.length,
+            has_caption: !!caption,
+            has_location: !!location,
+            tag_count: feedTaggedUsers.length,
+          });
+
+          // Notify each explicitly-tagged user.
+          if (feedTaggedUsers.length > 0 && user) {
+            const senderName = (user as any)?.profile?.full_name
+              || (user as any)?.profile?.username
+              || (user as any)?.email
+              || "Someone";
+            for (const tagged of feedTaggedUsers) {
+              fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'create_notification',
+                  payload: {
+                    userId: tagged.id,
+                    fromUserId: user.id,
+                    type: 'tag',
+                    referenceId: null,
+                    body: `${senderName} tagged you in a post`,
+                  },
+                }),
+              }).catch(() => {});
+            }
+          }
+
+          // @mention notifications — parse caption for @usernames not
+          // already in the explicit tag list.
+          if (caption && user) {
+            try {
+              const re = /(?:^|\s)@([a-zA-Z0-9_]{2,32})/g;
+              const mentioned = new Set<string>();
+              let m: RegExpExecArray | null;
+              while ((m = re.exec(caption)) !== null) {
+                mentioned.add(m[1].toLowerCase());
+              }
+              if (mentioned.size > 0) {
+                const taggedUsernames = new Set(feedTaggedUsers.map(t => t.username?.toLowerCase()).filter(Boolean));
+                const toNotify = Array.from(mentioned).filter(u => !taggedUsernames.has(u));
+                if (toNotify.length > 0) {
+                  const { data: foundUsers } = await supabase
+                    .from('users')
+                    .select('id, username')
+                    .in('username', toNotify);
+                  const senderName = (user as any)?.profile?.full_name
+                    || (user as any)?.profile?.username
+                    || "Someone";
+                  for (const fu of (foundUsers || []) as any[]) {
+                    if (fu.id === user.id) continue;
+                    fetch('/api/db', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'create_notification',
+                        payload: {
+                          userId: fu.id,
+                          fromUserId: user.id,
+                          type: 'mention',
+                          referenceId: null,
+                          body: `${senderName} mentioned you in a post`,
+                        },
+                      }),
+                    }).catch(() => {});
+                  }
+                }
+              }
+            } catch { /* best-effort */ }
+          }
+
+          // Auto-award post badges.
+          try {
+            const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+            const postCount = count || 1;
+            if (postCount === 1) {
+              await supabase.from('badges').insert({ user_id: user.id, badge_id: 'first-post' }).match({ user_id: user.id, badge_id: 'first-post' });
+            }
+            if (postCount >= 10) {
+              await supabase.from('badges').insert({ user_id: user.id, badge_id: '10-posts' }).match({ user_id: user.id, badge_id: '10-posts' });
+            }
+          } catch {}
+
+          // Award XP for feed post (server enforces 3/day cap).
+          try { await awardXp(user.id, "feed_post"); } catch (e) { console.warn("[post] feed_post XP failed:", e); }
+        })();
       }
     } catch (e: any) {
       setLoading(false);
@@ -3751,66 +3733,32 @@ export default function PostPage() {
       {/* Template Builder modal — full-screen, controlled by builderOpen.
           Mounting here keeps it overlaid above all other UI. Pre-fills
           Day 1 from the current workout form when launched via "Save
-          Current as Template"; empty otherwise.
-
-          Gated on `builderOpen` so the lazy chunk doesn't even start
-          downloading until the user actually taps the open button. The
-          `<Suspense>` boundary is required by React.lazy; fallback is
-          null because the click also sets state that closes the
-          underlying menus, so the brief gap before the modal appears
-          isn't visible. */}
-      {user && builderOpen && (
-        <Suspense fallback={null}>
-          <TemplateBuilder
-            open={builderOpen}
-            onClose={() => { setBuilderOpen(false); setBuilderInitialDay1(undefined); }}
-            userId={user.id}
-            initialDay1={builderInitialDay1}
-            onSaved={(saved) => {
-              // Insert at the top of the templates list so the user sees
-              // their fresh template right away in the existing dropdown
-              // (Session 4 will replace this dropdown with a richer Browse
-              // Templates flow). Cast back to the local type — Builder
-              // returns the V2 shape with `days`; legacy callers expect
-              // `exercises` so we surface day-1 there too.
-              const local: WorkoutTemplate = {
-                id: saved.id,
-                name: saved.name,
-                description: saved.description,
-                cover_emoji: saved.cover_emoji,
-                is_public: saved.is_public,
-                use_count: saved.use_count,
-                days: saved.days as any,
-                exercises: (saved.days?.[0]?.exercises as any) || (saved as any).exercises || [],
-              };
-              setTemplates(t => [local, ...t]);
-            }}
-          />
-        </Suspense>
-      )}
-
-      {/* Crop modal — full-screen overlay rendered above all other UI.
-          Opened by loadPhoto(); the data URL inside cropState.src is
-          the image being edited. Apply re-encodes the cropped region
-          and passes it back via cropState.onConfirm. Cancel just
-          closes the modal without touching downstream state. */}
-      {cropState && (
-        <CropModal
-          imageSrc={cropState.src}
-          aspect={1}
-          title={cropState.title || "Crop photo"}
-          onCrop={(file) => {
-            // The existing photo pipeline expects data URLs everywhere
-            // (preview rendering, compressImage, upload). Convert the
-            // cropped File back to a data URL so nothing downstream
-            // needs to change.
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-              cropState.onConfirm(ev.target!.result as string);
+          Current as Template"; empty otherwise. */}
+      {user && (
+        <TemplateBuilder
+          open={builderOpen}
+          onClose={() => { setBuilderOpen(false); setBuilderInitialDay1(undefined); }}
+          userId={user.id}
+          initialDay1={builderInitialDay1}
+          onSaved={(saved) => {
+            // Insert at the top of the templates list so the user sees
+            // their fresh template right away in the existing dropdown
+            // (Session 4 will replace this dropdown with a richer Browse
+            // Templates flow). Cast back to the local type — Builder
+            // returns the V2 shape with `days`; legacy callers expect
+            // `exercises` so we surface day-1 there too.
+            const local: WorkoutTemplate = {
+              id: saved.id,
+              name: saved.name,
+              description: saved.description,
+              cover_emoji: saved.cover_emoji,
+              is_public: saved.is_public,
+              use_count: saved.use_count,
+              days: saved.days as any,
+              exercises: (saved.days?.[0]?.exercises as any) || (saved as any).exercises || [],
             };
-            reader.readAsDataURL(file);
+            setTemplates(t => [local, ...t]);
           }}
-          onCancel={() => setCropState(null)}
         />
       )}
     </div>
