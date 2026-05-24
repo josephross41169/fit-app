@@ -11,7 +11,7 @@
 //   - the post creation page (focus mode, no distractions)
 // Hidden when no user is signed in.
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -75,6 +75,72 @@ export default function MessagesFAB() {
   // /messages, which matches the FAB's old behavior.
   const { unreadMessages: unreadTotal } = useUnreadCounts();
 
+  // ── Draggable position ───────────────────────────────────────────────────
+  // The button can be dragged anywhere and remembers where you left it
+  // (persisted to localStorage). null = use the default right-edge position.
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null);
+  // Tracks an in-progress drag so we can tell a tap (open messages) from a
+  // drag (just repositioning). `moved` flips true once the pointer travels
+  // past a small threshold.
+  const dragRef = useRef<{ startX: number; startY: number; offX: number; offY: number; moved: boolean } | null>(null);
+  const FAB_W = 48, FAB_H = 56;
+  const FAB_STORAGE_KEY = "livelee_fab_pos";
+
+  // Restore saved position on mount.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(FAB_STORAGE_KEY);
+      if (saved) setFabPos(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
+
+  function clampPos(x: number, y: number) {
+    if (typeof window === "undefined") return { x, y };
+    const maxX = window.innerWidth - FAB_W;
+    const maxY = window.innerHeight - FAB_H;
+    return { x: Math.max(0, Math.min(x, maxX)), y: Math.max(0, Math.min(y, maxY)) };
+  }
+
+  function onFabPointerDown(e: React.PointerEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      offX: e.clientX - rect.left,
+      offY: e.clientY - rect.top,
+      moved: false,
+    };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+  }
+
+  function onFabPointerMove(e: React.PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    // ~6px threshold so a slightly-imperfect tap doesn't count as a drag.
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) d.moved = true;
+    if (d.moved) {
+      setFabPos(clampPos(e.clientX - d.offX, e.clientY - d.offY));
+    }
+  }
+
+  function onFabPointerUp() {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    if (d.moved) {
+      // It was a drag — persist where they dropped it.
+      setFabPos(prev => {
+        if (prev) { try { localStorage.setItem(FAB_STORAGE_KEY, JSON.stringify(prev)); } catch {} }
+        return prev;
+      });
+    } else {
+      // It was a tap — open/close the messages overlay.
+      if (open) setOpen(false); else handleOpen();
+    }
+  }
+
   const hidden = !user || HIDDEN_ROUTES.some(r => pathname?.startsWith(r));
 
   // ── Removed local unread polling ───────────────────────────────────────
@@ -129,34 +195,31 @@ export default function MessagesFAB() {
           way to dismiss. */}
       <button
         className="md:hidden"
-        onClick={() => {
-          if (open) {
-            setOpen(false);
-          } else {
-            handleOpen();
-          }
-        }}
+        onPointerDown={onFabPointerDown}
+        onPointerMove={onFabPointerMove}
+        onPointerUp={onFabPointerUp}
         aria-label={open ? "Close messages" : "Open messages"}
         style={{
           position: "fixed",
-          right: 0,
-          // Sat at bottom:200 originally, but on mobile this overlapped the
-          // right-arrow on multi-photo carousels (arrow sits at vertical center
-          // of the square media). Bumped 100px higher (~1 inch) to clear it.
-          bottom: 300,
+          // Default = right-edge tab. Once dragged, fabPos takes over with
+          // absolute left/top coordinates.
+          ...(fabPos ? { left: fabPos.x, top: fabPos.y } : { right: 0, bottom: 300 }),
           // Sit ABOVE the overlay so it's still clickable when overlay is open
           zIndex: 10000,
           width: 48,
           height: 56,
           background: PURPLE,
           border: "none",
-          borderRadius: "16px 0 0 16px",
+          // Edge-tab shape by default; fully rounded once it's floating freely.
+          borderRadius: fabPos ? 16 : "16px 0 0 16px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
           boxShadow: "0 4px 14px rgba(124,58,237,0.5)",
           padding: 0,
+          // Prevent the page from scrolling while dragging the button on touch.
+          touchAction: "none",
         }}
       >
         {open ? (
