@@ -186,6 +186,45 @@ export async function bumpUseCount(id: string, currentCount: number): Promise<vo
 }
 
 // ─── Delete a favorite ──────────────────────────────────────────────────────
+// ─── Update an existing favorite (edit name/macros/photo) ───────────────────
+export async function updateSavedFood(
+  id: string,
+  fields: {
+    name?: string;
+    calories?: string | number;
+    protein?: string | number;
+    carbs?: string | number;
+    fat?: string | number;
+    default_meal_type?: string | null;
+    photoUrl?: string | null;
+  },
+): Promise<boolean> {
+  try {
+    const patch: Record<string, any> = {};
+    if (fields.name !== undefined) patch.name = String(fields.name).trim();
+    if (fields.calories !== undefined) patch.calories = num(fields.calories);
+    if (fields.protein !== undefined) patch.protein = num(fields.protein);
+    if (fields.carbs !== undefined) patch.carbs = num(fields.carbs);
+    if (fields.fat !== undefined) patch.fat = num(fields.fat);
+    if (fields.default_meal_type !== undefined) patch.default_meal_type = fields.default_meal_type;
+    if (fields.photoUrl !== undefined) patch.photo_url = fields.photoUrl;
+
+    const { error } = await (supabase as any)
+      .from("saved_foods")
+      .update(patch)
+      .eq("id", id);
+    if (error) {
+      console.warn("[savedFoods] update failed:", error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("[savedFoods] update threw:", e);
+    return false;
+  }
+}
+
+// ─── Delete a favorite ──────────────────────────────────────────────────────
 export async function deleteSavedFood(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("saved_foods").delete().eq("id", id);
