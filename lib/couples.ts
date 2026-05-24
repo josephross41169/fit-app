@@ -35,6 +35,7 @@ export interface Couple {
   status: "pending" | "active" | "ended";
   invite_code: string | null;
   details: CoupleDetails;
+  prompt_answers?: Record<string, string>;
   created_at: string;
   linked_at: string | null;
   // Hydrated:
@@ -100,6 +101,16 @@ export async function updateCoupleDetails(coupleId: string, details: CoupleDetai
     console.warn("[couples] update failed:", error.message);
     return false;
   }
+  return true;
+}
+
+/** Update the couple's prompt answers (the cycling Q&A pool). */
+export async function updateCouplePromptAnswers(coupleId: string, prompt_answers: Record<string, string>): Promise<boolean> {
+  const { error } = await (supabase as any)
+    .from("couples")
+    .update({ prompt_answers })
+    .eq("id", coupleId);
+  if (error) { console.warn("[couples] prompt update failed:", error.message); return false; }
   return true;
 }
 
