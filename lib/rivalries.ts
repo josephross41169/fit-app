@@ -78,8 +78,10 @@ export interface RivalUser {
   username: string;
   full_name: string;
   avatar_url: string | null;
+  avatar_video_url?: string | null;
   city: string | null;
   bio: string | null;
+  rival_prompt_answers?: Record<string, string> | null;
 }
 
 export interface RivalryWithOpponent extends Rivalry {
@@ -314,6 +316,18 @@ export async function cancelChallenge(): Promise<void> {
     .eq("status", "pending");
 }
 
+/** Save the current user's rival prompt answers (shown to opponents). */
+export async function saveMyRivalPromptAnswers(answers: Record<string, string>): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { error } = await (supabase as any)
+    .from("users")
+    .update({ rival_prompt_answers: answers })
+    .eq("id", user.id);
+  if (error) { console.warn("[rivalries] prompt save failed:", error.message); return false; }
+  return true;
+}
+
 /** Get the current user's active rivalry (or null). */
 export async function getActiveRivalry(): Promise<RivalryWithOpponent | null> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -346,7 +360,7 @@ async function hydrateRivalry(r: Rivalry, myId: string): Promise<RivalryWithOppo
 
   const { data: opp } = await supabase
     .from("users")
-    .select("id, username, full_name, avatar_url, avatar_video_url, city, bio")
+    .select("id, username, full_name, avatar_url, avatar_video_url, city, bio, rival_prompt_answers")
     .eq("id", opponentId)
     .single();
 
