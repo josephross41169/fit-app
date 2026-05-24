@@ -21,7 +21,7 @@ interface BusinessProfileViewProps {
   onProfileUpdate?: () => void;
 }
 
-type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop";
+type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop" | "community";
 const HIGHLIGHT_SLOTS = 9;
 
 const DAYS: { key: string; label: string }[] = [
@@ -85,12 +85,42 @@ export default function BusinessProfileView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "") as TabKey;
-    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop"].includes(hash)) setActiveTab(hash);
+    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop", "community"].includes(hash)) setActiveTab(hash);
   }, []);
   function switchTab(t: TabKey) {
     setActiveTab(t);
     if (typeof window !== "undefined") history.replaceState(null, "", `#${t}`);
   }
+
+  // Layer 3 — community posts (people who tagged/@mentioned this business)
+  const [communityPosts, setCommunityPosts] = useState<any[]>([]);
+  const [communityLoading, setCommunityLoading] = useState(false);
+  const [communityLoaded, setCommunityLoaded] = useState(false);
+
+  // Lazy-load community posts the first time the Community tab is opened.
+  useEffect(() => {
+    if (activeTab !== "community" || communityLoaded || communityLoading) return;
+    setCommunityLoading(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/db", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "get_business_community_posts",
+            payload: { businessId: profile.id, username: profile.username, limit: 30 },
+          }),
+        });
+        const json = await res.json();
+        setCommunityPosts(Array.isArray(json.posts) ? json.posts : []);
+      } catch {
+        setCommunityPosts([]);
+      } finally {
+        setCommunityLoading(false);
+        setCommunityLoaded(true);
+      }
+    })();
+  }, [activeTab, communityLoaded, communityLoading, profile.id, profile.username]);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -548,6 +578,7 @@ export default function BusinessProfileView({
         <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24, overflowX: "auto" }}>
           {([
             { key: "posts", label: "📸 Posts", show: true },
+            { key: "community", label: "🤝 Community", show: true },
             // Leaderboard only renders for gym-type businesses since the
             // category set (bench/squat/deadlift/etc.) doesn't make sense
             // for, say, a yoga studio. Could be opened up later.
@@ -606,6 +637,51 @@ export default function BusinessProfileView({
               Posts feed coming soon — announcements and content you publish.
             </div>
           </>
+        )}
+
+        {/* ── COMMUNITY TAB (Layer 3) — posts from people who tagged/@mentioned this business ── */}
+        {activeTab === "community" && (
+          <div>
+            {communityLoading ? (
+              <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>Loading community posts…</div>
+            ) : communityPosts.length === 0 ? (
+              <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14, lineHeight: 1.6 }}>
+                🤝 No community posts yet.<br />
+                When people tag or @mention {profile.business_name || profile.full_name || "this business"} in their posts, they'll show up here.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {communityPosts.map(post => {
+                  const author = Array.isArray(post.users) ? post.users[0] : post.users;
+                  const firstMedia = post.media_url || (Array.isArray(post.media_urls) ? post.media_urls[0] : null);
+                  const firstType = post.media_type || (Array.isArray(post.media_types) ? post.media_types[0] : "image");
+                  return (
+                    <a key={post.id} href={`/post/${post.id}`} style={{ textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", display: "block" }}>
+                      {/* Author row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+                        <div style={{ width: 34, height: 34, borderRadius: "50%", overflow: "hidden", background: C.input, flexShrink: 0 }}>
+                          {author?.avatar_url ? <img src={author.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{author?.full_name || author?.username || "Someone"}</div>
+                          {author?.username && <div style={{ fontSize: 12, color: C.sub }}>@{author.username}</div>}
+                        </div>
+                        <div style={{ marginLeft: "auto", fontSize: 11, color: C.muted, flexShrink: 0 }}>{timeAgoShort(post.created_at)}</div>
+                      </div>
+                      {/* Caption */}
+                      {post.caption && <div style={{ padding: "0 14px 12px", fontSize: 14, color: "#E2E8F0", lineHeight: 1.5 }}>{post.caption}</div>}
+                      {/* First media */}
+                      {firstMedia && (
+                        firstType === "video"
+                          ? <video src={firstMedia} style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} muted playsInline />
+                          : <img src={firstMedia} alt="" style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === "leaderboard" && (
