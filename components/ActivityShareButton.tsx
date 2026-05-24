@@ -453,7 +453,7 @@ function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; 
         gap: 16,
       }}
     >
-      <div style={{ width: 44, height: 44, fontSize: 38, lineHeight: "44px", textAlign: "center", flexShrink: 0 }}>{emoji}</div>
+      <div style={{ width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, lineHeight: 1, paddingTop: 4, flexShrink: 0 }}>{emoji}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", lineHeight: 1.1 }}>{title}</div>
         {subtitle && (
@@ -536,7 +536,7 @@ function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
       <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 12 }}>
         {wellness.entries.map((e, i) => (
           <div key={i} style={{ background: C.cardBg2, borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, border: `1px solid ${C.border}` }}>
-            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, lineHeight: "52px", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, lineHeight: 1, paddingTop: 3, flexShrink: 0 }}>
               {e.emoji || "🌿"}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -583,14 +583,14 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {nutrition.meals.slice(0, 5).map((m, i) => (
                 <div key={i} style={{ background: C.cardBg2, borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, border: `1px solid ${C.border}` }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: "42px", textAlign: "center", flexShrink: 0 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, paddingTop: 2, flexShrink: 0 }}>
                     {m.emoji || "🍽️"}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, lineHeight: 1.5, paddingBottom: 1 }}>{m.key}</div>
-                    <div style={{ fontSize: 13, color: C.sub, marginTop: 2, lineHeight: 1.5, paddingBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, height: 22, lineHeight: "22px" }}>{m.key}</div>
+                    <div style={{ fontSize: 13, color: C.sub, marginTop: 3, height: 20, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0, lineHeight: 1.5 }}>{m.cal} kcal</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0, lineHeight: "22px" }}>{m.cal} kcal</div>
                 </div>
               ))}
             </div>
