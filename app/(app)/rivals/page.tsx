@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import CouplesPanel from "@/components/CouplesPanel";
 import { supabase } from "@/lib/supabase";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
 import { BADGES } from "@/lib/badges";
@@ -2387,7 +2388,7 @@ export default function RivalsPage() {
   // Top-level page tab — Rivals (1v1 matchmaking, 7 days) vs
   // Workout Buddy (cooperative 2-week shared challenge). Same matchmaking
   // skeleton but the buddy outcome is win-together rather than head-to-head.
-  const [pageTab, setPageTab] = useState<"rivals" | "buddy">("rivals");
+  const [pageTab, setPageTab] = useState<"rivals" | "buddy" | "couples">("rivals");
 
   // Load initial state: do I have an active rivalry? Am I already queued?
   //
@@ -2636,10 +2637,12 @@ export default function RivalsPage() {
             >←</button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 900, fontSize: 22, color: "#F0F0F0", letterSpacing: -0.5 }}>
-                {pageTab === "buddy" ? "🤝 Workout Buddy" : "⚔️ Rivals"}
+                {pageTab === "couples" ? "💜 Couples" : pageTab === "buddy" ? "🤝 Workout Buddy" : "⚔️ Rivals"}
               </div>
               <div style={{ fontSize: 12, color: "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {pageTab === "buddy"
+                {pageTab === "couples"
+                  ? "You & your partner 💕"
+                  : pageTab === "buddy"
                   ? "Team up · 14-day shared challenge"
                   : isActive ? `You vs ${activeRivalry!.opponent.full_name}` :
                  matchStep === "matching" ? "Finding your match..." :
@@ -2663,6 +2666,7 @@ export default function RivalsPage() {
             {([
               { k: "rivals", label: "⚔️ Rivals", desc: "1v1 · 7 days" },
               { k: "buddy",  label: "🤝 Workout Buddy", desc: "Team · 14 days" },
+              { k: "couples", label: "💜 Couples", desc: "You & your partner" },
             ] as const).map(t => (
               <button
                 key={t.k}
@@ -2690,7 +2694,9 @@ export default function RivalsPage() {
           </div>
         )}
 
-        {pageTab === "buddy" ? (
+        {pageTab === "couples" ? (
+          <CouplesPanel />
+        ) : pageTab === "buddy" ? (
           <BuddyPanel userId={user.id} />
         ) : (<>
         {matchStep === "category" && (
