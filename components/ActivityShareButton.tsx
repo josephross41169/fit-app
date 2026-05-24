@@ -219,23 +219,47 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
       if (!blob) throw new Error("Failed to encode PNG");
 
       const fname = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
-      const url = URL.createObjectURL(blob);
+      const file = new File([blob], fname, { type: "image/png" });
 
-      const isIOSSafari =
+      // Prefer the Web Share API. This is the only thing that reliably
+      // works on iOS — both in regular Safari AND in the Home Screen PWA
+      // (standalone mode), where window.open is effectively a no-op.
+      // navigator.share opens the native iOS share sheet, letting the
+      // user Save to Photos, send via Messages, etc.
+      //
+      // The old code did window.open(blobUrl) on iOS, which:
+      //   - did nothing at all in standalone PWA mode (no "new tab"), and
+      //   - got popup-blocked even in Safari because html2canvas takes
+      //     long enough that the click's "user gesture" had expired.
+      const canShareFile =
         typeof navigator !== "undefined" &&
-        /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-        !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+        typeof (navigator as any).canShare === "function" &&
+        (navigator as any).canShare({ files: [file] });
 
-      if (isIOSSafari) {
-        window.open(url, "_blank");
-      } else {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fname;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+      if (canShareFile) {
+        try {
+          await (navigator as any).share({
+            files: [file],
+            title: "My Livelee activity",
+          });
+          return; // shared (or the user picked an action) — done
+        } catch (shareErr: any) {
+          // User tapped "Cancel" on the share sheet — that's not a
+          // failure, just abort silently. Any other share error falls
+          // through to the download path below.
+          if (shareErr?.name === "AbortError") return;
+        }
       }
+
+      // Desktop (or any browser without file-share support): download the
+      // PNG via a synthetic anchor click.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("[share] capture failed", err);
