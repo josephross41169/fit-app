@@ -13,9 +13,12 @@ import { useEffect, useState, useCallback } from "react";
 import {
   getMyCouple, createCoupleInvite, acceptCoupleInvite,
   updateCoupleDetails, unlinkCouple, cancelCoupleInvite,
+  updateCouplePromptAnswers,
   formatTogetherDuration,
   type Couple, type CoupleDetails, type CouplePartner,
 } from "@/lib/couples";
+import PromptsCard from "@/components/PromptsCard";
+import { COUPLE_PROMPTS } from "@/lib/rivalPrompts";
 
 const C = {
   text: "#F0F0F0", sub: "#9CA3AF", pink: "#EC4899", purple: "#7C3AED", purpleLt: "#A78BFA",
@@ -217,6 +220,17 @@ export default function CouplesPanel() {
                 </div>
               ))}
             </div>
+          )}
+          {/* Couple Q&A — cycling prompts about the two of you */}
+          {!editing && (
+            <PromptsCard
+              title="💬 Couple Q&A"
+              pool={COUPLE_PROMPTS}
+              answers={couple.prompt_answers || {}}
+              mineLabel="Your story"
+              accent={C.pink}
+              onSave={async (next) => { await updateCouplePromptAnswers(couple.id, next); await load(); }}
+            />
           )}
           <button onClick={startEdit}
             style={{ background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, border: "none", borderRadius: 14, padding: "13px 0", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
