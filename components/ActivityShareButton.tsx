@@ -221,18 +221,27 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
       const fname = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
       const file = new File([blob], fname, { type: "image/png" });
 
-      // Prefer the Web Share API. This is the only thing that reliably
-      // works on iOS — both in regular Safari AND in the Home Screen PWA
-      // (standalone mode), where window.open is effectively a no-op.
-      // navigator.share opens the native iOS share sheet, letting the
-      // user Save to Photos, send via Messages, etc.
-      //
-      // The old code did window.open(blobUrl) on iOS, which:
-      //   - did nothing at all in standalone PWA mode (no "new tab"), and
-      //   - got popup-blocked even in Safari because html2canvas takes
-      //     long enough that the click's "user gesture" had expired.
-      const canShareFile =
+      // Decide share-sheet vs download by DEVICE, not just capability.
+      // Windows 11 / some desktops DO support navigator.share, but there
+      // the user expects a normal file download — the OS share sheet is
+      // unexpected. So we only use Web Share on actual mobile/touch
+      // devices, where it opens the native iOS/Android share sheet
+      // (Save to Photos, Messages, etc) and where window.open / download
+      // are unreliable.
+      const isMobileDevice =
         typeof navigator !== "undefined" &&
+        (
+          /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+          // iPadOS 13+ reports as "Macintosh" but has touch — catch it
+          (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1) ||
+          // Generic touch + coarse-pointer heuristic for anything else
+          (typeof window !== "undefined" &&
+            window.matchMedia?.("(pointer: coarse)").matches === true &&
+            "ontouchstart" in window)
+        );
+
+      const canShareFile =
+        isMobileDevice &&
         typeof (navigator as any).canShare === "function" &&
         (navigator as any).canShare({ files: [file] });
 
@@ -244,15 +253,13 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
           });
           return; // shared (or the user picked an action) — done
         } catch (shareErr: any) {
-          // User tapped "Cancel" on the share sheet — that's not a
-          // failure, just abort silently. Any other share error falls
-          // through to the download path below.
+          // User tapped "Cancel" on the share sheet — not a failure.
           if (shareErr?.name === "AbortError") return;
         }
       }
 
-      // Desktop (or any browser without file-share support): download the
-      // PNG via a synthetic anchor click.
+      // Desktop (and any non-mobile / unsupported case): download the PNG
+      // via a synthetic anchor click.
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
