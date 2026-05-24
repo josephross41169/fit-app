@@ -113,6 +113,37 @@ const C = {
 // at /api/image-proxy and fetches the image server-side, sidestepping any
 // CORS issues with Supabase storage. Returns the original URL unchanged
 // if it's already same-origin (e.g., a data URL or a relative path).
+// Nutrition (and sometimes other) photos can be stored in TWO formats:
+//   1. Plain URL strings: "https://.../photo.jpg"
+//   2. Per-meal JSON objects encoded as a string entry in the array:
+//      '{"Breakfast":"https://...","Dinner":"https://..."}'
+// The profile page's display code parses both, but the share card used
+// to treat every entry as a plain URL — so per-meal JSON photos failed
+// the URL parse + reachability check and got silently dropped. This
+// helper flattens both formats into a plain list of image URLs.
+function extractPhotoUrls(raw: string[] | undefined): string[] {
+  if (!raw || raw.length === 0) return [];
+  const out: string[] = [];
+  for (const entry of raw) {
+    if (!entry) continue;
+    const trimmed = entry.trim();
+    if (trimmed.startsWith("{")) {
+      // Per-meal JSON object — pull out the URL values.
+      try {
+        const obj = JSON.parse(trimmed);
+        for (const v of Object.values(obj)) {
+          if (typeof v === "string" && v) out.push(v);
+        }
+      } catch {
+        // Not valid JSON after all — ignore this entry.
+      }
+    } else {
+      out.push(entry);
+    }
+  }
+  return out;
+}
+
 function toProxyUrl(url: string): string {
   if (!url) return url;
   // Data URLs and relative paths are already safe.
@@ -163,9 +194,9 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
         );
         return checks.filter((u): u is string => !!u);
       }
-      const wkPhotos = await filterReachable((data.workout?.photoUrls || []).slice(0, 4));
-      const ntPhotos = await filterReachable((data.nutrition?.photoUrls || []).slice(0, 4));
-      const wlPhotos = await filterReachable((data.wellness?.photoUrls || []).slice(0, 4));
+      const wkPhotos = await filterReachable(extractPhotoUrls(data.workout?.photoUrls).slice(0, 4));
+      const ntPhotos = await filterReachable(extractPhotoUrls(data.nutrition?.photoUrls).slice(0, 4));
+      const wlPhotos = await filterReachable(extractPhotoUrls(data.wellness?.photoUrls).slice(0, 4));
       setSafeWorkoutPhotos(wkPhotos);
       setSafeNutritionPhotos(ntPhotos);
       setSafeWellnessPhotos(wlPhotos);
@@ -422,7 +453,7 @@ function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; 
         gap: 16,
       }}
     >
-      <div style={{ fontSize: 38, lineHeight: 1 }}>{emoji}</div>
+      <div style={{ width: 44, height: 44, fontSize: 38, lineHeight: "44px", textAlign: "center", flexShrink: 0 }}>{emoji}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", lineHeight: 1.1 }}>{title}</div>
         {subtitle && (
@@ -472,9 +503,9 @@ function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🏃 Cardio</div>
             {workout.cardio.map((c, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: i > 0 ? `1px solid ${C.border}` : "none" }}>
-                <div style={{ fontWeight: 700, color: C.text, fontSize: 15 }}>{c.type}</div>
-                <div style={{ display: "flex", gap: 14, fontSize: 14 }}>
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderTop: i > 0 ? `1px solid ${C.border}` : "none" }}>
+                <div style={{ fontWeight: 700, color: C.text, fontSize: 15, lineHeight: 1.5 }}>{c.type}</div>
+                <div style={{ display: "flex", gap: 14, fontSize: 14, lineHeight: 1.5 }}>
                   {c.distance && <span style={{ color: C.gold, fontWeight: 800 }}>{c.distance} mi</span>}
                   {c.duration && <span style={{ color: C.purpleLt, fontWeight: 800 }}>{c.duration} min</span>}
                 </div>
@@ -505,7 +536,7 @@ function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
       <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 12 }}>
         {wellness.entries.map((e, i) => (
           <div key={i} style={{ background: C.cardBg2, borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, border: `1px solid ${C.border}` }}>
-            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, lineHeight: 1, flexShrink: 0 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, lineHeight: "52px", textAlign: "center", flexShrink: 0 }}>
               {e.emoji || "🌿"}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -551,15 +582,15 @@ function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] })
           {nutrition.meals && nutrition.meals.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {nutrition.meals.slice(0, 5).map((m, i) => (
-                <div key={i} style={{ background: C.cardBg2, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, border: `1px solid ${C.border}` }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, flexShrink: 0 }}>
+                <div key={i} style={{ background: C.cardBg2, borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, border: `1px solid ${C.border}` }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: "42px", textAlign: "center", flexShrink: 0 }}>
                     {m.emoji || "🍽️"}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{m.key}</div>
-                    <div style={{ fontSize: 13, color: C.sub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, lineHeight: 1.5, paddingBottom: 1 }}>{m.key}</div>
+                    <div style={{ fontSize: 13, color: C.sub, marginTop: 2, lineHeight: 1.5, paddingBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0 }}>{m.cal} kcal</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0, lineHeight: 1.5 }}>{m.cal} kcal</div>
                 </div>
               ))}
             </div>
