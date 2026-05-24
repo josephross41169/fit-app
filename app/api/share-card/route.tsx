@@ -182,9 +182,32 @@ export async function POST(req: NextRequest) {
   const exercises = data.workout?.exercises || [];
   const wellnessEntries = data.wellness?.entries || [];
 
-  // Compute a height that fits the content. Base chrome + per-meal rows.
-  const mealsBlock = meals.length * 64;
-  const height = Math.max(760, 470 + mealsBlock);
+  // ── Compute the card height from actual content ──────────────────────────
+  // Satori clips to the exact height we pass, so under-estimating cuts content
+  // off (the previous bug) and over-estimating just leaves dark space. We size
+  // each section from its real content with small buffers.
+  const exCount = Math.min(exercises.length, 6);
+  const cardioCount = cardio.length;
+  const workoutBodyH = (cardioCount > 0 ? 24 + cardioCount * 34 : 0) + exCount * 38;
+  const workoutTileH = 94 + 40 + Math.max(workoutBodyH, 44);
+  const wellnessTileH = 94 + 40 + Math.max(wellnessEntries.slice(0, 4).length * 40, 44);
+  const workoutRowH = Math.max(workoutTileH, wellnessTileH) + 22;
+
+  const MACROS_H = 111;       // macros row incl. margin
+  const MEAL_ROW_H = 72;      // one meal row incl. margin
+  const mealsColH = MACROS_H + meals.length * MEAL_ROW_H;
+  // Nutrition body = taller of the meals column and a sane minimum (so when
+  // photos exist but meals are few, the photos still get decent height).
+  const nutritionBodyH = Math.max(mealsColH, 300);
+  const nutritionH = 92 /*header*/ + 40 /*body padding*/ + nutritionBodyH;
+
+  const height = 80 /*outer padding*/ + 120 /*top header*/ + workoutRowH + nutritionH + 12;
+
+  // Per-photo height so the stacked photos exactly fill the nutrition body.
+  const photoCount = nutritionPhotos.length;
+  const perPhotoH = photoCount > 0
+    ? Math.floor((nutritionBodyH - (photoCount - 1) * 12) / photoCount)
+    : 0;
 
   const hasWorkout = exercises.length > 0 || cardio.length > 0;
   const workoutSubtitle = [
@@ -372,11 +395,9 @@ export async function POST(req: NextRequest) {
                   <img
                     key={i}
                     src={src}
-                    width={nutritionPhotos.length === 1 ? 360 : 360}
-                    height={nutritionPhotos.length === 1 ? 360 : 175}
                     style={{
                       width: "100%",
-                      height: nutritionPhotos.length === 1 ? 300 : 170,
+                      height: perPhotoH,
                       objectFit: "cover",
                       borderRadius: 14,
                       border: `1px solid ${C.border}`,
