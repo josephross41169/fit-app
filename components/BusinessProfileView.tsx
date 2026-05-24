@@ -34,6 +34,43 @@ const DAYS: { key: string; label: string }[] = [
   { key: "sun", label: "Sunday" },
 ];
 
+// Call-to-action presets. `label` is stored on the profile; `text`/`emoji`
+// drive the button. `kind` decides how the URL is built:
+//   - "url"        : use the business_cta_url verbatim
+//   - "directions" : build a Google Maps link from the business address
+//   - "call"       : tel: link from the business phone
+const CTA_PRESETS: { key: string; emoji: string; text: string; kind: "url" | "directions" | "call"; hint: string }[] = [
+  { key: "book",       emoji: "📅", text: "Book Now",       kind: "url",        hint: "Link to your booking page" },
+  { key: "shop",       emoji: "🛍️", text: "Shop",           kind: "url",        hint: "Link to your store" },
+  { key: "join",       emoji: "💪", text: "Join Now",       kind: "url",        hint: "Link to membership sign-up" },
+  { key: "signup",     emoji: "✍️", text: "Sign Up",        kind: "url",        hint: "Link to your sign-up form" },
+  { key: "menu",       emoji: "📋", text: "View Menu",      kind: "url",        hint: "Link to your menu / catalog" },
+  { key: "directions", emoji: "📍", text: "Get Directions", kind: "directions", hint: "Uses your address automatically" },
+  { key: "call",       emoji: "📞", text: "Call",           kind: "call",       hint: "Uses your phone number automatically" },
+  { key: "contact",    emoji: "✉️", text: "Contact",        kind: "url",        hint: "Link or mailto: for inquiries" },
+  { key: "learn",      emoji: "🔗", text: "Learn More",     kind: "url",        hint: "Any link you want to feature" },
+];
+function getCta(key: string | null | undefined) {
+  return CTA_PRESETS.find(c => c.key === key) || null;
+}
+// Resolve the actual href for a CTA given the business's stored fields.
+function resolveCtaHref(preset: { kind: string }, ctaUrl: string | null, address: string | null, phone: string | null): string | null {
+  if (preset.kind === "directions") {
+    return address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : null;
+  }
+  if (preset.kind === "call") {
+    return phone ? `tel:${phone.replace(/[^0-9+]/g, "")}` : null;
+  }
+  if (!ctaUrl) return null;
+  return /^https?:\/\/|^mailto:|^tel:/.test(ctaUrl) ? ctaUrl : `https://${ctaUrl}`;
+}
+// Is an offer object currently active (present + not expired)?
+function offerActive(offer: any): boolean {
+  if (!offer || !offer.title) return false;
+  if (offer.expires_at) return new Date(offer.expires_at).getTime() > Date.now();
+  return true;
+}
+
 export default function BusinessProfileView({
   profile,
   currentUser,
@@ -77,6 +114,15 @@ export default function BusinessProfileView({
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string[]>([]);
+  // Layer 1 business features
+  const [ctaLabel, setCtaLabel] = useState("");
+  const [ctaUrl, setCtaUrl] = useState("");
+  const [announcement, setAnnouncement] = useState("");
+  const [offerTitle, setOfferTitle] = useState("");
+  const [offerDesc, setOfferDesc] = useState("");
+  const [offerCode, setOfferCode] = useState("");
+  const [offerExpires, setOfferExpires] = useState(""); // yyyy-mm-dd
+  const [copiedCode, setCopiedCode] = useState(false);
 
   // Pull current values into editable state — runs on mount + whenever the
   // profile prop changes (e.g. after a save-and-refetch).
@@ -98,6 +144,15 @@ export default function BusinessProfileView({
     setAvatarUrl(profile.avatar_url || null);
     setBannerUrl(profile.banner_url || null);
     setHighlights(Array.isArray(profile.highlights) ? profile.highlights : []);
+    // Layer 1 fields
+    setCtaLabel(profile.business_cta_label || "");
+    setCtaUrl(profile.business_cta_url || "");
+    setAnnouncement(profile.business_announcement || "");
+    const off = profile.business_offer || null;
+    setOfferTitle(off?.title || "");
+    setOfferDesc(off?.description || "");
+    setOfferCode(off?.code || "");
+    setOfferExpires(off?.expires_at ? String(off.expires_at).slice(0, 10) : "");
   }
   useEffect(() => { initFromProfile(); /* eslint-disable-next-line */ }, [profile]);
 
@@ -173,6 +228,19 @@ export default function BusinessProfileView({
       else if (v && typeof v === "object" && v.open && v.close) cleanedHours[d.key] = v;
     }
 
+    // Build the offer object (null if no title)
+    const offerObj = offerTitle.trim()
+      ? {
+          title: offerTitle.trim(),
+          description: offerDesc.trim() || null,
+          code: offerCode.trim() || null,
+          expires_at: offerExpires ? new Date(offerExpires + "T23:59:59").toISOString() : null,
+        }
+      : null;
+    // Only bump the announcement timestamp when the text actually changed,
+    // so editing other fields doesn't reset "posted X ago".
+    const announcementChanged = (announcement.trim() || null) !== (profile.business_announcement || null);
+
     const { error } = await supabase.from("users").update({
       business_name: businessName || null,
       full_name: businessName || profile.full_name,
@@ -192,6 +260,14 @@ export default function BusinessProfileView({
       avatar_url: avatarUrl,
       banner_url: bannerUrl,
       highlights: highlights.filter(Boolean),
+      // Layer 1
+      business_cta_label: ctaLabel || null,
+      business_cta_url: ctaUrl.trim() || null,
+      business_announcement: announcement.trim() || null,
+      business_announcement_at: announcement.trim()
+        ? (announcementChanged ? new Date().toISOString() : (profile.business_announcement_at || new Date().toISOString()))
+        : null,
+      business_offer: offerObj,
     } as any).eq("id", currentUser.id);
 
     if (error) {
@@ -337,6 +413,18 @@ export default function BusinessProfileView({
           </div>
         ) : currentUser && (
           <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+            {(() => {
+              const preset = getCta(profile.business_cta_label);
+              if (!preset) return null;
+              const href = resolveCtaHref(preset, profile.business_cta_url, profile.business_address, profile.business_phone);
+              if (!href) return null;
+              return (
+                <a href={href} target={preset.kind === "call" ? undefined : "_blank"} rel="noopener noreferrer"
+                  style={{ ...primaryBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 7, flexGrow: 1, justifyContent: "center", minWidth: 150 }}>
+                  {preset.emoji} {preset.text}
+                </a>
+              );
+            })()}
             <FollowButton targetUserId={profile.id} />
             {onMessageClick && <button onClick={onMessageClick} style={secondaryBtn}>✉️ Message</button>}
             {profile.business_website && (
@@ -356,6 +444,83 @@ export default function BusinessProfileView({
             </div>
           </div>
         )}
+
+        {/* ── Layer 1: edit-mode controls (CTA / announcement / offer) ── */}
+        {viewingOwn && editing && (
+          <>
+            <Card title="Call-to-action button" hint="The big button visitors tap. Pick what you want them to do.">
+              <select value={ctaLabel} onChange={e => setCtaLabel(e.target.value)} style={{ ...inlineInput, marginBottom: 10 }}>
+                <option value="">— No button —</option>
+                {CTA_PRESETS.map(c => <option key={c.key} value={c.key}>{c.emoji} {c.text}</option>)}
+              </select>
+              {(() => {
+                const preset = getCta(ctaLabel);
+                if (!preset) return null;
+                if (preset.kind === "directions") return <div style={{ fontSize: 12, color: C.muted }}>📍 Uses your business address automatically — make sure it's set in About.</div>;
+                if (preset.kind === "call") return <div style={{ fontSize: 12, color: C.muted }}>📞 Uses your business phone automatically — make sure it's set in About.</div>;
+                return (
+                  <>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{preset.hint}</div>
+                    <input value={ctaUrl} onChange={e => setCtaUrl(e.target.value)} placeholder="https://..." style={inlineInput} />
+                  </>
+                );
+              })()}
+            </Card>
+
+            <Card title="Announcement" hint="A pinned banner at the top of your profile. Great for 'what's new'. Leave empty to hide.">
+              <textarea rows={2} maxLength={280} value={announcement} onChange={e => setAnnouncement(e.target.value)}
+                placeholder="New summer hours start Monday! Open until 10pm on weekdays." style={{ ...inlineInput, resize: "vertical", minHeight: 56 }} />
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4, textAlign: "right" }}>{announcement.length}/280</div>
+            </Card>
+
+            <Card title="Offer / promotion" hint="A featured deal shown on your profile. Leave the title empty to hide.">
+              <input value={offerTitle} onChange={e => setOfferTitle(e.target.value.slice(0, 60))} placeholder="Offer title — e.g. First class free" style={{ ...inlineInput, marginBottom: 8 }} />
+              <input value={offerDesc} onChange={e => setOfferDesc(e.target.value.slice(0, 140))} placeholder="Short details (optional)" style={{ ...inlineInput, marginBottom: 8 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={offerCode} onChange={e => setOfferCode(e.target.value.toUpperCase().slice(0, 24))} placeholder="Code (optional)" style={{ ...inlineInput, flex: 1 }} />
+                <input type="date" value={offerExpires} onChange={e => setOfferExpires(e.target.value)} style={{ ...inlineInput, flex: 1 }} />
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Date = when the offer expires (optional). Past that, it hides automatically.</div>
+            </Card>
+          </>
+        )}
+
+        {/* ── Layer 1: view-mode announcement banner ── */}
+        {!editing && profile.business_announcement && (
+          <div style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.16), rgba(167,139,250,0.10))", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 14, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>📣</span>
+            <div>
+              <div style={{ fontSize: 14, color: "#EDE9FE", lineHeight: 1.5, fontWeight: 600 }}>{profile.business_announcement}</div>
+              {profile.business_announcement_at && (
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{timeAgoShort(profile.business_announcement_at)}</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Layer 1: view-mode offer card ── */}
+        {!editing && offerActive(profile.business_offer) && (() => {
+          const off = profile.business_offer;
+          return (
+            <div style={{ background: "linear-gradient(135deg, rgba(245,166,35,0.14), rgba(245,166,35,0.05))", border: "1px solid rgba(245,166,35,0.45)", borderRadius: 14, padding: 16, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: off.description ? 6 : (off.code ? 10 : 0) }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#F5A623", textTransform: "uppercase", letterSpacing: 0.6, background: "rgba(245,166,35,0.15)", padding: "3px 9px", borderRadius: 20 }}>🎁 Offer</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{off.title}</span>
+              </div>
+              {off.description && <div style={{ fontSize: 13, color: C.sub, marginBottom: off.code ? 10 : 0, lineHeight: 1.5 }}>{off.description}</div>}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                {off.code && (
+                  <button
+                    onClick={() => { try { navigator.clipboard.writeText(off.code); setCopiedCode(true); setTimeout(() => setCopiedCode(false), 1500); } catch {} }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.input, border: "1px dashed #F5A623", borderRadius: 10, padding: "8px 14px", cursor: "pointer", color: "#F5A623", fontWeight: 800, fontSize: 14, letterSpacing: 1 }}>
+                    {off.code} <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{copiedCode ? "✓ copied" : "tap to copy"}</span>
+                  </button>
+                )}
+                {off.expires_at && <span style={{ fontSize: 12, color: C.muted }}>Ends {new Date(off.expires_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Tagline */}
         {editing ? (
@@ -632,6 +797,19 @@ function SocialChip({ icon, label, url }: { icon: string; label: string; url: st
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div style={{ color: C.muted, fontSize: 13, padding: "4px 0" }}>{children}</div>;
+}
+
+function timeAgoShort(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return "Just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function formatTodayHours(hours: any): { label: string; isOpen: boolean } | null {
