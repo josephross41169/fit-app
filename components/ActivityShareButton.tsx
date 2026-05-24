@@ -1,29 +1,27 @@
 "use client";
-// ─────────────────────────────────────────────────────────────────────────────
+
 // components/ActivityShareButton.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Generates a 2x1-grid share image of an activity day card and downloads it
-// as a PNG. Layout:
+// Camera/share button shown on activity cards. Captures the day's activity
+// as a polished PNG and hands it to the OS share sheet (mobile) or downloads
+// it (desktop).
 //
-//     ┌─────────────┬─────────────┐
-//     │  Workout    │   Wellness  │
-//     ├─────────────┴─────────────┤
-//     │      Nutrition (wide)     │
-//     └───────────────────────────┘
+// As of the server-render rewrite: this no longer uses html2canvas. Instead
+// it POSTs the day's data to /api/share-card, which renders the image with
+// next/og (real font metrics → pixel-perfect text + emoji, and photos fetched
+// server-side so there's no CORS dance). The button just fetches the PNG and
+// shares/downloads it.
 //
-// SAFETY DESIGN:
-//   This component wraps itself in an error boundary. If anything inside
-//   throws — including bad data, a missing module, an html2canvas crash,
-//   or a CORS error — the component renders nothing instead of crashing
-//   the parent page. Previous iterations took down the whole profile
-//   page when html2canvas tainted the canvas; this version contains
-//   blast radius to a single hidden button.
+// The old client-side html2canvas approach approximated the browser's layout
+// engine in JS and consistently mis-positioned text baselines and emoji; the
+// server route fixes that at the source.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useRef, Component, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Component, ReactNode, useState } from "react";
 
 // ─── Public type: shape of one day's data for the share render ──────────────
+// NOTE: kept in sync with the same interface in app/api/share-card/route.tsx.
+// Imported by profile/page.tsx, prs/page.tsx, ShareCard.tsx.
 export interface ShareCardData {
   dateLabel: string;
   monthShort: string;
@@ -62,29 +60,23 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-// ─── Error boundary: contains all crashes inside the share button ───────────
-// If anything inside the inner component throws during render, the boundary
-// renders null (no button) instead of letting the error propagate up to the
-// parent page. We log to console so the issue is visible in dev tools but
-// the user just sees no button rather than a full page crash.
+// ─── Error boundary: contains any crash inside the share button ─────────────
+// If the inner component throws, render null (no button) rather than crashing
+// the whole page.
 class ShareErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
-
   static getDerivedStateFromError(_err: Error) {
     return { hasError: true };
   }
-
-  componentDidCatch(err: Error, info: React.ErrorInfo) {
+  componentDidCatch(err: Error, info: unknown) {
     console.error("[ActivityShareButton] caught error, hiding button:", err, info);
   }
-
   render() {
     if (this.state.hasError) return null;
     return this.props.children;
   }
 }
 
-// Public default export wraps the inner implementation in the boundary.
 export default function ActivityShareButton(props: Props) {
   return (
     <ShareErrorBoundary>
@@ -93,81 +85,24 @@ export default function ActivityShareButton(props: Props) {
   );
 }
 
-// ─── Composition dimensions ─────────────────────────────────────────────────
-const SHARE_W = 1600;
-
-const C = {
-  bg:       "#0D0D0D",
-  card:     "#1A1230",
-  cardBg2:  "#1E1530",
-  border:   "#3D2A6E",
-  purple:   "#7C3AED",
-  purpleLt: "#A78BFA",
-  text:     "#F0F0F0",
-  sub:      "#9CA3AF",
-  gold:     "#F5A623",
-  green:    "#22C55E",
-};
-
-// Convert a remote image URL to a same-origin proxy URL. The proxy lives
-// at /api/image-proxy and fetches the image server-side, sidestepping any
-// CORS issues with Supabase storage. Returns the original URL unchanged
-// if it's already same-origin (e.g., a data URL or a relative path).
-// Nutrition (and sometimes other) photos can be stored in TWO formats:
-//   1. Plain URL strings: "https://.../photo.jpg"
-//   2. Per-meal JSON objects encoded as a string entry in the array:
-//      '{"Breakfast":"https://...","Dinner":"https://..."}'
-// The profile page's display code parses both, but the share card used
-// to treat every entry as a plain URL — so per-meal JSON photos failed
-// the URL parse + reachability check and got silently dropped. This
-// helper flattens both formats into a plain list of image URLs.
-function extractPhotoUrls(raw: string[] | undefined): string[] {
-  if (!raw || raw.length === 0) return [];
-  const out: string[] = [];
-  for (const entry of raw) {
-    if (!entry) continue;
-    const trimmed = entry.trim();
-    if (trimmed.startsWith("{")) {
-      // Per-meal JSON object — pull out the URL values.
-      try {
-        const obj = JSON.parse(trimmed);
-        for (const v of Object.values(obj)) {
-          if (typeof v === "string" && v) out.push(v);
-        }
-      } catch {
-        // Not valid JSON after all — ignore this entry.
-      }
-    } else {
-      out.push(entry);
-    }
-  }
-  return out;
+// ─── Mobile detection ────────────────────────────────────────────────────────
+// Used to decide share-sheet (mobile) vs download (desktop). We check the
+// DEVICE, not just whether navigator.share exists — Windows 11 supports
+// navigator.share but there the user expects a plain download.
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    // iPadOS 13+ reports as "Macintosh" but has touch
+    (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1) ||
+    (typeof window !== "undefined" &&
+      window.matchMedia?.("(pointer: coarse)").matches === true &&
+      "ontouchstart" in window)
+  );
 }
 
-function toProxyUrl(url: string): string {
-  if (!url) return url;
-  // Data URLs and relative paths are already safe.
-  if (url.startsWith("data:") || url.startsWith("/")) return url;
-  try {
-    const u = new URL(url, typeof window !== "undefined" ? window.location.origin : "https://liveleeapp.com");
-    // If it's already on our origin, no proxy needed.
-    if (typeof window !== "undefined" && u.origin === window.location.origin) {
-      return url;
-    }
-    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
-  } catch {
-    return url;
-  }
-}
-
-// ─── Inner component (the real implementation) ──────────────────────────────
 function ActivityShareButtonInner({ data, filename = "livelee-activity", style }: Props) {
   const [busy, setBusy] = useState(false);
-  const [snapshotMode, setSnapshotMode] = useState(false);
-  const [safeWorkoutPhotos, setSafeWorkoutPhotos] = useState<string[]>([]);
-  const [safeNutritionPhotos, setSafeNutritionPhotos] = useState<string[]>([]);
-  const [safeWellnessPhotos, setSafeWellnessPhotos] = useState<string[]>([]);
-  const shareNodeRef = useRef<HTMLDivElement | null>(null);
 
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
@@ -175,122 +110,34 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
     setBusy(true);
 
     try {
-      // Pre-flight: rewrite each photo URL through our same-origin proxy
-      // route, then HEAD-check each one to drop URLs the proxy can't fetch
-      // (404, 502, expired Supabase signed URLs, etc.). Only photos that
-      // actually load make it into the share image — no broken empty
-      // placeholders. Done for all 3 categories.
-      async function filterReachable(urls: string[]): Promise<string[]> {
-        const proxied = urls.map(toProxyUrl);
-        const checks = await Promise.all(
-          proxied.map(async (u) => {
-            try {
-              const r = await fetch(u, { method: "GET", cache: "force-cache" });
-              return r.ok ? u : null;
-            } catch {
-              return null;
-            }
-          })
-        );
-        return checks.filter((u): u is string => !!u);
-      }
-      const wkPhotos = await filterReachable(extractPhotoUrls(data.workout?.photoUrls).slice(0, 4));
-      const ntPhotos = await filterReachable(extractPhotoUrls(data.nutrition?.photoUrls).slice(0, 4));
-      const wlPhotos = await filterReachable(extractPhotoUrls(data.wellness?.photoUrls).slice(0, 4));
-      setSafeWorkoutPhotos(wkPhotos);
-      setSafeNutritionPhotos(ntPhotos);
-      setSafeWellnessPhotos(wlPhotos);
-
-      // Now mount the off-screen composition.
-      setSnapshotMode(true);
-      // Wait for React commit + paint. Longer than usual because the
-      // proxied images need a network round-trip through our server.
-      await new Promise(r => setTimeout(r, 800));
-
-      const node = shareNodeRef.current;
-      if (!node) throw new Error("Share composition failed to mount");
-
-      // Wait for any <img> to actually render. Probed images all load
-      // cleanly but they still need a tick to paint.
-      const imgs = Array.from(node.querySelectorAll("img"));
-      await Promise.all(
-        imgs.map(img =>
-          img.complete && img.naturalWidth > 0
-            ? Promise.resolve()
-            : new Promise<void>(resolve => {
-                const done = () => resolve();
-                img.addEventListener("load", done, { once: true });
-                img.addEventListener("error", done, { once: true });
-                setTimeout(done, 8000);
-              })
-        )
-      );
-
-      // Dynamic import — keeps html2canvas (~50KB gz) out of the main bundle.
-      const html2canvasMod = await import("html2canvas");
-      const html2canvas = html2canvasMod.default;
-
-      const canvas = await html2canvas(node, {
-        backgroundColor: "#0D0D0D",
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        allowTaint: false,
-        windowWidth: SHARE_W,
-        windowHeight: node.offsetHeight,
-        ignoreElements: (el) => {
-          const tag = el.tagName.toLowerCase();
-          return tag === "iframe" || tag === "video";
-        },
+      // Ask the server to render the card. Photos + layout + fonts are all
+      // handled server-side; we just get a finished PNG back.
+      const res = await fetch("/api/share-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
+      if (!res.ok) throw new Error(`share-card route returned ${res.status}`);
 
-      const blob: Blob | null = await new Promise(resolve => {
-        canvas.toBlob(b => resolve(b), "image/png", 0.95);
-      });
-      if (!blob) throw new Error("Failed to encode PNG");
-
+      const blob = await res.blob();
       const fname = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
       const file = new File([blob], fname, { type: "image/png" });
 
-      // Decide share-sheet vs download by DEVICE, not just capability.
-      // Windows 11 / some desktops DO support navigator.share, but there
-      // the user expects a normal file download — the OS share sheet is
-      // unexpected. So we only use Web Share on actual mobile/touch
-      // devices, where it opens the native iOS/Android share sheet
-      // (Save to Photos, Messages, etc) and where window.open / download
-      // are unreliable.
-      const isMobileDevice =
-        typeof navigator !== "undefined" &&
-        (
-          /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-          // iPadOS 13+ reports as "Macintosh" but has touch — catch it
-          (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1) ||
-          // Generic touch + coarse-pointer heuristic for anything else
-          (typeof window !== "undefined" &&
-            window.matchMedia?.("(pointer: coarse)").matches === true &&
-            "ontouchstart" in window)
-        );
-
-      const canShareFile =
-        isMobileDevice &&
+      // Mobile → native share sheet (Save to Photos, Messages, etc).
+      if (
+        isMobileDevice() &&
         typeof (navigator as any).canShare === "function" &&
-        (navigator as any).canShare({ files: [file] });
-
-      if (canShareFile) {
+        (navigator as any).canShare({ files: [file] })
+      ) {
         try {
-          await (navigator as any).share({
-            files: [file],
-            title: "My Livelee activity",
-          });
-          return; // shared (or the user picked an action) — done
+          await (navigator as any).share({ files: [file], title: "My Livelee activity" });
+          return;
         } catch (shareErr: any) {
-          // User tapped "Cancel" on the share sheet — not a failure.
-          if (shareErr?.name === "AbortError") return;
+          if (shareErr?.name === "AbortError") return; // user cancelled — fine
         }
       }
 
-      // Desktop (and any non-mobile / unsupported case): download the PNG
-      // via a synthetic anchor click.
+      // Desktop (and any non-mobile/unsupported case) → download.
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -300,380 +147,36 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      console.error("[share] capture failed", err);
-      // Show an alert here is fine — this catch only triggers from inside
-      // a click handler so it can't crash the whole page.
-      alert("Couldn't generate the share image. Try again, or take a regular screenshot.");
+      console.error("[share] generation failed", err);
+      alert("Couldn't generate the share image. Please try again.");
     } finally {
-      setSnapshotMode(false);
       setBusy(false);
-      setSafeWorkoutPhotos([]);
-      setSafeNutritionPhotos([]);
-      setSafeWellnessPhotos([]);
     }
   }
 
-  // Build the data passed to the composition with proxied photos for all
-  // three categories. Each section's photoUrls is overridden with our
-  // safe (proxied) list so html2canvas can render them.
-  const dataForRender: ShareCardData = {
-    ...data,
-    workout: data.workout
-      ? { ...data.workout, photoUrls: safeWorkoutPhotos }
-      : data.workout,
-    nutrition: data.nutrition
-      ? { ...data.nutrition, photoUrls: safeNutritionPhotos }
-      : data.nutrition,
-    wellness: data.wellness
-      ? { ...data.wellness, photoUrls: safeWellnessPhotos }
-      : data.wellness,
-  };
-
   return (
-    <>
-      <button
-        onClick={handleClick}
-        disabled={busy}
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: "50%",
-          background: busy ? "#2D1F52" : "rgba(124,58,237,0.15)",
-          border: "1.5px solid rgba(124,58,237,0.4)",
-          color: "#A78BFA",
-          fontSize: 15,
-          cursor: busy ? "default" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          ...style,
-        }}
-        aria-label="Download activity card as image"
-        title="Download as image"
-      >
-        {busy ? "⏳" : "📸"}
-      </button>
-
-      {snapshotMode && typeof document !== "undefined" &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: -99999,
-              width: SHARE_W,
-              zIndex: -1,
-              pointerEvents: "none",
-            }}
-          >
-            <ShareComposition data={dataForRender} forwardedRef={shareNodeRef} />
-          </div>,
-          document.body
-        )
-      }
-    </>
-  );
-}
-
-// ─── Composition ────────────────────────────────────────────────────────────
-function ShareComposition({
-  data,
-  forwardedRef,
-}: {
-  data: ShareCardData;
-  forwardedRef: React.MutableRefObject<HTMLDivElement | null>;
-}) {
-  return (
-    <div
-      ref={forwardedRef}
+    <button
+      onClick={handleClick}
+      disabled={busy}
       style={{
-        width: SHARE_W,
-        background: `linear-gradient(135deg, #0D0D0D 0%, #1A1230 100%)`,
-        padding: 40,
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        color: C.text,
-        boxSizing: "border-box",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 32 }}>
-        <div
-          style={{
-            width: 96,
-            height: 96,
-            borderRadius: 22,
-            background: `linear-gradient(135deg, #4ADE80, ${C.green})`,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 6px 20px rgba(74,222,128,0.35)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ color: "#fff", fontWeight: 900, fontSize: 36, lineHeight: 1 }}>{data.dayNum}</div>
-          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 700, marginTop: 2 }}>{data.monthShort}</div>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 900, fontSize: 38, color: C.text, lineHeight: 1.1 }}>{data.dateLabel}</div>
-          {data.displayName && (
-            <div style={{ fontSize: 20, color: C.sub, marginTop: 6 }}>
-              {data.displayName}{data.username ? ` · @${data.username}` : ""}
-            </div>
-          )}
-        </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 32, fontWeight: 900, color: C.purpleLt, letterSpacing: -0.5 }}>Livelee</div>
-          <div style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>liveleeapp.com</div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 24, marginBottom: 24 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <WorkoutTile workout={data.workout} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <WellnessTile wellness={data.wellness} />
-        </div>
-      </div>
-
-      <NutritionTile nutrition={data.nutrition} />
-    </div>
-  );
-}
-
-function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; subtitle?: string }) {
-  return (
-    <div
-      style={{
-        background: `linear-gradient(135deg, ${C.purple}, ${C.purpleLt})`,
-        padding: "20px 26px",
+        width: 34,
+        height: 34,
+        borderRadius: "50%",
+        background: busy ? "#2D1F52" : "rgba(124,58,237,0.15)",
+        border: "1.5px solid rgba(124,58,237,0.4)",
+        color: "#A78BFA",
+        fontSize: 15,
+        cursor: busy ? "default" : "pointer",
         display: "flex",
         alignItems: "center",
-        gap: 16,
+        justifyContent: "center",
+        flexShrink: 0,
+        ...style,
       }}
+      aria-label="Share activity card as image"
+      title="Share as image"
     >
-      <div style={{ width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, lineHeight: 1, paddingTop: 4, flexShrink: 0 }}>{emoji}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", lineHeight: 1.1 }}>{title}</div>
-        {subtitle && (
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>{subtitle}</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function WorkoutTile({ workout }: { workout: ShareCardData["workout"] }) {
-  if (!workout || (!workout.exercises?.length && !workout.cardio?.length)) {
-    return <EmptyTile emoji="💪" title="Workout" message="Rest day" />;
-  }
-  const subtitle = [
-    workout.duration && workout.duration !== "—" ? `⏱ ${workout.duration}` : null,
-    workout.calories ? `🔥 ${workout.calories} cal` : null,
-  ].filter(Boolean).join("  ·  ");
-
-  return (
-    <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}` }}>
-      <TileHeader emoji="💪" title={workout.type || "Workout"} subtitle={subtitle || undefined} />
-      <div style={{ padding: 22 }}>
-        {workout.exercises && workout.exercises.length > 0 && (
-          <div style={{ marginBottom: workout.cardio && workout.cardio.length > 0 ? 18 : 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 50px 50px 1fr", gap: 8, fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, padding: "0 4px" }}>
-              <div>Exercise</div>
-              <div style={{ textAlign: "center" }}>Sets</div>
-              <div style={{ textAlign: "center" }}>Reps</div>
-              <div style={{ textAlign: "right" }}>Weight</div>
-            </div>
-            {workout.exercises.slice(0, 8).map((e, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 50px 50px 1fr", gap: 8, padding: "14px 4px", borderTop: `1px solid ${C.border}`, fontSize: 15, alignItems: "center" }}>
-                <div style={{ fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>{e.name}</div>
-                <div style={{ textAlign: "center", color: C.purpleLt, fontWeight: 800 }}>{e.sets}</div>
-                <div style={{ textAlign: "center", color: C.purpleLt, fontWeight: 800 }}>{e.reps}</div>
-                <div style={{ textAlign: "right", color: C.gold, fontWeight: 800, fontSize: 13, lineHeight: 1.3 }}>{e.weight || "—"}</div>
-              </div>
-            ))}
-            {workout.exercises.length > 8 && (
-              <div style={{ padding: "10px 4px", fontSize: 13, color: C.sub, textAlign: "center", fontStyle: "italic" }}>+{workout.exercises.length - 8} more</div>
-            )}
-          </div>
-        )}
-
-        {workout.cardio && workout.cardio.length > 0 && (
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🏃 Cardio</div>
-            {workout.cardio.map((c, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderTop: i > 0 ? `1px solid ${C.border}` : "none" }}>
-                <div style={{ fontWeight: 700, color: C.text, fontSize: 15, lineHeight: 1.5 }}>{c.type}</div>
-                <div style={{ display: "flex", gap: 14, fontSize: 14, lineHeight: 1.5 }}>
-                  {c.distance && <span style={{ color: C.gold, fontWeight: 800 }}>{c.distance} mi</span>}
-                  {c.duration && <span style={{ color: C.purpleLt, fontWeight: 800 }}>{c.duration} min</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {workout.photoUrls && workout.photoUrls.length > 0 && (
-          <PhotoGrid photos={workout.photoUrls} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function WellnessTile({ wellness }: { wellness: ShareCardData["wellness"] }) {
-  if (!wellness || !wellness.entries || wellness.entries.length === 0) {
-    return <EmptyTile emoji="🌿" title="Wellness" message="None logged" />;
-  }
-  return (
-    <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}` }}>
-      <TileHeader
-        emoji="🌿"
-        title="Wellness"
-        subtitle={wellness.entries.map(e => e.activity).slice(0, 3).join(" · ")}
-      />
-      <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 12 }}>
-        {wellness.entries.map((e, i) => (
-          <div key={i} style={{ background: C.cardBg2, borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, border: `1px solid ${C.border}` }}>
-            <div style={{ width: 52, height: 52, borderRadius: 13, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, lineHeight: 1, paddingTop: 3, flexShrink: 0 }}>
-              {e.emoji || "🌿"}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: 17, color: C.text }}>{e.activity}</div>
-              {e.notes && <div style={{ fontSize: 14, color: C.sub, marginTop: 3 }}>{e.notes}</div>}
-            </div>
-            {typeof e.duration === "number" && e.duration > 0 && (
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.purpleLt, padding: "6px 12px", borderRadius: 12, background: "rgba(124,58,237,0.15)" }}>
-                {e.duration} min
-              </div>
-            )}
-          </div>
-        ))}
-        {wellness.photoUrls && wellness.photoUrls.length > 0 && (
-          <PhotoGrid photos={wellness.photoUrls} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function NutritionTile({ nutrition }: { nutrition: ShareCardData["nutrition"] }) {
-  if (!nutrition || (!nutrition.meals?.length && !nutrition.calories)) {
-    return <EmptyTile emoji="🥗" title="Nutrition" message="None logged" />;
-  }
-  const photos = (nutrition.photoUrls || []).slice(0, 4);
-  return (
-    <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}` }}>
-      <TileHeader
-        emoji="🥗"
-        title="Nutrition"
-        subtitle={`${nutrition.calories} kcal · ${nutrition.protein}g protein`}
-      />
-      <div style={{ padding: 22, display: "flex", gap: 24 }}>
-        <div style={{ flex: photos.length > 0 ? "1.5" : "1", minWidth: 0 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
-            <Macro value={nutrition.calories} label="Calories" unit="kcal" color={C.gold} />
-            <Macro value={nutrition.protein} label="Protein" unit="g" color="#3B82F6" />
-            <Macro value={nutrition.carbs} label="Carbs" unit="g" color={C.purpleLt} />
-            <Macro value={nutrition.fat} label="Fat" unit="g" color={C.green} />
-          </div>
-
-          {nutrition.meals && nutrition.meals.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {nutrition.meals.slice(0, 5).map((m, i) => (
-                <div key={i} style={{ background: C.cardBg2, borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, border: `1px solid ${C.border}` }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, paddingTop: 2, flexShrink: 0 }}>
-                    {m.emoji || "🍽️"}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, height: 22, lineHeight: "22px" }}>{m.key}</div>
-                    <div style={{ fontSize: 13, color: C.sub, marginTop: 3, height: 20, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0, lineHeight: "22px" }}>{m.cal} kcal</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {photos.length > 0 && (
-          <div style={{ flex: "1", minWidth: 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: photos.length === 1 ? "1fr" : "1fr 1fr", gap: 10, alignContent: "start" }}>
-              {photos.map((url, i) => (
-                <div key={i} style={{ aspectRatio: "1 / 1", borderRadius: 14, overflow: "hidden", border: `2px solid ${C.border}`, background: "#0D0D0D" }}>
-                  <img
-                    src={url}
-                    crossOrigin="anonymous"
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    alt=""
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Macro({ value, label, unit, color }: { value: number; label: string; unit: string; color: string }) {
-  return (
-    <div style={{ background: "#0D0D0D", borderRadius: 14, padding: "14px 12px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
-      <div style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>{unit}</div>
-      <div style={{ fontSize: 11, color: C.sub, marginTop: 2, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-    </div>
-  );
-}
-
-// Reusable photo grid for tiles. 1 photo full width, 2+ in a 2-column grid.
-// Lives below the rest of the tile content. We cap at 4 since we only have
-// space for a 2x2 grid before things start looking cluttered.
-function PhotoGrid({ photos }: { photos: string[] }) {
-  const list = photos.slice(0, 4);
-  if (list.length === 0) return null;
-  const cols = list.length === 1 ? "1fr" : "1fr 1fr";
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: cols,
-        gap: 10,
-        marginTop: 16,
-      }}
-    >
-      {list.map((url, i) => (
-        <div
-          key={i}
-          style={{
-            aspectRatio: "1 / 1",
-            borderRadius: 14,
-            overflow: "hidden",
-            border: `2px solid ${C.border}`,
-            background: "#0D0D0D",
-          }}
-        >
-          <img
-            src={url}
-            crossOrigin="anonymous"
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            alt=""
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyTile({ emoji, title, message }: { emoji: string; title: string; message: string }) {
-  return (
-    <div style={{ background: C.card, borderRadius: 22, overflow: "hidden", border: `2px solid ${C.border}`, height: "100%" }}>
-      <TileHeader emoji={emoji} title={title} />
-      <div style={{ padding: "44px 22px", textAlign: "center" }}>
-        <div style={{ fontSize: 17, color: C.sub, fontStyle: "italic" }}>{message}</div>
-      </div>
-    </div>
+      {busy ? "⏳" : "📸"}
+    </button>
   );
 }
