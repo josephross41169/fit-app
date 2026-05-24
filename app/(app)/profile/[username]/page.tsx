@@ -20,9 +20,15 @@ import TaggedPostsModal from "@/components/TaggedPostsModal";
 import StreakSection from "@/components/StreakSection";
 
 const C = {
-  bg:"#0D0D0D", white:"#1A1A1A", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
-  blue:"#16A34A", text:"#F0F0F0", sub:"#9CA3AF", gold:"#F5A623", goldLight:"#2A1F00",
+  bg:"#0D0D0D", white:"#1A1A1A",
+  // NOTE: these keys keep their historical names but now hold PURPLE values
+  // so this page matches the rest of the app's theme. greenLight/greenMid are
+  // the card background + border tints; "blue" is the primary accent (it was
+  // mislabeled green #16A34A from the original green color scheme).
+  greenLight:"#160F28", greenMid:"#2A1F45",
+  blue:"#7C3AED", text:"#F0F0F0", sub:"#9CA3AF", gold:"#F5A623", goldLight:"#2A1F00",
   darkCard:"#1A1A1A", darkBorder:"#2A2A2A", darkSub:"#6B7280",
+  purple:"#7C3AED", purpleLt:"#A78BFA", purpleMid:"#2D1F52",
 };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -249,7 +255,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
         {/* WORKOUT */}
         {workout ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`,marginBottom:20}}>
-            <div style={{background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
+            <div style={{background:`linear-gradient(135deg,${C.blue},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
               <span style={{fontSize:26}}>💪</span>
               <div>
                 <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{workout.type}</div>
@@ -302,7 +308,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
         {/* NUTRITION */}
         {nutrition ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.greenMid}`}}>
-            <button onClick={()=>setNutOpen(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+            <button onClick={()=>setNutOpen(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:26}}>🥗</span>
                 <div>
@@ -1035,7 +1041,7 @@ export default function UserProfilePage() {
                       onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
                       style={{display:"flex",alignItems:"center",gap:14,padding:"12px 10px",borderRadius:16,cursor:"pointer",transition:"background 0.15s",marginBottom:4}}
                     >
-                      <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
+                      <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff",overflow:"hidden",flexShrink:0}}>
                         {u.avatar_url
                           ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                           : ini}
@@ -1092,7 +1098,7 @@ export default function UserProfilePage() {
                 }}
                 style={{
                   width: avatarSize, height: avatarSize, borderRadius:"50%",
-                  background:`linear-gradient(135deg,${C.blue},#4ADE80)`,
+                  background:`linear-gradient(135deg,${C.blue},#A78BFA)`,
                   border: viewedUserLevel < 3 ? `4px solid ${C.greenMid}` : "none",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff",
@@ -1156,7 +1162,7 @@ export default function UserProfilePage() {
               }}
               style={{
                 width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,
-                background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#4ADE80)`,
+                background:profile.banner_url?"transparent":`linear-gradient(135deg,${C.blue},#A78BFA)`,
                 border:`2px solid ${C.greenMid}`,display:"flex",alignItems:"center",justifyContent:"center",
                 cursor: profile.banner_url ? "pointer" : "default",
               }}>
@@ -1472,7 +1478,7 @@ export default function UserProfilePage() {
             {/* Streak section — three strict-math streaks for the viewed
                 user. Lets visitors size up someone's current habits before
                 seeing their lifetime badges. */}
-            {profile && <StreakSection userId={profile.id} theme="green" />}
+            {profile && <StreakSection userId={profile.id} theme="purple" />}
 
             {/* Badges */}
             <div style={{background:C.white,borderRadius:22,padding:20,border:`2px solid ${C.greenMid}`,marginBottom:20}}>
