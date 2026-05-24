@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
-import { needsAvatarRepair, repairBrokenAvatar } from "@/lib/avatarRepair";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
@@ -995,12 +994,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : workout ? (
-          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginBottom:20}}>
-            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:16,overflow:"hidden",border:"1px solid #2A1F45",marginBottom:20,background:"#140E24"}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",borderBottom:woOpen?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <span style={{fontSize:26}}>💪</span>
+                <div style={{width:40,height:40,borderRadius:11,background:"rgba(124,58,237,0.16)",border:"1px solid rgba(124,58,237,0.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>💪</div>
                 <div>
-                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{(()=>{
+                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>{(()=>{
                     const cardioList = ((workout as any).cardio || []) as any[];
                     const exList = workout.exercises || [];
                     const parts: string[] = [];
@@ -1019,7 +1018,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     if(exList.length>0) parts.push(workout.type||'Workout');
                     return parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
                   })()}</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)",marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                  <div style={{fontSize:12,color:C.sub,marginTop:3,display:"flex",gap:10,flexWrap:"wrap"}}>
                     {workout.duration&&workout.duration!=='—'&&<span>⏱ {workout.duration}</span>}
                     {workout.calories>0&&<span>🔥 {workout.calories} cal</span>}
                     {workout.exercises&&workout.exercises.length>0&&<span>💪 {workout.exercises.length} exercise{workout.exercises.length!==1?'s':''}</span>}
@@ -1028,13 +1027,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
-                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(124,58,237,0.12)",color:"#A78BFA",border:"1px solid rgba(124,58,237,0.35)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"#1F1636",border:"1px solid #2A1F45",display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
               </div>
             </button>
-            {woOpen && <div style={{background:"#1A1230",padding:"12px 16px"}}>
+            {woOpen && <div style={{background:"#140E24",padding:"12px 16px"}}>
               {(() => {
                 // When the bucketing layer attached _workoutParts (>= 2 entries),
                 // render a labeled section per workout instead of one combined
@@ -1180,23 +1179,23 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : nutrition ? (
-          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
-            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:16,overflow:"hidden",border:"1px solid #2A1F45",background:"#140E24"}}>
+            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",borderBottom:nut?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <span style={{fontSize:26}}>🥗</span>
+                <div style={{width:40,height:40,borderRadius:11,background:"rgba(74,222,128,0.14)",border:"1px solid rgba(74,222,128,0.32)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🥗</div>
                 <div>
-                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>Nutrition</div>
-                  <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
+                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>Nutrition</div>
+                  <div style={{fontSize:13,color:C.sub,marginTop:2}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
-                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+                <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(74,222,128,0.12)",color:"#4ADE80",border:"1px solid rgba(74,222,128,0.32)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"#1F1636",border:"1px solid #2A1F45",display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
               </div>
             </button>
-            <div style={{background:"#1A1230",padding:16}}>
+            <div style={{background:"#140E24",padding:16}}>
               {/* Macro progress vs goals (if goals set) */}
               {(()=>{
                 let goals: any = null;
@@ -1782,40 +1781,6 @@ export default function ProfilePage() {
       }
     }
   }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
-
-  // ── Auto-repair broken avatar data ───────────────────────────────────
-  // One-shot: if this user's avatar_video_url is set but avatar_url is
-  // missing/broken (most commonly because their original upload's poster
-  // extraction failed on iPhone Live Photo HEIC encoding), grab the first
-  // frame from the video and save it as their new avatar_url. Silent —
-  // user just notices their avatar showing in places it wasn't before
-  // (feed comments, group cards, etc.). Idempotent: needsAvatarRepair()
-  // short-circuits if the data already looks valid.
-  //
-  // Why on profile page mount: this is the page the user is most likely
-  // to revisit, and updating their own users row requires being
-  // authenticated as that user (RLS would block us from fixing other
-  // people's data). Running it elsewhere (e.g. on every page) would
-  // hammer the DB pointlessly for users who don't need repair.
-  const repairRanRef = useRef(false);
-  useEffect(() => {
-    if (repairRanRef.current) return;
-    const p = user?.profile as any;
-    if (!p?.id) return;
-    if (!needsAvatarRepair(p)) return;
-    repairRanRef.current = true;
-
-    (async () => {
-      const newUrl = await repairBrokenAvatar(p);
-      if (newUrl) {
-        // Refresh local state so the page immediately reflects the
-        // repair instead of waiting for a full reload.
-        setAvatar(newUrl);
-        latestUploadedAvatarUrlRef.current = newUrl;
-        initedAvatarRef.current = true;
-      }
-    })();
-  }, [user?.profile]);
   const [showAllPhotos,setShowAllPhotos] = useState(false);
   // Tagged-in modal state — opens when user taps the 🏷️ Tagged In button.
   // Modal lazily fetches its own data from /api/db get_tagged_posts so the
@@ -2693,11 +2658,7 @@ export default function ProfilePage() {
     // Capture first frame for the poster image.
     let posterUrl: string | null = null;
     try {
-      // Use 0.1s rather than exactly 0 — some encoders pad the very
-      // first frame with a blank one, and iPhone Live Photos in
-      // particular can return a black canvas at currentTime=0. Seeking
-      // a tiny bit forward lands inside the first real content frame.
-      probe.currentTime = 0.1;
+      probe.currentTime = 0;
       await new Promise<void>((resolve) => {
         probe.onseeked = () => resolve();
         setTimeout(() => resolve(), 2_000);
@@ -2732,17 +2693,14 @@ export default function ProfilePage() {
           avatar_video_url: videoUrl,
         } as any).eq('id', user.id);
       } else {
-        // Poster extraction failed — store both URLs but use the video
-        // URL in the avatar_url slot too. The avatarRepair pass on the
-        // next profile visit will detect this state and replace the
-        // avatar_url with a real JPEG extracted from the video. This
-        // way the user's data is in a known-recoverable state rather
-        // than half-set (which was the original bug).
+        // No poster — fall back to video URL in both slots so something
+        // shows. Browsers display a black square for <img src=mp4> but
+        // the profile page renders <video> when avatarVideoUrl is set,
+        // so the user's profile still works; only other pages will fail.
         latestUploadedAvatarUrlRef.current = videoUrl;
         initedAvatarRef.current = true;
         setAvatarVideoUrl(videoUrl);
         await supabase.from('users').update({
-          avatar_url: videoUrl,
           avatar_video_url: videoUrl,
         } as any).eq('id', user.id);
       }
@@ -3030,23 +2988,6 @@ export default function ProfilePage() {
           position: relative;
           padding: 4px;
           border-radius: 50%;
-          box-shadow: 0 0 22px rgba(220,220,235,0.35);
-          /* Establish a new stacking context so the ::before pseudo can
-             sit behind the avatar (z-index: -1) without bleeding behind
-             the parent's background or sibling cards. */
-          isolation: isolate;
-        }
-        .tier-silver-avatar-wrap::before {
-          /* This is the ring — rotates. The avatar (a child of the wrap)
-             sits on top of this in normal flow and does NOT rotate, so
-             the visible silver shading appears to spin around a static
-             profile picture. inset:0 covers the full wrap including the
-             4px padding ring area; the avatar covers the center, leaving
-             only the perimeter visible. */
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
           background: conic-gradient(
             from 0deg,
             #6B7280 0%,
@@ -3055,13 +2996,11 @@ export default function ProfilePage() {
             #C0C0C0 75%,
             #6B7280 100%
           );
-          animation: tierSilverRingSpin 14s linear infinite;
-          z-index: -1;
+          box-shadow: 0 0 22px rgba(220,220,235,0.35);
         }
         .tier-silver-avatar-wrap::after {
-          /* Static outer halo glow — slightly larger than the wrap so it
-             feathers out beyond the ring perimeter. Symmetrical, doesn't
-             matter that it doesn't rotate. */
+          /* Static inner highlight. Still gives a slight shimmer feel
+             from the gradient but doesn't rotate. */
           content: '';
           position: absolute;
           inset: -3px;
@@ -3075,17 +3014,10 @@ export default function ProfilePage() {
             transparent 100%
           );
           pointer-events: none;
-          z-index: -2;
+          z-index: -1;
         }
-        @media (prefers-reduced-motion: reduce) {
-          .tier-silver-avatar-wrap::before {
-            animation: none;
-          }
-        }
-        /* Used by .tier-silver-avatar-wrap to rotate the whole avatar
-           (ring + photo inside) as a single unit — the "moving portrait"
-           effect Joey originally requested for Level 3. Disabled
-           automatically via prefers-reduced-motion. */
+        /* Spin keyframes left in place but no longer referenced — kept
+           in case we want to opt-in to motion later via a setting. */
         @keyframes tierSilverRingSpin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
