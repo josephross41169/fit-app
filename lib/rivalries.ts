@@ -229,6 +229,31 @@ export async function isQueued(): Promise<boolean> {
 
 // ── ACTIVE RIVALRY ──────────────────────────────────────────────────────────
 
+/** Resolve any of the current user's rivalries whose time has expired but
+ *  which the DB still has marked "active" (the resolver cron may not be
+ *  scheduled). Calls the same server-side resolver that stamps scores +
+ *  winner, then flips status to completed/cancelled. Returns the number
+ *  resolved (0 most of the time — cheap no-op). Best-effort: failure here
+ *  shouldn't block the page, the defensive check in getActiveRivalry still
+ *  prevents showing an expired matchup.
+ *
+ *  This is what lets the page return to the queue state once a rivalry ends:
+ *  it frees the user from the DB's "already has an active rivalry" guard so
+ *  they can matchmake again. */
+export async function resolveExpiredRivalries(): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc("resolve_expired_rivalries");
+    if (error) {
+      console.warn("[rivalries] resolve_expired_rivalries failed:", error.message);
+      return 0;
+    }
+    return Number(data ?? 0);
+  } catch (e) {
+    console.warn("[rivalries] resolve threw:", e);
+    return 0;
+  }
+}
+
 /** Get the current user's active rivalry (or null). */
 export async function getActiveRivalry(): Promise<RivalryWithOpponent | null> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -242,7 +267,17 @@ export async function getActiveRivalry(): Promise<RivalryWithOpponent | null> {
     .maybeSingle();
 
   if (error || !data) return null;
-  return hydrateRivalry(data as Rivalry, user.id);
+
+  // Defensive: if the rivalry's time has already passed, treat it as not
+  // active even though the DB row still says "active" (resolution may not
+  // have run yet). This keeps the page from showing an ended matchup; the
+  // resolver call on page load flips the DB row so matchmaking reopens.
+  const r = data as Rivalry;
+  if (r.ends_at && new Date(r.ends_at).getTime() <= Date.now()) {
+    return null;
+  }
+
+  return hydrateRivalry(r, user.id);
 }
 
 /** Attach opponent profile + orient scores from the current user's POV. */
