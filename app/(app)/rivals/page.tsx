@@ -9,7 +9,7 @@ import { forceSyncAllProgress } from "@/lib/syncProgress";
 import { BADGES } from "@/lib/badges";
 import {
   joinQueue, leaveQueue, getQueueEntry,
-  getActiveRivalry, getLiveScores, getUserRecord,
+  getActiveRivalry, getLiveScores, getUserRecord, resolveExpiredRivalries,
   getMessages, sendTextMessage, sendPhotoMessage,
   unblurPhoto, subscribeToMessages,
   getRivalryBadges,
@@ -2387,6 +2387,14 @@ export default function RivalsPage() {
     if (!user) return;
     setLoading(true);
     try {
+      // First, resolve any rivalry whose time has expired but that the DB
+      // still marks "active" (the resolver cron isn't scheduled, so we kick
+      // it on load). This stamps the winner + flips status to completed, so
+      // getActiveRivalry below returns null and the page returns to the
+      // queue/matchmaking state — and the user is no longer blocked from
+      // starting a new rivalry.
+      await resolveExpiredRivalries();
+
       const [rivalry, queueEntry, myRecPrefetched] = await Promise.all([
         getActiveRivalry(),
         getQueueEntry(),
