@@ -52,7 +52,7 @@ const iStyle = {
 type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string };
 type PrevSet = { weight: string; reps: string };
 type PrevSession = { date: string; sets: PrevSet[] };
-type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string };
+type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string; photoUrl?: string };
 type NutritionGoals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number; monthly_calories?: number; monthly_protein?: number; monthly_carbs?: number; monthly_fat?: number };
 type DailyTotals = { calories: number; protein: number; carbs: number; fat: number; water_oz: number };
 type LogTab = "workout" | "nutrition" | "wellness";
@@ -1835,6 +1835,12 @@ export default function PostPage() {
     const uploadResults = await Promise.all(
       itemsToUpload.map(async (item: { src: string; type: 'image' | 'video' }, idx: number) => {
         try {
+          // Already-uploaded photo (e.g. attached from a saved favorite) —
+          // it's an https URL in storage, not a data URL. Pass it straight
+          // through; no need to re-compress or re-upload.
+          if (item.src.startsWith('http')) {
+            return { url: item.src, type: item.type, idx };
+          }
           if (item.type === 'video') {
             // Direct-to-Supabase upload bypasses Vercel's body limit. RLS
             // policy requires the path to start with the user's UUID.
@@ -3202,6 +3208,7 @@ export default function PostPage() {
                     userId={user.id}
                     currentMealType={mealType}
                     refreshKey={favoritesRefreshKey}
+                    onSetMealType={(mt: string) => setMealType(mt)}
                     onAddFood={(food: SavedFoodItem) => {
                       setFoodItems(f => [...f, {
                         name: food.name,
@@ -3211,7 +3218,16 @@ export default function PostPage() {
                         fat: food.fat !== undefined ? String(food.fat) : undefined,
                         servingSize: food.servingSize,
                         qty: food.qty || "1",
+                        photoUrl: food.photoUrl,
                       }]);
+                      // If this favorite has a saved photo, auto-attach it to
+                      // the nutrition post (so it shows on the activity/share
+                      // card). It's already an uploaded URL; the submit logic
+                      // passes http URLs through without re-uploading.
+                      if (food.photoUrl) {
+                        setFeedPhotos(p => p.includes(food.photoUrl!) ? p : [...p, food.photoUrl!]);
+                        setFeedPhotoTypes(t => [...t, 'image']);
+                      }
                     }}
                     onAddCombo={(items: SavedFoodItem[]) => {
                       setFoodItems(f => [...f, ...items.map(it => ({
@@ -3222,7 +3238,14 @@ export default function PostPage() {
                         fat: it.fat !== undefined ? String(it.fat) : undefined,
                         servingSize: it.servingSize,
                         qty: it.qty || "1",
+                        photoUrl: it.photoUrl,
                       }))]);
+                      // Attach any photos the combo's items carry.
+                      const comboPhotos = items.map(it => it.photoUrl).filter((u): u is string => !!u);
+                      if (comboPhotos.length > 0) {
+                        setFeedPhotos(p => [...p, ...comboPhotos.filter(u => !p.includes(u))]);
+                        setFeedPhotoTypes(t => [...t, ...comboPhotos.map(() => 'image' as const)]);
+                      }
                     }}
                   />
                 ) : null}
@@ -3262,6 +3285,37 @@ export default function PostPage() {
                             value={item.calories}
                             onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, calories: e.target.value } : x))}
                           />
+                          <button
+                            onClick={() => {
+                              if (!user?.id) return;
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.accept = 'image/*';
+                              input.onchange = () => {
+                                const file = input.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = async (ev) => {
+                                  const dataUrl = ev.target?.result as string;
+                                  if (!dataUrl) return;
+                                  try {
+                                    const compressed = await compressImage(dataUrl);
+                                    const url = await uploadPhoto(compressed, 'posts', `${user.id}/fav-${Date.now()}-${i}.jpg`);
+                                    if (url) {
+                                      // Remember on the item (so star-to-save keeps it with the favorite)
+                                      setFoodItems(f => f.map((x, j) => j === i ? { ...x, photoUrl: url } : x));
+                                      // Auto-attach to the nutrition post
+                                      setFeedPhotos(p => p.includes(url) ? p : [...p, url]);
+                                      setFeedPhotoTypes(t => [...t, 'image']);
+                                    }
+                                  } catch (err) { console.warn('[food photo] upload failed', err); }
+                                };
+                                reader.readAsDataURL(file);
+                              };
+                              input.click();
+                            }}
+                            title={item.photoUrl ? "Photo attached" : "Add photo"}
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: item.photoUrl ? "#1F3D2D" : "#2D1F52", color: item.photoUrl ? "#4ADE80" : "#A78BFA", fontSize: 14, cursor: "pointer", flexShrink: 0 }}>📷</button>
                           <button
                             onClick={async () => {
                               if (!user?.id || !item.name?.trim()) return;
