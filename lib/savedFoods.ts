@@ -16,6 +16,7 @@ export interface SavedFoodItem {
   fat?: string | number;
   servingSize?: string;
   qty?: string;
+  photoUrl?: string;          // stored photo for this food (already uploaded)
 }
 
 export interface SavedFood {
@@ -29,6 +30,7 @@ export interface SavedFood {
   default_meal_type?: string | null;
   is_meal: boolean;
   items?: SavedFoodItem[] | null;
+  photo_url?: string | null;
   use_count: number;
   last_used_at?: string | null;
 }
@@ -93,6 +95,7 @@ export async function saveFood(
       default_meal_type: mealType || null,
       is_meal: false,
       items: null,
+      photo_url: food.photoUrl || null,
     };
     const { data, error } = await supabase
       .from("saved_foods")
@@ -150,6 +153,7 @@ export async function saveMeal(
         fat: num(it.fat),
         servingSize: it.servingSize || null,
         qty: it.qty || "1",
+        photoUrl: it.photoUrl || null,
       })),
     };
     const { data, error } = await supabase
@@ -172,9 +176,9 @@ export async function saveMeal(
 // Fire-and-forget; we don't block the UI on this.
 export async function bumpUseCount(id: string, currentCount: number): Promise<void> {
   try {
-    await supabase
+    await (supabase as any)
       .from("saved_foods")
-      .update({ use_count: currentCount + 1, last_used_at: new Date().toISOString() } as any)
+      .update({ use_count: currentCount + 1, last_used_at: new Date().toISOString() })
       .eq("id", id);
   } catch {
     /* best-effort */
