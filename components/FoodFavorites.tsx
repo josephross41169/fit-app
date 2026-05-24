@@ -5,21 +5,21 @@
 // Favorites section in the nutrition logging tab, organized by meal type.
 //
 //   • Tabs: Breakfast · Lunch · Dinner · Snacks. Tapping a tab filters the
-//     favorites to that meal type AND switches the post's Meal Type (via
-//     onSetMealType).
-//   • "+ Add Favorite" opens an inline form to CREATE a favorite from scratch
-//     (name, calories, macros, optional photo) — files it under the active
-//     tab's meal type. This is the dedicated create flow (separate from the
-//     ☆ star on a logged food row).
-//   • Each favorite is a tappable chip → adds the food (or all of a combo's
-//     items) to the meal being logged; saved photos auto-attach to the post.
-//   • Manage mode lets you delete favorites.
+//     favorites + switches the post's Meal Type (onSetMealType).
+//   • "+ Add Favorite" → inline form to create one from scratch (name,
+//     calories, macros, photo); files under the active tab.
+//   • Favorites render as PHOTO-FORWARD cards: when a favorite has a photo it
+//     shows a large thumbnail on top, name + macros below. Tap a card to add
+//     it to the meal being logged (photo auto-attaches to the post).
+//   • Manage mode shows ✏️ Edit and 🗑 Delete on each card. Edit opens the
+//     same form pre-filled so you can fix a typo / macros / photo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";
 import {
   fetchSavedFoods,
   saveFood,
+  updateSavedFood,
   bumpUseCount,
   deleteSavedFood,
   type SavedFood,
@@ -66,14 +66,15 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
   const initialTab = MEAL_TABS.includes(currentMealType as any) ? (currentMealType as string) : "Breakfast";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
-  // ── Create-favorite form state ───────────────────────────────────────────
+  // ── Form state (shared by create + edit) ─────────────────────────────────
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // null = create
   const [fName, setFName] = useState("");
   const [fCal, setFCal] = useState("");
   const [fProtein, setFProtein] = useState("");
   const [fCarbs, setFCarbs] = useState("");
   const [fFat, setFFat] = useState("");
-  const [fPhoto, setFPhoto] = useState<string | null>(null); // uploaded URL
+  const [fPhoto, setFPhoto] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -99,7 +100,25 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
   }
 
   function resetForm() {
+    setEditingId(null);
     setFName(""); setFCal(""); setFProtein(""); setFCarbs(""); setFFat(""); setFPhoto(null);
+  }
+
+  function openCreate() {
+    resetForm();
+    setShowForm(true);
+    setManageMode(false);
+  }
+
+  function openEdit(fav: SavedFood) {
+    setEditingId(fav.id);
+    setFName(fav.name);
+    setFCal(String(fav.calories ?? ""));
+    setFProtein(fav.protein ? String(fav.protein) : "");
+    setFCarbs(fav.carbs ? String(fav.carbs) : "");
+    setFFat(fav.fat ? String(fav.fat) : "");
+    setFPhoto(fav.photo_url || null);
+    setShowForm(true);
   }
 
   async function handlePhotoPick() {
@@ -129,29 +148,38 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
     input.click();
   }
 
-  async function handleCreateFavorite() {
+  async function handleSubmitForm() {
     if (!fName.trim() || saving) return;
     setSaving(true);
     try {
-      const saved = await saveFood(
-        userId,
-        {
-          name: fName.trim(),
+      if (editingId) {
+        // EDIT existing favorite
+        const ok = await updateSavedFood(editingId, {
+          name: fName,
           calories: fCal || "0",
-          protein: fProtein || undefined,
-          carbs: fCarbs || undefined,
-          fat: fFat || undefined,
-          photoUrl: fPhoto || undefined,
-        },
-        activeTab,
-      );
-      if (saved) {
-        resetForm();
-        setShowForm(false);
-        await load();
+          protein: fProtein || 0,
+          carbs: fCarbs || 0,
+          fat: fFat || 0,
+          default_meal_type: activeTab,
+          photoUrl: fPhoto,
+        });
+        if (ok) { resetForm(); setShowForm(false); await load(); }
       } else {
-        // saveFood returns null on duplicate name — surface gently.
-        alert("That food may already be saved, or the name is empty.");
+        // CREATE new favorite
+        const saved = await saveFood(
+          userId,
+          {
+            name: fName.trim(),
+            calories: fCal || "0",
+            protein: fProtein || undefined,
+            carbs: fCarbs || undefined,
+            fat: fFat || undefined,
+            photoUrl: fPhoto || undefined,
+          },
+          activeTab,
+        );
+        if (saved) { resetForm(); setShowForm(false); await load(); }
+        else alert("That food may already be saved, or the name is empty.");
       }
     } finally {
       setSaving(false);
@@ -159,7 +187,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
   }
 
   function handleTap(fav: SavedFood) {
-    if (manageMode) return;
+    if (manageMode) return; // in manage mode, taps go to the edit/delete buttons
     if (fav.is_meal && fav.items && fav.items.length > 0) {
       onAddCombo(fav.items);
     } else {
@@ -194,14 +222,14 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
-            onClick={() => { setShowForm(s => !s); setManageMode(false); }}
+            onClick={() => (showForm && !editingId ? (setShowForm(false), resetForm()) : openCreate())}
             style={{ fontSize: 11, fontWeight: 800, color: C.gold, background: "none", border: "none", cursor: "pointer" }}
           >
-            {showForm ? "✕ Cancel" : "+ Add Favorite"}
+            {showForm && !editingId ? "✕ Cancel" : "+ Add Favorite"}
           </button>
           {favorites.length > 0 ? (
             <button
-              onClick={() => { setManageMode(m => !m); setShowForm(false); }}
+              onClick={() => { setManageMode(m => !m); setShowForm(false); resetForm(); }}
               style={{ fontSize: 11, fontWeight: 700, color: manageMode ? C.gold : C.sub, background: "none", border: "none", cursor: "pointer" }}
             >
               {manageMode ? "Done" : "Manage"}
@@ -220,14 +248,10 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
               key={tab}
               onClick={() => handleTabClick(tab)}
               style={{
-                fontSize: 12,
-                fontWeight: 800,
-                padding: "7px 14px",
-                borderRadius: 20,
+                fontSize: 12, fontWeight: 800, padding: "7px 14px", borderRadius: 20,
                 border: active ? "none" : `1.5px solid ${C.chipBorder}`,
                 background: active ? "linear-gradient(135deg, #7C3AED, #A78BFA)" : "transparent",
-                color: active ? "#fff" : C.sub,
-                cursor: "pointer",
+                color: active ? "#fff" : C.sub, cursor: "pointer",
               }}
             >
               {tab}{count > 0 ? ` (${count})` : ""}
@@ -236,11 +260,11 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
         })}
       </div>
 
-      {/* Create-favorite form */}
+      {/* Create / Edit form */}
       {showForm ? (
         <div style={{ background: C.chip, border: `1.5px solid ${C.gold}`, borderRadius: 14, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: C.gold }}>
-            New {activeTab} favorite
+            {editingId ? "Edit favorite" : `New ${activeTab} favorite`}
           </div>
           <input style={iStyle} placeholder="Food name (e.g. 6 eggs w/ Moz cheese)" value={fName} onChange={e => setFName(e.target.value)} />
           <div style={{ display: "flex", gap: 8 }}>
@@ -259,65 +283,99 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
             >
               📷 {uploadingPhoto ? "Uploading…" : fPhoto ? "Change photo" : "Add photo"}
             </button>
-            {fPhoto ? <img src={fPhoto} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} /> : null}
+            {fPhoto ? (
+              <div style={{ position: "relative" }}>
+                <img src={fPhoto} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />
+                <button onClick={() => setFPhoto(null)} title="Remove photo"
+                  style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", border: "none", background: "#FF4444", color: "#fff", fontSize: 11, cursor: "pointer", lineHeight: "18px", padding: 0 }}>✕</button>
+              </div>
+            ) : null}
           </div>
-          <button
-            onClick={handleCreateFavorite}
-            disabled={!fName.trim() || saving}
-            style={{ fontSize: 13, fontWeight: 800, padding: "10px 14px", borderRadius: 10, border: "none", background: !fName.trim() || saving ? "#3A2D5C" : "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: !fName.trim() || saving ? "default" : "pointer" }}
-          >
-            {saving ? "Saving…" : `⭐ Save to ${activeTab}`}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={handleSubmitForm}
+              disabled={!fName.trim() || saving}
+              style={{ flex: 1, fontSize: 13, fontWeight: 800, padding: "10px 14px", borderRadius: 10, border: "none", background: !fName.trim() || saving ? "#3A2D5C" : "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: !fName.trim() || saving ? "default" : "pointer" }}
+            >
+              {saving ? "Saving…" : editingId ? "Save changes" : `⭐ Save to ${activeTab}`}
+            </button>
+            {editingId ? (
+              <button onClick={() => { resetForm(); setShowForm(false); }}
+                style={{ fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 10, border: `1.5px solid ${C.chipBorder}`, background: "transparent", color: C.sub, cursor: "pointer" }}>
+                Cancel
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      {/* Chips for the active tab */}
+      {/* Favorite cards (photo-forward) */}
       {loading ? (
         <div style={{ padding: "8px 0", fontSize: 12, color: C.sub }}>Loading favorites…</div>
       ) : visible.length === 0 ? (
         !showForm ? (
           <div style={{ padding: "10px 12px", fontSize: 12, color: C.sub, background: C.chip, borderRadius: 12, border: `1px dashed ${C.chipBorder}` }}>
             {favorites.length === 0
-              ? "No favorites yet. Tap “+ Add Favorite” to create one, or ⭐ a food below after adding it."
+              ? "No favorites yet. Tap “+ Add Favorite” to create one."
               : `No ${activeTab.toLowerCase()} favorites yet. Tap “+ Add Favorite” to create one.`}
           </div>
         ) : null
       ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
           {visible.map(fav => (
-            <button
+            <div
               key={fav.id}
-              onClick={() => (manageMode ? handleDelete(fav.id) : handleTap(fav))}
               style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                padding: fav.photo_url ? "6px 12px 6px 6px" : "8px 12px",
-                borderRadius: 12,
+                width: 150,
+                borderRadius: 14,
                 background: C.chip,
-                border: `1.5px solid ${manageMode ? "#FF6B6B" : C.chipBorder}`,
-                cursor: "pointer",
-                maxWidth: 230,
+                border: `1.5px solid ${C.chipBorder}`,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
               }}
             >
-              {fav.photo_url && !manageMode ? (
-                <img src={fav.photo_url} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-              ) : null}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, color: C.text }}>
-                  {manageMode ? <span style={{ color: "#FF6B6B" }}>✕</span> : <span>{fav.is_meal ? "🍱" : "＋"}</span>}
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>
+              {/* Tappable area = add to meal */}
+              <button
+                onClick={() => handleTap(fav)}
+                style={{ border: "none", background: "transparent", padding: 0, cursor: manageMode ? "default" : "pointer", textAlign: "left", width: "100%" }}
+              >
+                {/* Photo (or gradient placeholder) */}
+                <div style={{ width: "100%", height: 96, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#7C3AED,#4ADE80)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {fav.photo_url ? (
+                    <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <span style={{ fontSize: 30 }}>{fav.is_meal ? "🍱" : "🍽️"}</span>
+                  )}
+                </div>
+                {/* Text */}
+                <div style={{ padding: "8px 10px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {fav.name}
-                  </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
+                    {Math.round(fav.calories)} cal{fav.protein ? ` · ${Math.round(fav.protein)}g P` : ""}{fav.is_meal ? " · meal" : ""}
+                  </div>
+                  {!manageMode ? (
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.blue, marginTop: 6 }}>＋ Tap to add</div>
+                  ) : null}
                 </div>
-                <div style={{ fontSize: 11, color: C.sub }}>
-                  {Math.round(fav.calories)} cal
-                  {fav.protein ? ` · ${Math.round(fav.protein)}g P` : ""}
-                  {fav.is_meal ? ` · meal` : ""}
+              </button>
+
+              {/* Manage actions */}
+              {manageMode ? (
+                <div style={{ display: "flex", borderTop: `1px solid ${C.chipBorder}` }}>
+                  <button onClick={() => openEdit(fav)}
+                    style={{ flex: 1, padding: "8px 0", border: "none", background: "transparent", color: C.gold, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    ✏️ Edit
+                  </button>
+                  <button onClick={() => handleDelete(fav.id)}
+                    style={{ flex: 1, padding: "8px 0", border: "none", borderLeft: `1px solid ${C.chipBorder}`, background: "transparent", color: "#FF6B6B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    🗑 Delete
+                  </button>
                 </div>
-              </div>
-            </button>
+              ) : null}
+            </div>
           ))}
         </div>
       )}
