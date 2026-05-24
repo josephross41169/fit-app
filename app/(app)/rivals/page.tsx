@@ -10,6 +10,7 @@ import { BADGES } from "@/lib/badges";
 import {
   joinQueue, leaveQueue, getQueueEntry,
   getActiveRivalry, getLiveScores, getUserRecord, resolveExpiredRivalries,
+  createChallenge, acceptChallenge, getMyPendingChallenge, cancelChallenge,
   getMessages, sendTextMessage, sendPhotoMessage,
   unblurPhoto, subscribeToMessages,
   getRivalryBadges,
@@ -33,7 +34,7 @@ import {
 // STATIC CONFIG (unchanged from original — just the visual catalog)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type MatchStep = "category" | "competition" | "tier" | "matching" | "active";
+type MatchStep = "category" | "competition" | "tier" | "launch" | "challenge" | "matching" | "active";
 
 const CATEGORIES: { id: RivalCategory; emoji: string; name: string; desc: string }[] = [
   { id: "running",   emoji: "🏃", name: "Running",       desc: "Miles, pace, and endurance"     },
@@ -242,6 +243,19 @@ function TierSelect({ category, competition, onBack, onSelect }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // MATCHING SCREEN (now real — polls for a match or times out gracefully)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Invisible poller used on the challenge-code screen: when the recipient
+// accepts the code, a rivalry appears, and the challenger auto-advances.
+function ChallengePoller({ onMatched }: { onMatched: () => void }) {
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const rivalry = await getActiveRivalry();
+      if (rivalry) { clearInterval(interval); onMatched(); }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [onMatched]);
+  return null;
+}
 
 function MatchingScreen({ category, tier, onMatched, onCancel }: {
   category: RivalCategory; tier: RivalTier;
@@ -2452,22 +2466,68 @@ export default function RivalsPage() {
     if (user?.id) forceSyncAllProgress(user.id);
   }, [authLoading, user?.id, loadState]);
 
+  // Direct-challenge state
+  const [challengeCode, setChallengeCode] = useState<string | null>(null);
+  const [creatingChallenge, setCreatingChallenge] = useState(false);
+  const [acceptCode, setAcceptCode] = useState("");
+  const [acceptingChallenge, setAcceptingChallenge] = useState(false);
+  const [copiedChallenge, setCopiedChallenge] = useState(false);
+
+  // Picking a tier now lands on the "launch" choice (find any rival, or
+  // challenge a friend directly) rather than queuing immediately.
   async function handleSelectTier(t: RivalTier) {
     if (!rivalCategory || !rivalCompetition) return;
     setRivalTier(t);
+    setError(null);
+    setMatchStep("launch");
+  }
+
+  // "Find any rival" — the original open-queue matchmaking path.
+  async function handleFindAnyRival() {
+    if (!rivalCategory || !rivalCompetition || !rivalTier) return;
     setMatchStep("matching");
     setError(null);
-    clearDraft(); // they're in the queue now, no need for a draft
+    clearDraft();
     try {
-      const matched = await joinQueue({ category: rivalCategory, competition_type: rivalCompetition, tier: t });
-      if (matched) {
-        // Instant match — skip straight to active view
-        await loadState();
-      }
-      // Otherwise the matching screen's poller will catch the match
+      const matched = await joinQueue({ category: rivalCategory, competition_type: rivalCompetition, tier: rivalTier });
+      if (matched) await loadState();
     } catch (e: any) {
       setError(e.message || "Failed to join queue");
-      setMatchStep("tier");
+      setMatchStep("launch");
+    }
+  }
+
+  // "Challenge a friend" — generate a shareable code, then poll for acceptance.
+  async function handleCreateChallenge() {
+    if (!rivalCategory || !rivalCompetition || !rivalTier || creatingChallenge) return;
+    setCreatingChallenge(true);
+    setError(null);
+    try {
+      const code = await createChallenge({ category: rivalCategory, competition_type: rivalCompetition, tier: rivalTier });
+      setChallengeCode(code);
+      clearDraft();
+      setMatchStep("challenge");
+    } catch (e: any) {
+      setError(e.message || "Failed to create challenge");
+    } finally {
+      setCreatingChallenge(false);
+    }
+  }
+
+  // Accept a challenge by code → jumps straight into the rivalry.
+  async function handleAcceptCode() {
+    const code = acceptCode.trim();
+    if (!code || acceptingChallenge) return;
+    setAcceptingChallenge(true);
+    setError(null);
+    try {
+      await acceptChallenge(code);
+      setAcceptCode("");
+      await loadState(); // now have an active rivalry → active view
+    } catch (e: any) {
+      setError(e.message || "Couldn't accept that code");
+    } finally {
+      setAcceptingChallenge(false);
     }
   }
 
@@ -2634,11 +2694,31 @@ export default function RivalsPage() {
           <BuddyPanel userId={user.id} />
         ) : (<>
         {matchStep === "category" && (
-          <CategorySelect onSelect={(c) => {
-            setRivalCategory(c);
-            setMatchStep("competition");
-            saveDraft({ step: "competition", category: c, competition: null });
-          }} />
+          <>
+            {/* Accept a direct challenge by code */}
+            <div style={{ background: "#160F28", border: "1px solid #2A1F45", borderRadius: 16, padding: 16, marginBottom: 20, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#A78BFA", marginBottom: 8 }}>🔗 Got a challenge code?</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={acceptCode}
+                  onChange={e => setAcceptCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                  placeholder="ENTER CODE"
+                  style={{ flex: 1, background: "#0D0D0D", border: "1px solid #2A1F45", borderRadius: 10, color: "#fff", padding: "11px 12px", fontSize: 16, fontWeight: 800, letterSpacing: 3, fontFamily: "monospace", outline: "none", textTransform: "uppercase" }}
+                />
+                <button onClick={handleAcceptCode} disabled={acceptCode.trim().length < 4 || acceptingChallenge}
+                  style={{ background: acceptCode.trim().length < 4 || acceptingChallenge ? "#3A2D5C" : "linear-gradient(135deg,#7C3AED,#A78BFA)", border: "none", borderRadius: 10, padding: "0 18px", color: "#fff", fontWeight: 800, cursor: acceptCode.trim().length < 4 ? "default" : "pointer" }}>
+                  {acceptingChallenge ? "…" : "Accept"}
+                </button>
+              </div>
+              {error && matchStep === "category" && <div style={{ color: "#FCA5A5", fontSize: 12, marginTop: 8 }}>{error}</div>}
+            </div>
+
+            <CategorySelect onSelect={(c) => {
+              setRivalCategory(c);
+              setMatchStep("competition");
+              saveDraft({ step: "competition", category: c, competition: null });
+            }} />
+          </>
         )}
 
         {matchStep === "competition" && rivalCategory && (
@@ -2672,6 +2752,56 @@ export default function RivalsPage() {
             onMatched={loadState}
             onCancel={handleCancelMatching}
           />
+        )}
+
+        {/* LAUNCH — choose open queue or a direct challenge */}
+        {matchStep === "launch" && rivalCategory && rivalCompetition && rivalTier && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 460, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 14, marginBottom: 4 }}>
+              How do you want to find your rival?
+            </div>
+            <button onClick={handleFindAnyRival}
+              style={{ background: "linear-gradient(135deg,#7C3AED,#A78BFA)", border: "none", borderRadius: 16, padding: "18px 20px", color: "#fff", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontWeight: 900, fontSize: 16 }}>🎲 Find any rival</div>
+              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3 }}>Get matched with anyone who picked the same challenge.</div>
+            </button>
+            <button onClick={handleCreateChallenge} disabled={creatingChallenge}
+              style={{ background: "#160F28", border: "1.5px solid #7C3AED", borderRadius: 16, padding: "18px 20px", color: "#F0F0F0", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontWeight: 900, fontSize: 16, color: "#A78BFA" }}>🔗 {creatingChallenge ? "Creating…" : "Challenge a friend"}</div>
+              <div style={{ fontSize: 13, color: "#9CA3AF", marginTop: 3 }}>Get a code to send someone — they go head-to-head with you directly.</div>
+            </button>
+            <button onClick={() => { setMatchStep("tier"); }}
+              style={{ background: "transparent", border: "none", color: "#9CA3AF", fontSize: 13, cursor: "pointer", marginTop: 4 }}>← Back</button>
+            {error && <div style={{ color: "#FCA5A5", fontSize: 13, textAlign: "center" }}>{error}</div>}
+          </div>
+        )}
+
+        {/* CHALLENGE — show the shareable code; poll for acceptance */}
+        {matchStep === "challenge" && challengeCode && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 460, margin: "0 auto", textAlign: "center" }}>
+            <ChallengePoller onMatched={loadState} />
+            <div style={{ fontSize: 15, color: "#9CA3AF" }}>Send this code to whoever you want to challenge. When they enter it, your rivalry starts.</div>
+            <div style={{ background: "#160F28", border: "2px solid #7C3AED", borderRadius: 18, padding: "24px 16px" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 8 }}>Challenge code</div>
+              <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: 8, color: "#fff", fontFamily: "monospace" }}>{challengeCode}</div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { try { navigator.clipboard.writeText(challengeCode); setCopiedChallenge(true); setTimeout(() => setCopiedChallenge(false), 1500); } catch {} }}
+                style={{ flex: 1, background: "#1F1636", border: "1.5px solid #2A1F45", borderRadius: 12, padding: "12px 0", color: "#F0F0F0", fontWeight: 800, cursor: "pointer" }}>
+                {copiedChallenge ? "✓ Copied" : "📋 Copy code"}
+              </button>
+              <button onClick={async () => {
+                const msg = `I'm challenging you to a rivalry on Livelee! Enter code ${challengeCode} in the Rivals tab. https://liveleeapp.com`;
+                try { if (navigator.share) { await navigator.share({ title: "Livelee Rivalry Challenge", text: msg }); } else { await navigator.clipboard.writeText(msg); setCopiedChallenge(true); setTimeout(() => setCopiedChallenge(false), 1500); } } catch {}
+              }}
+                style={{ flex: 1, background: "linear-gradient(135deg,#7C3AED,#A78BFA)", border: "none", borderRadius: 12, padding: "12px 0", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                📤 Share
+              </button>
+            </div>
+            <div style={{ fontSize: 13, color: "#9CA3AF" }}>⏳ Waiting for them to accept… this screen updates automatically.</div>
+            <button onClick={async () => { await cancelChallenge(); setChallengeCode(null); setMatchStep("category"); setRivalCategory(null); setRivalCompetition(null); setRivalTier(null); }}
+              style={{ background: "transparent", border: "none", color: "#FCA5A5", fontSize: 13, cursor: "pointer" }}>Cancel challenge</button>
+          </div>
         )}
 
         {isActive && activeRivalry && (
