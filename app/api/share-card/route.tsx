@@ -2,26 +2,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Server-side activity share-card image generator.
 //
-// Replaces the old client-side html2canvas approach (components/
-// ActivityShareButton.tsx) which approximated the browser's layout engine
-// in JS and consistently mis-positioned text baselines and emoji. This
-// route uses next/og (Satori under the hood), which renders with REAL font
-// metrics — so text and emoji land exactly where they should, every time.
+// Uses next/og (Satori + resvg) with AUTO-HEIGHT so the card can never clip,
+// no matter how much someone logs. We pass `height: undefined` to
+// ImageResponse; Satori then skips setting a fixed root height and computes
+// the natural height from the content (it calls yoga's setHeightAuto + reads
+// getComputedHeight). resvg renders the resulting SVG at that exact height.
+// The canvas grows to contain whatever was rendered — long meal names that
+// wrap, six exercises, two tall photos, all of it.
+//
+// Why this matters: the earlier versions guessed the height from content
+// counts (meals * 72px, etc). Any content that rendered taller than the guess
+// — a wrapping meal name, an extra exercise — got clipped. Auto-height removes
+// the guess entirely, so clipping is structurally impossible.
 //
 // Contract:
-//   POST /api/share-card
-//   body: ShareCardData (same shape the share button already assembles)
-//   returns: image/png
+//   POST /api/share-card   body: ShareCardData   →   image/png
 //
-// Satori constraints we design around:
-//   • Flexbox ONLY — no CSS grid, no `aspect-ratio`. Every container that
-//     holds more than one child sets display:flex + an explicit
-//     flexDirection.
-//   • Remote images are fetched server-side and inlined as data URIs for
-//     reliability (Satori can fetch URLs itself, but pre-fetching avoids
-//     timing/format edge cases — and server-side there's no CORS issue).
-//   • Emoji handled by next/og's built-in twemoji support (emoji: "twemoji"),
-//     which draws emoji as SVGs at the correct position.
+// Satori constraints: flexbox only (no grid, no aspect-ratio); remote images
+// are fetched server-side and inlined as data URIs; emoji via twemoji.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { ImageResponse } from "next/og";
@@ -29,7 +27,6 @@ import { NextRequest } from "next/server";
 
 export const runtime = "edge";
 
-// ─── Input shape (mirrors ShareCardData in ActivityShareButton.tsx) ──────────
 interface ShareCardData {
   dateLabel: string;
   monthShort: string;
@@ -72,9 +69,8 @@ const C = {
 
 const ALLOWED_PHOTO_HOST = "biqsvrrnnoyulrrhgitc.supabase.co";
 
-// ─── Photo handling ──────────────────────────────────────────────────────────
-// Nutrition photos may be stored as plain URLs OR as a per-meal JSON object
-// string like {"Dinner":"url","Lunch":"url"}. Flatten both into plain URLs.
+// Nutrition photos may be plain URLs OR a per-meal JSON object string like
+// {"Dinner":"url","Lunch":"url"}. Flatten both into plain URLs.
 function extractPhotoUrls(raw: string[] | undefined): string[] {
   if (!raw || raw.length === 0) return [];
   const out: string[] = [];
@@ -95,9 +91,8 @@ function extractPhotoUrls(raw: string[] | undefined): string[] {
   return out;
 }
 
-// Fetch a photo server-side and return a data URI. Only our Supabase host is
-// allowed (no open relay). Returns null on any failure so a broken photo just
-// gets skipped instead of failing the whole render.
+// Fetch a photo server-side → data URI. Only our Supabase host is allowed.
+// Returns null on failure so a broken photo is skipped, not fatal.
 async function toDataUri(url: string): Promise<string | null> {
   try {
     const parsed = new URL(url);
@@ -106,7 +101,6 @@ async function toDataUri(url: string): Promise<string | null> {
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") || "image/jpeg";
     const buf = await res.arrayBuffer();
-    // Base64 encode (edge runtime has btoa).
     let binary = "";
     const bytes = new Uint8Array(buf);
     for (let i = 0; i < bytes.length; i++) {
@@ -118,7 +112,6 @@ async function toDataUri(url: string): Promise<string | null> {
   }
 }
 
-// ─── Small render helpers (all flexbox, Satori-safe) ─────────────────────────
 function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; subtitle?: string }) {
   return (
     <div
@@ -141,7 +134,7 @@ function TileHeader({ emoji, title, subtitle }: { emoji: string; title: string; 
   );
 }
 
-function Macro({ value, label, unit, color }: { value: number; label: string; unit: string; color: string }) {
+function Macro({ value, label, unit, color, last }: { value: number; label: string; unit: string; color: string; last?: boolean }) {
   return (
     <div
       style={{
@@ -153,7 +146,7 @@ function Macro({ value, label, unit, color }: { value: number; label: string; un
         borderRadius: 14,
         padding: "14px 8px",
         border: `1px solid ${C.border}`,
-        marginRight: 10,
+        marginRight: last ? 0 : 10,
       }}
     >
       <div style={{ display: "flex", fontSize: 26, fontWeight: 800, color }}>{value}</div>
@@ -177,43 +170,21 @@ export async function POST(req: NextRequest) {
     await Promise.all(rawNutritionPhotos.map(toDataUri))
   ).filter((u): u is string => !!u);
 
-  const meals = (data.nutrition?.meals || []).slice(0, 5);
+  const meals = (data.nutrition?.meals || []).slice(0, 8);
   const cardio = data.workout?.cardio || [];
-  const exercises = data.workout?.exercises || [];
-  const wellnessEntries = data.wellness?.entries || [];
-
-  // ── Compute the card height from actual content ──────────────────────────
-  // Satori clips to the exact height we pass, so under-estimating cuts content
-  // off (the previous bug) and over-estimating just leaves dark space. We size
-  // each section from its real content with small buffers.
-  const exCount = Math.min(exercises.length, 6);
-  const cardioCount = cardio.length;
-  const workoutBodyH = (cardioCount > 0 ? 24 + cardioCount * 34 : 0) + exCount * 38;
-  const workoutTileH = 94 + 40 + Math.max(workoutBodyH, 44);
-  const wellnessTileH = 94 + 40 + Math.max(wellnessEntries.slice(0, 4).length * 40, 44);
-  const workoutRowH = Math.max(workoutTileH, wellnessTileH) + 22;
-
-  const MACROS_H = 111;       // macros row incl. margin
-  const MEAL_ROW_H = 72;      // one meal row incl. margin
-  const mealsColH = MACROS_H + meals.length * MEAL_ROW_H;
-  // Nutrition body = taller of the meals column and a sane minimum (so when
-  // photos exist but meals are few, the photos still get decent height).
-  const nutritionBodyH = Math.max(mealsColH, 300);
-  const nutritionH = 92 /*header*/ + 40 /*body padding*/ + nutritionBodyH;
-
-  const height = 80 /*outer padding*/ + 120 /*top header*/ + workoutRowH + nutritionH + 12;
-
-  // Per-photo height so the stacked photos exactly fill the nutrition body.
-  const photoCount = nutritionPhotos.length;
-  const perPhotoH = photoCount > 0
-    ? Math.floor((nutritionBodyH - (photoCount - 1) * 12) / photoCount)
-    : 0;
+  const exercises = (data.workout?.exercises || []).slice(0, 8);
+  const wellnessEntries = (data.wellness?.entries || []).slice(0, 6);
 
   const hasWorkout = exercises.length > 0 || cardio.length > 0;
   const workoutSubtitle = [
     data.workout?.duration && data.workout.duration !== "—" ? `⏱ ${data.workout.duration}` : null,
     data.workout?.calories ? `🔥 ${data.workout.calories} cal` : null,
   ].filter(Boolean).join("   ");
+
+  // Fixed per-photo height. With auto-height on the canvas, the nutrition row
+  // grows to contain whichever column (meals vs photos) is taller — so these
+  // never cause clipping regardless of how they compare to the meal count.
+  const perPhotoH = nutritionPhotos.length === 1 ? 300 : 175;
 
   return new ImageResponse(
     (
@@ -222,10 +193,10 @@ export async function POST(req: NextRequest) {
           display: "flex",
           flexDirection: "column",
           width: "100%",
-          height: "100%",
+          // NO height set → root sizes to content (auto-height).
           background: "linear-gradient(135deg, #0D0D0D 0%, #1A1230 100%)",
           padding: 40,
-          fontFamily: "Inter, sans-serif",
+          fontFamily: "sans-serif",
           color: C.text,
         }}
       >
@@ -264,7 +235,7 @@ export async function POST(req: NextRequest) {
         </div>
 
         {/* Workout + Wellness row */}
-        <div style={{ display: "flex", flexDirection: "row", marginBottom: 22 }}>
+        <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", marginBottom: 22 }}>
           {/* Workout */}
           <div
             style={{
@@ -281,7 +252,7 @@ export async function POST(req: NextRequest) {
             <TileHeader emoji="💪" title={data.workout?.type || "Workout"} subtitle={hasWorkout ? (workoutSubtitle || undefined) : undefined} />
             <div style={{ display: "flex", flexDirection: "column", padding: 20 }}>
               {!hasWorkout ? (
-                <div style={{ display: "flex", fontSize: 16, color: C.sub, fontStyle: "italic", justifyContent: "center", padding: "20px 0" }}>
+                <div style={{ display: "flex", fontSize: 16, color: C.sub, justifyContent: "center", padding: "20px 0" }}>
                   Rest day
                 </div>
               ) : (
@@ -300,7 +271,7 @@ export async function POST(req: NextRequest) {
                       ))}
                     </div>
                   ) : null}
-                  {exercises.slice(0, 6).map((e, i) => (
+                  {exercises.map((e, i) => (
                     <div key={i} style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, paddingBottom: 8, borderTop: i > 0 || cardio.length > 0 ? `1px solid ${C.border}` : "none" }}>
                       <div style={{ display: "flex", fontWeight: 700, color: C.text, fontSize: 15 }}>{e.name}</div>
                       <div style={{ display: "flex", color: C.gold, fontWeight: 800, fontSize: 14 }}>{e.weight || `${e.sets}×${e.reps}`}</div>
@@ -326,11 +297,11 @@ export async function POST(req: NextRequest) {
             <TileHeader emoji="🌿" title="Wellness" subtitle={wellnessEntries.length > 0 ? wellnessEntries.map(e => e.activity).slice(0, 3).join(" · ") : undefined} />
             <div style={{ display: "flex", flexDirection: "column", padding: 20 }}>
               {wellnessEntries.length === 0 ? (
-                <div style={{ display: "flex", fontSize: 16, color: C.sub, fontStyle: "italic", justifyContent: "center", padding: "20px 0" }}>
+                <div style={{ display: "flex", fontSize: 16, color: C.sub, justifyContent: "center", padding: "20px 0" }}>
                   None logged
                 </div>
               ) : (
-                wellnessEntries.slice(0, 4).map((e, i) => (
+                wellnessEntries.map((e, i) => (
                   <div key={i} style={{ display: "flex", flexDirection: "row", alignItems: "center", paddingTop: 8, paddingBottom: 8 }}>
                     <div style={{ display: "flex", fontSize: 22, marginRight: 12 }}>{e.emoji || "🌿"}</div>
                     <div style={{ display: "flex", flex: 1, fontWeight: 700, color: C.text, fontSize: 16 }}>{e.activity}</div>
@@ -353,7 +324,6 @@ export async function POST(req: NextRequest) {
             borderRadius: 20,
             border: `1px solid ${C.border}`,
             overflow: "hidden",
-            flex: 1,
           }}
         >
           <TileHeader
@@ -361,7 +331,7 @@ export async function POST(req: NextRequest) {
             title="Nutrition"
             subtitle={data.nutrition ? `${data.nutrition.calories} kcal · ${data.nutrition.protein}g protein` : undefined}
           />
-          <div style={{ display: "flex", flexDirection: "row", padding: 20 }}>
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", padding: 20 }}>
             {/* Left: macros + meals */}
             <div style={{ display: "flex", flexDirection: "column", flex: nutritionPhotos.length > 0 ? 1.4 : 1, marginRight: nutritionPhotos.length > 0 ? 20 : 0 }}>
               {/* Macros */}
@@ -369,9 +339,7 @@ export async function POST(req: NextRequest) {
                 <Macro value={data.nutrition?.calories ?? 0} label="Calories" unit="kcal" color={C.gold} />
                 <Macro value={data.nutrition?.protein ?? 0} label="Protein" unit="g" color="#3B82F6" />
                 <Macro value={data.nutrition?.carbs ?? 0} label="Carbs" unit="g" color={C.purpleLt} />
-                <div style={{ display: "flex", flex: 1 }}>
-                  <Macro value={data.nutrition?.fat ?? 0} label="Fat" unit="g" color={C.green} />
-                </div>
+                <Macro value={data.nutrition?.fat ?? 0} label="Fat" unit="g" color={C.green} last />
               </div>
               {/* Meals */}
               <div style={{ display: "flex", flexDirection: "column" }}>
@@ -380,9 +348,11 @@ export async function POST(req: NextRequest) {
                     <div style={{ display: "flex", fontSize: 20, marginRight: 12 }}>{m.emoji || "🍽️"}</div>
                     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                       <div style={{ display: "flex", fontWeight: 800, fontSize: 15, color: C.text }}>{m.key}</div>
-                      <div style={{ display: "flex", fontSize: 13, color: C.sub, marginTop: 2 }}>{(m.name || "").slice(0, 42)}</div>
+                      {m.name ? (
+                        <div style={{ display: "flex", fontSize: 13, color: C.sub, marginTop: 2 }}>{m.name}</div>
+                      ) : null}
                     </div>
-                    <div style={{ display: "flex", fontSize: 15, fontWeight: 800, color: C.gold }}>{m.cal} kcal</div>
+                    <div style={{ display: "flex", fontSize: 15, fontWeight: 800, color: C.gold, marginLeft: 10 }}>{m.cal} kcal</div>
                   </div>
                 ))}
               </div>
@@ -413,7 +383,9 @@ export async function POST(req: NextRequest) {
     ),
     {
       width: 1200,
-      height,
+      // height OMITTED on purpose → forwarded to satori as undefined →
+      // satori auto-computes the natural height → nothing ever clips.
+      height: undefined,
       emoji: "twemoji",
     },
   );
