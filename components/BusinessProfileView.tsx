@@ -21,7 +21,7 @@ interface BusinessProfileViewProps {
   onProfileUpdate?: () => void;
 }
 
-type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard";
+type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop";
 const HIGHLIGHT_SLOTS = 9;
 
 const DAYS: { key: string; label: string }[] = [
@@ -85,7 +85,7 @@ export default function BusinessProfileView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "") as TabKey;
-    if (["posts", "events", "groups", "about", "leaderboard"].includes(hash)) setActiveTab(hash);
+    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop"].includes(hash)) setActiveTab(hash);
   }, []);
   function switchTab(t: TabKey) {
     setActiveTab(t);
@@ -123,6 +123,10 @@ export default function BusinessProfileView({
   const [offerCode, setOfferCode] = useState("");
   const [offerExpires, setOfferExpires] = useState(""); // yyyy-mm-dd
   const [copiedCode, setCopiedCode] = useState(false);
+  // Layer 2 type-specific modules
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
 
   // Pull current values into editable state — runs on mount + whenever the
   // profile prop changes (e.g. after a save-and-refetch).
@@ -153,6 +157,10 @@ export default function BusinessProfileView({
     setOfferDesc(off?.description || "");
     setOfferCode(off?.code || "");
     setOfferExpires(off?.expires_at ? String(off.expires_at).slice(0, 10) : "");
+    // Layer 2 modules
+    setSchedule(Array.isArray(profile.business_schedule) ? profile.business_schedule : []);
+    setServices(Array.isArray(profile.business_services) ? profile.business_services : []);
+    setProducts(Array.isArray(profile.business_products) ? profile.business_products : []);
   }
   useEffect(() => { initFromProfile(); /* eslint-disable-next-line */ }, [profile]);
 
@@ -268,6 +276,10 @@ export default function BusinessProfileView({
         ? (announcementChanged ? new Date().toISOString() : (profile.business_announcement_at || new Date().toISOString()))
         : null,
       business_offer: offerObj,
+      // Layer 2 — drop empty rows; store null if the list is empty
+      business_schedule: (() => { const v = schedule.filter(s => s && (s.name || "").trim()); return v.length ? v : null; })(),
+      business_services: (() => { const v = services.filter(s => s && (s.name || "").trim()); return v.length ? v : null; })(),
+      business_products: (() => { const v = products.filter(p => p && (p.name || "").trim()); return v.length ? v : null; })(),
     } as any).eq("id", currentUser.id);
 
     if (error) {
@@ -540,6 +552,9 @@ export default function BusinessProfileView({
             // category set (bench/squat/deadlift/etc.) doesn't make sense
             // for, say, a yoga studio. Could be opened up later.
             { key: "leaderboard", label: "🏆 Leaderboard", show: profile.business_type === "gym" },
+            { key: "schedule", label: "🗓️ Schedule", show: ["fitness", "wellness"].includes(getBusinessType(profile.business_type).category) },
+            { key: "services", label: "💲 Services", show: ["services", "wellness"].includes(getBusinessType(profile.business_type).category) },
+            { key: "shop", label: "🛍️ Shop", show: ["retail", "nutrition"].includes(getBusinessType(profile.business_type).category) },
             { key: "events", label: "📅 Events", show: true },
             { key: "groups", label: "👥 Groups", show: true },
             { key: "about", label: "ℹ️ About", show: true },
@@ -605,6 +620,144 @@ export default function BusinessProfileView({
         )}
         {activeTab === "groups" && (
           <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>👥 Groups this business runs will appear here.</div>
+        )}
+
+        {/* ── SCHEDULE TAB (fitness + wellness) ── */}
+        {activeTab === "schedule" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {editing ? (
+              <>
+                {schedule.map((row, i) => (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <select value={row.day || "mon"} onChange={e => setSchedule(s => s.map((x, j) => j === i ? { ...x, day: e.target.value } : x))} style={{ ...inlineInput, flex: 1 }}>
+                        {DAYS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                      </select>
+                      <input value={row.time || ""} onChange={e => setSchedule(s => s.map((x, j) => j === i ? { ...x, time: e.target.value } : x))} placeholder="6:00 AM" style={{ ...inlineInput, flex: 1 }} />
+                    </div>
+                    <input value={row.name || ""} onChange={e => setSchedule(s => s.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Class name — e.g. Sunrise HIIT" style={inlineInput} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input value={row.instructor || ""} onChange={e => setSchedule(s => s.map((x, j) => j === i ? { ...x, instructor: e.target.value } : x))} placeholder="Instructor (optional)" style={{ ...inlineInput, flex: 1 }} />
+                      <button onClick={() => setSchedule(s => s.filter((_, j) => j !== i))} style={{ ...secondaryBtn, color: "#FCA5A5", padding: "8px 14px" }}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={() => setSchedule(s => [...s, { day: "mon", time: "", name: "", instructor: "" }])} style={secondaryBtn}>+ Add class / session</button>
+              </>
+            ) : schedule.length === 0 ? (
+              <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>🗓️ No schedule posted yet.</div>
+            ) : (
+              DAYS.map(d => {
+                const rows = schedule.filter(r => r.day === d.key);
+                if (rows.length === 0) return null;
+                return (
+                  <div key={d.key} style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>{d.label}</div>
+                    {rows.map((r, i) => (
+                      <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 6, display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "#A78BFA", minWidth: 72 }}>{r.time || "—"}</div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{r.name}</div>
+                          {r.instructor && <div style={{ fontSize: 12, color: C.sub }}>with {r.instructor}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* ── SERVICES TAB (services + wellness) ── */}
+        {activeTab === "services" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {editing ? (
+              <>
+                {services.map((row, i) => (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input value={row.name || ""} onChange={e => setServices(s => s.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Service — e.g. 1:1 Coaching" style={{ ...inlineInput, flex: 2 }} />
+                      <input value={row.price || ""} onChange={e => setServices(s => s.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} placeholder="$120/mo" style={{ ...inlineInput, flex: 1 }} />
+                    </div>
+                    <input value={row.description || ""} onChange={e => setServices(s => s.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} placeholder="Short description (optional)" style={inlineInput} />
+                    <button onClick={() => setServices(s => s.filter((_, j) => j !== i))} style={{ ...secondaryBtn, color: "#FCA5A5", padding: "8px 14px", alignSelf: "flex-start" }}>Remove</button>
+                  </div>
+                ))}
+                <button onClick={() => setServices(s => [...s, { name: "", price: "", description: "" }])} style={secondaryBtn}>+ Add service</button>
+              </>
+            ) : services.length === 0 ? (
+              <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>💲 No services listed yet.</div>
+            ) : (
+              services.map((s, i) => (
+                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{s.name}</div>
+                    {s.description && <div style={{ fontSize: 13, color: C.sub, marginTop: 3, lineHeight: 1.5 }}>{s.description}</div>}
+                  </div>
+                  {s.price && <div style={{ fontSize: 15, fontWeight: 800, color: "#A78BFA", whiteSpace: "nowrap" }}>{s.price}</div>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ── SHOP TAB (retail + nutrition) ── */}
+        {activeTab === "shop" && (
+          <div>
+            {editing ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {products.map((row, i) => (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <button onClick={async () => {
+                        const input = document.createElement("input"); input.type = "file"; input.accept = "image/*";
+                        input.onchange = () => { const f = input.files?.[0]; if (!f) return; const r = new FileReader();
+                          r.onload = async ev => { const du = ev.target?.result as string; if (!du) return;
+                            try { const c = await compressImage(du); const url = await uploadPhoto(c, "posts", `${currentUser?.id}/product-${Date.now()}.jpg`); if (url) setProducts(p => p.map((x, j) => j === i ? { ...x, image_url: url } : x)); } catch {} };
+                          r.readAsDataURL(f); };
+                        input.click();
+                      }} style={{ width: 56, height: 56, borderRadius: 10, border: `1px dashed ${C.border}`, background: C.input, cursor: "pointer", overflow: "hidden", flexShrink: 0, padding: 0 }}>
+                        {row.image_url ? <img src={row.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 18 }}>📷</span>}
+                      </button>
+                      <input value={row.name || ""} onChange={e => setProducts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Product name" style={{ ...inlineInput, flex: 2 }} />
+                      <input value={row.price || ""} onChange={e => setProducts(p => p.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} placeholder="$39" style={{ ...inlineInput, flex: 1 }} />
+                    </div>
+                    <input value={row.url || ""} onChange={e => setProducts(p => p.map((x, j) => j === i ? { ...x, url: e.target.value } : x))} placeholder="Buy link (https://...)" style={inlineInput} />
+                    <button onClick={() => setProducts(p => p.filter((_, j) => j !== i))} style={{ ...secondaryBtn, color: "#FCA5A5", padding: "8px 14px", alignSelf: "flex-start" }}>Remove</button>
+                  </div>
+                ))}
+                <button onClick={() => setProducts(p => [...p, { name: "", price: "", url: "", image_url: "" }])} style={secondaryBtn}>+ Add product</button>
+              </div>
+            ) : products.length === 0 ? (
+              <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>🛍️ No products listed yet.</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+                {products.map((p, i) => {
+                  const href = p.url ? (/^https?:\/\//.test(p.url) ? p.url : `https://${p.url}`) : null;
+                  const Inner = (
+                    <>
+                      <div style={{ width: "100%", aspectRatio: "1", background: C.input, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {p.image_url ? <img src={p.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : <span style={{ fontSize: 30 }}>🛍️</span>}
+                      </div>
+                      <div style={{ padding: "10px 12px" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                          {p.price && <span style={{ fontSize: 14, fontWeight: 800, color: "#A78BFA" }}>{p.price}</span>}
+                          {href && <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Shop →</span>}
+                        </div>
+                      </div>
+                    </>
+                  );
+                  return href ? (
+                    <a key={i} href={href} target="_blank" rel="noopener noreferrer" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", textDecoration: "none", display: "block" }}>{Inner}</a>
+                  ) : (
+                    <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>{Inner}</div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === "about" && (
