@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import CouplesPanel from "@/components/CouplesPanel";
+import PromptsCard from "@/components/PromptsCard";
+import { RIVAL_PROMPTS } from "@/lib/rivalPrompts";
 import { supabase } from "@/lib/supabase";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
 import { BADGES } from "@/lib/badges";
@@ -12,6 +14,7 @@ import {
   joinQueue, leaveQueue, getQueueEntry,
   getActiveRivalry, getLiveScores, getUserRecord, resolveExpiredRivalries,
   createChallenge, acceptChallenge, getMyPendingChallenge, cancelChallenge,
+  saveMyRivalPromptAnswers,
   getMessages, sendTextMessage, sendPhotoMessage,
   unblurPhoto, subscribeToMessages,
   getRivalryBadges,
@@ -2370,7 +2373,7 @@ function BuddyPanel({ userId }: { userId: string }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RivalsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshProfile } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [activeRivalry, setActiveRivalry] = useState<RivalryWithOpponent | null>(null);
@@ -2813,6 +2816,17 @@ export default function RivalsPage() {
         {isActive && activeRivalry && (
           <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
             <HeadToHeadPanel rivalry={activeRivalry} myRecord={myRecord} theirRecord={theirRecord} />
+
+            {/* Get to know your rival — cycling prompts */}
+            <PromptsCard
+              title={`🤝 Get to know ${activeRivalry.opponent.full_name.split(" ")[0]}`}
+              pool={RIVAL_PROMPTS}
+              answers={((user?.profile as any)?.rival_prompt_answers as Record<string, string>) || {}}
+              mineLabel="Your answers"
+              other={{ label: `${activeRivalry.opponent.full_name.split(" ")[0]}'s answers`, answers: (activeRivalry.opponent.rival_prompt_answers as Record<string, string>) || {} }}
+              onSave={async (next) => { await saveMyRivalPromptAnswers(next); await refreshProfile?.(); await loadState(); }}
+            />
+
             <BadgesPanel rivalryId={activeRivalry.id} myId={user.id} opponentFirstName={activeRivalry.opponent.full_name.split(" ")[0]} />
             <ChatPanel rivalryId={activeRivalry.id} myId={user.id} rivalFirstName={activeRivalry.opponent.full_name.split(" ")[0]} />
 
