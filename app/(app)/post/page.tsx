@@ -466,6 +466,11 @@ export default function PostPage() {
   // AI food scanner modal state. When open, shows the photo→nutrition flow.
   const [showAIScanner, setShowAIScanner] = useState(false);
   const [mealPhotos, setMealPhotos] = useState<Record<string, string>>({});
+  // Photos attached to individual food items (from logged favorites or the
+  // per-row 📷 button). Keyed by food name → photo URL. These get merged into
+  // the nutrition log's photo_url on save, so a favorite's photo ALWAYS shows
+  // on the activity card / share card — no exceptions.
+  const [foodItemPhotos, setFoodItemPhotos] = useState<Record<string, string>>({});
   // Macro goals & daily tracking
   const [macroGoals, setMacroGoals] = useState<NutritionGoals | null>(null);
   const [dailyTotals, setDailyTotals] = useState<DailyTotals | null>(null);
@@ -1212,9 +1217,15 @@ export default function PostPage() {
         if (nutPhoto) {
           nutPhotoUrl = await uploadPhoto(await compressImage(nutPhoto), 'activity', `${user.id}/nutrition-${Date.now()}.jpg`);
         }
-        // Store meal photos as JSON string, or single URL for backward compat
-        const photoUrlToStore = Object.keys(uploadedMealPhotos).length > 0
-          ? JSON.stringify(uploadedMealPhotos)
+        // Store meal photos as JSON string, or single URL for backward compat.
+        // Merge in foodItemPhotos (photos from logged favorites + the per-row
+        // camera button) so every food photo lands on the activity card. Keys
+        // are food names; the activity card renders them with their name as the
+        // label. uploadedMealPhotos (manual per-meal photos) take precedence on
+        // key collision.
+        const combinedPhotos = { ...foodItemPhotos, ...uploadedMealPhotos };
+        const photoUrlToStore = Object.keys(combinedPhotos).length > 0
+          ? JSON.stringify(combinedPhotos)
           : nutPhotoUrl;
         // Auto-calculate macros from food items if available
         const autoCalNut = foodItems.reduce((s, f) => s + (parseFloat(f.calories) || 0), 0);
@@ -3227,6 +3238,9 @@ export default function PostPage() {
                       if (food.photoUrl) {
                         setFeedPhotos(p => p.includes(food.photoUrl!) ? p : [...p, food.photoUrl!]);
                         setFeedPhotoTypes(t => [...t, 'image']);
+                        // Also store for the nutrition activity card (keyed by
+                        // food name → shows on the card every time).
+                        setFoodItemPhotos(p => ({ ...p, [food.name || `food-${Date.now()}`]: food.photoUrl! }));
                       }
                     }}
                     onAddCombo={(items: SavedFoodItem[]) => {
@@ -3245,6 +3259,12 @@ export default function PostPage() {
                       if (comboPhotos.length > 0) {
                         setFeedPhotos(p => [...p, ...comboPhotos.filter(u => !p.includes(u))]);
                         setFeedPhotoTypes(t => [...t, ...comboPhotos.map(() => 'image' as const)]);
+                        // Store each combo item's photo for the activity card.
+                        setFoodItemPhotos(p => {
+                          const next = { ...p };
+                          items.forEach((it, idx) => { if (it.photoUrl) next[it.name || `combo-${idx}-${Date.now()}`] = it.photoUrl; });
+                          return next;
+                        });
                       }
                     }}
                   />
@@ -3307,6 +3327,8 @@ export default function PostPage() {
                                       // Auto-attach to the nutrition post
                                       setFeedPhotos(p => p.includes(url) ? p : [...p, url]);
                                       setFeedPhotoTypes(t => [...t, 'image']);
+                                      // And to the nutrition activity card
+                                      setFoodItemPhotos(p => ({ ...p, [item.name || `food-${i}-${Date.now()}`]: url }));
                                     }
                                   } catch (err) { console.warn('[food photo] upload failed', err); }
                                 };
