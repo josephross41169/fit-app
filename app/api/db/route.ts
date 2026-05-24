@@ -2644,6 +2644,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ posts: data || [] });
     }
 
+    // ── Get community posts for a business profile (Layer 3) ──────────────
+    // The organic "people posting about this business" feed. Surfaces posts
+    // where the business is either (a) tagged via tagged_user_ids, or (b)
+    // @mentioned in the caption by username. Merged + deduped, newest first,
+    // excluding the business's own posts.
+    if (action === 'get_business_community_posts') {
+      const businessId = payload?.businessId;
+      const username = String(payload?.username || '').toLowerCase().replace(/^@/, '');
+      const limit = Math.min(parseInt(payload?.limit || '30', 10) || 30, 60);
+      if (!businessId) return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
+
+      const SELECT = 'id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, created_at, likes_count, tagged_user_ids, users:user_id(id, username, full_name, avatar_url, avatar_video_url, city)';
+
+      // 1) Posts that tag this business in tagged_user_ids
+      const taggedQ = admin
+        .from('posts')
+        .select(SELECT)
+        .contains('tagged_user_ids', [businessId])
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // 2) Posts that @mention this business's username in the caption
+      const mentionQ = username
+        ? admin
+            .from('posts')
+            .select(SELECT)
+            .ilike('caption', `%@${username}%`)
+            .eq('is_public', true)
+            .order('created_at', { ascending: false })
+            .limit(limit)
+        : Promise.resolve({ data: [], error: null } as any);
+
+      const [tagged, mentioned] = await Promise.all([taggedQ, mentionQ]);
+      if (tagged.error) return NextResponse.json({ error: tagged.error.message }, { status: 500 });
+
+      // Merge + dedupe by id; drop the business's own posts.
+      const map = new Map<string, any>();
+      for (const p of [...(tagged.data || []), ...((mentioned as any).data || [])]) {
+        if (p.user_id !== businessId) map.set(p.id, p);
+      }
+      const merged = Array.from(map.values())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, limit);
+      return NextResponse.json({ posts: merged });
+    }
+
     // ── Create group post ──────────────────────────────────────────────────
     if (action === 'create_group_post') {
       const { userId, groupId, content, media_url, media_type } = payload;
