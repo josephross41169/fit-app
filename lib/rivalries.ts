@@ -254,6 +254,66 @@ export async function resolveExpiredRivalries(): Promise<number> {
   }
 }
 
+// ── DIRECT CHALLENGES (by code) ─────────────────────────────────────────────
+
+export interface PendingChallenge {
+  code: string;
+  category: RivalCategory;
+  competition_type: string;
+  tier: RivalTier;
+  expires_at: string;
+}
+
+/** Create a shareable challenge code for a specific pick. Returns the code.
+ *  Throws if the user already has an active rivalry. */
+export async function createChallenge(params: {
+  category: RivalCategory;
+  competition_type: string;
+  tier: RivalTier;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc("create_rivalry_challenge", {
+    p_category: params.category,
+    p_competition_type: params.competition_type,
+    p_tier: params.tier,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Accept a challenge by code → creates the rivalry. Returns the rivalry id.
+ *  Throws with a friendly message if invalid/expired/already-in-a-rivalry. */
+export async function acceptChallenge(code: string): Promise<string> {
+  const { data, error } = await supabase.rpc("accept_rivalry_challenge", {
+    p_code: code.trim(),
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** The current user's live (pending) challenge, if any. */
+export async function getMyPendingChallenge(): Promise<PendingChallenge | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("rivalry_challenges")
+    .select("code, category, competition_type, tier, expires_at")
+    .eq("challenger_id", user.id)
+    .eq("status", "pending")
+    .maybeSingle();
+  return (data as any) || null;
+}
+
+/** Cancel the current user's pending challenge. */
+export async function cancelChallenge(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await (supabase as any)
+    .from("rivalry_challenges")
+    .update({ status: "cancelled" })
+    .eq("challenger_id", user.id)
+    .eq("status", "pending");
+}
+
 /** Get the current user's active rivalry (or null). */
 export async function getActiveRivalry(): Promise<RivalryWithOpponent | null> {
   const { data: { user } } = await supabase.auth.getUser();
