@@ -3320,6 +3320,9 @@ export default function PostPage() {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Macros (manual override / supplement) */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>Total Macros</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>
