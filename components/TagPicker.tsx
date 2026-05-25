@@ -23,6 +23,8 @@ type Props = {
   className?: string;
   /** Override the default placeholder text. */
   placeholder?: string;
+  /** When true, only Livelee business accounts appear in search results. */
+  businessOnly?: boolean;
 };
 
 /**
@@ -48,6 +50,7 @@ export default function TagPicker({
   max = 10,
   className,
   placeholder = "Search to tag people…",
+  businessOnly = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TaggedUser[]>([]);
@@ -65,26 +68,29 @@ export default function TagPicker({
       setSearching(false);
       return;
     }
-    // Cache hit — show instantly without re-querying.
-    const cached = cacheRef.current.get(q.toLowerCase());
+    // Cache hit — show instantly without re-querying. Key includes the mode
+    // so business-only and all-user results never collide.
+    const cacheKey = (businessOnly ? "biz:" : "all:") + q.toLowerCase();
+    const cached = cacheRef.current.get(cacheKey);
     if (cached) {
       setResults(filterOut(cached, value, excludeSelfId));
       return;
     }
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
-      const { data } = await supabase
+      let qb = supabase
         .from("users")
         .select("id, username, full_name, avatar_url")
-        .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
-        .limit(8);
+        .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`);
+      if (businessOnly) qb = qb.eq("account_type", "business");
+      const { data } = await qb.limit(8);
       const list = (data || []) as TaggedUser[];
-      cacheRef.current.set(q.toLowerCase(), list);
+      cacheRef.current.set(cacheKey, list);
       setResults(filterOut(list, value, excludeSelfId));
       setSearching(false);
     }, 250);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, value, excludeSelfId]);
+  }, [query, value, excludeSelfId, businessOnly]);
 
   function addUser(u: TaggedUser) {
     if (value.length >= max) return;
