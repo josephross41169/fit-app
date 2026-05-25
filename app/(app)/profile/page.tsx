@@ -237,8 +237,8 @@ type WellnessEntry = {
   duration?: number | null;     // minutes (from wellness_duration_min)
   loggedAt?: string | null;     // ISO string (from logged_at) for time-of-day display
 };
-type Workout    = {type:string;duration:string;calories:number;exercises:Exercise[];cardio:CardioEntry[]};
-type Nutrition  = {calories:number;protein:number;carbs:number;fat:number;sugar:number;meals:Meal[]};
+type Workout    = {type:string;duration:string;calories:number;exercises:Exercise[];cardio:CardioEntry[];notes?:string};
+type Nutrition  = {calories:number;protein:number;carbs:number;fat:number;sugar:number;meals:Meal[];notes?:string};
 type Wellness   = {entries:WellnessEntry[]};
 
 const iStyle = {background:"#0D0D0D",border:`1.5px solid #3D2A6E`,borderRadius:10,padding:"7px 10px",fontSize:13,color:"#F0F0F0",outline:"none",width:"100%",boxSizing:"border-box" as const};
@@ -1034,6 +1034,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
             </button>
             {woOpen && <div style={{background:"#140E24",padding:"12px 16px"}}>
+              {workout.notes && workout.notes.trim().length > 0 && (
+                <div style={{background:"#1A1230",border:"1px solid #2A1F45",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
+                  <div style={{fontSize:10,fontWeight:800,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:0.6,marginBottom:3}}>📝 Notes</div>
+                  <div style={{fontSize:13,color:C.text,lineHeight:1.45,whiteSpace:"pre-wrap"}}>{workout.notes}</div>
+                </div>
+              )}
               {(() => {
                 // When the bucketing layer attached _workoutParts (>= 2 entries),
                 // render a labeled section per workout instead of one combined
@@ -1196,6 +1202,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
             </button>
             <div style={{background:"#140E24",padding:16}}>
+              {nutrition.notes && nutrition.notes.trim().length > 0 && (
+                <div style={{background:"#140E24",border:"1px solid #2A1F45",borderRadius:10,padding:"10px 12px",marginBottom:16}}>
+                  <div style={{fontSize:10,fontWeight:800,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:0.6,marginBottom:3}}>📝 Notes</div>
+                  <div style={{fontSize:13,color:C.text,lineHeight:1.45,whiteSpace:"pre-wrap"}}>{nutrition.notes}</div>
+                </div>
+              )}
               {/* Macro progress vs goals (if goals set) */}
               {(()=>{
                 let goals: any = null;
@@ -1849,6 +1861,7 @@ export default function ProfilePage() {
         id: w.id,
         type: w.workout_type || 'Workout',
         time: w.logged_at,
+        notes: w.notes || '',
         duration: w.workout_duration_min ? `${w.workout_duration_min} min` : '—',
         calories: w.workout_calories || 0,
         exercises: Array.isArray(w.exercises)
@@ -1888,6 +1901,7 @@ export default function ProfilePage() {
           type: headline,
           duration: totalDurationMin > 0 ? `${totalDurationMin} min` : '—',
           calories: totalCalories,
+          notes: parts.map((p: any) => p.notes).filter(Boolean).join(' · '),
           exercises: allExercises,
           cardio: allCardio,
         };
@@ -1904,6 +1918,7 @@ export default function ProfilePage() {
         carbs:    Math.round(totalCarbs),
         fat:      Math.round(totalFat),
         sugar:    0,
+        notes: nutritionLogs.map((l: any) => l.notes).filter(Boolean).join(' · '),
         photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
         meals: nutritionLogs.map((l: any) => ({
           key:   l.meal_type || 'Meal',
