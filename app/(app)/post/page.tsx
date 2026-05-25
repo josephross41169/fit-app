@@ -553,6 +553,9 @@ export default function PostPage() {
   // surfaces and a user might tag different friends in each.
   const [feedTaggedUsers, setFeedTaggedUsers] = useState<TaggedUser[]>([]);
   const [workoutTaggedUsers, setWorkoutTaggedUsers] = useState<TaggedUser[]>([]);
+  // Businesses tagged in this log (gym, restaurant, studio, etc.). Flows into
+  // the post's tagged_user_ids so it surfaces on the business's Community tab.
+  const [taggedBusinesses, setTaggedBusinesses] = useState<TaggedUser[]>([]);
   const [location, setLocation] = useState("");
   // Mapbox-powered location pick — replaces the bare text input. The basic
   // `location` string above is kept as a fallback (gets the picked place's
@@ -1191,8 +1194,12 @@ export default function PostPage() {
         // Always insert a new row — users can log multiple workouts per day.
         // Group goals, rivalries, challenges, and wars all aggregate by COUNT/SUM
         // across the date window, so each insert is tracked independently.
-        // tagged_user_ids drives the Workout Partner badge ladder.
-        const taggedIds = workoutTaggedUsers.map(u => u.id);
+        // tagged_user_ids drives the Workout Partner badge ladder (partners)
+        // and the business Community tab (tagged businesses). Both merged.
+        const taggedIds = Array.from(new Set([
+          ...workoutTaggedUsers.map(u => u.id),
+          ...taggedBusinesses.map(b => b.id),
+        ]));
         const insertWorkoutRow: any = { ...base, log_type: 'workout', ...workoutPayload };
         if (taggedIds.length > 0) insertWorkoutRow.tagged_user_ids = taggedIds;
         let res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
@@ -1914,9 +1921,12 @@ export default function PostPage() {
         location: pickedLocation?.name || location || null,
         location_id: pickedLocation?.id || null,
         is_public: true,
-        // Tagged users — drives @mention notifications and the future
-        // "tagged in" tab on profiles. Empty array = no tags.
-        tagged_user_ids: feedTaggedUsers.map(u => u.id),
+        // Tagged users + tagged businesses — drives @mention notifications,
+        // the "tagged in" tab, and the business Community tab. Deduped.
+        tagged_user_ids: Array.from(new Set([
+          ...feedTaggedUsers.map(u => u.id),
+          ...taggedBusinesses.map(b => b.id),
+        ])),
       };
       let { error } = await supabase.from('posts').insert(insertRow);
       // Graceful fallback if the migration hasn't been run yet — drop new column and retry.
@@ -3018,6 +3028,11 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes & Photo</div>
                 <textarea rows={3} style={{ ...iStyle, resize: "none", marginBottom: 14 }} placeholder="How did it feel? Any PRs?" value={woNotes} onChange={e => setWoNotes(e.target.value)} />
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🏢 Tag a business</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>Tag a gym, studio, or brand on Livelee — your post shows on their page.</div>
+                  <TagPicker businessOnly value={taggedBusinesses} onChange={setTaggedBusinesses} placeholder="Search businesses on Livelee…" max={3} />
+                </div>
                 <label style={{ display: "block", cursor: "pointer" }}>
                   {woPhoto ? (
                     <img src={woPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
@@ -3466,6 +3481,11 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes</div>
                 <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="Meal notes..." value={nutNotes} onChange={e => setNutNotes(e.target.value)} />
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🏢 Tag a business</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>Tag a restaurant, meal-prep, or brand on Livelee — your post shows on their page.</div>
+                  <TagPicker businessOnly value={taggedBusinesses} onChange={setTaggedBusinesses} placeholder="Search businesses on Livelee…" max={3} />
+                </div>
               </div>
 
               <SaveErrorBanner />
@@ -3657,6 +3677,11 @@ export default function PostPage() {
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</label>
                   <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How was it? How do you feel?" value={wellnessNotes} onChange={e => setWellnessNotes(e.target.value)} />
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🏢 Tag a business</div>
+                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>Tag a spa, studio, or wellness brand on Livelee — your post shows on their page.</div>
+                    <TagPicker businessOnly value={taggedBusinesses} onChange={setTaggedBusinesses} placeholder="Search businesses on Livelee…" max={3} />
+                  </div>
                 </div>
               </div>
 
