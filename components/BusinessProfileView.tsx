@@ -21,7 +21,7 @@ interface BusinessProfileViewProps {
   onProfileUpdate?: () => void;
 }
 
-type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop" | "community" | "menu";
+type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop" | "community" | "menu" | "gallery" | "reviews" | "insights";
 const HIGHLIGHT_SLOTS = 9;
 
 const DAYS: { key: string; label: string }[] = [
@@ -85,7 +85,7 @@ export default function BusinessProfileView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "") as TabKey;
-    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop", "community", "menu"].includes(hash)) setActiveTab(hash);
+    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop", "community", "menu", "gallery", "reviews", "insights"].includes(hash)) setActiveTab(hash);
   }, []);
   function switchTab(t: TabKey) {
     setActiveTab(t);
@@ -160,6 +160,15 @@ export default function BusinessProfileView({
   // Food businesses: menu items (with nutrition facts) + delivery links
   const [menu, setMenu] = useState<any[]>([]);
   const [delivery, setDelivery] = useState<Record<string, string>>({});
+  // FAQ + gallery
+  const [faq, setFaq] = useState<any[]>([]);
+  const [gallery, setGallery] = useState<string[]>([]);
+  // Reviews
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsLoaded, setReviewsLoaded] = useState(false);
+  const [myRating, setMyRating] = useState(0);
+  const [myReviewBody, setMyReviewBody] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
 
   // Pull current values into editable state — runs on mount + whenever the
   // profile prop changes (e.g. after a save-and-refetch).
@@ -196,8 +205,62 @@ export default function BusinessProfileView({
     setProducts(Array.isArray(profile.business_products) ? profile.business_products : []);
     setMenu(Array.isArray(profile.business_menu) ? profile.business_menu : []);
     setDelivery(profile.business_delivery && typeof profile.business_delivery === "object" ? profile.business_delivery : {});
+    setFaq(Array.isArray(profile.business_faq) ? profile.business_faq : []);
+    setGallery(Array.isArray(profile.business_gallery) ? profile.business_gallery : []);
   }
   useEffect(() => { initFromProfile(); /* eslint-disable-next-line */ }, [profile]);
+
+  // Count a profile view once per mount when a non-owner opens the page.
+  useEffect(() => {
+    if (!profile?.id || viewingOwn || profile.account_type !== "business") return;
+    (async () => { try { await supabase.rpc("increment_business_view", { p_business_id: profile.id }); } catch { /* best-effort */ } })();
+    // eslint-disable-next-line
+  }, [profile?.id]);
+
+  // Lazy-load reviews when the Reviews or Insights tab is opened.
+  useEffect(() => {
+    if ((activeTab !== "reviews" && activeTab !== "insights") || reviewsLoaded) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("business_reviews")
+          .select("id, reviewer_id, rating, body, created_at, users:reviewer_id(id, username, full_name, avatar_url)")
+          .eq("business_id", profile.id)
+          .order("created_at", { ascending: false });
+        const list = (data || []) as any[];
+        setReviews(list);
+        // Pre-fill the form if the current user already reviewed.
+        const mine = currentUser ? list.find(r => r.reviewer_id === currentUser.id) : null;
+        if (mine) { setMyRating(mine.rating); setMyReviewBody(mine.body || ""); }
+      } catch { setReviews([]); }
+      finally { setReviewsLoaded(true); }
+    })();
+    // eslint-disable-next-line
+  }, [activeTab, reviewsLoaded, profile.id]);
+
+  async function handleSaveReview() {
+    if (!currentUser || myRating < 1 || savingReview) return;
+    setSavingReview(true);
+    try {
+      await (supabase as any).from("business_reviews").upsert({
+        business_id: profile.id,
+        reviewer_id: currentUser.id,
+        rating: myRating,
+        body: myReviewBody.trim() || null,
+      }, { onConflict: "business_id,reviewer_id" });
+      // Refresh
+      const { data } = await supabase
+        .from("business_reviews")
+        .select("id, reviewer_id, rating, body, created_at, users:reviewer_id(id, username, full_name, avatar_url)")
+        .eq("business_id", profile.id)
+        .order("created_at", { ascending: false });
+      setReviews((data || []) as any[]);
+    } finally { setSavingReview(false); }
+  }
+
+  // Aggregate rating
+  const reviewCount = reviews.length;
+  const avgRating = reviewCount > 0 ? reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviewCount : 0;
 
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [moderationMenuOpen, setModerationMenuOpen] = useState(false);
@@ -317,6 +380,8 @@ export default function BusinessProfileView({
       business_products: (() => { const v = products.filter(p => p && (p.name || "").trim()); return v.length ? v : null; })(),
       business_menu: (() => { const v = menu.filter(m => m && (m.name || "").trim()); return v.length ? v : null; })(),
       business_delivery: (() => { const e = Object.fromEntries(Object.entries(delivery).filter(([, u]) => u && String(u).trim())); return Object.keys(e).length ? e : null; })(),
+      business_faq: (() => { const v = faq.filter(f => f && (f.q || "").trim()); return v.length ? v : null; })(),
+      business_gallery: gallery.filter(Boolean).length ? gallery.filter(Boolean) : null,
     } as any).eq("id", currentUser.id);
 
     if (error) {
@@ -586,6 +651,9 @@ export default function BusinessProfileView({
           {([
             { key: "posts", label: "📸 Posts", show: true },
             { key: "community", label: "🤝 Community", show: true },
+            { key: "gallery", label: "📷 Gallery", show: true },
+            { key: "reviews", label: "⭐ Reviews", show: true },
+            { key: "insights", label: "📊 Insights", show: viewingOwn },
             // Leaderboard only renders for gym-type businesses since the
             // category set (bench/squat/deadlift/etc.) doesn't make sense
             // for, say, a yoga studio. Could be opened up later.
@@ -941,6 +1009,117 @@ export default function BusinessProfileView({
           );
         })()}
 
+        {/* ── GALLERY TAB — photos of the space ── */}
+        {activeTab === "gallery" && (
+          <div>
+            {editing ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                  {gallery.map((url, i) => (
+                    <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: C.input }}>
+                      <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <button onClick={() => setGallery(g => g.filter((_, j) => j !== i))} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.7)", color: "#FCA5A5", fontSize: 13, cursor: "pointer", padding: 0 }}>✕</button>
+                    </div>
+                  ))}
+                  <button onClick={async () => {
+                    const input = document.createElement("input"); input.type = "file"; input.accept = "image/*";
+                    input.onchange = () => { const f = input.files?.[0]; if (!f) return; const r = new FileReader();
+                      r.onload = async ev => { const du = ev.target?.result as string; if (!du) return;
+                        try { const c = await compressImage(du); const url = await uploadPhoto(c, "posts", `${currentUser?.id}/gallery-${Date.now()}.jpg`); if (url) setGallery(g => [...g, url]); } catch {} };
+                      r.readAsDataURL(f); };
+                    input.click();
+                  }} style={{ aspectRatio: "1", borderRadius: 12, border: `1.5px dashed ${C.border}`, background: C.input, color: C.sub, fontSize: 26, cursor: "pointer" }}>＋</button>
+                </div>
+                <div style={{ fontSize: 12, color: C.muted }}>Show off your space, your food, the vibe. Tap ＋ to add photos.</div>
+              </div>
+            ) : (Array.isArray(profile.business_gallery) && profile.business_gallery.length > 0) ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                {profile.business_gallery.map((url: string, i: number) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: C.input, display: "block" }}>
+                    <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>📷 No photos yet.</div>
+            )}
+          </div>
+        )}
+
+        {/* ── REVIEWS TAB ── */}
+        {activeTab === "reviews" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Aggregate */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, textAlign: "center" }}>
+              {reviewCount > 0 ? (
+                <>
+                  <div style={{ fontSize: 34, fontWeight: 900, color: "#F5A623" }}>{avgRating.toFixed(1)}</div>
+                  <div style={{ fontSize: 16, marginTop: 2 }}>{"★".repeat(Math.round(avgRating))}{"☆".repeat(5 - Math.round(avgRating))}</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{reviewCount} review{reviewCount !== 1 ? "s" : ""}</div>
+                </>
+              ) : (
+                <div style={{ fontSize: 14, color: C.muted }}>No reviews yet — be the first.</div>
+              )}
+            </div>
+
+            {/* Write a review (non-owners, logged in) */}
+            {currentUser && !viewingOwn && (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>Leave a review</div>
+                <div style={{ fontSize: 28, marginBottom: 10, letterSpacing: 4 }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <span key={n} onClick={() => setMyRating(n)} style={{ cursor: "pointer", color: n <= myRating ? "#F5A623" : "#3A3F52" }}>★</span>
+                  ))}
+                </div>
+                <textarea rows={3} value={myReviewBody} onChange={e => setMyReviewBody(e.target.value.slice(0, 400))} placeholder="Share your experience (optional)" style={{ ...inlineInput, resize: "vertical" }} />
+                <button onClick={handleSaveReview} disabled={myRating < 1 || savingReview}
+                  style={{ ...primaryBtn, marginTop: 10, opacity: myRating < 1 ? 0.5 : 1 }}>
+                  {savingReview ? "Saving…" : "Post review"}
+                </button>
+              </div>
+            )}
+
+            {/* List */}
+            {!reviewsLoaded ? (
+              <div style={{ color: C.muted, textAlign: "center", padding: 20, fontSize: 14 }}>Loading…</div>
+            ) : reviews.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {reviews.map(r => {
+                  const u = Array.isArray(r.users) ? r.users[0] : r.users;
+                  return (
+                    <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: r.body ? 6 : 0 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", background: C.input, flexShrink: 0 }}>
+                          {u?.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{u?.full_name || u?.username || "Member"}</div>
+                        <div style={{ marginLeft: "auto", fontSize: 13, color: "#F5A623" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</div>
+                      </div>
+                      {r.body && <div style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{r.body}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* ── INSIGHTS TAB (owner only) ── */}
+        {activeTab === "insights" && viewingOwn && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 2 }}>How your profile is doing. Only you can see this.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+              <InsightCard label="Profile views" value={profile.business_profile_views ?? 0} emoji="👀" />
+              <InsightCard label="Followers" value={profile.followers_count ?? 0} emoji="👥" />
+              <InsightCard label="Reviews" value={reviewsLoaded ? reviewCount : "…"} emoji="⭐" />
+              <InsightCard label="Avg rating" value={reviewsLoaded ? (reviewCount > 0 ? avgRating.toFixed(1) : "—") : "…"} emoji="📊" />
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+              💡 Keep your offer, announcement, and menu fresh — active profiles get more views and followers.
+            </div>
+          </div>
+        )}
+
         {activeTab === "about" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Card title="About">
@@ -953,6 +1132,32 @@ export default function BusinessProfileView({
                 profile.business_description_long
                   ? <p style={{ fontSize: 14, lineHeight: 1.65, color: "#CBD5E1", whiteSpace: "pre-wrap", margin: 0 }}>{profile.business_description_long}</p>
                   : <Empty>No description yet.</Empty>
+              )}
+            </Card>
+
+            <Card title="FAQ" hint={editing ? "Answer common questions (parking, first visit, policies…)." : undefined}>
+              {editing ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {faq.map((row, i) => (
+                    <div key={i} style={{ background: C.input, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <input value={row.q || ""} onChange={e => setFaq(f => f.map((x, j) => j === i ? { ...x, q: e.target.value } : x))} placeholder="Question" style={inlineInput} />
+                      <textarea rows={2} value={row.a || ""} onChange={e => setFaq(f => f.map((x, j) => j === i ? { ...x, a: e.target.value } : x))} placeholder="Answer" style={{ ...inlineInput, resize: "vertical" }} />
+                      <button onClick={() => setFaq(f => f.filter((_, j) => j !== i))} style={{ ...secondaryBtn, color: "#FCA5A5", padding: "7px 12px", alignSelf: "flex-start" }}>Remove</button>
+                    </div>
+                  ))}
+                  <button onClick={() => setFaq(f => [...f, { q: "", a: "" }])} style={secondaryBtn}>+ Add question</button>
+                </div>
+              ) : (
+                (Array.isArray(profile.business_faq) && profile.business_faq.length > 0)
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {profile.business_faq.map((row: any, i: number) => (
+                        <div key={i}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 3 }}>{row.q}</div>
+                          <div style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{row.a}</div>
+                        </div>
+                      ))}
+                    </div>
+                  : <Empty>No FAQs yet.</Empty>
               )}
             </Card>
 
@@ -1010,6 +1215,16 @@ export default function BusinessProfileView({
       )}
 
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
+    </div>
+  );
+}
+
+function InsightCard({ label, value, emoji }: { label: string; value: string | number; emoji: string }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 14px" }}>
+      <div style={{ fontSize: 20 }}>{emoji}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, color: C.text, marginTop: 6 }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>{label}</div>
     </div>
   );
 }
