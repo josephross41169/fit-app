@@ -13,7 +13,7 @@ export interface BusinessType {
   key: string;
   label: string;
   emoji: string;        // placeholder until custom icons are built
-  category: "fitness" | "wellness" | "nutrition" | "retail" | "services";
+  category: "fitness" | "wellness" | "nutrition" | "retail" | "services" | "food";
   /** Does this type typically have physical operating hours? */
   hasHours: boolean;
   /** Does this type typically have a physical address? */
@@ -39,6 +39,12 @@ export const BUSINESS_TYPES: BusinessType[] = [
   { key: "supplement_brand",label:"Supplement Brand",      emoji: "💊", category: "nutrition",hasHours: false, hasAddress: false },
   { key: "dietitian",      label: "Dietitian / Nutritionist",emoji:"🍎",category: "services", hasHours: true,  hasAddress: false },
   { key: "coach",          label: "Coach / Trainer",       emoji: "🧑‍🏫",category:"services", hasHours: false, hasAddress: false },
+
+  // ── FOOD ──────────────────────────────────────────
+  { key: "restaurant",     label: "Restaurant",            emoji: "🍽️", category: "food",     hasHours: true,  hasAddress: true  },
+  { key: "cafe",           label: "Café / Coffee Shop",    emoji: "☕", category: "food",     hasHours: true,  hasAddress: true  },
+  { key: "juice_bar",      label: "Juice / Smoothie Bar",  emoji: "🥤", category: "food",     hasHours: true,  hasAddress: true  },
+  { key: "healthy_eatery", label: "Healthy Eatery / Bowls",emoji: "🥙", category: "food",     hasHours: true,  hasAddress: true  },
 
   // ── RETAIL ────────────────────────────────────────
   { key: "apparel_brand",  label: "Apparel Brand",         emoji: "🛍️", category: "retail",   hasHours: false, hasAddress: false },
