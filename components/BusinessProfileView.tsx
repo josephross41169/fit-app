@@ -21,7 +21,7 @@ interface BusinessProfileViewProps {
   onProfileUpdate?: () => void;
 }
 
-type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop" | "community";
+type TabKey = "posts" | "events" | "groups" | "about" | "leaderboard" | "schedule" | "services" | "shop" | "community" | "menu";
 const HIGHLIGHT_SLOTS = 9;
 
 const DAYS: { key: string; label: string }[] = [
@@ -85,7 +85,7 @@ export default function BusinessProfileView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "") as TabKey;
-    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop", "community"].includes(hash)) setActiveTab(hash);
+    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop", "community", "menu"].includes(hash)) setActiveTab(hash);
   }, []);
   function switchTab(t: TabKey) {
     setActiveTab(t);
@@ -157,6 +157,9 @@ export default function BusinessProfileView({
   const [schedule, setSchedule] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  // Food businesses: menu items (with nutrition facts) + delivery links
+  const [menu, setMenu] = useState<any[]>([]);
+  const [delivery, setDelivery] = useState<Record<string, string>>({});
 
   // Pull current values into editable state — runs on mount + whenever the
   // profile prop changes (e.g. after a save-and-refetch).
@@ -191,6 +194,8 @@ export default function BusinessProfileView({
     setSchedule(Array.isArray(profile.business_schedule) ? profile.business_schedule : []);
     setServices(Array.isArray(profile.business_services) ? profile.business_services : []);
     setProducts(Array.isArray(profile.business_products) ? profile.business_products : []);
+    setMenu(Array.isArray(profile.business_menu) ? profile.business_menu : []);
+    setDelivery(profile.business_delivery && typeof profile.business_delivery === "object" ? profile.business_delivery : {});
   }
   useEffect(() => { initFromProfile(); /* eslint-disable-next-line */ }, [profile]);
 
@@ -310,6 +315,8 @@ export default function BusinessProfileView({
       business_schedule: (() => { const v = schedule.filter(s => s && (s.name || "").trim()); return v.length ? v : null; })(),
       business_services: (() => { const v = services.filter(s => s && (s.name || "").trim()); return v.length ? v : null; })(),
       business_products: (() => { const v = products.filter(p => p && (p.name || "").trim()); return v.length ? v : null; })(),
+      business_menu: (() => { const v = menu.filter(m => m && (m.name || "").trim()); return v.length ? v : null; })(),
+      business_delivery: (() => { const e = Object.fromEntries(Object.entries(delivery).filter(([, u]) => u && String(u).trim())); return Object.keys(e).length ? e : null; })(),
     } as any).eq("id", currentUser.id);
 
     if (error) {
@@ -585,6 +592,7 @@ export default function BusinessProfileView({
             { key: "leaderboard", label: "🏆 Leaderboard", show: profile.business_type === "gym" },
             { key: "schedule", label: "🗓️ Schedule", show: ["fitness", "wellness"].includes(getBusinessType(profile.business_type).category) },
             { key: "services", label: "💲 Services", show: ["services", "wellness"].includes(getBusinessType(profile.business_type).category) },
+            { key: "menu", label: "🍽️ Menu", show: getBusinessType(profile.business_type).category === "food" || profile.business_type === "nutrition_brand" },
             { key: "shop", label: "🛍️ Shop", show: ["retail", "nutrition"].includes(getBusinessType(profile.business_type).category) },
             { key: "events", label: "📅 Events", show: true },
             { key: "groups", label: "👥 Groups", show: true },
@@ -835,6 +843,103 @@ export default function BusinessProfileView({
             )}
           </div>
         )}
+
+        {/* ── MENU TAB (food businesses) — items with nutrition facts + delivery ── */}
+        {activeTab === "menu" && (() => {
+          const DELIVERY_PLATFORMS = [
+            { key: "doordash", label: "DoorDash", emoji: "🚪" },
+            { key: "ubereats", label: "Uber Eats", emoji: "🛵" },
+            { key: "grubhub", label: "Grubhub", emoji: "🍴" },
+            { key: "postmates", label: "Postmates", emoji: "📦" },
+            { key: "order", label: "Order Online", emoji: "🔗" },
+          ];
+          const normUrl = (u: string) => /^https?:\/\//.test(u) ? u : `https://${u}`;
+          if (editing) {
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Card title="Delivery & ordering links" hint="Add any that apply — they show as order buttons on your menu.">
+                  {DELIVERY_PLATFORMS.map(p => (
+                    <div key={p.key} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 4 }}>{p.emoji} {p.label}</div>
+                      <input value={delivery[p.key] || ""} onChange={e => setDelivery(d => ({ ...d, [p.key]: e.target.value }))} placeholder="https://..." style={inlineInput} />
+                    </div>
+                  ))}
+                </Card>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {menu.map((row, i) => (
+                    <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input value={row.name || ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Item name" style={{ ...inlineInput, flex: 2 }} />
+                        <input value={row.price || ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} placeholder="$12" style={{ ...inlineInput, flex: 1 }} />
+                      </div>
+                      <input value={row.section || ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, section: e.target.value } : x))} placeholder="Section (e.g. Bowls, Drinks) — optional" style={inlineInput} />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input value={row.calories ?? ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, calories: e.target.value } : x))} inputMode="numeric" placeholder="Cal" style={{ ...inlineInput, flex: 1 }} />
+                        <input value={row.protein ?? ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, protein: e.target.value } : x))} inputMode="numeric" placeholder="P (g)" style={{ ...inlineInput, flex: 1 }} />
+                        <input value={row.carbs ?? ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, carbs: e.target.value } : x))} inputMode="numeric" placeholder="C (g)" style={{ ...inlineInput, flex: 1 }} />
+                        <input value={row.fat ?? ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, fat: e.target.value } : x))} inputMode="numeric" placeholder="F (g)" style={{ ...inlineInput, flex: 1 }} />
+                      </div>
+                      <input value={row.description || ""} onChange={e => setMenu(m => m.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} placeholder="Description (optional)" style={inlineInput} />
+                      <button onClick={() => setMenu(m => m.filter((_, j) => j !== i))} style={{ ...secondaryBtn, color: "#FCA5A5", padding: "8px 14px", alignSelf: "flex-start" }}>Remove</button>
+                    </div>
+                  ))}
+                  <button onClick={() => setMenu(m => [...m, { name: "", section: "", calories: "", protein: "", carbs: "", fat: "", price: "", description: "" }])} style={secondaryBtn}>+ Add menu item</button>
+                </div>
+              </div>
+            );
+          }
+          // View mode
+          const activeDelivery = DELIVERY_PLATFORMS.filter(p => (profile.business_delivery || {})[p.key]);
+          const items = Array.isArray(profile.business_menu) ? profile.business_menu : [];
+          // Group by section (blank section → "Menu")
+          const sections: Record<string, any[]> = {};
+          for (const it of items) { const s = (it.section || "Menu").trim() || "Menu"; (sections[s] = sections[s] || []).push(it); }
+          return (
+            <div>
+              {activeDelivery.length > 0 && (
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>🛵 Order delivery</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {activeDelivery.map(p => (
+                      <a key={p.key} href={normUrl((profile.business_delivery || {})[p.key])} target="_blank" rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 16px", color: C.text, fontWeight: 800, fontSize: 13, textDecoration: "none" }}>
+                        {p.emoji} {p.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {items.length === 0 ? (
+                <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>🍽️ No menu posted yet.</div>
+              ) : (
+                Object.entries(sections).map(([section, rows]) => (
+                  <div key={section} style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 10 }}>{section}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {rows.map((it, i) => (
+                        <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "13px 16px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{it.name}</div>
+                            {it.price && <div style={{ fontSize: 15, fontWeight: 800, color: "#4ADE80", whiteSpace: "nowrap" }}>{it.price}</div>}
+                          </div>
+                          {it.description && <div style={{ fontSize: 13, color: C.sub, marginTop: 3, lineHeight: 1.5 }}>{it.description}</div>}
+                          {(it.calories || it.protein || it.carbs || it.fat) && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                              {it.calories ? <span style={{ fontSize: 11, fontWeight: 700, color: "#F5A623", background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 99, padding: "3px 10px" }}>{it.calories} cal</span> : null}
+                              {it.protein ? <span style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 99, padding: "3px 10px" }}>{it.protein}g protein</span> : null}
+                              {it.carbs ? <span style={{ fontSize: 11, fontWeight: 700, color: C.sub, background: C.input, border: `1px solid ${C.border}`, borderRadius: 99, padding: "3px 10px" }}>{it.carbs}g carbs</span> : null}
+                              {it.fat ? <span style={{ fontSize: 11, fontWeight: 700, color: C.sub, background: C.input, border: `1px solid ${C.border}`, borderRadius: 99, padding: "3px 10px" }}>{it.fat}g fat</span> : null}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })()}
 
         {activeTab === "about" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
