@@ -4,17 +4,23 @@
 // On the native iOS/Android shell, the WebView serves files from
 // `capacitor://localhost`. A relative `/api/...` fetch resolves to
 // `capacitor://localhost/api/...` — which is the local bundle, not our API,
-// so every API call would 404.
+// so every API call would 404 and features that rely on /api (e.g. Groups)
+// silently come back empty.
 //
-// This module installs a one-time `window.fetch` override that rewrites any
-// relative `/api/...` request to the absolute live API
-// (https://liveleeapp.com/api/...) ONLY when running inside Capacitor.
+// This installs a one-time `window.fetch` override that rewrites any relative
+// `/api/...` request to the absolute live API (https://liveleeapp.com/api/...)
+// when running inside the native shell.
 //
-// On the web (Vercel) build, Capacitor isn't present, the override is a no-op,
-// and fetches stay relative — same behaviour as today.
+// IMPORTANT (the bug this fixes): the native check is now evaluated at FETCH
+// TIME, not at import time. The previous version decided "am I native?" the
+// instant this module was imported — but Capacitor injects `window.Capacitor`
+// asynchronously, so if app code imported this before the bridge was ready,
+// the shim turned itself off for the entire session and every /api call broke.
+// We also detect the native context by the `capacitor:`/`ionic:`/`file:`
+// origin, which is reliable regardless of when the Capacitor object appears.
 //
-// We import this from `lib/supabase.ts` so it runs before any API call fires
-// (every part of the app touches supabase early).
+// On the web (Vercel) build the page origin is https://… so `shouldRewrite()`
+// is always false and fetches pass through unchanged — identical behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const API_BASE = 'https://liveleeapp.com';
@@ -30,12 +36,23 @@ declare global {
 }
 
 if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
-  const isNative = !!window.Capacitor?.isNativePlatform?.();
+  const originalFetch = window.fetch.bind(window);
 
-  if (isNative) {
-    const originalFetch = window.fetch.bind(window);
+  // Evaluated per-call so the Capacitor bridge / origin are guaranteed ready
+  // by the time any real API request fires.
+  const shouldRewrite = (): boolean => {
+    try {
+      if (window.Capacitor?.isNativePlatform?.()) return true;
+      const proto = window.location.protocol;
+      if (proto === 'capacitor:' || proto === 'ionic:' || proto === 'file:') return true;
+    } catch {
+      /* ignore */
+    }
+    return false;
+  };
 
-    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (shouldRewrite()) {
       // String URL starting with `/api/` → rewrite to absolute live API.
       if (typeof input === 'string' && input.startsWith('/api/')) {
         return originalFetch(API_BASE + input, init);
@@ -51,7 +68,8 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
         try {
           const u = new URL(input.url, window.location.href);
           if (u.pathname.startsWith('/api/') &&
-              (u.origin === window.location.origin || u.protocol === 'capacitor:')) {
+              (u.origin === window.location.origin ||
+               u.protocol === 'capacitor:' || u.protocol === 'ionic:' || u.protocol === 'file:')) {
             const rewritten = new Request(API_BASE + u.pathname + u.search, input);
             return originalFetch(rewritten, init);
           }
@@ -59,12 +77,12 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
           /* fall through to passthrough */
         }
       }
+    }
 
-      return originalFetch(input as RequestInfo, init);
-    }) as typeof fetch;
+    return originalFetch(input as RequestInfo, init);
+  }) as typeof fetch;
 
-    window.__liveleeFetchShimInstalled = true;
-  }
+  window.__liveleeFetchShimInstalled = true;
 }
 
 export {};
