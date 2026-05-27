@@ -814,12 +814,14 @@ function ConnectPageInner() {
   }
 
   return (
-    <div style={{ background:C.bg, minHeight:"100vh" }}>
+    <div className="connect-root" style={{ background:C.bg, minHeight:"100vh" }}>
       <style jsx global>{`
         @media (max-width: 767px) {
           .connect-layout { flex-direction: column !important; padding: 0 16px !important; }
           .connect-layout > * { width: 100% !important; }
           .connect-sidebar { width: 100% !important; }
+          .connect-root { overflow-x: hidden !important; }
+          .connect-header-row { padding-left: 16px !important; padding-right: 16px !important; }
         }
         @keyframes connectSkeletonShimmer {
           0%   { background-position: 200% 0; }
@@ -832,13 +834,13 @@ function ConnectPageInner() {
       )}
 
       {/* ── Sticky Header ── */}
-      <div style={{ position:"sticky", top:0, zIndex:100, background:C.white, borderBottom:`2px solid ${C.greenLight}`, paddingTop:"var(--safe-top)" }}>
-        <div style={{ maxWidth:1200, margin:"0 auto", padding:"14px 24px 0", display:"flex", alignItems:"center", gap:16 }}>
+      <div style={{ position:"sticky", top:0, zIndex:100, background:C.white, borderBottom:`2px solid ${C.greenLight}` }}>
+        <div className="connect-header-row" style={{ maxWidth:1200, margin:"0 auto", padding:"14px 24px 0", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", rowGap:10 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginRight:8 }}>
             <span style={{ fontSize:20 }}>🤝</span>
             <span style={{ fontWeight:900, fontSize:20, color:C.text }}>Connect</span>
           </div>
-          <div style={{ flex:1, maxWidth:380, display:"flex", alignItems:"center", gap:10, background:C.greenLight, borderRadius:24, padding:"8px 16px", border:`1.5px solid ${C.greenMid}` }}>
+          <div style={{ flex:"1 1 200px", minWidth:0, maxWidth:380, display:"flex", alignItems:"center", gap:10, background:C.greenLight, borderRadius:24, padding:"8px 16px", border:`1.5px solid ${C.greenMid}` }}>
             <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:16, height:16, flexShrink:0 }}>
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
