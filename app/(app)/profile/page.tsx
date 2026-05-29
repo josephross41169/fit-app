@@ -350,6 +350,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const { user } = useAuth();
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
+  const [menuOpen,setMenuOpen] = useState(false);
   const [nut,setNut]         = useState(false);
   const [woOpen,setWoOpen]   = useState(false);
   const [wellOpen,setWellOpen] = useState(false);
@@ -736,16 +737,61 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     lvl >= 2 ? { collapsed:"#2A1A0E", body:"#211309", border:"#4A3018", chip:"rgba(205,127,50,0.16)", chipBorder:"rgba(205,127,50,0.45)", chipText:"#E8A87C", iconBg:"rgba(205,127,50,0.18)", iconBorder:"rgba(205,127,50,0.45)", chevBg:"#3A2410", chevBorder:"#4A3018" } :
     { collapsed:"#160F28", body:"#140E24", border:"#2A1F45", chip:"rgba(124,58,237,0.12)", chipBorder:"rgba(124,58,237,0.35)", chipText:"#A78BFA", iconBg:"rgba(124,58,237,0.16)", iconBorder:"rgba(124,58,237,0.35)", chevBg:"#1F1636", chevBorder:"#2A1F45" };
 
+  // Pulled out of JSX so both the (hidden) share button and the ⋯ menu
+  // can reference the same payload without duplicating this large object.
+  const shareData = {
+    dateLabel: day.label,
+    monthShort: MONTHS[m-1],
+    dayNum: d,
+    workout: workout ? {
+      type: workout.type,
+      duration: workout.duration,
+      calories: workout.calories,
+      exercises: (workout.exercises || []).map(e => ({
+        name: e.name,
+        sets: e.sets,
+        reps: e.reps,
+        weight: e.weight || '',
+      })),
+      cardio: ((workout as any).cardio || []).map((c: any) => ({
+        type: c.type || 'Cardio',
+        duration: c.duration || undefined,
+        distance: c.distance || undefined,
+      })),
+    } : null,
+    nutrition: nutrition ? {
+      calories: nutrition.calories,
+      protein: nutrition.protein,
+      carbs: nutrition.carbs,
+      fat: nutrition.fat,
+      meals: (nutrition.meals || []).map(meal => ({
+        key: meal.key,
+        name: meal.name,
+        cal: meal.cal,
+        emoji: meal.emoji,
+      })),
+      photoUrls: photos,
+    } : null,
+    wellness: wellness ? {
+      entries: (wellness.entries || []).map(e => ({
+        activity: e.activity,
+        emoji: e.emoji,
+        notes: e.notes,
+        duration: (e as any).duration,
+      })),
+    } : null,
+  };
+
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
     <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
 
       {/* HEADER */}
       <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",flexDirection:"column",alignItems:"stretch",gap:12,padding:"18px 20px",cursor:"pointer",background:open?headerOpenBg:headerClosedBg,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
-        {/* Row 1: date badge + summary text (text flows across full card width) */}
-        <div style={{display:"flex",alignItems:"flex-start",gap:14,width:"100%"}}>
-        <div style={{width:56,height:56,borderRadius:16,flexShrink:0,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(124,58,237,0.35)"}}>
-          <span style={{color:"#fff",fontWeight:900,fontSize:22,lineHeight:1}}>{d}</span>
+        {/* Single compact row: date badge + summary text + controls (chevron + ⋯ menu) */}
+        <div style={{display:"flex",alignItems:"center",gap:14,width:"100%"}}>
+        <div style={{width:52,height:52,borderRadius:15,flexShrink:0,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(124,58,237,0.35)"}}>
+          <span style={{color:"#fff",fontWeight:900,fontSize:21,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700}}>{MONTHS[m-1]}</span>
         </div>
         <div style={{flex:1,minWidth:0}}>
@@ -776,77 +822,44 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           })():"😴 Rest day"}</div>
           {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
         </div>
-        </div>
-        {/* Row 2: action icons, aligned bottom-right */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:10,width:"100%"}}>
-        <div style={{width:34,height:34,borderRadius:"50%",background:"#2D1F52",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
-          <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-        {photos.length > 0 && (
-          <div style={{width:40,height:40,borderRadius:10,overflow:"hidden",flexShrink:0,border:`1px solid ${C.purpleMid}`}}>
-            <img src={ImagePresets.thumb(photos[0])} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+        {/* Controls: chevron (expand) + ⋯ menu — kept inline so the card stays short */}
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:"#2D1F52",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
+            <svg viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2.5" style={{width:15,height:15}}><path d="M6 9l6 6 6-6"/></svg>
           </div>
-        )}
-        {onDelete && (
+          {/* ⋯ menu always available (Share works for any day; Delete only if onDelete given) */}
           <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
-            {!confirmDel
-              ? <button onClick={()=>setConfirmDel(true)} style={{width:34,height:34,borderRadius:"50%",background:"#FEE2E2",border:"none",color:"#EF4444",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
-              : <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  <button onClick={()=>onDelete()} style={{padding:"5px 10px",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer"}}>Delete</button>
-                  <button onClick={()=>setConfirmDel(false)} style={{padding:"5px 10px",borderRadius:10,border:`1px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:800,fontSize:12,cursor:"pointer"}}>Cancel</button>
+              <button onClick={()=>{setMenuOpen(o=>!o);setConfirmDel(false);}} aria-label="More actions" style={{width:32,height:32,borderRadius:"50%",background:menuOpen?"#3A2A5E":"#2D1F52",border:"none",color:C.purple,fontSize:18,fontWeight:900,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>⋯</button>
+              {menuOpen && (<>
+                {/* tap-away backdrop */}
+                <div onClick={()=>{setMenuOpen(false);setConfirmDel(false);}} style={{position:"fixed",inset:0,zIndex:40}}/>
+                <div style={{position:"absolute",top:38,right:0,zIndex:41,minWidth:184,background:"#1B1330",border:`1px solid ${C.purpleMid}`,borderRadius:14,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",overflow:"hidden",padding:4,display:"flex",flexDirection:"column",gap:2}}>
+                  {photos.length>0 && (
+                    <button onClick={()=>{setLb(photos[0]);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:C.text,fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
+                      <span style={{fontSize:16}}>🖼️</span> View photo
+                    </button>
+                  )}
+                  {/* Share — ActivityShareButton handles the whole flow; styled as a row */}
+                  <div onClick={()=>setMenuOpen(false)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,cursor:"pointer"}}>
+                    <ActivityShareButton
+                      data={shareData}
+                      filename={`livelee-${day.id.replace(/\//g,'-')}`}
+                      style={{width:22,height:22,fontSize:13,background:"transparent",border:"none",color:C.text}}
+                    />
+                    <span style={{color:C.text,fontSize:14,fontWeight:600}}>Share as image</span>
+                  </div>
+                  {onDelete && (!confirmDel
+                    ? <button onClick={()=>setConfirmDel(true)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:"#F87171",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
+                        <span style={{fontSize:16}}>🗑️</span> Delete
+                      </button>
+                    : <div style={{display:"flex",gap:8,alignItems:"center",padding:"8px 12px"}}>
+                        <button onClick={()=>{onDelete();setMenuOpen(false);}} style={{flex:1,padding:"7px 10px",borderRadius:9,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}}>Delete</button>
+                        <button onClick={()=>setConfirmDel(false)} style={{flex:1,padding:"7px 10px",borderRadius:9,border:`1px solid ${C.purpleMid}`,background:"#0D0D0D",color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer"}}>Cancel</button>
+                      </div>
+                  )}
                 </div>
-            }
-          </div>
-        )}
-        {/* Share / save-as-image button. Self-contained — wraps itself in
-            an error boundary so any crash inside is contained to the
-            button, not the page. */}
-        <div style={{flexShrink:0}} onClick={e=>e.stopPropagation()}>
-          <ActivityShareButton
-            data={{
-              dateLabel: day.label,
-              monthShort: MONTHS[m-1],
-              dayNum: d,
-              workout: workout ? {
-                type: workout.type,
-                duration: workout.duration,
-                calories: workout.calories,
-                exercises: (workout.exercises || []).map(e => ({
-                  name: e.name,
-                  sets: e.sets,
-                  reps: e.reps,
-                  weight: e.weight || '',
-                })),
-                cardio: ((workout as any).cardio || []).map((c: any) => ({
-                  type: c.type || 'Cardio',
-                  duration: c.duration || undefined,
-                  distance: c.distance || undefined,
-                })),
-              } : null,
-              nutrition: nutrition ? {
-                calories: nutrition.calories,
-                protein: nutrition.protein,
-                carbs: nutrition.carbs,
-                fat: nutrition.fat,
-                meals: (nutrition.meals || []).map(meal => ({
-                  key: meal.key,
-                  name: meal.name,
-                  cal: meal.cal,
-                  emoji: meal.emoji,
-                })),
-                photoUrls: photos,
-              } : null,
-              wellness: wellness ? {
-                entries: (wellness.entries || []).map(e => ({
-                  activity: e.activity,
-                  emoji: e.emoji,
-                  notes: e.notes,
-                  duration: (e as any).duration,
-                })),
-              } : null,
-            }}
-            filename={`livelee-${day.id.replace(/\//g,'-')}`}
-          />
+              </>)}
+            </div>
         </div>
         </div>
       </button>
