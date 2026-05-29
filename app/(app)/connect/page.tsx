@@ -712,10 +712,6 @@ function ConnectPageInner() {
   const [joinedGroups, setJoinedGroups] = useState<any[]>([]);
   const [loadingJoined, setLoadingJoined] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  // TEMPORARY diagnostic — surfaces what the get_groups fetch actually does
-  // on the device (native TestFlight swallows errors silently otherwise).
-  // Remove once the groups-empty cause is confirmed.
-  const [diag, setDiag] = useState<string>("");
 
   useEffect(() => {
     // Kick off both initial network calls in parallel. Previously these
@@ -768,36 +764,17 @@ function ConnectPageInner() {
   }
 
   async function loadGroups() {
-    const reqUrl = `/api/db?action=get_groups`;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const params = new URLSearchParams({ action: 'get_groups' });
       if (user) params.append('userId', user.id);
-      const url = `/api/db?${params}`;
-      let res: Response;
-      try {
-        res = await fetch(url);
-      } catch (netErr: any) {
-        // A thrown fetch = network/CORS/connection failure (the response was
-        // never readable). This is the signature of a cross-origin block.
-        setDiag(`NETWORK FAIL on ${url}\norigin=${typeof window!=='undefined'?window.location.origin:'?'}\nerr=${netErr?.message||String(netErr)}`);
-        return;
-      }
-      let data: any = null;
-      let raw = "";
-      try { raw = await res.text(); data = JSON.parse(raw); }
-      catch (parseErr: any) {
-        setDiag(`BAD JSON  status=${res.status} ${res.statusText}\nbody[0..120]=${raw.slice(0,120)}`);
-        return;
-      }
+      const res = await fetch(`/api/db?${params}`);
+      const data = await res.json();
       if (data.groups && data.groups.length > 0) {
         setDbGroups(data.groups.map(normalizeDbGroup));
-        setDiag(`OK status=${res.status} groups=${data.groups.length}`);
-      } else {
-        setDiag(`EMPTY status=${res.status} groups=${(data.groups||[]).length} keys=${Object.keys(data||{}).join(',')}`);
       }
-    } catch (e: any) {
-      setDiag(`EXCEPTION on ${reqUrl}\n${e?.message||String(e)}`);
+    } catch {
+      // Use mock data fallback
     } finally {
       setLoadingGroups(false);
     }
@@ -838,12 +815,6 @@ function ConnectPageInner() {
 
   return (
     <div className="connect-root" style={{ background:C.bg, minHeight:"100vh" }}>
-      {diag && (
-        <div style={{position:"sticky",top:0,zIndex:9999,background:"#1a0f0f",color:"#ffd1d1",border:"1px solid #7f1d1d",padding:"8px 12px",fontSize:11,fontFamily:"monospace",whiteSpace:"pre-wrap",lineHeight:1.4}}>
-          🔧 GROUPS DIAG: {diag}
-          <button onClick={()=>setDiag("")} style={{marginLeft:8,background:"#7f1d1d",color:"#fff",border:"none",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontSize:11}}>×</button>
-        </div>
-      )}
       <style jsx global>{`
         @media (max-width: 767px) {
           .connect-layout { flex-direction: column !important; padding: 0 16px !important; }
