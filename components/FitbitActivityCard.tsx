@@ -24,8 +24,8 @@ export function FitbitActivityCard({ data }: { data: FitbitData }) {
     text: '#F0F0F0',
     sub: '#9CA3AF',
     white: '#1A1A1A',
-    greenLight: '#1A2A1A',
-    greenMid: '#2A3A2A',
+    greenLight: '#160F28',
+    greenMid: '#2A1F45',
   };
 
   return (
