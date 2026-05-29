@@ -723,6 +723,19 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const headerOpenBg   = lvl >= 2 ? "rgba(255,255,255,0.06)" : "#2D1F52";
   const headerClosedBg = lvl >= 2 ? "transparent"            : C.white;
 
+  // ── Inner activity-card colors, derived from the user's tier ────────────
+  // The workout / nutrition / wellness cards sit INSIDE the tier-colored
+  // profile card, so they should echo the same metal tone instead of the
+  // old hardcoded purple. collapsed = header bar, body = expanded area,
+  // border = card edge, chip* = the "Edit" pill.
+  const tierInner =
+    lvl >= 6 ? { collapsed:"#0E2A33", body:"#0B2129", border:"#1C4A56", chip:"rgba(103,232,249,0.14)", chipBorder:"rgba(103,232,249,0.4)", chipText:"#A5F3FC", iconBg:"rgba(103,232,249,0.16)", iconBorder:"rgba(103,232,249,0.4)", chevBg:"#10323B", chevBorder:"#1C4A56" } :
+    lvl >= 5 ? { collapsed:"#0F2E22", body:"#0B2419", border:"#1C4A38", chip:"rgba(16,185,129,0.14)", chipBorder:"rgba(16,185,129,0.4)", chipText:"#6EE7B7", iconBg:"rgba(16,185,129,0.16)", iconBorder:"rgba(16,185,129,0.4)", chevBg:"#10342633", chevBorder:"#1C4A38" } :
+    lvl >= 4 ? { collapsed:"#2A2008", body:"#211900", border:"#4A3A14", chip:"rgba(255,215,0,0.14)", chipBorder:"rgba(255,215,0,0.4)", chipText:"#FDE68A", iconBg:"rgba(255,215,0,0.16)", iconBorder:"rgba(255,215,0,0.4)", chevBg:"#2A2008", chevBorder:"#4A3A14" } :
+    lvl >= 3 ? { collapsed:"#23262F", body:"#1B1E25", border:"#3A3E4A", chip:"rgba(212,212,220,0.14)", chipBorder:"rgba(212,212,220,0.45)", chipText:"#E5E5EA", iconBg:"rgba(212,212,220,0.16)", iconBorder:"rgba(212,212,220,0.45)", chevBg:"#2A2D38", chevBorder:"#3A3E4A" } :
+    lvl >= 2 ? { collapsed:"#2A1A0E", body:"#211309", border:"#4A3018", chip:"rgba(205,127,50,0.16)", chipBorder:"rgba(205,127,50,0.45)", chipText:"#E8A87C", iconBg:"rgba(205,127,50,0.18)", iconBorder:"rgba(205,127,50,0.45)", chevBg:"#3A2410", chevBorder:"#4A3018" } :
+    { collapsed:"#160F28", body:"#140E24", border:"#2A1F45", chip:"rgba(124,58,237,0.12)", chipBorder:"rgba(124,58,237,0.35)", chipText:"#A78BFA", iconBg:"rgba(124,58,237,0.16)", iconBorder:"rgba(124,58,237,0.35)", chevBg:"#1F1636", chevBorder:"#2A1F45" };
+
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
     <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
@@ -994,12 +1007,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : workout ? (
-          <div style={{borderRadius:16,overflow:"hidden",border:"1px solid #2A1F45",marginBottom:20,background:"#140E24"}}>
-            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:10,border:"none",borderBottom:woOpen?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:16,overflow:"hidden",border:`1px solid ${tierInner.border}`,marginBottom:20,background:tierInner.body}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:tierInner.collapsed,padding:"13px 16px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:7,border:"none",borderBottom:woOpen?`1px solid ${tierInner.border}`:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
-                <div style={{width:40,height:40,borderRadius:11,background:"rgba(124,58,237,0.16)",border:"1px solid rgba(124,58,237,0.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>💪</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>{(()=>{
+                <div style={{width:38,height:38,borderRadius:11,background:tierInner.iconBg,border:`1px solid ${tierInner.iconBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>💪</div>
+                <div style={{flex:1,minWidth:0,fontWeight:800,fontSize:16,color:C.text}}>{(()=>{
                     const cardioList = ((workout as any).cardio || []) as any[];
                     const exList = workout.exercises || [];
                     const parts: string[] = [];
@@ -1018,22 +1030,21 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     if(exList.length>0) parts.push(workout.type||'Workout');
                     return parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
                   })()}</div>
-                  <div style={{fontSize:12,color:C.sub,marginTop:3,display:"flex",gap:10,flexWrap:"wrap"}}>
-                    {workout.duration&&workout.duration!=='—'&&<span>⏱ {workout.duration}</span>}
-                    {workout.calories>0&&<span>🔥 {workout.calories} cal</span>}
-                    {workout.exercises&&workout.exercises.length>0&&<span>💪 {workout.exercises.length} exercise{workout.exercises.length!==1?'s':''}</span>}
-                    {((workout as any).cardio||[]).length>0&&<span>🏃 {((workout as any).cardio||[]).length} cardio</span>}
-                  </div>
-                </div>
               </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,alignSelf:"flex-end"}}>
-                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(124,58,237,0.12)",color:"#A78BFA",border:"1px solid rgba(124,58,237,0.35)",cursor:"pointer"}}>✏️ Edit</span>
-                <div style={{width:28,height:28,borderRadius:"50%",background:"#1F1636",border:"1px solid #2A1F45",display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+              <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
+                <div style={{flex:1,minWidth:0,fontSize:12,color:C.sub,display:"flex",gap:10,flexWrap:"wrap"}}>
+                  {workout.duration&&workout.duration!=='—'&&<span>⏱ {workout.duration}</span>}
+                  {workout.calories>0&&<span>🔥 {workout.calories} cal</span>}
+                  {workout.exercises&&workout.exercises.length>0&&<span>💪 {workout.exercises.length} exercise{workout.exercises.length!==1?'s':''}</span>}
+                  {((workout as any).cardio||[]).length>0&&<span>🏃 {((workout as any).cardio||[]).length} cardio</span>}
+                </div>
+                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
               </div>
             </button>
-            {woOpen && <div style={{background:"#140E24",padding:"12px 16px"}}>
+            {woOpen && <div style={{background:tierInner.body,padding:"12px 16px"}}>
               {workout.notes && workout.notes.trim().length > 0 && (
                 <div style={{background:"#1A1230",border:"1px solid #2A1F45",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
                   <div style={{fontSize:10,fontWeight:800,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:0.6,marginBottom:3}}>📝 Notes</div>
@@ -1185,23 +1196,21 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : nutrition ? (
-          <div style={{borderRadius:16,overflow:"hidden",border:"1px solid #2A1F45",background:"#140E24"}}>
-            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:10,border:"none",borderBottom:nut?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:16,overflow:"hidden",border:`1px solid ${tierInner.border}`,background:tierInner.body}}>
+            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:tierInner.collapsed,padding:"13px 16px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:7,border:"none",borderBottom:nut?`1px solid ${tierInner.border}`:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
-                <div style={{width:40,height:40,borderRadius:11,background:"rgba(74,222,128,0.14)",border:"1px solid rgba(74,222,128,0.32)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🥗</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>Nutrition</div>
-                  <div style={{fontSize:13,color:C.sub,marginTop:2}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
-                </div>
+                <div style={{width:38,height:38,borderRadius:11,background:"rgba(74,222,128,0.14)",border:"1px solid rgba(74,222,128,0.32)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>🥗</div>
+                <div style={{flex:1,minWidth:0,fontWeight:800,fontSize:16,color:C.text}}>Nutrition</div>
               </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,alignSelf:"flex-end"}}>
-                <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(74,222,128,0.12)",color:"#4ADE80",border:"1px solid rgba(74,222,128,0.32)",cursor:"pointer"}}>✏️ Edit</span>
-                <div style={{width:28,height:28,borderRadius:"50%",background:"#1F1636",border:"1px solid #2A1F45",display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+              <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
+                <div style={{flex:1,minWidth:0,fontSize:13,color:C.sub}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
+                <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:"rgba(74,222,128,0.12)",color:"#4ADE80",border:"1px solid rgba(74,222,128,0.32)",cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
               </div>
             </button>
-            <div style={{background:"#140E24",padding:16}}>
+            <div style={{background:tierInner.body,padding:16}}>
               {nutrition.notes && nutrition.notes.trim().length > 0 && (
                 <div style={{background:"#140E24",border:"1px solid #2A1F45",borderRadius:10,padding:"10px 12px",marginBottom:16}}>
                   <div style={{fontSize:10,fontWeight:800,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:0.6,marginBottom:3}}>📝 Notes</div>
@@ -1350,23 +1359,21 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : wellness ? (
-          <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginTop:16}}>
-            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,padding:"14px 20px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:10,border:"none",cursor:"pointer",textAlign:"left"}}>
+          <div style={{borderRadius:18,overflow:"hidden",border:`1px solid ${tierInner.border}`,marginTop:16,background:tierInner.body}}>
+            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:tierInner.collapsed,padding:"13px 18px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:7,border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
-                <span style={{fontSize:24}}>🌿</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>Wellness</div>
-                  <div style={{fontSize:13,color:"rgba(255,255,255,0.85)"}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
-                </div>
+                <span style={{fontSize:22}}>🌿</span>
+                <div style={{flex:1,minWidth:0,fontWeight:900,fontSize:17,color:C.text}}>Wellness</div>
               </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,alignSelf:"flex-end"}}>
-                <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
-                <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
+              <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
+                <div style={{flex:1,minWidth:0,fontSize:13,color:C.sub}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
+                <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>
+                <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
               </div>
             </button>
-            {wellOpen && <div style={{background:"#1A1230",padding:14,display:"flex",flexDirection:"column",gap:8}}>
+            {wellOpen && <div style={{background:tierInner.body,padding:14,display:"flex",flexDirection:"column",gap:8}}>
               {wellness.entries.map((e,i)=>{
                 // Per-activity styling — pulls emoji + accent color from
                 // WELLNESS_STYLES lookup. Falls back gracefully if the activity
