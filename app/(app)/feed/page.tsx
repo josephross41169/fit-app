@@ -1611,16 +1611,14 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                   decoding="async"
                   style={{
                     width:"100%",height:"100%",
-                    // objectFit: cover — but the container's aspectRatio
-                    // is already sized to the FIRST photo's natural
-                    // aspect (clamped to [0.8, 1.91]). For a single-photo
-                    // post or the first photo of a carousel, cover is
-                    // a no-op (container matches photo). For subsequent
-                    // photos in a carousel with different aspects, cover
-                    // crops to fill rather than letterbox — Instagram
-                    // does the same and forces uploaders to crop their
-                    // multi-photo posts to a single aspect at upload.
-                    objectFit:"cover",
+                    // objectFit: contain — show the WHOLE photo at its true
+                    // aspect ratio (no cropping). The container is sized to
+                    // the first photo's real aspect (see onLoad below), so a
+                    // single photo fills the box exactly. In a multi-photo
+                    // carousel, photos with a different aspect letterbox
+                    // against the gradient bg instead of being cropped —
+                    // nothing gets cut off.
+                    objectFit:"contain",
                     cursor:"pointer",
                     objectPosition: `center ${(post as any).mediaPositions?.[currentPhoto] ?? 50}%`,
                   }}
@@ -1640,8 +1638,13 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                     if (postAspect != null) return;
                     const img = e.currentTarget;
                     if (img.naturalWidth && img.naturalHeight) {
+                      // Use the photo's TRUE aspect ratio so the whole image
+                      // shows (no cropping). Older photos that used to get
+                      // cropped to the old [0.8,1.91] bounds now render fully.
+                      // Light safety clamp only for absurd extremes so a
+                      // freak panorama/strip can't break the layout.
                       const raw = img.naturalWidth / img.naturalHeight;
-                      const clamped = Math.max(0.8, Math.min(1.91, raw));
+                      const clamped = Math.max(0.4, Math.min(2.5, raw));
                       setPostAspect(clamped);
                     }
                   }}
@@ -3155,7 +3158,7 @@ export default function FeedPage() {
       <style jsx global>{`
         .feed-layout { display:flex; max-width:1200px; margin:0 auto; padding:0 24px; gap:48px; align-items:flex-start; }
         .feed-sidebar { width:340px; flex-shrink:0; padding-top:20px; padding-bottom:20px; }
-        .feed-main { flex:1; min-width:0; padding-top:20px; }
+        .feed-main { flex:1; min-width:0; max-width:560px; padding-top:20px; }
         .feed-mobile-only { display:none; }
         .feed-desktop-only { display:block; }
         @media (max-width: 767px) {
