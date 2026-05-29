@@ -96,8 +96,8 @@ const C = {
 };
 
 const CATEGORY_COLORS: Record<string,string> = {
-  "Running":"#7C3AED","Strength":"#7C3AED","Yoga":"#52C97A","HIIT":"#EF4444",
-  "Bodybuilding":"#F5A623","Nutrition":"#7C3AED","Wellness":"#22C55E","Calisthenics":"#7C3AED",
+  "Running":"#7C3AED","Strength":"#7C3AED","Yoga":"#7C3AED","HIIT":"#EF4444",
+  "Bodybuilding":"#F5A623","Nutrition":"#7C3AED","Wellness":"#7C3AED","Calisthenics":"#7C3AED",
   "General":"#7C3AED",
 };
 
@@ -3365,7 +3365,7 @@ export default function GroupPage() {
                             <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{e.description.slice(0, 180)}{e.description.length > 180 ? "..." : ""}</div>
                           )}
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✓ Approve</button>
+                            <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✓ Approve</button>
                             <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1.5px solid #2D1F52", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✗ Reject</button>
                           </div>
                         </div>
@@ -3467,9 +3467,9 @@ export default function GroupPage() {
                     const isComplete = goal.status !== "active";
                     return (
                       <div key={goal.id} style={{
-                        background: isComplete ? "rgba(74,222,128,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
+                        background: isComplete ? "rgba(124,58,237,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
                         borderRadius:16, padding:"14px 16px",
-                        border:`1px solid ${isComplete ? "#4ADE80" : "#7C3AED"}`,
+                        border:`1px solid ${isComplete ? "#A78BFA" : "#7C3AED"}`,
                         marginBottom:10,
                       }}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
@@ -3482,7 +3482,7 @@ export default function GroupPage() {
                               )}
                             </div>
                           </div>
-                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#4ADE80":"#A78BFA",flexShrink:0,textAlign:"right" as const}}>
+                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#A78BFA":"#A78BFA",flexShrink:0,textAlign:"right" as const}}>
                             <div>{Math.round(current * 100) / 100}/{target} {meta.unit}</div>
                             {target > 0 && (
                               <div style={{fontSize:10,color:"#6B7280",fontWeight:600,marginTop:1}}>{Math.round(pct)}%</div>
@@ -3492,7 +3492,7 @@ export default function GroupPage() {
                         <div style={{height:6,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
                           <div style={{
                             height:"100%", width:`${pct}%`,
-                            background: isComplete ? "#4ADE80" : "linear-gradient(90deg,#7C3AED,#A78BFA)",
+                            background: isComplete ? "#A78BFA" : "linear-gradient(90deg,#7C3AED,#A78BFA)",
                             borderRadius:99,
                           }}/>
                         </div>
@@ -3670,13 +3670,13 @@ export default function GroupPage() {
                 {/* Success banner */}
                 {warPosted && (
                   <div style={{
-                    background:"rgba(74,222,128,0.12)",border:"1px solid #4ADE80",
+                    background:"rgba(124,58,237,0.12)",border:"1px solid #A78BFA",
                     borderRadius:12,padding:"12px 16px",marginBottom:16,
                     display:"flex",alignItems:"center",gap:10,
                   }}>
                     <span style={{fontSize:20}}>🔍</span>
                     <div>
-                      <div style={{fontWeight:700,fontSize:14,color:"#4ADE80"}}>War posted! Searching for an opponent...</div>
+                      <div style={{fontWeight:700,fontSize:14,color:"#A78BFA"}}>War posted! Searching for an opponent...</div>
                       <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Your challenge is now visible under "Find Opponents" for other groups to accept.</div>
                     </div>
                   </div>
@@ -3739,7 +3739,7 @@ export default function GroupPage() {
                               </span>
                               {chal.goal>0 && (
                                 <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
-                                  background:"rgba(74,222,128,0.12)",color:"#4ADE80"}}>
+                                  background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
                                   🎯 Goal: {chal.goal}{meta.unit}
                                 </span>
                               )}
@@ -3757,7 +3757,7 @@ export default function GroupPage() {
                             {isOwnerOrMod ? (
                               <button onClick={()=>acceptWarChallenge(chal)} style={{
                                 width:"100%",padding:"11px 0",borderRadius:10,border:"none",
-                                background:"linear-gradient(135deg,#4ADE80,#16A34A)",
+                                background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
                                 color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",
                               }}>⚔️ Accept This Challenge</button>
                             ) : (
@@ -3831,7 +3831,7 @@ export default function GroupPage() {
                                   <span style={{fontSize:18}}>{meta.icon}</span>
                                   <span style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{chal.title}</span>
                                   <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,
-                                    background:"rgba(74,222,128,0.15)",color:"#4ADE80"}}>LIVE</span>
+                                    background:"rgba(124,58,237,0.15)",color:"#A78BFA"}}>LIVE</span>
                                 </div>
                                 {/* Detail line — metric + lift type + days
                                     left + (when set) goal target + member
@@ -4133,7 +4133,7 @@ export default function GroupPage() {
                                   </span>
                                   {chal.goal>0 && (
                                     <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
-                                      background:"rgba(74,222,128,0.12)",color:"#4ADE80"}}>
+                                      background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
                                       🎯 Goal: {chal.goal}{meta.unit}
                                     </span>
                                   )}
@@ -4400,7 +4400,7 @@ export default function GroupPage() {
                         <div style={{ fontWeight: 700, fontSize: 12, color: "#E2E8F0", marginBottom: 2 }}>{e.title}</div>
                         <div style={{ fontSize: 10, color: C.darkSub, marginBottom: 7 }}>by {creatorName}</div>
                         <div style={{ display: "flex", gap: 5 }}>
-                          <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Approve</button>
+                          <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Approve</button>
                           <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "1px solid #2D1F52", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
                         </div>
                       </div>
