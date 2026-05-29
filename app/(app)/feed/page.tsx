@@ -1611,6 +1611,15 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                   decoding="async"
                   style={{
                     width:"100%",height:"100%",
+                    // objectFit: cover — but the container's aspectRatio
+                    // is already sized to the FIRST photo's natural
+                    // aspect (clamped to [0.8, 1.91]). For a single-photo
+                    // post or the first photo of a carousel, cover is
+                    // a no-op (container matches photo). For subsequent
+                    // photos in a carousel with different aspects, cover
+                    // crops to fill rather than letterbox — Instagram
+                    // does the same and forces uploaders to crop their
+                    // multi-photo posts to a single aspect at upload.
                     objectFit:"cover",
                     cursor:"pointer",
                     objectPosition: `center ${(post as any).mediaPositions?.[currentPhoto] ?? 50}%`,
@@ -3146,7 +3155,7 @@ export default function FeedPage() {
       <style jsx global>{`
         .feed-layout { display:flex; max-width:1200px; margin:0 auto; padding:0 24px; gap:48px; align-items:flex-start; }
         .feed-sidebar { width:340px; flex-shrink:0; padding-top:20px; padding-bottom:20px; }
-        .feed-main { flex:1; min-width:0; max-width:620px; padding-top:20px; }
+        .feed-main { flex:1; min-width:0; padding-top:20px; }
         .feed-mobile-only { display:none; }
         .feed-desktop-only { display:block; }
         @media (max-width: 767px) {
