@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
+  blue:"#7C3AED", greenLight:"#160F28", greenMid:"#2A1F45",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
   green:"#52C97A",
@@ -279,10 +279,10 @@ function GroupCard({ group, onJoin }: { group: DisplayGroup; onJoin?: (id: strin
 
   return (
     <div
-      style={{ background:C.white, borderRadius:20, border:`2px solid ${C.greenMid}`, marginBottom:24, overflow:"hidden", boxShadow:"0 4px 20px rgba(22,163,74,0.09)", cursor:"pointer", transition:"transform 0.15s, box-shadow 0.15s" }}
+      style={{ background:C.white, borderRadius:20, border:`2px solid ${C.greenMid}`, marginBottom:24, overflow:"hidden", boxShadow:"0 4px 20px rgba(124,58,237,0.09)", cursor:"pointer", transition:"transform 0.15s, box-shadow 0.15s" }}
       onClick={() => router.push(`/groups/${group.id}`)}
-      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 28px rgba(22,163,74,0.18)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 20px rgba(22,163,74,0.09)"; }}
+      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 28px rgba(124,58,237,0.18)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 20px rgba(124,58,237,0.09)"; }}
     >
       {/* Photo banner */}
       <div style={{ width:"100%", aspectRatio:"16/7", overflow:"hidden", position:"relative", background:"#111" }}>
@@ -348,7 +348,7 @@ function GroupCard({ group, onJoin }: { group: DisplayGroup; onJoin?: (id: strin
 
         <button
           onClick={handleJoin}
-          style={{ width:"100%", padding:"11px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#7C3AED,#A78BFA)", color:joined?"#7C3AED":"#fff", fontWeight:800, fontSize:14, cursor:"pointer", transition:"all 0.15s", boxShadow:joined?"none":"0 4px 14px rgba(22,163,74,0.35)", opacity:joining?0.7:1 }}
+          style={{ width:"100%", padding:"11px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#7C3AED,#A78BFA)", color:joined?"#7C3AED":"#fff", fontWeight:800, fontSize:14, cursor:"pointer", transition:"all 0.15s", boxShadow:joined?"none":"0 4px 14px rgba(124,58,237,0.35)", opacity:joining?0.7:1 }}
         >
           {joining ? "Joining..." : joined ? "✓ Joined — View Group" : "Join Group"}
         </button>
@@ -407,7 +407,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {EMOJI_OPTIONS.map(em => (
                 <button key={em} type="button" onClick={() => setForm(f=>({...f,emoji:em}))}
-                  style={{ width:40, height:40, borderRadius:10, border:`2px solid ${form.emoji===em?"#7C3AED":"#2A2D3E"}`, background:form.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  style={{ width:40, height:40, borderRadius:10, border:`2px solid ${form.emoji===em?"#7C3AED":"#2A2D3E"}`, background:form.emoji===em?"rgba(124,58,237,0.2)":"transparent", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                   {em}
                 </button>
               ))}
@@ -534,7 +534,7 @@ function NearbyPlaces() {
         <>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
             {["All",...PLACE_CATEGORIES].map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${activeCategory===cat?"#7C3AED":C.darkBorder}`, background:activeCategory===cat?"rgba(22,163,74,0.2)":"transparent", color:activeCategory===cat?"#4ADE80":C.darkSub, fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
+              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${activeCategory===cat?"#7C3AED":C.darkBorder}`, background:activeCategory===cat?"rgba(124,58,237,0.2)":"transparent", color:activeCategory===cat?"#A78BFA":C.darkSub, fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
                 {cat}
               </button>
             ))}
@@ -551,7 +551,7 @@ function NearbyPlaces() {
                   <div style={{ fontWeight:800, fontSize:12, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{place.name}</div>
                   <div style={{ fontSize:10, color:C.darkSub, marginTop:1 }}>{place.address}</div>
                   <div style={{ display:"flex", gap:8, marginTop:3, alignItems:"center" }}>
-                    <span style={{ background:"rgba(22,163,74,0.2)", color:"#4ADE80", fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99 }}>{place.category}</span>
+                    <span style={{ background:"rgba(124,58,237,0.2)", color:"#A78BFA", fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99 }}>{place.category}</span>
                     <span style={{ fontSize:10, color:C.gold }}>★ {place.rating}</span>
                     <span style={{ fontSize:10, color:C.darkSub }}>{place.distance}</span>
                   </div>
@@ -595,7 +595,7 @@ function ConnectSidebar({
   return (
     <div className="connect-sidebar" style={{ width:320, flexShrink:0, paddingTop:20, paddingBottom:20 }}>
       {/* Create a group CTA */}
-      <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+      <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
         <div style={{ fontSize:32, marginBottom:8 }}>{effectiveTab==="local"?"📍":"🌍"}</div>
         <div style={{ fontWeight:900, fontSize:16, color:"#fff", marginBottom:6 }}>
           {effectiveTab==="local" ? "Start a Local Group" : "Create an Online Group"}
@@ -877,7 +877,7 @@ function ConnectPageInner() {
         <div style={{ flex:1, minWidth:0 }}>
           {/* Banner */}
           {tab !== "joined" && (
-            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
               <div style={{ fontSize:40 }}>{tab==="local"?"📍":"🌍"}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>
@@ -898,7 +898,7 @@ function ConnectPageInner() {
           )}
 
           {tab === "joined" && (
-            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:16, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(22,163,74,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:16, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
               <div style={{ fontSize:40 }}>✅</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>My Groups</div>
