@@ -9,7 +9,7 @@ import FollowButton from "@/components/FollowButton";
 import { ImagePresets } from "@/lib/imageUrls";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#1A2A1A", greenMid:"#2A3A2A",
+  blue:"#7C3AED", greenLight:"#160F28", greenMid:"#2A1F45",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
   dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
@@ -522,7 +522,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
         return (
           <div
             onClick={toggleComments}
-            style={{ borderTop:`1px solid ${C.greenLight}`, padding:"10px 18px", background:"#0F1A0F", cursor:"pointer" }}>
+            style={{ borderTop:`1px solid ${C.greenLight}`, padding:"10px 18px", background:"#160F28", cursor:"pointer" }}>
             <div style={{ fontSize:13, color:C.text, lineHeight:1.4, wordBreak:"break-word" }}>
               <span style={{ fontWeight:800 }}>{cname}</span>
               <span style={{ color:C.sub }}> · </span>
@@ -541,7 +541,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
           without navigating away to the post detail page. Mirrors the
           feed's comment composer pattern. */}
       {showComments && (
-        <div style={{ borderTop:`1px solid ${C.greenLight}`, padding:"10px 18px 14px", background:"#0F1A0F" }}>
+        <div style={{ borderTop:`1px solid ${C.greenLight}`, padding:"10px 18px 14px", background:"#160F28" }}>
           {comments.length === 0 ? (
             <div style={{ fontSize:12, color:C.sub, padding:"6px 0 10px" }}>No comments yet — be the first.</div>
           ) : (
@@ -570,7 +570,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             </div>
           )}
           {/* Composer */}
-          <div style={{ display:"flex", gap:8, alignItems:"center", background:"#1A2A1A", borderRadius:999, padding:"6px 6px 6px 14px", border:`1.5px solid ${C.greenMid}` }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center", background:"#160F28", borderRadius:999, padding:"6px 6px 6px 14px", border:`1.5px solid ${C.greenMid}` }}>
             <input
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
@@ -796,7 +796,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
             Old inline modal removed in favor of the full create-event flow. */}
         <Link href="/events/new" style={{ textDecoration: "none", display: "block" }}>
           <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #7C3AED`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#1A2A1A"; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#160F28"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background=C.darkCard; }}
           >
             <div style={{ fontSize:22,marginBottom:5 }}>+</div>
