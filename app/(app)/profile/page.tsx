@@ -172,7 +172,28 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
 }
 
 type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[];repsArr?:string[]};
-type CardioEntry = {type:string;duration:string;distance:string};
+type CardioEntry = {type:string;duration:string;distance:string;run_type?:string};
+
+// Maps a run subtype (stored on the cardio entry as `run_type` by the post
+// page) to a display label. Non-running cardio has no run_type and falls
+// through to its plain type label. Legacy running entries with no run_type
+// still read as plain "running".
+const RUN_TYPE_LABELS: Record<string,string> = {
+  outdoor:  "outdoor run",
+  treadmill:"treadmill run",
+  trail:    "trail run",
+  hiit:     "HIIT run",
+};
+// Returns the label to group/display a cardio entry under. For running
+// entries with a known run_type we use the subtype label (so the summary
+// reads "2.45 mi trail run"); everything else uses the lowercased type.
+function cardioLabel(c: {type?:string; run_type?:string}): string {
+  const type = (c.type || 'Cardio');
+  if (type.toLowerCase() === 'running' && c.run_type && RUN_TYPE_LABELS[c.run_type]) {
+    return RUN_TYPE_LABELS[c.run_type];
+  }
+  return type.toLowerCase();
+}
 type Meal        = {key:string;emoji:string;name:string;cal:number};
 // ── Wellness display: per-activity emoji + accent color ──────────────────
 // Maps wellness_type strings (Title Case) to a visual treatment for the
@@ -802,15 +823,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             const parts: string[] = [];
             const cardioByType: Record<string,{dist:number;dur:number}> = {};
             cardioList.forEach((c:any)=>{
-              const t = (c.type||'Cardio') as string;
+              const t = cardioLabel(c);
               if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
               cardioByType[t].dist += parseFloat(String(c.distance))||0;
               cardioByType[t].dur  += parseFloat(String(c.duration))||0;
             });
-            Object.entries(cardioByType).forEach(([type,{dist,dur}])=>{
-              if(dist>0) parts.push(`${dist.toFixed(2)} mi ${type.toLowerCase()}`);
-              else if(dur>0) parts.push(`${dur} min ${type.toLowerCase()}`);
-              else parts.push(type);
+            Object.entries(cardioByType).forEach(([label,{dist,dur}])=>{
+              if(dist>0) parts.push(`${dist.toFixed(2)} mi ${label}`);
+              else if(dur>0) parts.push(`${dur} min ${label}`);
+              else parts.push(label);
             });
             if(exList.length>0) parts.push(workout.type||'Workout');
             const summary = parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
@@ -1036,15 +1057,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     const parts: string[] = [];
                     const cardioByType: Record<string,{dist:number;dur:number}> = {};
                     cardioList.forEach((c:any)=>{
-                      const t = (c.type||'Cardio') as string;
+                      const t = cardioLabel(c);
                       if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
                       cardioByType[t].dist += parseFloat(String(c.distance))||0;
                       cardioByType[t].dur  += parseFloat(String(c.duration))||0;
                     });
-                    Object.entries(cardioByType).forEach(([type,{dist,dur}])=>{
-                      if(dist>0) parts.push(`${dist.toFixed(2)} mi ${type.toLowerCase()}`);
-                      else if(dur>0) parts.push(`${dur} min ${type.toLowerCase()}`);
-                      else parts.push(type);
+                    Object.entries(cardioByType).forEach(([label,{dist,dur}])=>{
+                      if(dist>0) parts.push(`${dist.toFixed(2)} mi ${label}`);
+                      else if(dur>0) parts.push(`${dur} min ${label}`);
+                      else parts.push(label);
                     });
                     if(exList.length>0) parts.push(workout.type||'Workout');
                     return parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
@@ -1124,7 +1145,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           </div>
                           {carList.map((c: any, i: number)=>(
                             <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                              <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
+                              <span style={{fontSize:14,fontWeight:600,color:C.text}}>{
+                                (String(c.type||'').toLowerCase()==='running' && c.run_type && RUN_TYPE_LABELS[c.run_type])
+                                  ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
+                                  : c.type
+                              }</span>
                               <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
                               <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
                             </div>
@@ -1904,6 +1929,7 @@ export default function ProfilePage() {
               type: c.type || 'Cardio',
               duration: c.duration || '—',
               distance: c.distance || '',
+              run_type: c.run_type || undefined,
             }))
           : [],
       }));
