@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { getEventCategory } from "@/lib/eventCategories";
 import FollowButton from "@/components/FollowButton";
 import { ImagePresets } from "@/lib/imageUrls";
+import { geocode, distanceMiles, type Coords } from "@/lib/geocode";
 
 const C = {
   blue:"#7C3AED", greenLight:"#160F28", greenMid:"#2A1F45",
@@ -118,6 +119,9 @@ interface DbEvent {
   city: string | null;
   price: string;
   going_count: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  _distanceMi?: number | null; // computed client-side for sorting/labeling
 }
 
 interface LocalPost extends Post {
@@ -342,7 +346,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             router.push onClick which navigates fine but skips the
             prefetch step. */}
         <Link href={`/profile/${displayHandle}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
-          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
+          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
             {avatarVideoUrl
               ? <video src={avatarVideoUrl} poster={avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
               : avatarUrl
@@ -610,6 +614,7 @@ interface DiscoverEvent {
   city: string | null;
   price: string;
   going_count: number;
+  _distanceMi?: number | null;
 }
 
 function EventCard({ event }: { event: DiscoverEvent }) {
@@ -638,10 +643,15 @@ function EventCard({ event }: { event: DiscoverEvent }) {
             <span style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{event.title}</span>
           </div>
           {event.location_name && (
-            <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>📍 {event.location_name}</div>
+            <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>
+              📍 {event.location_name}
+              {event._distanceMi != null && (
+                <span style={{ color:"#A78BFA",fontWeight:700 }}> · {event._distanceMi < 1 ? "<1" : Math.round(event._distanceMi)} mi away</span>
+              )}
+            </div>
           )}
           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-            <span style={{ background:"rgba(124,58,237,0.2)",color:"#4ADE80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
+            <span style={{ background:"rgba(124,58,237,0.2)",color:"#A78BFA",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
             <span style={{ color:event.price === "Free" ? "#22C55E" : C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
             <span style={{ color:C.darkSub,fontSize:10 }}>· {timeStr}</span>
           </div>
@@ -684,7 +694,7 @@ function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0
     <Link href={`/profile/${person.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
         <div style={{ width:14,fontSize:11,fontWeight:900,color:C.darkSub,flexShrink:0,textAlign:"center" }}>#{rank}</div>
-        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
           {person.avatar.slice(0,2)}
         </div>
         <div style={{ flex:1,minWidth:0 }}>
@@ -693,7 +703,7 @@ function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0
           <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
         </div>
         {/* preventDefault stops the Link navigation when the follow button is tapped */}
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#A78BFA)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
           {following ? "Following" : "+ Follow"}
         </button>
       </div>
@@ -707,7 +717,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
   return (
     <Link href={`/profile/${account.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
-        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
           {account.avatar}
         </div>
         <div style={{ flex:1,minWidth:0 }}>
@@ -718,7 +728,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
             <span style={{ color:"#7C3AED",fontWeight:700 }}> {account.mutual} mutual</span>
           </div>
         </div>
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#15803D)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#A78BFA)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
           {following ? "Following" : "+ Follow"}
         </button>
       </div>
@@ -780,14 +790,14 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>📅 Local Events This Week</div>
               <div style={{ fontSize:11,color:C.darkSub }}>Las Vegas · Mar 27·30</div>
             </div>
-            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#4ADE80",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
+            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#A78BFA",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
           </div>
         </div>
 
         {eventsToShow.map((event: any) => <EventCard key={event.id} event={event} />)}
         {allEvents.length > 6 && (
           <button onClick={() => setShowAllEvents(!showAllEvents)}
-            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#4ADE80",marginBottom:8,textAlign:"center" }}>
+            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#A78BFA",marginBottom:8,textAlign:"center" }}>
             {showAllEvents ? "Show less ↑" : `See all ${allEvents.length} events →`}
           </button>
         )}
@@ -898,28 +908,78 @@ export default function DiscoverPage() {
   // Real events from DB
   const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  // User's coordinates (geocoded from their city) — anchor for radius search.
+  const [userCoords, setUserCoords] = useState<Coords | null>(null);
 
-  // Re-fetch events whenever the user's city changes so the sidebar stays
-  // in sync with whatever city they've picked above.
+  // Radius for "events near me," in miles. 50mi covers a metro + nearby
+  // suburbs (e.g. Henderson ↔ Las Vegas) without pulling the whole state.
+  const EVENT_RADIUS_MI = 50;
+
+  // Resolve the user's city → coordinates whenever the city changes. Null
+  // result means we couldn't geocode; the event loader then falls back to
+  // city-name matching so events still show.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const coords = await geocode(userCity);
+      if (!cancelled) setUserCoords(coords);
+    })();
+    return () => { cancelled = true; };
+  }, [userCity]);
+
+  // Re-fetch events whenever the user's city OR resolved coords change so the
+  // sidebar stays in sync with whatever city they've picked above.
   useEffect(() => {
     async function loadEvents() {
       const now = new Date().toISOString();
-      let query = supabase
+      const cityKey = userCity ? userCity.split(',')[0].trim() : '';
+
+      // Base query: upcoming, public, approved. We pull a wider net (200) and
+      // now also select coordinates so we can distance-filter client-side.
+      const { data } = await supabase
         .from('events_with_counts')
-        .select('id, title, category, subcategory, event_date, date_tbd, location_name, city, price, going_count, approved')
+        .select('id, title, category, subcategory, event_date, date_tbd, location_name, city, price, going_count, approved, latitude, longitude')
         .eq('is_public', true)
         .or('approved.is.null,approved.eq.true')
         .gte('event_date', now)
         .order('event_date', { ascending: true })
-        .limit(50);
-      // City match: pull events whose city contains the user's city string.
-      // ilike is case-insensitive substring, so "Las Vegas" matches "Las Vegas, NV"
-      if (userCity) query = query.ilike('city', `%${userCity.split(',')[0].trim()}%`);
-      const { data } = await query;
-      setDbEvents(data || []);
+        .limit(200);
+
+      const all: DbEvent[] = (data || []) as any[];
+
+      // Partition by whether we can measure distance.
+      //  - If user coords known AND event has coords → keep if within radius,
+      //    tag with distance for sorting/labeling.
+      //  - If event has NO coords (old/un-geocoded) → fall back to city-name
+      //    match so it doesn't silently disappear.
+      //  - If we couldn't geocode the user at all → city-name match for all.
+      const result: DbEvent[] = [];
+      for (const ev of all) {
+        const hasEvCoords = ev.latitude != null && ev.longitude != null;
+        if (userCoords && hasEvCoords) {
+          const d = distanceMiles(userCoords, { lat: ev.latitude as number, lng: ev.longitude as number });
+          if (d <= EVENT_RADIUS_MI) result.push({ ...ev, _distanceMi: d });
+        } else {
+          // Fallback: city substring match (case-insensitive).
+          const cityMatch = cityKey && (ev.city || '').toLowerCase().includes(cityKey.toLowerCase());
+          if (cityMatch || !cityKey) result.push({ ...ev, _distanceMi: null });
+        }
+      }
+
+      // Sort: events with a known distance first (closest → farthest), then
+      // the city-matched ones by soonest date.
+      result.sort((a, b) => {
+        const da = a._distanceMi, db = b._distanceMi;
+        if (da != null && db != null) return da - db;
+        if (da != null) return -1;
+        if (db != null) return 1;
+        return new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
+      });
+
+      setDbEvents(result.slice(0, 50));
     }
     loadEvents();
-  }, [userCity]);
+  }, [userCity, userCoords]);
 
   useEffect(() => {
     async function loadLocalPosts() {
@@ -939,13 +999,18 @@ export default function DiscoverPage() {
       if (user) {
         const { data: profile } = await supabase
           .from('users')
-          .select('city')
+          .select('city, latitude, longitude')
           .eq('id', user.id)
           .single();
         if ((profile as any)?.city) {
           city = (profile as any).city;
           setUserCity((profile as any).city);
         }
+        // Prefer stored coordinates if present — more accurate and avoids a
+        // re-geocode. The city→coords effect still runs as a fallback for
+        // users who haven't re-saved their profile since coords were added.
+        const pLat = (profile as any)?.latitude, pLng = (profile as any)?.longitude;
+        if (pLat != null && pLng != null) setUserCoords({ lat: pLat, lng: pLng });
       }
       const cityKey = city.split(',')[0].trim();
 
@@ -1090,7 +1155,7 @@ export default function DiscoverPage() {
                         style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`,transition:"background 0.1s" }}
                         onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
                         onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
-                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
+                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
                           {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                         </div>
                         <div style={{ flex:1,minWidth:0 }}>
