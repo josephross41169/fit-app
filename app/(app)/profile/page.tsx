@@ -995,10 +995,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           </div>
         ) : workout ? (
           <div style={{borderRadius:16,overflow:"hidden",border:"1px solid #2A1F45",marginBottom:20,background:"#140E24"}}>
-            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",borderBottom:woOpen?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:10,border:"none",borderBottom:woOpen?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
                 <div style={{width:40,height:40,borderRadius:11,background:"rgba(124,58,237,0.16)",border:"1px solid rgba(124,58,237,0.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>💪</div>
-                <div>
+                <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:800,fontSize:16,color:C.text}}>{(()=>{
                     const cardioList = ((workout as any).cardio || []) as any[];
                     const exList = workout.exercises || [];
@@ -1026,7 +1026,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   </div>
                 </div>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,alignSelf:"flex-end"}}>
                 <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(124,58,237,0.12)",color:"#A78BFA",border:"1px solid rgba(124,58,237,0.35)",cursor:"pointer"}}>✏️ Edit</span>
                 <div style={{width:28,height:28,borderRadius:"50%",background:"#1F1636",border:"1px solid #2A1F45",display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
@@ -1186,15 +1186,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           </div>
         ) : nutrition ? (
           <div style={{borderRadius:16,overflow:"hidden",border:"1px solid #2A1F45",background:"#140E24"}}>
-            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",borderBottom:nut?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:"#160F28",padding:"15px 18px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:10,border:"none",borderBottom:nut?"1px solid #2A1F45":"none",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
                 <div style={{width:40,height:40,borderRadius:11,background:"rgba(74,222,128,0.14)",border:"1px solid rgba(74,222,128,0.32)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🥗</div>
-                <div>
+                <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:800,fontSize:16,color:C.text}}>Nutrition</div>
                   <div style={{fontSize:13,color:C.sub,marginTop:2}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
                 </div>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,alignSelf:"flex-end"}}>
                 <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(74,222,128,0.12)",color:"#4ADE80",border:"1px solid rgba(74,222,128,0.32)",cursor:"pointer"}}>✏️ Edit</span>
                 <div style={{width:28,height:28,borderRadius:"50%",background:"#1F1636",border:"1px solid #2A1F45",display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
@@ -1351,15 +1351,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           </div>
         ) : wellness ? (
           <div style={{borderRadius:18,overflow:"hidden",border:`2px solid ${C.purpleMid}`,marginTop:16}}>
-            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,padding:"14px 20px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:10,border:"none",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
                 <span style={{fontSize:24}}>🌿</span>
-                <div>
+                <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>Wellness</div>
                   <div style={{fontSize:13,color:"rgba(255,255,255,0.85)"}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
                 </div>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,alignSelf:"flex-end"}}>
                 <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:20,background:"rgba(255,255,255,0.2)",color:"#fff",border:"1.5px solid rgba(255,255,255,0.4)",cursor:"pointer"}}>✏️ Edit</span>
                 <div style={{width:30,height:30,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>
