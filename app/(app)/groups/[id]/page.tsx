@@ -90,15 +90,15 @@ function UserAvatar({
 }
 
 const C = {
-  blue:"#16A34A", blueLight:"#1A2A1A", blueMid:"#2A3A2A",
+  blue:"#7C3AED", blueLight:"#160F28", blueMid:"#2A1F45",
   gold:"#F5A623", text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
   dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
 };
 
 const CATEGORY_COLORS: Record<string,string> = {
-  "Running":"#16A34A","Strength":"#16A34A","Yoga":"#52C97A","HIIT":"#EF4444",
+  "Running":"#7C3AED","Strength":"#7C3AED","Yoga":"#52C97A","HIIT":"#EF4444",
   "Bodybuilding":"#F5A623","Nutrition":"#7C3AED","Wellness":"#22C55E","Calisthenics":"#7C3AED",
-  "General":"#16A34A",
+  "General":"#7C3AED",
 };
 
 // ── Full group data (mock fallback) ────────────────────────────────────────────
@@ -357,10 +357,10 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
 }
 
 const DIFFICULTY_COLORS: Record<string,string> = {
-  "Beginner":"#7C3AED", "Medium":"#16A34A", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#16A34A",
+  "Beginner":"#7C3AED", "Medium":"#A78BFA", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#7C3AED",
 };
 const NOTE_CATEGORY_COLORS: Record<string,string> = {
-  "Workout":"#16A34A", "Recipe":"#7C3AED", "Mindset":"#16A34A", "General":"#F5A623", "Tip":"#7C3AED",
+  "Workout":"#7C3AED", "Recipe":"#7C3AED", "Mindset":"#A78BFA", "General":"#F5A623", "Tip":"#7C3AED",
 };
 const EMOJI_OPTIONS = ["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","📅","🎯"];
 
@@ -471,7 +471,7 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                   height: "100%",
                   width: `${progressPct}%`,
                   background: progressPct >= 100
-                    ? "linear-gradient(90deg, #7C3AED, #34D399)"
+                    ? "linear-gradient(90deg, #7C3AED, #A78BFA)"
                     : progressPct >= 60
                     ? "linear-gradient(90deg, #7C3AED, #9D5CF0)"
                     : "linear-gradient(90deg, #EF4444, #F87171)",
@@ -2306,7 +2306,7 @@ export default function GroupPage() {
                 <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
                   {["🏆","🔥","⚡","🌱","💪","🏅","🤸","🎯","🌅","💀","🥇","🚀"].map(em => (
                     <button key={em} type="button" onClick={() => setChallengeForm(p=>({...p,emoji:em}))}
-                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${challengeForm.emoji===em?"#16A34A":"#2A2D3E"}`, background:challengeForm.emoji===em?"rgba(22,163,74,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
+                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${challengeForm.emoji===em?"#7C3AED":"#2A2D3E"}`, background:challengeForm.emoji===em?"rgba(124,58,237,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
                       {em}
                     </button>
                   ))}
@@ -2395,7 +2395,7 @@ export default function GroupPage() {
               </div>
               <div style={{ display:"flex", gap:10 }}>
                 <button type="button" onClick={() => setShowChallengeModal(false)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
-                <button type="submit" disabled={challengeSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:challengeSubmitting?0.7:1 }}>
+                <button type="submit" disabled={challengeSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:challengeSubmitting?0.7:1 }}>
                   {challengeSubmitting ? "Creating..." : "Create Challenge"}
                 </button>
               </div>
@@ -2427,7 +2427,7 @@ export default function GroupPage() {
             )}
             <div style={{ display:"flex", gap:10 }}>
               <button onClick={() => setLogProgressChallenge(null)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
-              <button onClick={submitLogProgress} disabled={!logValue || logSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#16A34A,#22C55E)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!logValue||logSubmitting)?0.5:1 }}>
+              <button onClick={submitLogProgress} disabled={!logValue || logSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!logValue||logSubmitting)?0.5:1 }}>
                 {logSubmitting ? "Saving..." : "Log Progress 💪"}
               </button>
             </div>
@@ -2503,10 +2503,10 @@ export default function GroupPage() {
 
           {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
-            <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(22,163,74,0.12)":"linear-gradient(135deg,#16A34A,#22C55E)", color:joined?"#16A34A":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(22,163,74,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
+            <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#7C3AED,#A78BFA)", color:joined?"#A78BFA":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(124,58,237,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
               {joining ? "Working..." : joined ? (isOwnerDB ? "✓ Owner" : "✓ Joined") : "Join Group"}
             </button>
-            <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(22,163,74,0.1)` : C.white, border:`2px solid ${shareCopied ? "#16A34A" : C.blueMid}`, color:shareCopied ? "#16A34A" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
+            <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(124,58,237,0.1)` : C.white, border:`2px solid ${shareCopied ? "#7C3AED" : C.blueMid}`, color:shareCopied ? "#A78BFA" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
             </button>
             <div style={{ position:"relative" }}>
@@ -2698,7 +2698,7 @@ export default function GroupPage() {
           {/* Sub-tabs — only shown for sections that have multiple kids.
               Board has none (just renders the leaderboard directly). */}
           {section === "social" && (
-            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.greenLight, borderRadius:12, padding:4, border:`1px solid ${C.greenMid}`, overflowX:"auto" }}>
+            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}`, overflowX:"auto" }}>
               {([
                 { key:"posts",   label:"📸 Posts"   },
                 { key:"notes",   label:"💬 Notes"   },
@@ -2716,7 +2716,7 @@ export default function GroupPage() {
           )}
 
           {section === "challenges" && (
-            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.greenLight, borderRadius:12, padding:4, border:`1px solid ${C.greenMid}`, overflowX:"auto" }}>
+            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}`, overflowX:"auto" }}>
               {([
                 { key:"challenges", label:"⚡ Challenges" },
                 { key:"war",        label:"⚔️ Wars"      },
