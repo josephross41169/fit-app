@@ -1202,11 +1202,23 @@ export default function PostPage() {
         ]));
         const insertWorkoutRow: any = { ...base, log_type: 'workout', ...workoutPayload };
         if (taggedIds.length > 0) insertWorkoutRow.tagged_user_ids = taggedIds;
-        let res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
-        // Graceful fallback if the migration hasn't been run yet
-        if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
-          delete insertWorkoutRow.tagged_user_ids;
+        let res;
+        if (todayLogId) {
+          // Resuming today's workout — UPDATE the existing row instead of
+          // creating a second log for the same day. Adds the new exercises/
+          // cardio onto the workout the user already posted.
+          res = await (supabase as any).from('activity_logs').update(insertWorkoutRow).eq('id', todayLogId).select('id').single();
+          if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
+            delete insertWorkoutRow.tagged_user_ids;
+            res = await (supabase as any).from('activity_logs').update(insertWorkoutRow).eq('id', todayLogId).select('id').single();
+          }
+        } else {
           res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
+          // Graceful fallback if the migration hasn't been run yet
+          if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
+            delete insertWorkoutRow.tagged_user_ids;
+            res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
+          }
         }
         error = res.error;
         if (!error && res.data?.id) savedLogIds.push(res.data.id);
@@ -2398,10 +2410,53 @@ export default function PostPage() {
               {/* -- Fitbit Connect -- */}
               <FitbitConnect />
 
-              {/* -- Resume banner removed -- users can now log multiple
-                  workouts per day. Each save inserts a new row. To edit a
-                  previously logged workout, edit it from the activity feed
-                  (TODO: add edit affordance there). */}
+              {/* -- Resume / continue today's workout --
+                  If the user already logged a workout today, offer to add
+                  onto it instead of starting a fresh one. Tapping pre-loads
+                  the existing workout's data into the form; saving then
+                  UPDATES that log rather than creating a second one. Hidden
+                  once resumed (todayLogId set) or if none exists today. */}
+              {todayLog && !todayLogId && (
+                <div style={{
+                  background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(167,139,250,0.08))",
+                  borderRadius: 14, padding: "12px 14px",
+                  border: "1.5px solid rgba(124,58,237,0.4)",
+                  display: "flex", alignItems: "center", gap: 12,
+                }}>
+                  <div style={{ fontSize: 22 }}>🔁</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>Continue today's workout?</div>
+                    <div style={{ fontSize: 11, color: "#A78BFA", fontWeight: 600, marginTop: 1 }}>
+                      You already logged {todayLog.type} today — add onto it instead of starting new.
+                    </div>
+                  </div>
+                  <button onClick={resumeTodayWorkout}
+                    style={{ flexShrink: 0, padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#7C3AED,#A78BFA)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    Continue
+                  </button>
+                </div>
+              )}
+
+              {/* Resumed indicator — confirms the form is now editing the
+                  existing log, and lets the user bail back to a fresh entry. */}
+              {todayLogId && (
+                <div style={{
+                  background: "rgba(124,58,237,0.12)",
+                  borderRadius: 14, padding: "10px 14px",
+                  border: "1.5px solid rgba(124,58,237,0.4)",
+                  display: "flex", alignItems: "center", gap: 10,
+                }}>
+                  <div style={{ fontSize: 18 }}>✏️</div>
+                  <div style={{ flex: 1, fontSize: 12, color: "#A78BFA", fontWeight: 700 }}>
+                    Adding to today's workout — saving will update your existing post.
+                  </div>
+                  <button onClick={() => setTodayLogId(null)}
+                    style={{ background: "none", border: "none", color: "#9CA3AF", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}
+                    title="Start a fresh workout instead">
+                    ×
+                  </button>
+                </div>
+              )}
 
               {/* AI Plan import banner — shown after user picks a day from
                   their saved plan. Reminds them what plan they're logging
