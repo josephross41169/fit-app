@@ -151,7 +151,7 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
           image at its natural aspect ratio. See same fix on own
           profile page; .thumb() rendered eggs/meals/photos in a weird
           portrait-cropped strip when expanded full-screen. */}
-      <img src={ImagePresets.full(src)} loading="lazy" decoding="async" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <img src={ImagePresets.full(src)} loading="eager" decoding="async" onClick={(e) => e.stopPropagation()} style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
