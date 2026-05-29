@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
+import { geocode } from "@/lib/geocode";
 import { EVENT_CATEGORIES, getEventCategory } from "@/lib/eventCategories";
 
 export default function CreateEventPage() {
@@ -138,6 +139,21 @@ export default function CreateEventPage() {
 
       const maxNum = maxAttendees.trim() ? parseInt(maxAttendees, 10) : null;
 
+      // Resolve coordinates for radius search on the Discover page. Try the
+      // most specific string available (full address → venue + city → city).
+      // Non-fatal: if geocoding returns nothing the event still saves with
+      // null coords and falls back to city-name matching.
+      let evLat: number | null = null;
+      let evLng: number | null = null;
+      try {
+        const geoQuery =
+          address.trim() ||
+          [locationName.trim(), city.trim()].filter(Boolean).join(", ") ||
+          city.trim();
+        const coords = await geocode(geoQuery);
+        if (coords) { evLat = coords.lat; evLng = coords.lng; }
+      } catch { /* leave coords null */ }
+
       // Approval logic:
       //   - No group_id  → public event, no approval needed → approved=true
       //   - Group owner   → auto-approve their own submission
@@ -159,6 +175,8 @@ export default function CreateEventPage() {
           location_name: locationName.trim() || null,
           address: address.trim() || null,
           city: city.trim() || null,
+          latitude: evLat,
+          longitude: evLng,
           price: price.trim() || "Free",
           max_attendees: maxNum && maxNum > 0 ? maxNum : null,
           image_url: imageUrl,
