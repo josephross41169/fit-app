@@ -16,6 +16,51 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key-for-build';
 const admin = createClient(supabaseUrl, serviceKey);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CORS — the native iOS/Android app calls this API cross-origin from
+// `capacitor://localhost`. The browser/WebView blocks the response unless we
+// echo back Access-Control-Allow-Origin. We previously relied on root
+// middleware.ts for this, but middleware does not reliably apply to these
+// API responses in production (the native app reported "NETWORK FAIL /
+// Load failed"), so we set the headers directly on every response here and
+// answer the OPTIONS preflight in-route. This is self-contained and does not
+// depend on middleware running.
+// ─────────────────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = new Set([
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',
+  'https://localhost',
+  'https://liveleeapp.com',
+  'https://www.liveleeapp.com',
+]);
+
+function corsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get('origin') || '';
+  // Echo the caller's origin if allow-listed; fall back to the native shell
+  // origin so the app is never blocked even if the Origin header is unusual.
+  const allow = ALLOWED_ORIGINS.has(origin) ? origin : 'capacitor://localhost';
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Vary': 'Origin',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Attach CORS headers onto a response produced by the handlers below.
+function withCors(res: Response, req: NextRequest): Response {
+  const headers = corsHeaders(req);
+  for (const [k, v] of Object.entries(headers)) res.headers.set(k, v);
+  return res;
+}
+
+// Preflight — browsers/WebViews send OPTIONS before a cross-origin request.
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+}
+
 /** Haversine distance in miles between two lat/lng points. Used by location
  *  search ranking and the find-or-create dedup guard. Approximation is
  *  accurate within a few feet over ~10mi distances which is plenty for our
@@ -71,7 +116,7 @@ function hasFeedPhoto(post: any) {
   return false;
 }
 
-export async function GET(req: NextRequest) {
+async function handleGET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
@@ -369,7 +414,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const { action, payload } = await req.json();
 
@@ -3441,4 +3486,14 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
+}
+
+// CORS wrappers — run the handler, then attach CORS headers to whatever
+// response it produced (success or error) so the native app is never blocked.
+export async function GET(req: NextRequest) {
+  return withCors(await handleGET(req), req);
+}
+
+export async function POST(req: NextRequest) {
+  return withCors(await handlePOST(req), req);
 }
