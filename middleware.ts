@@ -1,65 +1,28 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // middleware.ts (root)
 // ─────────────────────────────────────────────────────────────────────────────
-// CORS for /api/*. The Capacitor WebView serves files from
-// `capacitor://localhost`, so when the native app calls
-// `https://liveleeapp.com/api/db` it needs the live API to allow that origin.
+// CORS for /api/* is now handled directly inside the route handlers
+// (see app/api/db/route.ts, which sets Access-Control-Allow-Origin and
+// answers the OPTIONS preflight itself). This middleware previously ALSO set
+// CORS headers, which meant a single response could carry the
+// Access-Control-Allow-Origin header twice — an invalid CORS response that
+// the Capacitor WebView rejects as "Load failed". To guarantee exactly one
+// CORS authority, this middleware now passes every request straight through
+// and sets no headers. The route is the single source of truth.
 //
-// Browsers send a CORS preflight (OPTIONS) before any POST with a JSON body,
-// which is every meaningful call to /api/db. We respond to OPTIONS here so we
-// don't have to add a handler to every route file.
+// The file is kept (rather than deleted) because the mobile build script
+// (scripts/build-mobile.mjs) stashes and restores it during the static
+// export, and expects it to exist.
 //
 // This middleware ONLY runs on the Vercel web build. The mobile build uses
-// `output: 'export'`, which doesn't run middleware (the build script
-// temporarily moves this file aside — see `scripts/build-mobile.mjs`).
+// `output: 'export'`, which doesn't run middleware at all.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const ALLOWED_ORIGINS = new Set([
-  'capacitor://localhost',
-  'ionic://localhost',
-  'http://localhost',
-  'https://localhost',
-  'https://liveleeapp.com',
-  'https://www.liveleeapp.com',
-])
-
-function pickOrigin(req: NextRequest): string | null {
-  const origin = req.headers.get('origin')
-  if (!origin) return null
-  return ALLOWED_ORIGINS.has(origin) ? origin : null
-}
-
-export function middleware(req: NextRequest) {
-  const origin = pickOrigin(req)
-
-  // Preflight — respond directly with CORS headers.
-  if (req.method === 'OPTIONS') {
-    const res = new NextResponse(null, { status: 204 })
-    if (origin) {
-      res.headers.set('Access-Control-Allow-Origin', origin)
-      res.headers.set('Vary', 'Origin')
-      res.headers.set(
-        'Access-Control-Allow-Methods',
-        'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-      )
-      res.headers.set(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Authorization, X-Requested-With'
-      )
-      res.headers.set('Access-Control-Max-Age', '86400')
-    }
-    return res
-  }
-
-  // Actual request — pass through, attach CORS headers if origin is allowed.
-  const res = NextResponse.next()
-  if (origin) {
-    res.headers.set('Access-Control-Allow-Origin', origin)
-    res.headers.set('Vary', 'Origin')
-  }
-  return res
+export function middleware(_req: NextRequest) {
+  // Pass-through. CORS is owned by the individual API route handlers.
+  return NextResponse.next()
 }
 
 export const config = {
