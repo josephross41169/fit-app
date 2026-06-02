@@ -31,6 +31,22 @@ const C = {
   purple:"#7C3AED", purpleLt:"#A78BFA", purpleMid:"#2D1F52",
 };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// Format a workout duration for display. Stored durations may be decimal
+// minutes (17.3667 → "17:22"); whole minutes stay "45 min". Already-formatted
+// strings pass through.
+function fmtDur(val: any): string {
+  if (val == null || val === '') return '';
+  if (typeof val === 'string') {
+    if (val.includes(':') || /[a-z]/i.test(val)) return val;
+  }
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  if (isNaN(num) || num <= 0) return '';
+  const min = Math.floor(num);
+  const sec = Math.round((num - min) * 60);
+  if (sec === 60) return `${min + 1} min`;
+  if (sec === 0) return `${min} min`;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
 
 // ── Wellness style lookup ─────────────────────────────────────────────────────
 // 26 activities → emoji + accent color. Mirrors the constant in /profile/page.tsx
@@ -222,7 +238,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:900,fontSize:19,color:C.text}}>{day.label}</div>
-          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${workout.duration}  ·  🔥 ${workout.calories} cal`:"😴 Rest day"}</div>
+          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${fmtDur(workout.duration)}  ·  🔥 ${workout.calories} cal`:"😴 Rest day"}</div>
           {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
         </div>
         <div style={{width:34,height:34,borderRadius:"50%",background:C.greenLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
@@ -259,7 +275,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
               <span style={{fontSize:26}}>💪</span>
               <div>
                 <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{workout.type}</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{workout.duration}  ·  {workout.calories} cal burned</div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{fmtDur(workout.duration)}  ·  {workout.calories} cal burned</div>
               </div>
             </div>
             <div style={{background:C.greenLight,padding:"12px 16px"}}>
@@ -290,7 +306,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
                   {workout.cardio.map((c:any,i:number)=>(
                     <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.greenMid}55`:"transparent"}}>
                       <span style={{fontSize:14,fontWeight:600,color:C.text}}>{c.type}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:C.blue,textAlign:"center"}}>{c.duration}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:C.blue,textAlign:"center"}}>{fmtDur(c.duration)}</span>
                       <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
                     </div>
                   ))}
@@ -662,7 +678,7 @@ export default function UserProfilePage() {
 
           const workout = workoutLog ? {
             type: workoutLog.workout_type || 'Workout',
-            duration: workoutLog.workout_duration_min ? `${workoutLog.workout_duration_min} min` : '—',
+            duration: workoutLog.workout_duration_min ? fmtDur(workoutLog.workout_duration_min) : '—',
             calories: workoutLog.workout_calories || 0,
             exercises: Array.isArray(workoutLog.exercises)
               ? workoutLog.exercises.map((e: any) => ({
