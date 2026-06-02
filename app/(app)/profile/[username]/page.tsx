@@ -238,7 +238,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:900,fontSize:19,color:C.text}}>{day.label}</div>
-          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${fmtDur(workout.duration)}  ·  🔥 ${workout.calories} cal`:"😴 Rest day"}</div>
+          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${fmtDur(workout.duration)}${workout.calories>0?`  ·  🔥 ${workout.calories} cal`:""}`:"😴 Rest day"}</div>
           {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
         </div>
         <div style={{width:34,height:34,borderRadius:"50%",background:C.greenLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
@@ -275,7 +275,7 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
               <span style={{fontSize:26}}>💪</span>
               <div>
                 <div style={{fontWeight:900,fontSize:17,color:"#fff"}}>{workout.type}</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{fmtDur(workout.duration)}  ·  {workout.calories} cal burned</div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)"}}>{fmtDur(workout.duration)}{workout.calories>0?`  ·  ${workout.calories} cal burned`:""}</div>
               </div>
             </div>
             <div style={{background:C.greenLight,padding:"12px 16px"}}>
