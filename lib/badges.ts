@@ -406,6 +406,7 @@ export const BADGES: Badge[] = [
   { id:"iron-will",   emoji:"🪖", label:"Iron Will",     desc:"Completed a 30-day challenge",         category:"challenges" },
 
   // Personal credentials
+  { id:"founder",         emoji:"🌟", label:"Founder",           desc:"Joined Livelee in its first year",          category:"special" },
   { id:"veteran",         emoji:"🎖️", label:"Veteran",          desc:"US Military Service",                       category:"special" },
   { id:"coach",           emoji:"🎓", label:"Coach",             desc:"Became a certified fitness coach",          category:"special" },
   { id:"personal-trainer",emoji:"📋", label:"Personal Trainer",  desc:"Earned a personal training certification",  category:"special" },
