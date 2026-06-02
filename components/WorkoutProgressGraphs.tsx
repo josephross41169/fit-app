@@ -82,6 +82,30 @@ function normalizeCardioForChip(raw: string): string | null {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
+// Run-subtype labels. The post page stores `run_type` on running cardio
+// entries (outdoor / treadmill / trail / hiit). We surface those as distinct
+// chips so a treadmill run reads differently from an outdoor run, instead of
+// everything collapsing into one "Running" chip.
+const RUN_TYPE_CHIP_LABELS: Record<string, string> = {
+  outdoor:   'Outdoor Run',
+  treadmill: 'Treadmill Run',
+  trail:     'Trail Run',
+  hiit:      'HIIT Run',
+};
+
+// Chip label for a cardio ENTRY (not just its type string). Running entries
+// split by run_type; everything else (and runs with no run_type, e.g. legacy
+// logs) falls back to the canonical discipline label.
+function cardioChipLabel(c: any): string | null {
+  const type = (c?.type || '').toString().toLowerCase();
+  const isRun = ['run', 'jog', 'sprint', 'treadmill', 'trail'].some(k => type.includes(k));
+  if (isRun && c?.run_type && RUN_TYPE_CHIP_LABELS[c.run_type]) {
+    return RUN_TYPE_CHIP_LABELS[c.run_type];
+  }
+  // No run_type (or non-running cardio) → canonical discipline.
+  return normalizeCardioForChip(c?.type || '');
+}
+
 type WorkoutData = {
   date: string; exercise: string; weight: number;
   reps: number; sets: number; volume: number;
@@ -314,11 +338,10 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
 
       const cardioList: any[] = w.cardio || w.workout?.cardio || [];
       cardioList.forEach((c: any) => {
-        // Bucket all cardio entries under their canonical discipline so
-        // "Morning Run", "Evening Run", "Trail Run", "running" etc. all
-        // collapse into a single "Running" chip with a combined count.
-        // Same logic mirrored in app/(app)/stats/page.tsx normalizeCardio().
-        const t = normalizeCardioForChip(c?.type || '');
+        // Running entries split by run_type (Outdoor / Treadmill / Trail /
+        // HIIT Run) so subtypes read as distinct chips; other cardio and
+        // legacy runs without a run_type fall back to the canonical label.
+        const t = cardioChipLabel(c);
         if (t) hitCardio.add(t);
       });
 
