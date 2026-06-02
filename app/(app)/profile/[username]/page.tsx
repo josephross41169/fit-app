@@ -238,8 +238,55 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:900,fontSize:19,color:C.text}}>{day.label}</div>
-          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?`💪 ${workout.type}  ·  ⏱ ${fmtDur(workout.duration)}${workout.calories>0?`  ·  🔥 ${workout.calories} cal`:""}`:"😴 Rest day"}</div>
-          {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
+          {(() => {
+            const chip = (key: string, emoji: string, label: string) => (
+              <span key={key} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,color:"#C9C2DE",background:"#15111E",border:"1px solid #2E2440",borderRadius:99,padding:"4px 10px",whiteSpace:"nowrap"}}>
+                <span aria-hidden="true">{emoji}</span>{label}
+              </span>
+            );
+            const cardioLbl = (c:any) => {
+              const base = String(c?.run_type || c?.type || "Cardio").replace(/_/g," ").replace(/\b\w/g,(m:string)=>m.toUpperCase());
+              return base;
+            };
+            const chips: React.ReactNode[] = [];
+            if (workout) {
+              const cardioList = (workout.cardio || []) as any[];
+              const exList = workout.exercises || [];
+              const byType: Record<string,{dist:number;dur:number}> = {};
+              cardioList.forEach((c:any)=>{
+                const t = cardioLbl(c);
+                if(!byType[t]) byType[t]={dist:0,dur:0};
+                byType[t].dist += parseFloat(String(c.distance))||0;
+                byType[t].dur  += parseFloat(String(c.duration))||0;
+              });
+              const cardioEntries = Object.entries(byType);
+              const hasLift = exList.length>0;
+              const totalDur = (workout.duration && workout.duration!=='—') ? fmtDur(workout.duration) : '';
+              let totalDurUsed = false;
+              cardioEntries.forEach(([label,{dist,dur}],i)=>{
+                const segs:string[]=[];
+                if(dist>0) segs.push(`${dist.toFixed(2)} mi`);
+                segs.push(label);
+                let text = segs.join(' ');
+                let durStr = dur>0 ? fmtDur(dur) : '';
+                if(!durStr && cardioEntries.length===1 && totalDur){ durStr=totalDur; totalDurUsed=true; }
+                else if(durStr && cardioEntries.length===1 && !hasLift){ totalDurUsed=true; }
+                if(durStr) text += ` · ${durStr}`;
+                chips.push(chip(`c${i}`,"🏃",text));
+              });
+              if(hasLift) chips.push(chip("lift","💪",workout.type||'Workout'));
+              if(!hasLift && cardioEntries.length===0) chips.push(chip("w","💪",workout.type||'Workout'));
+              if(totalDur && !totalDurUsed) chips.push(chip("dur","⏱",totalDur));
+              if(workout.calories>0) chips.push(chip("cal","🔥",`${workout.calories} cal`));
+            } else {
+              chips.push(chip("rest","😴","Rest day"));
+            }
+            if (nutrition) {
+              if (nutrition.calories>0) chips.push(chip("kcal","🥗",`${nutrition.calories} kcal`));
+              if (nutrition.protein>0) chips.push(chip("pro","🥩",`${nutrition.protein}g protein`));
+            }
+            return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>{chips}</div>;
+          })()}
         </div>
         <div style={{width:34,height:34,borderRadius:"50%",background:C.greenLight,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s"}}>
           <svg viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{width:16,height:16}}><path d="M6 9l6 6 6-6"/></svg>
