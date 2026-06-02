@@ -377,6 +377,46 @@ export default function PostPage() {
   // the UI block — woDateMin / woDateMax build the picker bounds.
   const [woDate, setWoDate] = useState("");
   const [woDuration, setWoDuration] = useState("");
+  // Seconds companions for the workout duration inputs. Minutes stay in the
+  // existing *Duration fields; these hold the 0–59 seconds portion so users can
+  // log e.g. 17:22. Combined into decimal minutes on save (min + sec/60).
+  // Wellness durations intentionally stay minutes-only.
+  const [woDurationSec, setWoDurationSec] = useState("");
+
+  // ── Duration helpers (min + sec → decimal minutes, and back for display) ──
+  // We keep storing workout_duration_min as a number, but now it can carry a
+  // fractional part (17:22 → 17 + 22/60 = 17.3667). This keeps pace math
+  // accurate and leaves all existing whole-minute logs untouched.
+  function combineMinSec(minStr: string, secStr: string): number | null {
+    const min = parseInt(minStr || "0", 10);
+    const sec = parseInt(secStr || "0", 10);
+    const m = isNaN(min) ? 0 : min;
+    const s = isNaN(sec) ? 0 : Math.min(Math.max(sec, 0), 59); // clamp 0–59
+    if (m === 0 && s === 0 && !minStr && !secStr) return null;
+    if (m === 0 && s === 0) return null;
+    // Round to 4 decimals so we don't store float noise.
+    return Math.round((m + s / 60) * 10000) / 10000;
+  }
+  // Sanitize a seconds text input to 0–59 (digits only).
+  function clampSecInput(v: string): string {
+    const digits = v.replace(/[^0-9]/g, "").slice(0, 2);
+    if (digits === "") return "";
+    const n = Math.min(parseInt(digits, 10), 59);
+    return String(n);
+  }
+  // Split a stored duration (decimal minutes, possibly a string) back into
+  // [minStr, secStr] for the edit form. Whole numbers → ["45",""]; fractional
+  // → ["17","22"]. Used when loading an existing log to edit.
+  function splitMinSec(val: any): [string, string] {
+    if (val == null || val === "") return ["", ""];
+    const num = typeof val === "number" ? val : parseFloat(String(val));
+    if (isNaN(num) || num <= 0) return ["", ""];
+    const min = Math.floor(num);
+    const sec = Math.round((num - min) * 60);
+    // Rounding can push to 60 — carry into minutes.
+    if (sec === 60) return [String(min + 1), ""];
+    return [String(min), sec > 0 ? String(sec) : ""];
+  }
   const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [prevSessions, setPrevSessions] = useState<Record<string, PrevSession | null>>({});
@@ -400,11 +440,13 @@ export default function PostPage() {
   // cardio types. Stored on the cardio entry as `run_type`.
   const [cardioRunType, setCardioRunType] = useState<string>("outdoor");
   const [cardioBlockDuration, setCardioBlockDuration] = useState("");
+  const [cardioBlockDurationSec, setCardioBlockDurationSec] = useState("");
   const [cardioBlockDistance, setCardioBlockDistance] = useState("");
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
   // Kept separate from woDuration (which is the lifting block's duration)
   // so users can have BOTH "Sports + Lifting" with independent times.
   const [otherTypeDuration, setOtherTypeDuration] = useState("");
+  const [otherTypeDurationSec, setOtherTypeDurationSec] = useState("");
 
   // ── AI Plan import state ──────────────────────────────────────────────
   // The AI Plan page persists the most recent plan to localStorage when
@@ -713,13 +755,13 @@ export default function PostPage() {
       // categories (sports/HIIT/yoga/etc.) the duration belongs in
       // otherTypeDuration; for cardio/lifting it goes in woDuration.
       const isOtherCat = !["running","walking","biking","swimming","rowing","lifting"].includes(data.workout_category || 'lifting');
-      const durStr = data.workout_duration_min ? String(data.workout_duration_min) : '';
+      const [durMin, durSec] = splitMinSec(data.workout_duration_min);
       if (isOtherCat) {
-        setOtherTypeDuration(durStr);
-        setWoDuration('');
+        setOtherTypeDuration(durMin); setOtherTypeDurationSec(durSec);
+        setWoDuration(''); setWoDurationSec('');
       } else {
-        setWoDuration(durStr);
-        setOtherTypeDuration('');
+        setWoDuration(durMin); setWoDurationSec(durSec);
+        setOtherTypeDuration(''); setOtherTypeDurationSec('');
       }
       setWoNotes(data.notes || '');
       // If the stored cardio array has a distance, restore it into the new single-distance field
@@ -763,7 +805,10 @@ export default function PostPage() {
         setIncludeCardio(true);
         setIncludeLifting(false);
         setCardioSubcategory(data.workout_category);
-        setCardioBlockDuration(data.workout_duration_min ? String(data.workout_duration_min) : '');
+        {
+          const [cMin, cSec] = splitMinSec(data.workout_duration_min);
+          setCardioBlockDuration(cMin); setCardioBlockDurationSec(cSec);
+        }
         setCardioBlockDistance(firstCardio ? String(firstCardio.miles ?? firstCardio.distance ?? '') : '');
         // Restore run subtype if it was a running log
         if (data.workout_category === "running" && firstCardio?.run_type) {
@@ -774,7 +819,10 @@ export default function PostPage() {
         setIncludeCardio(true);
         setIncludeLifting(true);
         setCardioSubcategory(data.cardio[0].type || 'running');
-        setCardioBlockDuration(data.cardio[0].duration ? String(data.cardio[0].duration) : '');
+        {
+          const [cMin, cSec] = splitMinSec(data.cardio[0].duration);
+          setCardioBlockDuration(cMin); setCardioBlockDurationSec(cSec);
+        }
         setCardioBlockDistance(data.cardio[0].distance ? String(data.cardio[0].distance) : (data.cardio[0].miles ? String(data.cardio[0].miles) : ''));
         if (data.cardio[0].run_type) setCardioRunType(data.cardio[0].run_type);
       } else if (hasExercises) {
@@ -1126,11 +1174,11 @@ export default function PostPage() {
           // Primary activity = sports/HIIT/yoga/etc. The dedicated
           // otherTypeDuration field drives the primary log duration.
           // Then if lifting is also toggled on, woDuration adds to it.
-          effectiveDuration = otherTypeDuration ? parseInt(otherTypeDuration) : null;
+          effectiveDuration = combineMinSec(otherTypeDuration, otherTypeDurationSec);
           // Add lifting duration on top if user typed one in the lifting block
-          if (includeLifting && woDuration) {
-            const wd = parseInt(woDuration);
-            if (!isNaN(wd)) effectiveDuration = (effectiveDuration || 0) + wd;
+          if (includeLifting && (woDuration || woDurationSec)) {
+            const wd = combineMinSec(woDuration, woDurationSec);
+            if (wd != null) effectiveDuration = (effectiveDuration || 0) + wd;
           }
           // woCategory stays as-is (sports/hiit/yoga/etc) — that's the
           // primary classifier. We still allow lifting exercises to
@@ -1139,11 +1187,16 @@ export default function PostPage() {
           // Cardio-mode — process toggles
           if (includeCardio) {
             const distNum = parseFloat(cardioBlockDistance) || 0;
-            const durNum  = parseFloat(cardioBlockDuration)  || 0;
+            // Combine the minutes + seconds inputs into decimal minutes. This
+            // drives both the stored duration and the pace calc, so a 17:22 run
+            // paces correctly instead of being truncated to 17:00.
+            const durNum  = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
             const cardioEntry: any = {
               type: cardioSubcategory,
               distance: cardioBlockDistance || null,
-              duration: cardioBlockDuration || null,
+              // Store the decimal-minutes value (e.g. 17.3667). Display layers
+              // format it back to MM:SS. Kept as a number for consistency.
+              duration: durNum > 0 ? durNum : null,
             };
             // Persist run subtype (outdoor / treadmill / trail / hiit) so the
             // stats page can break running stats down further. Only meaningful
@@ -1158,7 +1211,9 @@ export default function PostPage() {
               else if (cardioSubcategory === "swimming") cardioEntry.pace_min_per_100 = (durNum / distNum) * 100;
             }
             cardioPayload = [cardioEntry];
-            effectiveDuration = (effectiveDuration || 0) + (durNum > 0 ? Math.round(durNum) : 0);
+            // Keep the fractional minutes in the day total too (no rounding,
+            // so seconds aren't lost when there's only a cardio block).
+            effectiveDuration = (effectiveDuration || 0) + (durNum > 0 ? durNum : 0);
           }
 
           // Set workout_category — primary classifier for badges/stats/rivalries.
@@ -1172,9 +1227,9 @@ export default function PostPage() {
             effectiveWoCategory = woCategory;
           }
           // Lifting workouts may also have a duration (user can enter it manually)
-          if (woDuration) {
-            const wd = parseInt(woDuration);
-            if (!isNaN(wd)) effectiveDuration = (effectiveDuration || 0) + wd;
+          if (woDuration || woDurationSec) {
+            const wd = combineMinSec(woDuration, woDurationSec);
+            if (wd != null) effectiveDuration = (effectiveDuration || 0) + wd;
           }
         }
         // Allow exercises to attach in BOTH cardio-mode (when includeLifting on)
@@ -2662,7 +2717,7 @@ export default function PostPage() {
                 {/* ── CARDIO BLOCK — only when toggle on ─────────────────── */}
                 {includeCardio && (() => {
                   const distNum = parseFloat(cardioBlockDistance) || 0;
-                  const durNum  = parseFloat(cardioBlockDuration)  || 0;
+                  const durNum  = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
                   let paceText = "";
                   if (distNum > 0 && durNum > 0) {
                     if (cardioSubcategory === "running") {
@@ -2717,8 +2772,12 @@ export default function PostPage() {
                       )}
                       <div style={{ display: "flex", gap: 10 }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
-                          <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 30" value={cardioBlockDuration} onChange={e => setCardioBlockDuration(e.target.value)} />
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={cardioBlockDuration} onChange={e => setCardioBlockDuration(e.target.value.replace(/[^0-9]/g, ""))} />
+                            <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
+                            <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={cardioBlockDurationSec} onChange={e => setCardioBlockDurationSec(clampSecInput(e.target.value))} />
+                          </div>
                         </div>
                         <div style={{ flex: 1 }}>
                           <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance ({distUnit})</label>
@@ -2743,8 +2802,12 @@ export default function PostPage() {
                 {includeLifting && (
                   <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>🏋️ Lifting</div>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min) <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
-                    <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={woDuration} onChange={e => setWoDuration(e.target.value)} />
+                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
+                      <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={woDuration} onChange={e => setWoDuration(e.target.value.replace(/[^0-9]/g, ""))} />
+                      <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
+                      <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={woDurationSec} onChange={e => setWoDurationSec(clampSecInput(e.target.value))} />
+                    </div>
                     <div style={{ fontSize: 11, color: C.sub, marginTop: 8 }}>Add your exercises in the section below ↓</div>
                   </div>
                 )}
@@ -2759,8 +2822,12 @@ export default function PostPage() {
                   return (
                     <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
                       <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 45" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value)} />
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
+                        <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value.replace(/[^0-9]/g, ""))} />
+                        <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
+                        <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={otherTypeDurationSec} onChange={e => setOtherTypeDurationSec(clampSecInput(e.target.value))} />
+                      </div>
                     </div>
                   );
                 })()}
