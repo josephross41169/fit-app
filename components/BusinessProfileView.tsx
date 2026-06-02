@@ -85,7 +85,9 @@ export default function BusinessProfileView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.replace("#", "") as TabKey;
-    if (["posts", "events", "groups", "about", "leaderboard", "schedule", "services", "shop", "community", "menu", "gallery", "reviews", "insights"].includes(hash)) setActiveTab(hash);
+    // reviews/events/insights/groups are no longer tabs — a stale hash for
+    // those falls through and leaves the default "posts" tab selected.
+    if (["posts", "about", "leaderboard", "schedule", "services", "shop", "community", "menu", "gallery"].includes(hash)) setActiveTab(hash);
   }, []);
   function switchTab(t: TabKey) {
     setActiveTab(t);
@@ -217,9 +219,11 @@ export default function BusinessProfileView({
     // eslint-disable-next-line
   }, [profile?.id]);
 
-  // Lazy-load reviews when the Reviews or Insights tab is opened.
+  // Load reviews on mount — Reviews now lives in the always-visible right
+  // sidebar (no longer gated behind a tab), so we fetch once when the profile
+  // mounts rather than on tab-open.
   useEffect(() => {
-    if ((activeTab !== "reviews" && activeTab !== "insights") || reviewsLoaded) return;
+    if (reviewsLoaded) return;
     (async () => {
       try {
         const { data } = await supabase
@@ -236,7 +240,7 @@ export default function BusinessProfileView({
       finally { setReviewsLoaded(true); }
     })();
     // eslint-disable-next-line
-  }, [activeTab, reviewsLoaded, profile.id]);
+  }, [reviewsLoaded, profile.id]);
 
   async function handleSaveReview() {
     if (!currentUser || myRating < 1 || savingReview) return;
@@ -447,8 +451,8 @@ export default function BusinessProfileView({
       </div>
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 20px" }}>
-        {/* Identity row — avatar + name */}
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", marginTop: -68, marginBottom: 20 }}>
+        {/* Identity row — avatar + name. Sits BELOW the banner (no overlap). */}
+        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", marginTop: 20, marginBottom: 20 }}>
           <div
             onClick={() => editing && pickAndUpload("avatar")}
             style={{
@@ -471,7 +475,7 @@ export default function BusinessProfileView({
             )}
           </div>
 
-          <div style={{ flex: 1, minWidth: 0, paddingTop: 76 }}>
+          <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
             {editing ? (
               <input value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Business name" style={{ ...inlineInput, fontSize: 26, fontWeight: 900 }} />
             ) : (
@@ -646,14 +650,28 @@ export default function BusinessProfileView({
           profile.bio && <p style={{ fontSize: 15, color: "#E2E8F0", lineHeight: 1.6, marginBottom: 24 }}>{profile.bio}</p>
         )}
 
+        {/* ── Two-column body: main tabs on the left, Reviews + Events sidebar
+            on the right. Collapses to a single column on mobile (sidebar
+            stacks below the main content). ── */}
+        <style jsx>{`
+          .biz-body { display: flex; gap: 24px; align-items: flex-start; }
+          .biz-main { flex: 1; min-width: 0; }
+          .biz-side { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+          @media (max-width: 860px) {
+            .biz-body { flex-direction: column; }
+            .biz-side { width: 100%; }
+          }
+        `}</style>
+        <div className="biz-body">
+          <div className="biz-main">
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24, overflowX: "auto" }}>
           {([
             { key: "posts", label: "📸 Posts", show: true },
             { key: "community", label: "🤝 Community", show: true },
             { key: "gallery", label: "📷 Gallery", show: true },
-            { key: "reviews", label: "⭐ Reviews", show: true },
-            { key: "insights", label: "📊 Insights", show: viewingOwn },
+            // Reviews + Events now live in the right sidebar (not tabs).
+            // Insights moved to Settings (owner-only). Groups removed.
             // Leaderboard only renders for gym-type businesses since the
             // category set (bench/squat/deadlift/etc.) doesn't make sense
             // for, say, a yoga studio. Could be opened up later.
@@ -662,8 +680,6 @@ export default function BusinessProfileView({
             { key: "services", label: "💲 Services", show: ["services", "wellness"].includes(getBusinessType(profile.business_type).category) },
             { key: "menu", label: "🍽️ Menu", show: getBusinessType(profile.business_type).category === "food" || profile.business_type === "nutrition_brand" },
             { key: "shop", label: "🛍️ Shop", show: ["retail", "nutrition"].includes(getBusinessType(profile.business_type).category) },
-            { key: "events", label: "📅 Events", show: true },
-            { key: "groups", label: "👥 Groups", show: true },
             { key: "about", label: "ℹ️ About", show: true },
           ] as const).filter(t => t.show).map(t => (
             <button key={t.key} onClick={() => switchTab(t.key)} style={{
@@ -765,13 +781,6 @@ export default function BusinessProfileView({
             gymId={profile.id}
             isOwner={viewingOwn}
           />
-        )}
-
-        {activeTab === "events" && (
-          <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>📅 Events system coming soon.</div>
-        )}
-        {activeTab === "groups" && (
-          <div style={{ color: C.muted, padding: 40, textAlign: "center", fontSize: 14 }}>👥 Groups this business runs will appear here.</div>
         )}
 
         {/* ── SCHEDULE TAB (fitness + wellness) ── */}
@@ -1047,79 +1056,6 @@ export default function BusinessProfileView({
         )}
 
         {/* ── REVIEWS TAB ── */}
-        {activeTab === "reviews" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Aggregate */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, textAlign: "center" }}>
-              {reviewCount > 0 ? (
-                <>
-                  <div style={{ fontSize: 34, fontWeight: 900, color: "#F5A623" }}>{avgRating.toFixed(1)}</div>
-                  <div style={{ fontSize: 16, marginTop: 2 }}>{"★".repeat(Math.round(avgRating))}{"☆".repeat(5 - Math.round(avgRating))}</div>
-                  <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{reviewCount} review{reviewCount !== 1 ? "s" : ""}</div>
-                </>
-              ) : (
-                <div style={{ fontSize: 14, color: C.muted }}>No reviews yet — be the first.</div>
-              )}
-            </div>
-
-            {/* Write a review (non-owners, logged in) */}
-            {currentUser && !viewingOwn && (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>Leave a review</div>
-                <div style={{ fontSize: 28, marginBottom: 10, letterSpacing: 4 }}>
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <span key={n} onClick={() => setMyRating(n)} style={{ cursor: "pointer", color: n <= myRating ? "#F5A623" : "#3A3F52" }}>★</span>
-                  ))}
-                </div>
-                <textarea rows={3} value={myReviewBody} onChange={e => setMyReviewBody(e.target.value.slice(0, 400))} placeholder="Share your experience (optional)" style={{ ...inlineInput, resize: "vertical" }} />
-                <button onClick={handleSaveReview} disabled={myRating < 1 || savingReview}
-                  style={{ ...primaryBtn, marginTop: 10, opacity: myRating < 1 ? 0.5 : 1 }}>
-                  {savingReview ? "Saving…" : "Post review"}
-                </button>
-              </div>
-            )}
-
-            {/* List */}
-            {!reviewsLoaded ? (
-              <div style={{ color: C.muted, textAlign: "center", padding: 20, fontSize: 14 }}>Loading…</div>
-            ) : reviews.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {reviews.map(r => {
-                  const u = Array.isArray(r.users) ? r.users[0] : r.users;
-                  return (
-                    <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: r.body ? 6 : 0 }}>
-                        <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", background: C.input, flexShrink: 0 }}>
-                          {u?.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{u?.full_name || u?.username || "Member"}</div>
-                        <div style={{ marginLeft: "auto", fontSize: 13, color: "#F5A623" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</div>
-                      </div>
-                      {r.body && <div style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{r.body}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        {/* ── INSIGHTS TAB (owner only) ── */}
-        {activeTab === "insights" && viewingOwn && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ fontSize: 12, color: C.sub, marginBottom: 2 }}>How your profile is doing. Only you can see this.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-              <InsightCard label="Profile views" value={profile.business_profile_views ?? 0} emoji="👀" />
-              <InsightCard label="Followers" value={profile.followers_count ?? 0} emoji="👥" />
-              <InsightCard label="Reviews" value={reviewsLoaded ? reviewCount : "…"} emoji="⭐" />
-              <InsightCard label="Avg rating" value={reviewsLoaded ? (reviewCount > 0 ? avgRating.toFixed(1) : "—") : "…"} emoji="📊" />
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-              💡 Keep your offer, announcement, and menu fresh — active profiles get more views and followers.
-            </div>
-          </div>
-        )}
-
         {activeTab === "about" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Card title="About">
@@ -1193,6 +1129,76 @@ export default function BusinessProfileView({
             </Card>
           </div>
         )}
+          </div>{/* /.biz-main */}
+
+          {/* ── RIGHT SIDEBAR: Reviews + Events (always visible) ── */}
+          <aside className="biz-side">
+            {/* Reviews */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, textTransform: "uppercase", letterSpacing: 0.6 }}>⭐ Reviews</div>
+              {/* Aggregate */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, textAlign: "center" }}>
+                {reviewCount > 0 ? (
+                  <>
+                    <div style={{ fontSize: 34, fontWeight: 900, color: "#F5A623" }}>{avgRating.toFixed(1)}</div>
+                    <div style={{ fontSize: 16, marginTop: 2 }}>{"★".repeat(Math.round(avgRating))}{"☆".repeat(5 - Math.round(avgRating))}</div>
+                    <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{reviewCount} review{reviewCount !== 1 ? "s" : ""}</div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 14, color: C.muted }}>No reviews yet — be the first.</div>
+                )}
+              </div>
+
+              {/* Write a review (non-owners, logged in) */}
+              {currentUser && !viewingOwn && (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>Leave a review</div>
+                  <div style={{ fontSize: 28, marginBottom: 10, letterSpacing: 4 }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <span key={n} onClick={() => setMyRating(n)} style={{ cursor: "pointer", color: n <= myRating ? "#F5A623" : "#3A3F52" }}>★</span>
+                    ))}
+                  </div>
+                  <textarea rows={3} value={myReviewBody} onChange={e => setMyReviewBody(e.target.value.slice(0, 400))} placeholder="Share your experience (optional)" style={{ ...inlineInput, resize: "vertical" }} />
+                  <button onClick={handleSaveReview} disabled={myRating < 1 || savingReview}
+                    style={{ ...primaryBtn, marginTop: 10, opacity: myRating < 1 ? 0.5 : 1 }}>
+                    {savingReview ? "Saving…" : "Post review"}
+                  </button>
+                </div>
+              )}
+
+              {/* List */}
+              {!reviewsLoaded ? (
+                <div style={{ color: C.muted, textAlign: "center", padding: 20, fontSize: 14 }}>Loading…</div>
+              ) : reviews.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {reviews.map(r => {
+                    const u = Array.isArray(r.users) ? r.users[0] : r.users;
+                    return (
+                      <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "13px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: r.body ? 6 : 0 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", background: C.input, flexShrink: 0 }}>
+                            {u?.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{u?.full_name || u?.username || "Member"}</div>
+                          <div style={{ marginLeft: "auto", fontSize: 13, color: "#F5A623" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</div>
+                        </div>
+                        {r.body && <div style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{r.body}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Events */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, textTransform: "uppercase", letterSpacing: 0.6 }}>📅 Events</div>
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, color: C.muted, textAlign: "center", fontSize: 14 }}>
+                📅 Events system coming soon.
+              </div>
+            </div>
+          </aside>
+        </div>{/* /.biz-body */}
       </div>
 
       {editing && (
