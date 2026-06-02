@@ -3020,8 +3020,8 @@ export default function PostPage() {
                             if (name.length >= 2) fetchPrevSession(name);
                           }}
                         />
-                        <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))}
-                          style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>·</button>
+                        <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} aria-label="Remove exercise" title="Remove exercise"
+                          style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 18, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
                       </div>
 
                       {/* Previous session reference */}
@@ -3493,8 +3493,8 @@ export default function PostPage() {
                             }}
                             title="Save as favorite"
                             style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#2D1F52", color: "#F5A623", fontSize: 15, cursor: "pointer", flexShrink: 0 }}>☆</button>
-                          <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))}
-                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#FFE8E8", color: "#FF4444", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>·</button>
+                          <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))} aria-label="Remove item" title="Remove item"
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 17, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
                         </div>
                         {/* Macro detail row */}
                         {(item.protein || item.carbs || item.fat) && (
@@ -3585,7 +3585,7 @@ export default function PostPage() {
                       <img src={mealPhotos[mealType]} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
                       <button
                         onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[mealType]; return n; }); }}
-                        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>·</button>
+                        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>×</button>
                     </div>
                   ) : (
                     <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "16px 0", textAlign: "center", background: C.greenLight }}>
@@ -3602,7 +3602,7 @@ export default function PostPage() {
                       <div key={meal} style={{ position: "relative" }}>
                         <img src={src} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10 }} alt={meal} />
                         <div style={{ position: "absolute", bottom: 2, left: 2, right: 2, background: "rgba(0,0,0,0.5)", borderRadius: 4, textAlign: "center", fontSize: 9, color: "#fff", fontWeight: 700 }}>{meal.slice(0,4)}</div>
-                        <button onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[meal]; return n; }); }} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", padding: 0 }}>·</button>
+                        <button onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[meal]; return n; }); }} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", padding: 0 }}>×</button>
                       </div>
                     ))}
                   </div>
@@ -3824,7 +3824,7 @@ export default function PostPage() {
                   {wellnessPhotoUrl ? (
                     <div style={{ position:"relative", display:"inline-block" }}>
                       <img src={wellnessPhotoUrl} style={{ width:100, height:100, objectFit:"cover", borderRadius:12, border:`2px solid #2A3A2A` }} alt=""/>
-                      <button onClick={() => setWellnessPhotoUrl(null)} style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.7)", border:"none", color:"#fff", fontSize:12, cursor:"pointer" }}>·</button>
+                      <button onClick={() => setWellnessPhotoUrl(null)} style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.7)", border:"none", color:"#fff", fontSize:12, cursor:"pointer" }}>×</button>
                     </div>
                   ) : (
                     <label style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 16px", borderRadius:12, border:`1.5px dashed #2A3A2A`, background:"#111", cursor:"pointer" }}>
@@ -3891,14 +3891,14 @@ export default function PostPage() {
                   </div>
                 )}
                 {/* Prev/Next */}
-                {carouselIdx > 0 && <button onClick={()=>setCarouselIdx(i=>i-1)} style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>·</button>}
-                {carouselIdx < feedPhotos.length-1 && <button onClick={()=>setCarouselIdx(i=>i+1)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer" }}>·</button>}
+                {carouselIdx > 0 && <button onClick={()=>setCarouselIdx(i=>i-1)} aria-label="Previous photo" style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,paddingBottom:2 }}>‹</button>}
+                {carouselIdx < feedPhotos.length-1 && <button onClick={()=>setCarouselIdx(i=>i+1)} aria-label="Next photo" style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,paddingBottom:2 }}>›</button>}
                 {/* Remove current */}
                 <button onClick={()=>{
                   setFeedPhotos(p=>{ const n=[...p]; n.splice(carouselIdx,1); return n; });
                   setFeedPhotoTypes(t=>{ const n=[...t]; n.splice(carouselIdx,1); return n; });
                   setCarouselIdx(i => Math.max(0, Math.min(i, feedPhotos.length - 2)));
-                }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>·</button>
+                }} style={{ position:"absolute",top:10,right:10,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
               </div>
             ) : (
               <label style={{ display:"block",cursor:"pointer" }}>
