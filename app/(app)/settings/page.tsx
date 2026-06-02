@@ -144,6 +144,10 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* ── SECTION: Insights (owner-only analytics, moved off the public
+          profile so only the business owner sees them) ─────────────── */}
+      {isBusinessAccount(user.profile) && <BusinessInsights profile={user.profile} />}
+
       {/* ── SECTION: About ──────────────────────────────────────────── */}
       <Section title="📜 About & Legal">
         <Row>
@@ -471,6 +475,59 @@ function Section({ title, children, danger }: { title: string; children: React.R
 
 function Row({ children }: { children: React.ReactNode }) {
   return <div style={{ padding: "8px 0" }}>{children}</div>;
+}
+
+// Owner-only business analytics. Moved here from the public profile so only
+// the business owner (who can reach their own Settings) sees these numbers.
+function BusinessInsights({ profile }: { profile: any }) {
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+  const [avgRating, setAvgRating] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("business_reviews")
+          .select("rating")
+          .eq("business_id", profile.id);
+        const list = (data || []) as any[];
+        if (!alive) return;
+        setReviewCount(list.length);
+        setAvgRating(list.length ? list.reduce((s, r) => s + (r.rating || 0), 0) / list.length : 0);
+      } catch {
+        if (alive) { setReviewCount(0); setAvgRating(0); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [profile.id]);
+
+  const cards: { label: string; value: string | number; emoji: string }[] = [
+    { label: "Profile views", value: profile.business_profile_views ?? 0, emoji: "👀" },
+    { label: "Followers", value: profile.followers_count ?? 0, emoji: "👥" },
+    { label: "Reviews", value: reviewCount == null ? "…" : reviewCount, emoji: "⭐" },
+    { label: "Avg rating", value: avgRating == null ? "…" : (reviewCount ? avgRating.toFixed(1) : "—"), emoji: "📊" },
+  ];
+
+  return (
+    <Section title="📊 Insights">
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12, paddingLeft: 4 }}>
+        How your profile is doing. Only you can see this.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {cards.map(c => (
+          <div key={c.label} style={{ background: "#11141F", border: "1px solid #2A2D3E", borderRadius: 12, padding: "14px 14px" }}>
+            <div style={{ fontSize: 20, marginBottom: 4 }}>{c.emoji}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#F0F0F0" }}>{c.value}</div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, color: "#6B7280", marginTop: 12, lineHeight: 1.5, paddingLeft: 4 }}>
+        💡 Keep your offer, announcement, and gallery fresh — active profiles get more views and followers.
+      </div>
+    </Section>
+  );
 }
 
 const linkStyle = {
