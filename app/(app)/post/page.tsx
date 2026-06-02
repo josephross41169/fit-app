@@ -3021,7 +3021,7 @@ export default function PostPage() {
                           }}
                         />
                         <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} aria-label="Remove exercise" title="Remove exercise"
-                          style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 18, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                          style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 22, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
                       </div>
 
                       {/* Previous session reference */}
@@ -3494,7 +3494,7 @@ export default function PostPage() {
                             title="Save as favorite"
                             style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#2D1F52", color: "#F5A623", fontSize: 15, cursor: "pointer", flexShrink: 0 }}>☆</button>
                           <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))} aria-label="Remove item" title="Remove item"
-                            style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 17, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 20, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
                         </div>
                         {/* Macro detail row */}
                         {(item.protein || item.carbs || item.fat) && (
