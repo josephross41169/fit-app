@@ -3128,6 +3128,16 @@ export default function PostPage() {
                   })}
                   </div>
                 )}
+                {/* Second "Add exercise" button at the BOTTOM of the list so you
+                    can add the next exercise right where you just finished —
+                    no scrolling back up to the header button. Only shown once
+                    there's at least one exercise (empty state prompts above). */}
+                {exercises.length > 0 && (
+                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"] }])}
+                    style={{ width: "100%", marginTop: 14, fontSize: 13, fontWeight: 800, padding: "12px 0", borderRadius: 14, border: `1.5px dashed ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                    + Add Exercise
+                  </button>
+                )}
               </div>
               )}
 
