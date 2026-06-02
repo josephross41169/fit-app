@@ -451,14 +451,14 @@ export default function BusinessProfileView({
       </div>
 
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 20px" }}>
-        {/* Identity row — avatar + name. The circular avatar overlaps the
-            bottom of the banner for an organic hero look (like the individual
-            profile), then the name sits beside it. */}
-        <div style={{ display: "flex", gap: 24, alignItems: "flex-end", marginTop: -64, marginBottom: 20 }}>
+        {/* Identity row — avatar + name. The large circular avatar sits fully
+            BELOW the banner (no overlap) with a clean gap, name centered
+            alongside it. */}
+        <div style={{ display: "flex", gap: 24, alignItems: "center", marginTop: 24, marginBottom: 20 }}>
           <div
             onClick={() => editing && pickAndUpload("avatar")}
             style={{
-              width: 168, height: 168, borderRadius: "50%",
+              width: 190, height: 190, borderRadius: "50%",
               background: C.card, border: `5px solid ${C.bg}`, overflow: "hidden",
               flexShrink: 0, boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
               cursor: editing ? "pointer" : "default", position: "relative",
@@ -468,7 +468,7 @@ export default function BusinessProfileView({
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={editing ? avatarUrl! : profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
-              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 72 }}>
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 84 }}>
                 {businessTypeMeta.emoji}
               </div>
             )}
@@ -477,7 +477,7 @@ export default function BusinessProfileView({
             )}
           </div>
 
-          <div style={{ flex: 1, minWidth: 0, paddingBottom: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             {editing ? (
               <input value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Business name" style={{ ...inlineInput, fontSize: 26, fontWeight: 900 }} />
             ) : (
