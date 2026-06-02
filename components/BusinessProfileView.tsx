@@ -435,7 +435,7 @@ export default function BusinessProfileView({
         style={{
           position: "relative",
           width: "100%",
-          height: 240,
+          height: 300,
           background: (editing ? bannerUrl : profile.banner_url)
             ? `url(${editing ? bannerUrl : profile.banner_url}) center/cover`
             : "linear-gradient(135deg, #7C3AED, #A78BFA)",
@@ -450,13 +450,15 @@ export default function BusinessProfileView({
         )}
       </div>
 
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 20px" }}>
-        {/* Identity row — avatar + name. Sits BELOW the banner (no overlap). */}
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", marginTop: 20, marginBottom: 20 }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 20px" }}>
+        {/* Identity row — avatar + name. The circular avatar overlaps the
+            bottom of the banner for an organic hero look (like the individual
+            profile), then the name sits beside it. */}
+        <div style={{ display: "flex", gap: 24, alignItems: "flex-end", marginTop: -64, marginBottom: 20 }}>
           <div
             onClick={() => editing && pickAndUpload("avatar")}
             style={{
-              width: 136, height: 136, borderRadius: 24,
+              width: 168, height: 168, borderRadius: "50%",
               background: C.card, border: `5px solid ${C.bg}`, overflow: "hidden",
               flexShrink: 0, boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
               cursor: editing ? "pointer" : "default", position: "relative",
@@ -466,7 +468,7 @@ export default function BusinessProfileView({
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={editing ? avatarUrl! : profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
-              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 58 }}>
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 72 }}>
                 {businessTypeMeta.emoji}
               </div>
             )}
@@ -475,7 +477,7 @@ export default function BusinessProfileView({
             )}
           </div>
 
-          <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+          <div style={{ flex: 1, minWidth: 0, paddingBottom: 8 }}>
             {editing ? (
               <input value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Business name" style={{ ...inlineInput, fontSize: 26, fontWeight: 900 }} />
             ) : (
@@ -654,12 +656,15 @@ export default function BusinessProfileView({
             on the right. Collapses to a single column on mobile (sidebar
             stacks below the main content). ── */}
         <style jsx>{`
-          .biz-body { display: flex; gap: 24px; align-items: flex-start; }
+          .biz-body { display: flex; gap: 40px; align-items: flex-start; }
           .biz-main { flex: 1; min-width: 0; }
-          .biz-side { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
-          @media (max-width: 860px) {
-            .biz-body { flex-direction: column; }
-            .biz-side { width: 100%; }
+          .biz-side {
+            width: 340px; flex-shrink: 0; display: flex; flex-direction: column;
+            gap: 20px; padding-left: 28px; border-left: 1px solid ${C.border};
+          }
+          @media (max-width: 980px) {
+            .biz-body { flex-direction: column; gap: 28px; }
+            .biz-side { width: 100%; padding-left: 0; border-left: none; }
           }
         `}</style>
         <div className="biz-body">
