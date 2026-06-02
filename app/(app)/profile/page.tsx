@@ -37,6 +37,22 @@ const C = {
   text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
 };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// Format a workout duration for display. Stored durations may be decimal
+// minutes now (17.3667 → "17:22"); whole minutes stay "45 min". Strings that
+// are already formatted ("45 min" / "17:22") pass through unchanged.
+function fmtDur(val: any): string {
+  if (val == null || val === '') return '';
+  if (typeof val === 'string') {
+    if (val.includes(':') || /[a-z]/i.test(val)) return val;
+  }
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  if (isNaN(num) || num <= 0) return '';
+  const min = Math.floor(num);
+  const sec = Math.round((num - min) * 60);
+  if (sec === 60) return `${min + 1} min`;
+  if (sec === 0) return `${min} min`;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
 
 const DAYS = [
   { id:"3.24", label:"Tuesday", emoji:"💪",
@@ -1150,7 +1166,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                                   ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
                                   : c.type
                               }</span>
-                              <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{c.duration}</span>
+                              <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{fmtDur(c.duration)}</span>
                               <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
                             </div>
                           ))}
@@ -1913,7 +1929,7 @@ export default function ProfilePage() {
         type: w.workout_type || 'Workout',
         time: w.logged_at,
         notes: w.notes || '',
-        duration: w.workout_duration_min ? `${w.workout_duration_min} min` : '—',
+        duration: w.workout_duration_min ? fmtDur(w.workout_duration_min) : '—',
         calories: w.workout_calories || 0,
         exercises: Array.isArray(w.exercises)
           ? w.exercises.map((e: any) => ({
