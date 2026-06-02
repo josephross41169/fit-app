@@ -3022,6 +3022,17 @@ export default function ProfilePage() {
     return <ProfileSkeleton />;
   }
 
+  // IMPORTANT: hold the skeleton until the profile row (which carries
+  // account_type) has loaded. The auth provider sets `user` immediately on
+  // tab-return but fetches `profile` a moment later. Without this guard, a
+  // business account briefly falls through to the individual layout below
+  // (the business branch needs user.profile) and "flashes" the athlete
+  // profile before snapping to the business view. Waiting for profile to
+  // exist means we branch to the correct layout on the first paint.
+  if (!user.profile) {
+    return <ProfileSkeleton />;
+  }
+
   // ── BRANCH: business accounts render a completely different layout ──
   // The entire athlete profile (followers/following, badges, activity log,
   // level progress, rivals, etc.) is inappropriate for a business. Instead
