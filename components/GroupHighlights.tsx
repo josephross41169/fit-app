@@ -556,24 +556,99 @@ export default function GroupHighlights({
 // ─────────────────────────────────────────────────────────────────────────
 
 export function HighlightsStrip({ urls }: { urls: string[] }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  // Recompute whether the arrows should be enabled based on scroll position.
+  function updateArrows() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    // 4px fudge so rounding doesn't leave the right arrow stuck "enabled".
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    updateArrows();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+    };
+  }, [urls.length]);
+
+  // Scroll by roughly one tile (tile width + gap) in the given direction.
+  function nudge(dir: -1 | 1) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    // First child is a tile; use its width so the step matches the tile size
+    // (which is responsive). Fall back to 208 if we can't measure.
+    const firstTile = el.firstElementChild as HTMLElement | null;
+    const step = (firstTile?.offsetWidth ?? 200) + 8; // +8 = the flex gap
+    el.scrollBy({ left: dir * step, behavior: "smooth" });
+  }
+
   if (urls.length === 0) return null;
 
+  const arrowBtn = (dir: -1 | 1, enabled: boolean): React.CSSProperties => ({
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    [dir === -1 ? "left" : "right"]: 6,
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    border: "none",
+    background: "rgba(13,13,13,0.72)",
+    color: "#fff",
+    fontSize: 20,
+    lineHeight: 1,
+    cursor: enabled ? "pointer" : "default",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 2,
+    zIndex: 2,
+    opacity: enabled ? 1 : 0,
+    pointerEvents: enabled ? "auto" : "none",
+    transition: "opacity 0.2s",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
+  });
+
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 8,
-        overflowX: "auto",
-        // Snap each tile into place when scrolling — feels much better than
-        // free scrolling for a row of square highlights.
-        scrollSnapType: "x mandatory",
-        WebkitOverflowScrolling: "touch",
-        paddingBottom: 4,
-      }}
-    >
-      {urls.map((url, i) => (
-        <HighlightTile key={url + i} url={url} />
-      ))}
+    <div style={{ position: "relative" }}>
+      <div
+        ref={scrollerRef}
+        className="hl-strip"
+        style={{
+          display: "flex",
+          gap: 8,
+          // Arrows now drive navigation. We keep the element scrollable (so
+          // the arrows have something to scroll, and trackpads/keyboards
+          // still work) but hide the scrollbar and disable the swipe-snap
+          // feel that the user didn't like.
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch",
+          paddingBottom: 4,
+          scrollbarWidth: "none",        // Firefox
+          msOverflowStyle: "none",       // IE/Edge legacy
+        }}
+      >
+        {/* Hide the WebKit scrollbar (Chrome/Safari) for this strip only. */}
+        <style jsx>{`
+          .hl-strip::-webkit-scrollbar { display: none; height: 0; }
+        `}</style>
+        {urls.map((url, i) => (
+          <HighlightTile key={url + i} url={url} />
+        ))}
+      </div>
+
+      <button type="button" aria-label="Previous highlights" onClick={() => nudge(-1)} style={arrowBtn(-1, canLeft)}>‹</button>
+      <button type="button" aria-label="Next highlights" onClick={() => nudge(1)} style={arrowBtn(1, canRight)}>›</button>
     </div>
   );
 }
