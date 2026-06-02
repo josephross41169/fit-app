@@ -194,6 +194,23 @@ type Post = {
   post_type?: string;
 };
 
+// Format a workout duration for display. Stored durations are decimal minutes
+// (e.g. 17.3667 → "17:22"). Whole-minute values stay "45 min". Accepts a
+// number, a numeric string, or an already-formatted "45 min" / "17:22" string
+// (those pass through unchanged so old data and mock posts still render).
+function fmtDur(val: any): string {
+  if (val == null || val === '') return '';
+  if (typeof val === 'string') {
+    if (val.includes(':') || /[a-z]/i.test(val)) return val;
+  }
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  if (isNaN(num) || num <= 0) return '';
+  const min = Math.floor(num);
+  const sec = Math.round((num - min) * 60);
+  if (sec === 60) return `${min + 1} min`;
+  if (sec === 0) return `${min} min`;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
 function normalizePhotoUrls(...sources: any[]): string[] {
   const out: string[] = [];
   const add = (value: any) => {
@@ -821,7 +838,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               {cardio.map((c,i) => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, padding:"4px 9px", borderRadius:99, background:"rgba(124,58,237,0.18)", border:"1px solid rgba(124,58,237,0.35)" }}>
                   <span style={{ fontWeight:800, color:"#E2E8F0" }}>{c.type}</span>
-                  {c.duration && <span style={{ color:C.blue, fontWeight:700 }}>· {c.duration}</span>}
+                  {c.duration && <span style={{ color:C.blue, fontWeight:700 }}>· {fmtDur(c.duration)}</span>}
                   {c.distance && <span style={{ color:C.gold, fontWeight:700 }}>· {c.distance}</span>}
                 </div>
               ))}
@@ -857,7 +874,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               {cardio.map((c,i) => (
                 <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 70px 70px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                   <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{c.type}</span>
-                  <span style={{ fontSize:12,fontWeight:700,color:C.blue,textAlign:"center" }}>{c.duration}</span>
+                  <span style={{ fontSize:12,fontWeight:700,color:C.blue,textAlign:"center" }}>{fmtDur(c.duration)}</span>
                   <span style={{ fontSize:12,fontWeight:700,color:C.gold,textAlign:"center" }}>{c.distance}</span>
                 </div>
               ))}
@@ -3068,7 +3085,7 @@ export default function FeedPage() {
 
       const workout = wl ? {
         type: wl.workout_type || 'Workout',
-        duration: wl.workout_duration_min ? `${wl.workout_duration_min} min` : '—',
+        duration: wl.workout_duration_min ? fmtDur(wl.workout_duration_min) : '—',
         calories: wl.workout_calories || 0,
         exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—' })) : [],
         cardio: Array.isArray(wl.cardio) ? wl.cardio.map((c: any) => ({
