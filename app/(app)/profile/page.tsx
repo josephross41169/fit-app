@@ -833,31 +833,60 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:900,fontSize:19,color:C.text}}>{day.label}</div>
-          <div style={{fontSize:13,color:C.sub,marginTop:3}}>{workout?(()=>{
-            const cardioList = ((workout as any).cardio || []) as any[];
-            const exList = workout.exercises || [];
-            const parts: string[] = [];
-            const cardioByType: Record<string,{dist:number;dur:number}> = {};
-            cardioList.forEach((c:any)=>{
-              const t = cardioLabel(c);
-              if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
-              cardioByType[t].dist += parseFloat(String(c.distance))||0;
-              cardioByType[t].dur  += parseFloat(String(c.duration))||0;
-            });
-            Object.entries(cardioByType).forEach(([label,{dist,dur}])=>{
-              if(dist>0) parts.push(`${dist.toFixed(2)} mi ${label}`);
-              else if(dur>0) parts.push(`${dur} min ${label}`);
-              else parts.push(label);
-            });
-            if(exList.length>0) parts.push(workout.type||'Workout');
-            const summary = parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
-            const extras = [
-              workout.duration&&workout.duration!=='—'?`⏱ ${workout.duration}`:null,
-              workout.calories>0?`🔥 ${workout.calories} cal`:null,
-            ].filter(Boolean).join('  ·  ');
-            return '💪 ' + summary + (extras ? '  ·  ' + extras : '');
-          })():"😴 Rest day"}</div>
-          {nutrition&&<div style={{fontSize:12,color:C.sub,marginTop:2}}>🥗 {nutrition.calories} kcal  ·  🥩 {nutrition.protein}g protein</div>}
+          {(() => {
+            // Build the workout/nutrition summary as discrete "chips" (pills)
+            // instead of one run-on line. Each chip is {emoji,label}; rendered
+            // as a small rounded pill below the day title.
+            const chip = (key: string, emoji: string, label: string) => (
+              <span key={key} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,color:"#C9C2DE",background:"#15111E",border:"1px solid #2E2440",borderRadius:99,padding:"4px 10px",whiteSpace:"nowrap"}}>
+                <span aria-hidden="true">{emoji}</span>{label}
+              </span>
+            );
+            const chips: React.ReactNode[] = [];
+            if (workout) {
+              const cardioList = ((workout as any).cardio || []) as any[];
+              const exList = workout.exercises || [];
+              const cardioByType: Record<string,{dist:number;dur:number}> = {};
+              cardioList.forEach((c:any)=>{
+                const t = cardioLabel(c);
+                if(!cardioByType[t]) cardioByType[t]={dist:0,dur:0};
+                cardioByType[t].dist += parseFloat(String(c.distance))||0;
+                cardioByType[t].dur  += parseFloat(String(c.duration))||0;
+              });
+              const cardioEntries = Object.entries(cardioByType);
+              const hasLift = exList.length>0;
+              const totalDur = (workout.duration && workout.duration!=='—') ? fmtDur(workout.duration) : '';
+              let totalDurUsed = false;
+              cardioEntries.forEach(([label,{dist,dur}],i)=>{
+                // One chip per cardio type, carrying BOTH distance and time so
+                // they read as a single activity (not split across chips).
+                const segs:string[]=[];
+                if(dist>0) segs.push(`${dist.toFixed(2)} mi`);
+                segs.push(label);
+                let text = segs.join(' ');
+                let durStr = dur>0 ? fmtDur(dur) : '';
+                // If this is the only cardio and it has no own duration, fold in
+                // the workout's total time so distance + time stay together.
+                if(!durStr && cardioEntries.length===1 && totalDur){ durStr=totalDur; totalDurUsed=true; }
+                else if(durStr && cardioEntries.length===1 && !hasLift){ totalDurUsed=true; }
+                if(durStr) text += ` · ${durStr}`;
+                chips.push(chip(`c${i}`,"🏃",text));
+              });
+              if(hasLift) chips.push(chip("lift","💪",workout.type||'Workout'));
+              if(!hasLift && cardioEntries.length===0) chips.push(chip("w","💪",workout.type||'Workout'));
+              // Standalone total-time chip only when it wasn't already folded
+              // into a single cardio chip above (avoids showing the time twice).
+              if(totalDur && !totalDurUsed) chips.push(chip("dur","⏱",totalDur));
+              if(workout.calories>0) chips.push(chip("cal","🔥",`${workout.calories} cal`));
+            } else {
+              chips.push(chip("rest","😴","Rest day"));
+            }
+            if (nutrition) {
+              if (nutrition.calories>0) chips.push(chip("kcal","🥗",`${nutrition.calories} kcal`));
+              if (nutrition.protein>0) chips.push(chip("pro","🥩",`${nutrition.protein}g protein`));
+            }
+            return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>{chips}</div>;
+          })()}
         </div>
         {/* Controls: chevron (expand) + ⋯ menu — kept inline so the card stays short */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
