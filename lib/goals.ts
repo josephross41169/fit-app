@@ -88,35 +88,49 @@ export function progressFromLog(goal: Goal, log: ActivityLog): number {
 
     case "cardio_distance": {
       if (log.log_type !== "workout") return 0;
-      // If the goal has a category filter, the log's workout_category
-      // must match (running/biking/walking/swimming/rowing).
-      if (goal.filter && log.workout_category !== goal.filter) return 0;
       const cardio = Array.isArray(log.cardio) ? log.cardio : [];
       let total = 0;
+      let matchedAnyEntry = false;
       for (const c of cardio) {
         // If filter is set, only count cardio entries whose type matches
         // (case-insensitive). e.g. goal.filter = "running" → only count
-        // cardio entries with type matching "running".
+        // cardio entries with type matching "running". We match on the
+        // cardio ENTRY's own type (not the log's primary workout_category)
+        // so a run logged as part of a combined session (e.g. lifting +
+        // treadmill run, where the primary category is "lifting") still
+        // counts toward a running-miles goal.
         if (goal.filter) {
           const ctype = String((c as any).type || "").toLowerCase();
           if (!ctype.includes(goal.filter.toLowerCase())) continue;
         }
+        matchedAnyEntry = true;
         total += parseNum((c as any).distance);
+      }
+      // Legacy fallback: older logs may have an empty cardio[] but the run
+      // distance captured at the log level with workout_category set. If the
+      // filter matches the log's category and no per-entry matched, fall back
+      // to the log-level distance so old data still counts.
+      if (goal.filter && !matchedAnyEntry && log.workout_category === goal.filter) {
+        total += parseNum((log as any).workout_distance_mi ?? (log as any).distance);
       }
       return total;
     }
 
     case "cardio_duration": {
       if (log.log_type !== "workout") return 0;
-      if (goal.filter && log.workout_category !== goal.filter) return 0;
       const cardio = Array.isArray(log.cardio) ? log.cardio : [];
       let total = 0;
+      let matchedAnyEntry = false;
       for (const c of cardio) {
         if (goal.filter) {
           const ctype = String((c as any).type || "").toLowerCase();
           if (!ctype.includes(goal.filter.toLowerCase())) continue;
         }
+        matchedAnyEntry = true;
         total += parseNum((c as any).duration);
+      }
+      if (goal.filter && !matchedAnyEntry && log.workout_category === goal.filter) {
+        total += parseNum((log as any).workout_duration_min);
       }
       return total;
     }
