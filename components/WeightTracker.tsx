@@ -397,22 +397,21 @@ export default function WeightTracker({ userId }: Props) {
                     Recent Weigh-ins
                   </div>
                   {latest ? (
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 7, whiteSpace: "nowrap", overflow: "hidden" }}>
                       <span style={{ fontSize: 17, fontWeight: 900, color: C.purple }}>{latest.weight_lbs}</span>
                       <span style={{ fontSize: 11, color: C.sub }}>lbs</span>
                       {latestDelta !== null && latestDelta !== 0 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: latestDelta < 0 ? "#4ADE80" : "#F87171" }}>
-                          {latestDelta < 0 ? "▼" : "▲"} {Math.abs(latestDelta)}
+                        <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: latestDelta < 0 ? "#4ADE80" : "#F87171" }}>
+                          {latestDelta < 0 ? "▼" : "▲"} {Math.abs(latestDelta)} lbs
                         </span>
                       )}
-                      <span style={{ fontSize: 11, color: C.sub }}>· {formatDateFull(latest.logged_at)}</span>
                     </div>
                   ) : (
                     <div style={{ fontSize: 12, color: C.sub }}>No weigh-ins yet</div>
                   )}
                 </div>
                 {logs.length > 0 && (
-                  <span style={{ fontSize: 11, color: C.sub, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: C.sub, flexShrink: 0, whiteSpace: "nowrap" }}>
                     {logs.length} {logs.length === 1 ? "entry" : "entries"}
                   </span>
                 )}
