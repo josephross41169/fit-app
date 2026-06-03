@@ -84,6 +84,10 @@ export default function WeightTracker({ userId }: Props) {
   // Which weigh-in row is expanded (tap to reveal change vs previous, exact
   // time, and full notes). Null = all collapsed.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Whether the Recent Weigh-ins list is expanded. Collapsed by default so
+  // the section is a single card showing the latest weigh-in; tapping the
+  // header drops down the full list.
+  const [listOpen, setListOpen] = useState(false);
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
@@ -374,107 +378,139 @@ export default function WeightTracker({ userId }: Props) {
             </div>
           )}
 
-          {/* Recent logs */}
+          {/* Recent logs — collapsed into a single card. The header shows the
+              most recent weigh-in; tapping it drops down the full list. */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-              Recent Weigh-ins
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[...logs].reverse().slice(0, 7).map(log => {
-                const isExpanded = expandedId === log.id;
-                // Chronological index in the ascending-sorted `logs` so we can
-                // find the immediately-previous weigh-in for the delta.
-                const idxInLogs = logs.findIndex(l => l.id === log.id);
-                const prev = idxInLogs > 0 ? logs[idxInLogs - 1] : null;
-                const delta = prev ? +(log.weight_lbs - prev.weight_lbs).toFixed(1) : null;
-                return (
-                <div
-                  key={log.id}
-                  style={{
-                    background: "#111827", borderRadius: 12,
-                    border: `1px solid ${isExpanded ? C.purpleMid : C.border}`,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    onClick={() => { if (deleteId !== log.id) setExpandedId(e => e === log.id ? null : log.id); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 12px", cursor: "pointer",
-                    }}
-                  >
-                  <div style={{ flex: 1, minWidth: 0 }}>
+            {(() => {
+              const latest = logs.length > 0 ? logs[logs.length - 1] : null;
+              const prevToLatest = logs.length > 1 ? logs[logs.length - 2] : null;
+              const latestDelta = latest && prevToLatest ? +(latest.weight_lbs - prevToLatest.weight_lbs).toFixed(1) : null;
+              return (
+            <div style={{ background: "#111827", borderRadius: 12, border: `1px solid ${listOpen ? C.purpleMid : C.border}`, overflow: "hidden" }}>
+              {/* Header / summary row */}
+              <div
+                onClick={() => setListOpen(o => !o)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", cursor: "pointer" }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>
+                    Recent Weigh-ins
+                  </div>
+                  {latest ? (
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                      <span style={{ fontSize: 17, fontWeight: 900, color: C.purple }}>{log.weight_lbs}</span>
+                      <span style={{ fontSize: 17, fontWeight: 900, color: C.purple }}>{latest.weight_lbs}</span>
                       <span style={{ fontSize: 11, color: C.sub }}>lbs</span>
-                      {/* Quick delta hint inline so the trend reads at a glance even collapsed */}
-                      {delta !== null && delta !== 0 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: delta < 0 ? "#4ADE80" : "#F87171" }}>
-                          {delta < 0 ? "▼" : "▲"} {Math.abs(delta)}
+                      {latestDelta !== null && latestDelta !== 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: latestDelta < 0 ? "#4ADE80" : "#F87171" }}>
+                          {latestDelta < 0 ? "▼" : "▲"} {Math.abs(latestDelta)}
                         </span>
                       )}
+                      <span style={{ fontSize: 11, color: C.sub }}>· {formatDateFull(latest.logged_at)}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: C.sub, marginTop: 1 }}>
-                      {formatDateFull(log.logged_at)}
-                      {log.notes && !isExpanded && <span style={{ color: "#6B7280" }}> · {log.notes}</span>}
-                    </div>
-                  </div>
-                  {/* Chevron indicates the row expands */}
-                  <span style={{ color: C.sub, fontSize: 12, transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}>▾</span>
-                  <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
-                    {deleteId === log.id ? (
-                      <div style={{ display: "flex", gap: 5 }}>
-                        <button
-                          onClick={() => deleteLog(log.id)}
-                          style={{ padding: "4px 8px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer" }}
-                        >Del</button>
-                        <button
-                          onClick={() => setDeleteId(null)}
-                          style={{ padding: "4px 8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 11, cursor: "pointer" }}
-                        >No</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setDeleteId(log.id)}
-                        style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "#1F2937", color: C.sub, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                      >×</button>
-                    )}
-                  </div>
-                  </div>
-                  {/* Expanded detail */}
-                  {isExpanded && (
-                    <div style={{ padding: "0 12px 12px", borderTop: `1px solid ${C.border}`, marginTop: -1, paddingTop: 10 }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, color: C.sub }}>Logged</span>
-                          <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{formatDateTimeFull(log.logged_at)}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, color: C.sub }}>Change since last weigh-in</span>
-                          <span style={{ fontSize: 12, fontWeight: 800, color: delta === null ? C.sub : delta < 0 ? "#4ADE80" : delta > 0 ? "#F87171" : C.text }}>
-                            {delta === null ? "First weigh-in" : delta === 0 ? "No change" : `${delta < 0 ? "▼" : "▲"} ${Math.abs(delta)} lbs`}
-                          </span>
-                        </div>
-                        {log.notes ? (
-                          <div>
-                            <div style={{ fontSize: 11, color: C.sub, marginBottom: 2 }}>Note</div>
-                            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.4 }}>{log.notes}</div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: "#6B7280", fontStyle: "italic" }}>No note for this weigh-in</div>
-                        )}
-                      </div>
-                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: C.sub }}>No weigh-ins yet</div>
                   )}
                 </div>
-                );
-              })}
-            </div>
-            {logs.length > 7 && (
-              <div style={{ fontSize: 11, color: C.sub, textAlign: "center", marginTop: 8 }}>
-                {logs.length - 7} more entries
+                {logs.length > 0 && (
+                  <span style={{ fontSize: 11, color: C.sub, flexShrink: 0 }}>
+                    {logs.length} {logs.length === 1 ? "entry" : "entries"}
+                  </span>
+                )}
+                <span style={{ color: C.sub, fontSize: 12, transform: listOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}>▾</span>
               </div>
-            )}
+
+              {/* Expanded full list */}
+              {listOpen && logs.length > 0 && (
+                <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  {[...logs].reverse().map(log => {
+                    const isExpanded = expandedId === log.id;
+                    const idxInLogs = logs.findIndex(l => l.id === log.id);
+                    const prev = idxInLogs > 0 ? logs[idxInLogs - 1] : null;
+                    const delta = prev ? +(log.weight_lbs - prev.weight_lbs).toFixed(1) : null;
+                    return (
+                    <div
+                      key={log.id}
+                      style={{
+                        background: "#0D1320", borderRadius: 12,
+                        border: `1px solid ${isExpanded ? C.purpleMid : C.border}`,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        onClick={() => { if (deleteId !== log.id) setExpandedId(e => e === log.id ? null : log.id); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 12px", cursor: "pointer",
+                        }}
+                      >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ fontSize: 17, fontWeight: 900, color: C.purple }}>{log.weight_lbs}</span>
+                          <span style={{ fontSize: 11, color: C.sub }}>lbs</span>
+                          {delta !== null && delta !== 0 && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: delta < 0 ? "#4ADE80" : "#F87171" }}>
+                              {delta < 0 ? "▼" : "▲"} {Math.abs(delta)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.sub, marginTop: 1 }}>
+                          {formatDateFull(log.logged_at)}
+                          {log.notes && !isExpanded && <span style={{ color: "#6B7280" }}> · {log.notes}</span>}
+                        </div>
+                      </div>
+                      <span style={{ color: C.sub, fontSize: 12, transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}>▾</span>
+                      <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
+                        {deleteId === log.id ? (
+                          <div style={{ display: "flex", gap: 5 }}>
+                            <button
+                              onClick={() => deleteLog(log.id)}
+                              style={{ padding: "4px 8px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer" }}
+                            >Del</button>
+                            <button
+                              onClick={() => setDeleteId(null)}
+                              style={{ padding: "4px 8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 11, cursor: "pointer" }}
+                            >No</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteId(log.id)}
+                            style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "#1F2937", color: C.sub, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                          >×</button>
+                        )}
+                      </div>
+                      </div>
+                      {isExpanded && (
+                        <div style={{ padding: "0 12px 12px", borderTop: `1px solid ${C.border}`, marginTop: -1, paddingTop: 10 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: 11, color: C.sub }}>Logged</span>
+                              <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{formatDateTimeFull(log.logged_at)}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: 11, color: C.sub }}>Change since last weigh-in</span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: delta === null ? C.sub : delta < 0 ? "#4ADE80" : delta > 0 ? "#F87171" : C.text }}>
+                                {delta === null ? "First weigh-in" : delta === 0 ? "No change" : `${delta < 0 ? "▼" : "▲"} ${Math.abs(delta)} lbs`}
+                              </span>
+                            </div>
+                            {log.notes ? (
+                              <div>
+                                <div style={{ fontSize: 11, color: C.sub, marginBottom: 2 }}>Note</div>
+                                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.4 }}>{log.notes}</div>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 12, color: "#6B7280", fontStyle: "italic" }}>No note for this weigh-in</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+              );
+            })()}
           </div>
         </>
       )}
