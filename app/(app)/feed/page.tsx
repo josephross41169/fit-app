@@ -2946,7 +2946,9 @@ export default function FeedPage() {
         ? data.filter((u: any) => u.city && u.city.toLowerCase().includes(userCity.toLowerCase().split(',')[0].trim()))
         : [];
       const everyone = data.filter((u: any) => !cityMatch.find((c: any) => c.id === u.id));
-      setNewMembers([...cityMatch, ...everyone].slice(0, 10));
+      // Show only the newest 7 members (city matches first, then everyone
+      // else). Anything past 7 is dropped so the panel stays short.
+      setNewMembers([...cityMatch, ...everyone].slice(0, 7));
     }
     loadNewMembers();
   }, [user]);
