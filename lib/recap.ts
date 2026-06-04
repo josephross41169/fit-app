@@ -28,8 +28,19 @@ export type LogRow = {
   workout_category?: string | null;
   workout_type?: string | null;
   exercises?: Array<{ name?: string; sets?: string; reps?: string; weight?: string; weights?: string[] }> | null;
-  cardio?: Array<{ type?: string; duration?: string | number; distance?: string; miles?: number; mph?: number }> | null;
+  cardio?: Array<{ type?: string; run_type?: string | null; duration?: string | number; distance?: string; miles?: number; mph?: number }> | null;
   wellness_type?: string | null;
+  // Nutrition fields (log_type === "nutrition"). Macros are stored at the
+  // log level; food_items is the per-item breakdown; supplements is the
+  // {name, photo_url}[] list added by the post page.
+  meal_type?: string | null;
+  calories_total?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+  water_oz?: number | null;
+  food_items?: Array<{ name?: string; calories?: number | string; protein?: number | string }> | null;
+  supplements?: Array<{ name?: string; photo_url?: string | null }> | null;
   // Real duration columns from the schema. Workouts and wellness sessions
   // have separate per-type duration fields (in minutes). The previous
   // `duration` field referenced a column that doesn't exist — that bug
@@ -101,6 +112,46 @@ export type Recap = {
     avgPaceMinPerMi: number | null;
     /** Days of the week the user did cardio. ISO weekday names sorted Sun→Sat. */
     cardioDays: string[];
+    /** Breakdown of RUNS by run_type (treadmill / outdoor / trail / other).
+     *  count + miles + minutes each. Empty if no running cardio. */
+    runsByType: Array<{ runType: string; sessions: number; miles: number; minutes: number }>;
+    /** Fastest single-run pace (min/mile) among runs with distance + time. */
+    fastestPaceMinPerMi: number | null;
+    /** Total running-type cardio entries this week. */
+    totalRuns: number;
+  };
+
+  /** Nutrition breakdown — built from nutrition logs. All optional/zero-safe;
+   *  the Nutrition card only shows when daysLogged > 0. */
+  nutrition: {
+    /** Number of days with at least one nutrition log. */
+    daysLogged: number;
+    /** Number of individual nutrition log entries. */
+    entries: number;
+    /** Totals across the week. */
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    totalWaterOz: number;
+    /** Per-logged-day averages (totals / daysLogged). */
+    avgCalories: number;
+    avgProtein: number;
+    avgCarbs: number;
+    avgFat: number;
+    /** Highest-calorie day. */
+    biggestDay: { date: string; label: string; calories: number } | null;
+    /** Most-logged food by frequency across food_items. */
+    topFood: { name: string; count: number } | null;
+    /** Top few foods (name + count), most frequent first. */
+    topFoods: Array<{ name: string; count: number }>;
+    /** Meal-type counts (Breakfast/Lunch/Dinner/Snack/etc). */
+    mealCounts: Array<{ meal: string; count: number }>;
+    /** Supplements logged: total count + most common. */
+    supplementCount: number;
+    topSupplement: { name: string; count: number } | null;
+    /** Restaurants / places tagged on posts this week (name + city). */
+    restaurants: Array<{ name: string; city: string | null }>;
   };
 
   /** Wellness breakdown — per-type counts. */
@@ -275,7 +326,8 @@ export function buildRecap(
   historyLogs: LogRow[],
   badgesThisWeek: BadgeRow[],
   weekPosts: PostRow[] = [],
-  priorWeekLogs: LogRow[] = []
+  priorWeekLogs: LogRow[] = [],
+  nutritionLogs: LogRow[] = []
 ): Recap {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
@@ -424,7 +476,7 @@ export function buildRecap(
   //   2. workout logs in lifting category that ALSO have cardio[] entries
   //      attached (the "log both" feature)
   // We unify them as "cardio entries" — each entry has type + minutes + miles.
-  type CardioEntry = { type: string; minutes: number; miles: number; date: string };
+  type CardioEntry = { type: string; runType: string | null; minutes: number; miles: number; date: string };
   const cardioEntries: CardioEntry[] = [];
 
   inRange.forEach(l => {
@@ -440,8 +492,10 @@ export function buildRecap(
         const minutes = parseDurationToMinutes(c.duration);
         const miles = typeof c.miles === "number" ? c.miles : parseFloat(c.distance || "0") || 0;
         const type = (c.type || category || "cardio").toLowerCase();
+        // run_type distinguishes treadmill / outdoor / trail runs.
+        const runType = c.run_type ? String(c.run_type).toLowerCase() : null;
         if (minutes > 0 || miles > 0) {
-          cardioEntries.push({ type, minutes, miles, date });
+          cardioEntries.push({ type, runType, minutes, miles, date });
         }
       });
     } else if (
@@ -452,6 +506,7 @@ export function buildRecap(
       const minutes = parseDurationToMinutes(l.workout_duration_min ?? l.duration);
       cardioEntries.push({
         type: category || "cardio",
+        runType: null,
         minutes,
         miles: 0,
         date,
@@ -509,6 +564,32 @@ export function buildRecap(
     const totalMi = pacedEntries.reduce((s, c) => s + c.miles, 0);
     avgPaceMinPerMi = totalMi > 0 ? totalMin / totalMi : null;
   }
+
+  // ─── Runs by run_type (treadmill / outdoor / trail / …) ───────────────
+  // Only entries that are "running" type. We bucket by run_type; entries
+  // with no run_type fall into "other". Each bucket carries count/miles/min.
+  const runEntries = cardioEntries.filter(c => c.type.includes("running") || c.type === "run");
+  const runBuckets: Record<string, { sessions: number; miles: number; minutes: number }> = {};
+  runEntries.forEach(c => {
+    const rt = c.runType || "other";
+    if (!runBuckets[rt]) runBuckets[rt] = { sessions: 0, miles: 0, minutes: 0 };
+    runBuckets[rt].sessions += 1;
+    runBuckets[rt].miles += c.miles;
+    runBuckets[rt].minutes += c.minutes;
+  });
+  const runsByType: Recap["cardio"]["runsByType"] = Object.entries(runBuckets)
+    .map(([runType, agg]) => ({ runType, ...agg }))
+    .sort((a, b) => b.sessions - a.sessions);
+  const totalRuns = runEntries.length;
+
+  // Fastest single-run pace (min/mile) among runs with both distance + time
+  let fastestPaceMinPerMi: number | null = null;
+  runEntries.forEach(c => {
+    if (c.miles > 0 && c.minutes > 0) {
+      const pace = c.minutes / c.miles;
+      if (fastestPaceMinPerMi === null || pace < fastestPaceMinPerMi) fastestPaceMinPerMi = pace;
+    }
+  });
 
   // Day-of-week breakdown for cardio
   const cardioDayLabels: string[] = (() => {
@@ -636,6 +717,93 @@ export function buildRecap(
   });
   const placesTagged = Array.from(placeMap.values()).slice(0, 5);
 
+  // ─── Nutrition ────────────────────────────────────────────────────────
+  // Built from nutrition logs (passed in separately). Everything is
+  // zero-safe so the card simply won't show when daysLogged is 0.
+  const nutInRange = (nutritionLogs || []).filter(r => {
+    if (r.log_type !== "nutrition") return false;
+    const ts = r.logged_at || r.created_at;
+    if (!ts) return false;
+    const ms = new Date(ts).getTime();
+    return ms >= startMs && ms <= endMs;
+  });
+
+  const nutCaloriesByDay: Record<string, number> = {};
+  const nutDays = new Set<string>();
+  let nutTotalCalories = 0, nutTotalProtein = 0, nutTotalCarbs = 0, nutTotalFat = 0, nutTotalWater = 0;
+  const foodCounts: Record<string, number> = {};
+  const mealCountMap: Record<string, number> = {};
+  const supplementCounts: Record<string, number> = {};
+  let supplementTotal = 0;
+
+  nutInRange.forEach(l => {
+    const day = isoDateLocal(new Date(l.logged_at || l.created_at!));
+    nutDays.add(day);
+    const cals = Number(l.calories_total) || 0;
+    nutTotalCalories += cals;
+    nutCaloriesByDay[day] = (nutCaloriesByDay[day] || 0) + cals;
+    nutTotalProtein += Number(l.protein_g) || 0;
+    nutTotalCarbs += Number(l.carbs_g) || 0;
+    nutTotalFat += Number(l.fat_g) || 0;
+    nutTotalWater += Number(l.water_oz) || 0;
+    // meal type
+    const meal = (l.meal_type || "").trim();
+    if (meal) mealCountMap[meal] = (mealCountMap[meal] || 0) + 1;
+    // foods
+    (Array.isArray(l.food_items) ? l.food_items : []).forEach(f => {
+      const n = (f?.name || "").trim();
+      if (n) foodCounts[n] = (foodCounts[n] || 0) + 1;
+    });
+    // supplements
+    (Array.isArray(l.supplements) ? l.supplements : []).forEach(s => {
+      const n = (s?.name || "").trim();
+      if (n) { supplementCounts[n] = (supplementCounts[n] || 0) + 1; supplementTotal += 1; }
+    });
+  });
+
+  const nutDaysLogged = nutDays.size;
+  let nutBiggestDay: Recap["nutrition"]["biggestDay"] = null;
+  Object.entries(nutCaloriesByDay).forEach(([date, cals]) => {
+    if (cals > 0 && (!nutBiggestDay || cals > nutBiggestDay.calories)) {
+      const parts = date.split("-").map(Number);
+      const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+      nutBiggestDay = { date, label: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()], calories: Math.round(cals) };
+    }
+  });
+  const topFoods = Object.entries(foodCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4);
+  const mealCounts = Object.entries(mealCountMap)
+    .map(([meal, count]) => ({ meal, count }))
+    .sort((a, b) => b.count - a.count);
+  const topSupplementArr = Object.entries(supplementCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const nutrition: Recap["nutrition"] = {
+    daysLogged: nutDaysLogged,
+    entries: nutInRange.length,
+    totalCalories: Math.round(nutTotalCalories),
+    totalProtein: Math.round(nutTotalProtein),
+    totalCarbs: Math.round(nutTotalCarbs),
+    totalFat: Math.round(nutTotalFat),
+    totalWaterOz: Math.round(nutTotalWater),
+    avgCalories: nutDaysLogged > 0 ? Math.round(nutTotalCalories / nutDaysLogged) : 0,
+    avgProtein: nutDaysLogged > 0 ? Math.round(nutTotalProtein / nutDaysLogged) : 0,
+    avgCarbs: nutDaysLogged > 0 ? Math.round(nutTotalCarbs / nutDaysLogged) : 0,
+    avgFat: nutDaysLogged > 0 ? Math.round(nutTotalFat / nutDaysLogged) : 0,
+    biggestDay: nutBiggestDay,
+    topFood: topFoods[0] || null,
+    topFoods,
+    mealCounts,
+    supplementCount: supplementTotal,
+    topSupplement: topSupplementArr[0] || null,
+    // Reuse the week's tagged places as "restaurants" — these are the
+    // businesses/locations the user tagged on Livelee posts this week.
+    restaurants: placesTagged,
+  };
+
   // Engagement totals
   const totalLikes = photos.reduce((s, p) => s + (p.likes || 0), 0);
   // Top post = highest-likes photo. Tied at 0 falls back to first photo.
@@ -738,6 +906,9 @@ export function buildRecap(
       longestSession: longestCardio,
       avgPaceMinPerMi,
       cardioDays: cardioDayLabels,
+      runsByType,
+      fastestPaceMinPerMi,
+      totalRuns,
     },
     wellness: {
       sessions: wellnessLogs.length,
@@ -747,6 +918,7 @@ export function buildRecap(
       bestDay: bestWellnessDay,
       longestSession: longestWellness,
     },
+    nutrition,
     daily,
     badgesEarned: badgesThisWeek,
     photos,
