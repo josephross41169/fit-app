@@ -2831,6 +2831,7 @@ export default function GroupPage() {
                       postId={post.id}
                       ownerId={post.userId}
                       currentUserId={currentUser?.id}
+                      table="group_posts"
                       onDeleted={() => setDbPosts(prev => prev.filter((x:any) => x.id !== post.id))}
                       tint={C.sub}
                       surface={C.white}
