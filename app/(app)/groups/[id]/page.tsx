@@ -2723,7 +2723,6 @@ export default function GroupPage() {
               {([
                 { key:"posts",   label:"📸 Posts"   },
                 { key:"notes",   label:"💬 Notes"   },
-                { key:"events",  label:"🗓️ Events" },
                 { key:"members", label:"👥 Members" },
               ] as const).map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)} style={{
