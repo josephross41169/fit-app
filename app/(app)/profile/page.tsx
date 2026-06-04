@@ -149,7 +149,7 @@ function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; 
   );
 }
 
-function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: string[]; onClose: () => void; onChange?: (newSrc: string) => void; }) {
+function Lightbox({ src, photos, onClose, onChange, canDelete, onDelete }: { src: string; photos?: string[]; onClose: () => void; onChange?: (newSrc: string) => void; canDelete?: boolean; onDelete?: (src: string) => void; }) {
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -173,6 +173,9 @@ function Lightbox({ src, photos, onClose, onChange }: { src: string; photos?: st
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 20, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>x</button>
+      {canDelete && onDelete && (
+        <button onClick={(e) => { e.stopPropagation(); onDelete(src); }} title="Delete post" style={{ position: 'absolute', top: 16, left: 20, height: 44, padding: '0 18px', borderRadius: 99, background: 'rgba(239,68,68,0.92)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer', zIndex: 2, display: 'flex', alignItems: 'center', gap: 8 }}>🗑️ Delete</button>
+      )}
       {hasPrev && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx - 1]); }} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'<'}</button>
       )}
@@ -1773,6 +1776,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
   // ── Feed photos (for All Photos modal + Highlight picker) ──
   const [feedPhotos,setFeedPhotos] = useState<string[]>([]);
+  // url → post id pairs for the owner-only delete in the All Photos lightbox.
+  const [photoPosts,setPhotoPosts] = useState<{ id: string; url: string }[]>([]);
   const [showHighlightPicker,setShowHighlightPicker] = useState(false);
   useEffect(()=>{
     if(!user) return;
@@ -1780,23 +1785,54 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     // Videos previously got filtered out so the highlights row was photo-only.
     // Now that the strip supports autoplay video tiles, we accept both.
     supabase.from('posts')
-      .select('media_url, media_type, media_types')
+      .select('id, media_url, media_type, media_types')
       .eq('user_id', viewUserId)
       .eq('is_public', true)
       .not('media_url','is',null)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (!data) return;
-        const urls = data
-          .map((p: any) => p.media_url as string)
-          .filter((url): url is string => Boolean(url));
-        setFeedPhotos(urls);
+        // Keep id alongside each url so the gallery lightbox can delete the
+        // underlying post (owner only). feedPhotos stays a plain url[] for the
+        // highlight picker + grid which don't need ids.
+        const pairs = data
+          .map((p: any) => ({ id: p.id as string, url: p.media_url as string }))
+          .filter((x: any): x is { id: string; url: string } => Boolean(x.url));
+        setPhotoPosts(pairs);
+        setFeedPhotos(pairs.map((x: { id: string; url: string }) => x.url));
       });
   },[viewUserId]);
 
   // ── Highlights state ──
   const [highlights,setHighlights] = useState<string[]>([]);
   const [highlightLb,setHighlightLb] = useState<string|null>(null);
+
+  // Delete the post behind a gallery photo (All Photos lightbox). Owner only —
+  // the button is gated by canDelete={isOwn} and the query is scoped to the
+  // owner's id. After deleting we drop the photo from local state and advance
+  // the lightbox to a neighbor (or close it if that was the last photo).
+  async function deletePhotoPost(src: string) {
+    if (!isOwn || !user) return;
+    const pp = photoPosts.find((x) => x.url === src);
+    if (!pp) { alert("Couldn't find that post to delete."); return; }
+    if (!confirm("Delete this post permanently? This cannot be undone.")) return;
+    try {
+      const { error } = await supabase.from("posts").delete().eq("id", pp.id).eq("user_id", user.id);
+      if (error) throw error;
+      const oldIdx = feedPhotos.indexOf(src);
+      const remaining = photoPosts.filter((x) => x.url !== src);
+      setPhotoPosts(remaining);
+      setFeedPhotos(remaining.map((x) => x.url));
+      if (remaining.length === 0) {
+        setHighlightLb(null);
+      } else {
+        const nextIdx = Math.min(oldIdx, remaining.length - 1);
+        setHighlightLb(remaining[nextIdx]?.url ?? null);
+      }
+    } catch (e: any) {
+      alert(`Could not delete post: ${e?.message || "unknown error"}`);
+    }
+  }
   const [editingHighlights,setEditingHighlights] = useState(false);
 
   // Load persisted highlights — Supabase is source of truth.
@@ -4256,6 +4292,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           photos={feedPhotos}
           onChange={(s) => setHighlightLb(s)}
           onClose={() => setHighlightLb(null)}
+          canDelete={isOwn}
+          onDelete={deletePhotoPost}
         />
       )}
 
