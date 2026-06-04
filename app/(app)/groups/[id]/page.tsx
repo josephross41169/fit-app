@@ -1207,9 +1207,12 @@ export default function GroupPage() {
     // Enforce 1-active-goal-per-category. Any active goal in the same
     // category blocks creation — owner has to delete the old one first.
     // Goals without a category set (legacy) are treated as fitness so the
-    // limit applies to them too.
+    // limit applies to them too. A goal whose end_date has passed is treated
+    // as ended (same rule the Active/Past tabs use), so an expired goal no
+    // longer blocks creating a new one in that category. (FIT-57)
+    const now = new Date();
     const activeInCategory = groupGoals.filter((g: any) =>
-      g.status === 'active' && (g.goal_category || 'fitness') === goalForm.category
+      g.status === 'active' && (!g.end_date || new Date(g.end_date) > now) && (g.goal_category || 'fitness') === goalForm.category
     );
     if (activeInCategory.length > 0) {
       alert(`This group already has an active ${goalForm.category} goal. Delete it first to set a new one.`);
@@ -3433,8 +3436,15 @@ export default function GroupPage() {
               wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
               nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
             };
-            const activeGoals = groupGoals.filter(g => g.status === "active");
-            const pastGoals   = groupGoals.filter(g => g.status !== "active");
+            // A goal counts as "ended" once its status is no longer active OR its
+            // end date has passed. Previously the split looked at status only, so a
+            // goal whose deadline passed stayed in the Active tab forever (nothing
+            // flips its status when the date rolls by). Now it moves to Past
+            // automatically the moment its end_date is in the past. (FIT-57)
+            const now = new Date();
+            const goalEnded = (g: any) => g.status !== "active" || (!!g.end_date && new Date(g.end_date) <= now);
+            const activeGoals = groupGoals.filter(g => !goalEnded(g));
+            const pastGoals   = groupGoals.filter(g => goalEnded(g));
 
             return (
               <div>
@@ -3491,7 +3501,7 @@ export default function GroupPage() {
                       .sort((a: any, b: any) => (b.contribution || 0) - (a.contribution || 0))
                       .slice(0, 3);
                     const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
-                    const isComplete = goal.status !== "active";
+                    const isComplete = goalEnded(goal);
                     return (
                       <div key={goal.id} style={{
                         background: isComplete ? "rgba(124,58,237,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
@@ -3505,7 +3515,7 @@ export default function GroupPage() {
                             <div style={{fontSize:11,color:"#9CA3AF",marginTop:2,display:"flex",alignItems:"center",gap:6}}>
                               <span>{meta.icon} {meta.label}</span>
                               {goal.end_date && (
-                                <span>· Ends {new Date(goal.end_date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span>
+                                <span>· {isComplete ? "Ended" : "Ends"} {new Date(goal.end_date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span>
                               )}
                             </div>
                           </div>
