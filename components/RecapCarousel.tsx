@@ -110,6 +110,13 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
   const [username, setUsername] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // TEMP DIAGNOSTIC: shows the live load phase + counts on the loading screen
+  // so we can see exactly where a stuck recap is getting hung. Remove once the
+  // recap is confirmed working.
+  const [dbg, setDbg] = useState<string>("init");
+  const dbgRef = useRef<string>("init");
+  useEffect(() => { dbgRef.current = dbg; }, [dbg]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Carousel navigation state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -145,13 +152,14 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
 
   // ─── Data load ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setDbg("no user yet"); return; }
     let cancelled = false;
+    setDbg(`start · week ${weekKey} · uid ${String(user.id).slice(0, 8)}`);
     // Hard safety timeout — if a query hangs (slow network / stuck socket),
     // don't spin forever. Surface a retryable error instead.
     const timeout = setTimeout(() => {
-      if (!cancelled) { setError("This is taking too long. Check your connection and try again."); setLoading(false); }
-    }, 20000);
+      if (!cancelled) { setError(`Timed out. Last phase: ${dbgRef.current}`); setLoading(false); }
+    }, 15000);
 
     (async () => {
       setLoading(true);
@@ -162,6 +170,7 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
         weekEnd.setHours(23, 59, 59, 999);
         const startIso = weekStart.toISOString();
         const endIso = weekEnd.toISOString();
+        setDbg("querying activity/badges/profile…");
 
         // Each query is awaited via a helper that swallows its own error and
         // returns [] (or null for profile). One failing query (e.g. a column
@@ -200,7 +209,7 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
             .single()),
         ]);
         if (cancelled) return;
-
+        setDbg(`logs:${(weekLogs||[]).length} hist:${(historyLogs||[]).length} badges:${(badges||[]).length} · fetching posts…`);
         // Posts: try the rich select (with location join + media columns)
         // first; if it errors for ANY reason, fall back to the minimal,
         // always-present columns. Either way we never throw.
@@ -244,6 +253,7 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
 
         // buildRecap / computeAllStreaks are wrapped so a malformed row can't
         // take down the whole screen — we still render whatever we can.
+        setDbg(`posts:${(postsData||[]).length} streak:${(streakLogs||[]).length} · building…`);
         let built: Recap | null = null;
         try {
           built = buildRecap(
@@ -263,8 +273,9 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
         setRecap(built);
         setUsername((profile as any)?.username || undefined);
         try { setStreaks(computeAllStreaks((streakLogs || []) as any[])); } catch { setStreaks(null); }
+        setDbg("built ✓");
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Couldn't load recap");
+        if (!cancelled) setError(`${e?.message || "Couldn't load recap"} (phase: ${dbgRef.current})`);
       } finally {
         clearTimeout(timeout);
         if (!cancelled) setLoading(false);
@@ -276,7 +287,7 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
     // (a fresh Date is a new reference each time), which could refetch in a
     // loop. The string only changes when the actual week changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, weekKey]);
+  }, [user, weekKey, reloadKey]);
 
   // ─── Keyboard navigation ────────────────────────────────────────────
   useEffect(() => {
@@ -325,16 +336,33 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
   // so any thrown error (recap stays null) showed the spinner forever instead
   // of the error. That's the "it just loads and never finishes" bug.
   if (error) {
-    return <FullScreenMessage message={`⚠️ ${error}`} />;
+    return (
+      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", color: "#FCA5A5", maxWidth: 420 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14, lineHeight: 1.5 }}>⚠️ {error}</div>
+          <button onClick={() => { setError(null); setLoading(true); setReloadKey(k => k + 1); }}
+            style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: "#7C3AED", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
   // Only show the spinner while we're genuinely still fetching.
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div style={{ textAlign: "center", color: "#9CA3AF" }}>
           <div style={{ width: 36, height: 36, borderRadius: "50%", border: "4px solid #2D1F52", borderTopColor: "#7C3AED", animation: "rspin 0.8s linear infinite", margin: "0 auto 16px" }} />
           <style>{`@keyframes rspin { to { transform: rotate(360deg); } }`}</style>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Loading your recap…</div>
+          {/* TEMP DIAGNOSTIC — shows the live load phase so a stuck recap tells
+              us where it's hung. Remove once confirmed working. */}
+          <div style={{ fontSize: 11, color: "#6D5B8A", marginTop: 12, fontFamily: "monospace", maxWidth: 320, wordBreak: "break-word" }}>{dbg}</div>
+          <button onClick={() => setReloadKey(k => k + 1)}
+            style={{ marginTop: 14, padding: "7px 16px", borderRadius: 10, border: "1px solid #2D1F52", background: "transparent", color: "#9CA3AF", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            Retry
+          </button>
         </div>
       </div>
     );
