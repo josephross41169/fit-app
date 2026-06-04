@@ -23,11 +23,13 @@ type Props = {
 };
 
 export default function Motif({ theme, variant = "fill" }: Props) {
-  // Opacity is driven by intensity. "loud" patterns are nearly fully
-  // visible — they ARE the design. "ambient" sits low and decorates.
+  // Opacity is driven by intensity. Even "loud" patterns are pulled back a
+  // bit so they read as a bold *background texture* rather than competing
+  // with the text on top (the content sits above a darkening scrim in
+  // CardFrame, so the motif doesn't need to be at full blast).
   const opacity = (
-    theme.motifIntensity === "loud" ? 1 :
-    theme.motifIntensity === "bold" ? 0.45 : 0.18
+    theme.motifIntensity === "loud" ? 0.6 :
+    theme.motifIntensity === "bold" ? 0.32 : 0.14
   );
 
   return (
