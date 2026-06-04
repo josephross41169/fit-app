@@ -57,85 +57,75 @@ export type MotifId =
   | "diagonalSplit"
   | "dotMatrix"
   | "wavyLines"
-  | "halfMoons";
+  | "halfMoons"
+  | "paintSplash";
 
 // ────────────────────────────────────────────────────────────────────────
 // THEME 1 — VELOCITY (cardio-dominant weeks)
 // ────────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// PAINT-SPLASH FAMILY — soft baby-blue canvas, splattered-paint motif, with
+// pink / yellow / lavender / coral / mint accents. Every theme shares the
+// same blue gradient base and light text (so text stays legible), and just
+// leans on a different splash accent so a cardio week still looks a little
+// different from a lifting or balanced week. All use the "paintSplash" motif.
+// Shared base values pulled into a helper to keep the six themes consistent.
+// ════════════════════════════════════════════════════════════════════════
+const PAINT_BASE = {
+  // Soft blue gradient — reads "baby blue" up top, deepens toward the bottom
+  // so light text has contrast across the whole card.
+  bgTop: "#5C93D6", bgBottom: "#16335F",
+  text: "#FFFFFF", textSub: "#DCEBFB",
+  numberWeight: "900", headerLetterSpacing: "-0.01em",
+  headlineTransform: "uppercase" as const, numberStyle: "normal" as const,
+  decorMotif: "paintSplash" as const, motifIntensity: "loud" as const,
+};
+
+// THEME 1 — VELOCITY (cardio) → pink-forward splashes
 const VELOCITY: Theme = {
+  ...PAINT_BASE,
   id: "velocity", name: "Velocity", vibeWord: "IN MOTION",
-  bgTop: "#CCFF00", bgBottom: "#0A0A0A",
-  accent: "#FF1F8F", accent2: "#0A0A0A", accent3: "#CCFF00",
-  text: "#0A0A0A", textSub: "#1F2810", decor: "#FF1F8F",
-  numberWeight: "900", headerLetterSpacing: "-0.03em",
-  headlineTransform: "uppercase", numberStyle: "italic",
-  decorMotif: "diagonalSplit", motifIntensity: "loud",
+  accent: "#FFE070", accent2: "#FF9EC8", accent3: "#BFE3FF", decor: "#FF9EC8",
+  numberStyle: "italic",
 };
 
-// ────────────────────────────────────────────────────────────────────────
-// THEME 2 — IRON (lifting-dominant weeks)
-// ────────────────────────────────────────────────────────────────────────
+// THEME 2 — IRON (lifting) → yellow-forward splashes
 const IRON: Theme = {
+  ...PAINT_BASE,
   id: "iron", name: "Iron", vibeWord: "HEAVY",
-  bgTop: "#0A0A0A", bgBottom: "#1A1A1A",
-  accent: "#E8C547", accent2: "#F5F1E8", accent3: "#7A7A7A",
-  text: "#F5F1E8", textSub: "#9C9C9C", decor: "#E8C547",
-  numberWeight: "900", headerLetterSpacing: "0.02em",
-  headlineTransform: "uppercase", numberStyle: "normal",
-  decorMotif: "checkerboard", motifIntensity: "bold",
+  accent: "#FFE070", accent2: "#BFE3FF", accent3: "#C9B6FF", decor: "#FFE070",
 };
 
-// ────────────────────────────────────────────────────────────────────────
-// THEME 3 — CHROMATIC (wellness-dominant weeks, replaces washed-out Stillness)
-// ────────────────────────────────────────────────────────────────────────
+// THEME 3 — CHROMATIC (wellness) → lavender/mint splashes
 const CHROMATIC: Theme = {
+  ...PAINT_BASE,
   id: "chromatic", name: "Chromatic", vibeWord: "VIVID",
-  bgTop: "#1947D1", bgBottom: "#0A1247",
-  accent: "#FF4DA6", accent2: "#FFD600", accent3: "#FFF1E0",
-  text: "#FFF1E0", textSub: "#B8C4F0", decor: "#FF4DA6",
-  numberWeight: "900", headerLetterSpacing: "-0.02em",
-  headlineTransform: "uppercase", numberStyle: "normal",
-  decorMotif: "spiral", motifIntensity: "loud",
+  accent: "#C9B6FF", accent2: "#9FE8D2", accent3: "#FFB3D9", decor: "#C9B6FF",
 };
 
-// ────────────────────────────────────────────────────────────────────────
-// THEME 4 — APEX (PR-heavy weeks)
-// ────────────────────────────────────────────────────────────────────────
+// THEME 4 — APEX (PRs) → bright sky-blue + yellow splashes
 const APEX: Theme = {
+  ...PAINT_BASE,
   id: "apex", name: "Apex", vibeWord: "PEAK",
-  bgTop: "#3A1B6B", bgBottom: "#0A0420",
-  accent: "#E8FF1A", accent2: "#9F5BFF", accent3: "#C0C9D6",
-  text: "#FFFFFF", textSub: "#B8B0D6", decor: "#E8FF1A",
-  numberWeight: "900", headerLetterSpacing: "0.06em",
-  headlineTransform: "uppercase", numberStyle: "normal",
-  decorMotif: "warpedCircles", motifIntensity: "loud",
+  accent: "#FFE070", accent2: "#8ECBFF", accent3: "#FFB3D9", decor: "#8ECBFF",
+  headerLetterSpacing: "0.02em",
 };
 
-// ────────────────────────────────────────────────────────────────────────
-// THEME 5 — INFERNO (long-streak weeks)
-// ────────────────────────────────────────────────────────────────────────
+// THEME 5 — INFERNO (long streak) → warm coral/pink + yellow splashes
 const INFERNO: Theme = {
+  ...PAINT_BASE,
   id: "inferno", name: "Inferno", vibeWord: "ON FIRE",
-  bgTop: "#B30E1F", bgBottom: "#260000",
-  accent: "#FFB627", accent2: "#FFE4A6", accent3: "#FF6B1A",
-  text: "#FFF8E7", textSub: "#FFB89C", decor: "#FFB627",
-  numberWeight: "900", headerLetterSpacing: "0.04em",
-  headlineTransform: "uppercase", numberStyle: "italic",
-  decorMotif: "starburst", motifIntensity: "loud",
+  accent: "#FFD15C", accent2: "#FFA98A", accent3: "#FF9EC8", decor: "#FFA98A",
+  numberStyle: "italic",
 };
 
-// ────────────────────────────────────────────────────────────────────────
-// THEME 6 — SPECTRUM (balanced weeks)
-// ────────────────────────────────────────────────────────────────────────
+// THEME 6 — SPECTRUM (balanced) → the full mix: pink + yellow + mint + sky
 const SPECTRUM: Theme = {
+  ...PAINT_BASE,
   id: "spectrum", name: "Spectrum", vibeWord: "ALL AROUND",
-  bgTop: "#FF6B9D", bgBottom: "#3A1B6B",
-  accent: "#FFD93D", accent2: "#5AE0FF", accent3: "#FFFFFF",
-  text: "#FFFFFF", textSub: "#F8E0F0", decor: "#FFD93D",
-  numberWeight: "900", headerLetterSpacing: "-0.02em",
-  headlineTransform: "uppercase", numberStyle: "normal",
-  decorMotif: "halfMoons", motifIntensity: "loud",
+  accent: "#FFE070", accent2: "#FF9EC8", accent3: "#9FE8D2", decor: "#BFE3FF",
 };
+
 
 const ALL_THEMES: Record<ThemeId, Theme> = {
   velocity: VELOCITY,
