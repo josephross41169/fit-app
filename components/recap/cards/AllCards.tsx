@@ -50,8 +50,12 @@ function prettyBadgeId(id: string): string {
 function StatChip({ value, label, theme }: { value: ReactNode; label: string; theme: Theme }) {
   return (
     <div style={{
-      background: `${theme.accent3}15`,
-      border: `1.5px solid ${theme.accent3}33`,
+      // Dark, semi-solid backing so the chip reads as its own surface over the
+      // bold pattern instead of letting it bleed through (Spotify-style chips).
+      background: "rgba(0,0,0,0.42)",
+      backdropFilter: "blur(2px)",
+      WebkitBackdropFilter: "blur(2px)",
+      border: `1.5px solid ${theme.accent3}40`,
       borderRadius: 12,
       padding: "10px 14px",
       minWidth: 0,
@@ -262,7 +266,7 @@ export function LiftsCard({ theme, recap }: { theme: Theme; recap: Recap }) {
       {recap.lifts.mostTrained && (
         <div style={{
           marginTop: 14, padding: "10px 14px",
-          background: `${theme.accent}1F`,
+          background: "rgba(0,0,0,0.42)",
           border: `1.5px solid ${theme.accent}55`,
           borderRadius: 12,
         }}>
