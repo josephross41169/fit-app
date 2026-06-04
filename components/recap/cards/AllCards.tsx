@@ -52,7 +52,7 @@ function StatChip({ value, label, theme }: { value: ReactNode; label: string; th
     <div style={{
       // Dark, semi-solid backing so the chip reads as its own surface over the
       // bold pattern instead of letting it bleed through (Spotify-style chips).
-      background: "rgba(0,0,0,0.42)",
+      background: "rgba(8,20,40,0.50)",
       backdropFilter: "blur(2px)",
       WebkitBackdropFilter: "blur(2px)",
       border: `1.5px solid ${theme.accent3}40`,
@@ -266,7 +266,7 @@ export function LiftsCard({ theme, recap }: { theme: Theme; recap: Recap }) {
       {recap.lifts.mostTrained && (
         <div style={{
           marginTop: 14, padding: "10px 14px",
-          background: "rgba(0,0,0,0.42)",
+          background: "rgba(8,20,40,0.50)",
           border: `1.5px solid ${theme.accent}55`,
           borderRadius: 12,
         }}>
