@@ -12,6 +12,7 @@ import { shareWithToast } from "@/lib/share";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
 import GroupHighlights from "@/components/GroupHighlights";
 import GroupBadges from "@/components/GroupBadges";
+import PostDeleteMenu from "@/components/PostDeleteMenu";
 
 // ── UserAvatar ─────────────────────────────────────────────────────────────
 // Robust avatar with initials fallback. The previous inline implementation
@@ -1422,7 +1423,7 @@ export default function GroupPage() {
 
   // ── Merged posts (DB + local) ──
   const allPosts = dbPosts.map((p: any) => ({
-    id: p.id, user: p.user?.full_name || p.user?.username || 'Unknown',
+    id: p.id, userId: p.user_id || p.user?.id || null, user: p.user?.full_name || p.user?.username || 'Unknown',
     avatar: (p.user?.full_name || p.user?.username || 'U').slice(0,2).toUpperCase(),
     avatarUrl: p.user?.avatar_url || null,
       avatarVideoUrl: p.user?.avatar_video_url || null,
@@ -2808,6 +2809,15 @@ export default function GroupPage() {
                       <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{post.user}</div>
                       <div style={{ fontSize:11, color:C.sub }}>{post.time}</div>
                     </div>
+                    <PostDeleteMenu
+                      postId={post.id}
+                      ownerId={post.userId}
+                      currentUserId={currentUser?.id}
+                      onDeleted={() => setDbPosts(prev => prev.filter((x:any) => x.id !== post.id))}
+                      tint={C.sub}
+                      surface={C.white}
+                      border={C.blueMid}
+                    />
                   </div>
                   {post.photo && post.mediaType === 'video' ? (
                     <div style={{ width:"100%", background:"#000", overflow:"hidden" }}>
