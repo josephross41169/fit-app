@@ -312,6 +312,14 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
                   {event.is_public ? "🌎 Open" : "🔒 Group"}
                 </span>
               )}
+              {event._pending && (
+                <span
+                  title="Pending the group admin's approval — only you can see it until it's approved."
+                  style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(245,166,35,0.18)", color: "#F5A623", border: "1px solid rgba(245,166,35,0.45)", whiteSpace: "nowrap" as const, flexShrink: 0 }}
+                >
+                  ⏳ Pending review
+                </span>
+              )}
             </div>
             <div style={{ fontSize:11, color:darkSub, marginTop:2 }}>📅 {dateDisplay} · ⏰ {timeDisplay}</div>
             <div style={{ fontSize:11, fontWeight:700, color:gold, marginTop:1 }}>{event.price || 'Free'}</div>
@@ -839,9 +847,12 @@ export default function GroupPage() {
           // member-vs-non-member access gate.
           supabase
             .from("events_with_counts")
-            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved, is_public")
+            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved, is_public, creator_id")
             .eq("group_id", data.group.id)
-            .or("approved.is.null,approved.eq.true")
+            // Show every approved event, PLUS the viewer's own events even if
+            // still pending review — so an event you just created never silently
+            // vanishes from the group's Upcoming Events. (FIT-60)
+            .or(user ? `approved.is.null,approved.eq.true,creator_id.eq.${user.id}` : "approved.is.null,approved.eq.true")
             .order("event_date", { ascending: true }),
           // Pending events (only fetched if user is owner — non-owners get [])
           isOwner
@@ -878,6 +889,11 @@ export default function GroupPage() {
             // tell at a glance whether the event is also on the city
             // discovery feed.
             is_public: e.is_public,
+            // _pending: event exists but hasn't been approved yet. _mine: the
+            // viewer created it. Used to show a "Pending review" chip on your
+            // own un-approved events (others don't see those rows at all).
+            _pending: e.approved === false,
+            _mine: !!(user && e.creator_id === user.id),
             _isNewEvent: true, // flag so card knows to link to /events/[id]
           }));
         setDbEvents([...adapted, ...legacyEvents]);
