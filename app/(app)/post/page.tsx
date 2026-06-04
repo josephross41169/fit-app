@@ -3209,8 +3209,8 @@ export default function PostPage() {
                   ) : (
                     <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "20px 0", textAlign: "center", background: C.greenLight }}>
                       <div style={{ fontSize: 28, marginBottom: 6 }}>💪</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add photo · won't appear on feed</div>
-                      <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Saved privately to your profile</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add photo</div>
+                      <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Saved to your activity card</div>
                     </div>
                   )}
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setWoPhoto)} />
