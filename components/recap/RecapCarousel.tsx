@@ -110,6 +110,13 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
   const [username, setUsername] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // TEMP DIAGNOSTIC: shows the live load phase + counts on the loading screen
+  // so we can see exactly where a stuck recap is getting hung. Remove once the
+  // recap is confirmed working.
+  const [dbg, setDbg] = useState<string>("init");
+  const dbgRef = useRef<string>("init");
+  useEffect(() => { dbgRef.current = dbg; }, [dbg]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Carousel navigation state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -122,6 +129,13 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
     if (weekStartProp) return weekStartProp;
     return getPreviousWeekStart();
   }, [weekStartProp]);
+  // Stable string key for the week (YYYY-MM-DD). Used as the data-effect
+  // dependency instead of the Date object, whose reference changes on every
+  // parent render and would otherwise refetch in a loop.
+  const weekKey = useMemo(() => {
+    const d = weekStart;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, [weekStart]);
 
   // Theme for this week
   const theme = useMemo(() => recap ? pickTheme(recap, streaks ? {
@@ -138,8 +152,15 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
 
   // ─── Data load ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setDbg("no user yet"); return; }
     let cancelled = false;
+    setDbg(`start · week ${weekKey} · uid ${String(user.id).slice(0, 8)}`);
+    // Hard safety timeout — if a query hangs (slow network / stuck socket),
+    // don't spin forever. Surface a retryable error instead.
+    const timeout = setTimeout(() => {
+      if (!cancelled) { setError(`Timed out. Last phase: ${dbgRef.current}`); setLoading(false); }
+    }, 15000);
+
     (async () => {
       setLoading(true);
       setError(null);
@@ -149,69 +170,77 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
         weekEnd.setHours(23, 59, 59, 999);
         const startIso = weekStart.toISOString();
         const endIso = weekEnd.toISOString();
+        setDbg("querying activity/badges/profile…");
 
-        const [weekLogsRes, historyLogsRes, badgesRes, postsRes, profileRes] = await Promise.all([
-          supabase
+        // Each query is awaited via a helper that swallows its own error and
+        // returns [] (or null for profile). One failing query (e.g. a column
+        // that doesn't exist in this database) can no longer blank the whole
+        // recap or throw the load into the catch. Posts use a SAFE column set
+        // — the optional location join and rarely-present media_* columns were
+        // a frequent source of query errors, so we fetch the guaranteed
+        // columns and let those extras be best-effort only.
+        const safe = async <T,>(p: PromiseLike<{ data: T | null; error: any }>): Promise<T | null> => {
+          try { const { data } = await p; return data; } catch { return null; }
+        };
+
+        const [weekLogs, historyLogs, badges, profile] = await Promise.all([
+          safe(supabase
             .from("activity_logs")
             .select("id, log_type, workout_category, workout_type, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, logged_at, created_at")
             .eq("user_id", user.id)
             .gte("logged_at", startIso)
-            .lte("logged_at", endIso),
-          supabase
+            .lte("logged_at", endIso)),
+          safe(supabase
             .from("activity_logs")
             .select("log_type, exercises")
             .eq("user_id", user.id)
             .eq("log_type", "workout")
-            .lt("logged_at", startIso),
-          supabase
+            .lt("logged_at", startIso)),
+          safe(supabase
             .from("badges")
             .select("id, badge_id, created_at")
             .eq("user_id", user.id)
             .gte("created_at", startIso)
-            .lte("created_at", endIso),
-          supabase
-            .from("posts")
-            .select("id, user_id, caption, media_url, media_urls, media_types, media_positions, likes_count, created_at, locationData:locations(name, city)")
-            .eq("user_id", user.id)
-            .gte("created_at", startIso)
-            .lte("created_at", endIso)
-            .order("created_at", { ascending: false }),
-          supabase
+            .lte("created_at", endIso)),
+          safe(supabase
             .from("users")
             .select("username")
             .eq("id", user.id)
-            .single(),
+            .single()),
         ]);
         if (cancelled) return;
-
-        // If the locations join failed (e.g. RLS blocks it or FK isn't set
-        // up), retry without the join — we still get photos, just no
-        // location names for the Achievements card.
-        let postsData = postsRes.data;
-        if (postsRes.error && /location/i.test(postsRes.error.message || "")) {
-          const fallback = await supabase
+        setDbg(`logs:${(weekLogs||[]).length} hist:${(historyLogs||[]).length} badges:${(badges||[]).length} · fetching posts…`);
+        // Posts: try the rich select (with location join + media columns)
+        // first; if it errors for ANY reason, fall back to the minimal,
+        // always-present columns. Either way we never throw.
+        let postsData: any[] | null = await safe(supabase
+          .from("posts")
+          .select("id, user_id, caption, media_url, media_urls, media_types, media_positions, likes_count, created_at, locationData:locations(name, city)")
+          .eq("user_id", user.id)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .order("created_at", { ascending: false }) as any);
+        if (!postsData) {
+          postsData = await safe(supabase
             .from("posts")
-            .select("id, user_id, caption, media_url, media_urls, media_types, media_positions, likes_count, created_at")
+            .select("id, user_id, caption, media_url, media_urls, likes_count, created_at")
             .eq("user_id", user.id)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
-            .order("created_at", { ascending: false });
-          postsData = fallback.data;
+            .order("created_at", { ascending: false }) as any);
         }
+        if (cancelled) return;
 
-        // Fetch the 90-day streak data BEFORE building the recap. The
-        // prior-week slice of this data feeds buildRecap's vsLastWeek
-        // comparison without needing an extra query — single source of truth.
+        // 90-day streak data (also feeds the prior-week comparison).
         const streakSince = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: streakLogs } = await supabase
+        const streakLogs = await safe(supabase
           .from("activity_logs")
           .select("log_type, logged_at, created_at")
           .eq("user_id", user.id)
           .in("log_type", ["workout", "wellness", "nutrition"])
-          .gte("logged_at", streakSince);
+          .gte("logged_at", streakSince)) as any[] | null;
         if (cancelled) return;
 
-        // Slice prior week from streak data: Sun (weekStart - 7 days) → Sat (weekStart - 1ms).
         const priorWeekStart = new Date(weekStart);
         priorWeekStart.setDate(priorWeekStart.getDate() - 7);
         const priorStartIso = priorWeekStart.toISOString();
@@ -222,25 +251,43 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
           return ts >= priorStartIso && ts <= priorEndIso;
         });
 
-        const built = buildRecap(
-          weekStart,
-          (weekLogsRes.data || []) as any[],
-          (historyLogsRes.data || []) as any[],
-          (badgesRes.data || []) as any[],
-          (postsData || []) as any[],
-          priorWeekLogs as any[]
-        );
+        // buildRecap / computeAllStreaks are wrapped so a malformed row can't
+        // take down the whole screen — we still render whatever we can.
+        setDbg(`posts:${(postsData||[]).length} streak:${(streakLogs||[]).length} · building…`);
+        let built: Recap | null = null;
+        try {
+          built = buildRecap(
+            weekStart,
+            (weekLogs || []) as any[],
+            (historyLogs || []) as any[],
+            (badges || []) as any[],
+            (postsData || []) as any[],
+            priorWeekLogs as any[]
+          );
+        } catch (be: any) {
+          console.warn("[recap] buildRecap failed:", be?.message);
+        }
+        if (cancelled) return;
+        if (!built) { setError("Couldn't assemble your recap from this week's data."); return; }
+
         setRecap(built);
-        setUsername((profileRes.data as any)?.username || undefined);
-        setStreaks(computeAllStreaks((streakLogs || []) as any[]));
+        setUsername((profile as any)?.username || undefined);
+        try { setStreaks(computeAllStreaks((streakLogs || []) as any[])); } catch { setStreaks(null); }
+        setDbg("built ✓");
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Couldn't load recap");
+        if (!cancelled) setError(`${e?.message || "Couldn't load recap"} (phase: ${dbgRef.current})`);
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [user, weekStart]);
+    return () => { cancelled = true; clearTimeout(timeout); };
+    // weekKey (a string) is the stable dependency — depending on the Date
+    // object directly would re-fire this effect on every parent re-render
+    // (a fresh Date is a new reference each time), which could refetch in a
+    // loop. The string only changes when the actual week changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, weekKey, reloadKey]);
 
   // ─── Keyboard navigation ────────────────────────────────────────────
   useEffect(() => {
@@ -285,22 +332,44 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
   if (!user) {
     return <FullScreenMessage message="Sign in to view your recap." />;
   }
-  if (loading || !recap || !theme) {
+  // Surface a real error first — previously this sat BELOW the loading gate,
+  // so any thrown error (recap stays null) showed the spinner forever instead
+  // of the error. That's the "it just loads and never finishes" bug.
+  if (error) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", color: "#9CA3AF" }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", border: "4px solid #2D1F52", borderTopColor: "#7C3AED", animation: "rspin 0.8s linear infinite", margin: "0 auto 16px" }} />
-          <style>{`@keyframes rspin { to { transform: rotate(360deg); } }`}</style>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Loading your recap…</div>
+      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", color: "#FCA5A5", maxWidth: 420 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14, lineHeight: 1.5 }}>⚠️ {error}</div>
+          <button onClick={() => { setError(null); setLoading(true); setReloadKey(k => k + 1); }}
+            style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: "#7C3AED", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+            Try again
+          </button>
         </div>
       </div>
     );
   }
-  if (error) {
-    return <FullScreenMessage message={`⚠️ ${error}`} />;
+  // Only show the spinner while we're genuinely still fetching.
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", color: "#9CA3AF" }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", border: "4px solid #2D1F52", borderTopColor: "#7C3AED", animation: "rspin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <style>{`@keyframes rspin { to { transform: rotate(360deg); } }`}</style>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Loading your recap…</div>
+          {/* TEMP DIAGNOSTIC — shows the live load phase so a stuck recap tells
+              us where it's hung. Remove once confirmed working. */}
+          <div style={{ fontSize: 11, color: "#6D5B8A", marginTop: 12, fontFamily: "monospace", maxWidth: 320, wordBreak: "break-word" }}>{dbg}</div>
+          <button onClick={() => setReloadKey(k => k + 1)}
+            style={{ marginTop: 14, padding: "7px 16px", borderRadius: 10, border: "1px solid #2D1F52", background: "transparent", color: "#9CA3AF", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
-  if (cards.length === 0) {
-    return <FullScreenMessage message="No data for this week." />;
+  // Done loading but no recap/theme/cards → say so instead of spinning.
+  if (!recap || !theme || cards.length === 0) {
+    return <FullScreenMessage message="No activity to recap for this week yet — log a workout, meal, or wellness session and check back." />;
   }
 
   return (
