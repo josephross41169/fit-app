@@ -10,6 +10,7 @@ import { track } from "@/components/PostHogProvider";
 import AIFoodScanner from "@/components/AIFoodScanner";
 import { EXERCISES } from "@/lib/exercises";
 import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
+import { syncGroupBadgesForUser } from "@/lib/groupBadges";
 import { BADGES } from "@/lib/badges";
 import { awardXp } from "@/lib/xp";
 
@@ -1492,6 +1493,9 @@ export default function PostPage() {
       // Scans the user's active group goals and updates their contribution
       // based on what's actually in activity_logs right now. Best-effort.
       try { await syncGroupChallengeProgressFor(user.id); } catch {}
+      // Roll the just-logged cardio into the user's group-badge contributions
+      // for every group they're in (from their join date forward).
+      try { await syncGroupBadgesForUser(user.id); } catch {}
 
       // -- Sync member-challenge progress (auto-tracked challenges) ----------
       // Same recompute pattern for member challenges that have a metric_key
