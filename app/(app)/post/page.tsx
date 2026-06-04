@@ -20,6 +20,7 @@ import LocationPicker, { type Location as PickedLocation } from "@/components/Lo
 import MentionInput from "@/components/MentionInput";
 import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
 import FoodFavorites from "@/components/FoodFavorites";
+import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSupplement, type SavedSupplement } from "@/lib/savedSupplements";
 import { saveFood, saveMeal, type SavedFoodItem } from "@/lib/savedFoods";
 
 const C = {
@@ -497,11 +498,15 @@ export default function PostPage() {
   // Nutrition state
   const [mealType, setMealType] = useState("Breakfast");
   // Supplements logged with this nutrition entry. Each is { name, photo_url }
-  // (photo_url is a data: URL until save, when it's uploaded). Kept simple —
-  // a name + optional picture, mirroring the favorites pattern.
-  const [supplements, setSupplements] = useState<{ name: string; photo_url: string | null }[]>([]);
+  // (photo_url is a data: URL until save, when it's uploaded). favId, when
+  // present, links this back to the saved favorite it came from so we can
+  // bump that favorite's use_count on save.
+  const [supplements, setSupplements] = useState<{ name: string; photo_url: string | null; favId?: string; favCount?: number }[]>([]);
   const [suppName, setSuppName] = useState("");
   const [suppPhoto, setSuppPhoto] = useState<string | null>(null);
+  // Saved supplement favorites (one-tap re-add), mirrors food favorites.
+  const [suppFavorites, setSuppFavorites] = useState<SavedSupplement[]>([]);
+  const [suppFavRefresh, setSuppFavRefresh] = useState(0);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   // Bumped after star-to-save so the FoodFavorites bar re-fetches.
   const [favoritesRefreshKey, setFavoritesRefreshKey] = useState(0);
@@ -895,6 +900,14 @@ export default function PostPage() {
     // the template if the user navigates within the page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Load the user's saved supplement favorites (and re-load after saving one).
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    fetchSavedSupplements(user.id).then(favs => { if (alive) setSuppFavorites(favs); });
+    return () => { alive = false; };
+  }, [user, suppFavRefresh]);
 
   // -- Fetch macro goals + today's nutrition totals --------------------------
   const fetchMacroGoalsAndTotals = useCallback(async () => {
@@ -1330,6 +1343,9 @@ export default function PostPage() {
             }
             supplementsToStore.push({ name: s.name, photo_url: url });
           }
+          // Bump use_count for any supplement that came from a saved favorite
+          // so the favorites bar orders most-used first. Fire-and-forget.
+          supplements.forEach(s => { if (s.favId) bumpSupplementUse(s.favId, s.favCount || 0); });
         }
         const res = await supabase.from('activity_logs').insert({
           ...base,
@@ -3363,6 +3379,64 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>💊 Supplements</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>Add anything you took — protein, creatine, vitamins, etc.</div>
+
+                {/* ⭐ Favorites — one-tap re-add of saved supplements, mirrors
+                    the food favorites bar. Tap a favorite to add it to this
+                    log. The ☆/★ on the add row below saves the typed name. */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: C.gold }}>⭐ Favorites</div>
+                    {suppName.trim() && (
+                      <button
+                        onClick={async () => {
+                          if (!user || !suppName.trim()) return;
+                          // Upload the photo first if one was picked, so the
+                          // favorite stores a real URL (not a data: blob).
+                          let url = suppPhoto;
+                          if (url && url.startsWith("data:")) {
+                            try { url = await uploadPhoto(await compressImage(url), "activity", `${user.id}/supplement-fav-${Date.now()}.jpg`); } catch { url = null; }
+                          }
+                          const saved = await saveSupplement(user.id, { name: suppName.trim(), photo_url: url });
+                          if (saved) setSuppFavRefresh(k => k + 1);
+                        }}
+                        style={{ background: "none", border: "none", color: C.gold, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        ☆ Save "{suppName.trim().length > 14 ? suppName.trim().slice(0, 14) + "…" : suppName.trim()}"
+                      </button>
+                    )}
+                  </div>
+                  {suppFavorites.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {suppFavorites.map(fav => {
+                        const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
+                        return (
+                          <div key={fav.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: alreadyAdded ? "rgba(124,58,237,0.18)" : C.greenLight, border: `1px solid ${alreadyAdded ? C.blue : C.greenMid}`, borderRadius: 999, padding: "4px 7px 4px 5px" }}>
+                            <button
+                              onClick={() => {
+                                if (alreadyAdded) return;
+                                setSupplements(arr => [...arr, { name: fav.name, photo_url: fav.photo_url || null, favId: fav.id, favCount: fav.use_count }]);
+                              }}
+                              disabled={alreadyAdded}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "none", border: "none", cursor: alreadyAdded ? "default" : "pointer", padding: 0 }}>
+                              {fav.photo_url
+                                ? <img src={fav.photo_url} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                                : <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#1F2937", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>💊</span>}
+                              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fav.name}</span>
+                              {alreadyAdded
+                                ? <span style={{ fontSize: 12, color: C.blue, fontWeight: 800 }}>✓</span>
+                                : <span style={{ fontSize: 14, color: C.blue, fontWeight: 800 }}>＋</span>}
+                            </button>
+                            <button
+                              onClick={async () => { await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
+                              aria-label={`Remove ${fav.name} from favorites`} title="Remove from favorites"
+                              style={{ width: 18, height: 18, borderRadius: "50%", border: "none", background: "transparent", color: C.sub, fontSize: 14, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: C.sub }}>No saved supplements yet — add one below, then tap ☆ to save it.</div>
+                  )}
+                </div>
 
                 {/* Added supplements */}
                 {supplements.length > 0 && (
