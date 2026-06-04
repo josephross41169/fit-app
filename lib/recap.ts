@@ -799,17 +799,21 @@ function parseFirstNumber(v: any): number {
  * (we don't have per-set reps; this is "reps target for the heaviest set").
  */
 function bestSetWeightFromExercise(
-  ex: { weight?: string; weights?: string[]; reps?: string }
+  ex: { weight?: any; weights?: any[]; reps?: any }
 ): { weight: number; reps: number } | null {
-  const reps = parseFloat((ex.reps || "0").replace(/[^0-9.]/g, "")) || 0;
+  // reps / weight / weights can come back from the DB as NUMBERS (not just
+  // strings). Calling .replace() on a number throws ("replace is not a
+  // function") and used to crash the whole recap, so we coerce to String()
+  // first — String(10) → "10", String("135 lb") → "135 lb", String(null) → "".
+  const reps = parseFloat(String(ex.reps ?? "").replace(/[^0-9.]/g, "")) || 0;
   let max = 0;
   if (Array.isArray(ex.weights)) {
     ex.weights.forEach(w => {
-      const n = parseFloat((w || "").replace(/[^0-9.]/g, ""));
+      const n = parseFloat(String(w ?? "").replace(/[^0-9.]/g, ""));
       if (!isNaN(n) && n > max) max = n;
     });
   }
-  const single = parseFloat((ex.weight || "").replace(/[^0-9.]/g, ""));
+  const single = parseFloat(String(ex.weight ?? "").replace(/[^0-9.]/g, ""));
   if (!isNaN(single) && single > max) max = single;
   if (max <= 0) return null;
   return { weight: max, reps };
