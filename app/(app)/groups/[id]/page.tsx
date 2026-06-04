@@ -2673,18 +2673,6 @@ export default function GroupPage() {
             </div>
           )}
 
-          {/* Group Badges — collective tiered cardio badges. Loads its own
-              totals; contributor lists load lazily on tap. Owner can hide
-              badges (e.g. a run club hides swimming/rowing). */}
-          {dbGroup?.id && (
-            <GroupBadges
-              groupId={dbGroup.id}
-              isOwner={isOwnerDB}
-              hiddenBadges={Array.isArray(dbGroup.hidden_group_badges) ? dbGroup.hidden_group_badges : []}
-              onHiddenChange={(next) => setDbGroup((g: any) => g ? { ...g, hidden_group_badges: next } : g)}
-            />
-          )}
-
           {/* Tabs — two-tier. Parent sections collapse the previous flat
               7-tab strip into 3 manageable groups. Sub-tabs render
               below the parent strip and only show when the relevant
@@ -4494,6 +4482,20 @@ export default function GroupPage() {
               );
             })}
           </div>
+
+          {/* Group Badges — under All Members in the right sidebar. Compact,
+              shows a few then expands. Loads its own totals; contributor
+              lists load lazily on tap. */}
+          {dbGroup?.id && (
+            <div style={{ marginTop: 16 }}>
+              <GroupBadges
+                groupId={dbGroup.id}
+                isOwner={isOwnerDB}
+                hiddenBadges={Array.isArray(dbGroup.hidden_group_badges) ? dbGroup.hidden_group_badges : []}
+                onHiddenChange={(next) => setDbGroup((g: any) => g ? { ...g, hidden_group_badges: next } : g)}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
