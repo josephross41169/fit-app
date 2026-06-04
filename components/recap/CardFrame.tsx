@@ -59,7 +59,7 @@ export default function CardFrame({ theme, children, className, style, hideBrand
           pointerEvents: "none",
           zIndex: 1,
           background:
-            "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.30) 22%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.34) 78%, rgba(0,0,0,0.60) 100%)",
+          "linear-gradient(180deg, rgba(8,20,40,0.62) 0%, rgba(8,20,40,0.40) 22%, rgba(8,20,40,0.34) 50%, rgba(8,20,40,0.46) 78%, rgba(8,20,40,0.70) 100%)",
         }}
       />
       {/* A soft vignette to push the corners down further and frame the card. */}
@@ -71,7 +71,7 @@ export default function CardFrame({ theme, children, className, style, hideBrand
           pointerEvents: "none",
           zIndex: 1,
           background:
-            "radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.38) 100%)",
+            "radial-gradient(125% 95% at 50% 42%, rgba(8,20,40,0) 42%, rgba(8,20,40,0.50) 100%)",
         }}
       />
 
@@ -108,7 +108,7 @@ export default function CardFrame({ theme, children, className, style, hideBrand
           // Subtle shadow on every text element so numbers/labels stay crisp
           // against the bold pattern behind them (Spotify does the same — text
           // never relies on the background being plain).
-          textShadow: "0 1px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.6)",
+          textShadow: "0 2px 18px rgba(4,12,28,0.75), 0 1px 4px rgba(4,12,28,0.85), 0 0 2px rgba(4,12,28,0.7)",
         }}
       >
         {children}
