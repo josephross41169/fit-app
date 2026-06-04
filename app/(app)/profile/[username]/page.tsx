@@ -284,6 +284,9 @@ function ReadOnlyDayCard({day, userLevel = 1}:{day:any; userLevel?: number}) {
             if (nutrition) {
               if (nutrition.calories>0) chips.push(chip("kcal","🥗",`${nutrition.calories} kcal`));
               if (nutrition.protein>0) chips.push(chip("pro","🥩",`${nutrition.protein}g protein`));
+              ((nutrition as any).supplements || []).forEach((s: any, si: number) => {
+                if (s && s.name) chips.push(chip(`supp${si}`,"💊",s.name));
+              });
             }
             return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>{chips}</div>;
           })()}
@@ -751,6 +754,7 @@ export default function UserProfilePage() {
             fat:      Math.round(totalFat),
             sugar:    0,
             photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
+            supplements: nutritionLogs.flatMap((l: any) => Array.isArray(l.supplements) ? l.supplements : []),
             meals: nutritionLogs.map((l: any) => ({
               key:   l.meal_type || 'Meal',
               emoji: '🍽️',
