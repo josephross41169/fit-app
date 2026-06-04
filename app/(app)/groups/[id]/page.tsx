@@ -11,6 +11,7 @@ import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast } from "@/lib/share";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
 import GroupHighlights from "@/components/GroupHighlights";
+import GroupBadges from "@/components/GroupBadges";
 
 // ── UserAvatar ─────────────────────────────────────────────────────────────
 // Robust avatar with initials fallback. The previous inline implementation
@@ -2670,6 +2671,18 @@ export default function GroupPage() {
                 onSaved={(urls) => setGroupHighlights(urls)}
               />
             </div>
+          )}
+
+          {/* Group Badges — collective tiered cardio badges. Loads its own
+              totals; contributor lists load lazily on tap. Owner can hide
+              badges (e.g. a run club hides swimming/rowing). */}
+          {dbGroup?.id && (
+            <GroupBadges
+              groupId={dbGroup.id}
+              isOwner={isOwnerDB}
+              hiddenBadges={Array.isArray(dbGroup.hidden_group_badges) ? dbGroup.hidden_group_badges : []}
+              onHiddenChange={(next) => setDbGroup((g: any) => g ? { ...g, hidden_group_badges: next } : g)}
+            />
           )}
 
           {/* Tabs — two-tier. Parent sections collapse the previous flat
