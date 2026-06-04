@@ -110,7 +110,7 @@ const STATIC_NOTIFS: Notif[] = [
   { id: "s4", type: "like_activity", actor_id: null, actor_name: "Chris Wallace", actor_username: "chris_power",
     actor_avatar: null, target_id: null, target_preview: null,
     created_at: new Date(Date.now() - 86_400_000).toISOString(), read_at: "1" },
-  { id: "s5", type: "badge", actor_id: null, actor_name: "FIT", actor_username: "fit",
+  { id: "s5", type: "badge", actor_id: null, actor_name: "Livelee", actor_username: "livelee",
     actor_avatar: null, target_id: null, target_preview: "First Workout 🏋️",
     created_at: new Date(Date.now() - 172_800_000).toISOString(), read_at: "1" },
 ];
