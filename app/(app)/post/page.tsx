@@ -496,6 +496,12 @@ export default function PostPage() {
 
   // Nutrition state
   const [mealType, setMealType] = useState("Breakfast");
+  // Supplements logged with this nutrition entry. Each is { name, photo_url }
+  // (photo_url is a data: URL until save, when it's uploaded). Kept simple —
+  // a name + optional picture, mirroring the favorites pattern.
+  const [supplements, setSupplements] = useState<{ name: string; photo_url: string | null }[]>([]);
+  const [suppName, setSuppName] = useState("");
+  const [suppPhoto, setSuppPhoto] = useState<string | null>(null);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   // Bumped after star-to-save so the FoodFavorites bar re-fetches.
   const [favoritesRefreshKey, setFavoritesRefreshKey] = useState(0);
@@ -1310,11 +1316,27 @@ export default function PostPage() {
         const finalCarbs = autoCarbsNut > 0 ? autoCarbsNut : (carbs ? parseFloat(carbs) : null);
         const finalFat = autoFatNut > 0 ? autoFatNut : (fat ? parseFloat(fat) : null);
         const finalCalories = autoCalNut > 0 ? autoCalNut : null;
+        // Upload any supplement photos that are still local data: URLs, then
+        // store the supplements array (name + uploaded photo_url) on the log.
+        let supplementsToStore: { name: string; photo_url: string | null }[] | null = null;
+        if (supplements.length > 0) {
+          supplementsToStore = [];
+          for (let si = 0; si < supplements.length; si++) {
+            const s = supplements[si];
+            let url = s.photo_url;
+            if (url && url.startsWith('data:')) {
+              try { url = await uploadPhoto(await compressImage(url), 'activity', `${user.id}/supplement-${Date.now()}-${si}.jpg`); }
+              catch { url = null; }
+            }
+            supplementsToStore.push({ name: s.name, photo_url: url });
+          }
+        }
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'nutrition',
           meal_type: mealType,
           food_items: foodItems.length > 0 ? foodItems : null,
+          supplements: supplementsToStore,
           calories_total: finalCalories,
           protein_g: finalProtein,
           carbs_g: finalCarbs,
@@ -3333,6 +3355,66 @@ export default function PostPage() {
                   💡 Set daily macro goals · see progress bars
                 </button>
               )}
+
+              {/* ── Supplements ─────────────────────────────────────────────
+                  Add supplements (name + optional photo), similar to the
+                  favorites pattern. Stored on the nutrition log and shown on
+                  the activity card alongside the rest of the nutrition. ── */}
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>💊 Supplements</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>Add anything you took — protein, creatine, vitamins, etc.</div>
+
+                {/* Added supplements */}
+                {supplements.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                    {supplements.map((s, i) => (
+                      <div key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.greenLight, border: `1px solid ${C.greenMid}`, borderRadius: 999, padding: "5px 8px 5px 6px" }}>
+                        {s.photo_url
+                          ? <img src={s.photo_url} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                          : <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#1F2937", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>💊</span>}
+                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{s.name}</span>
+                        <button onClick={() => setSupplements(arr => arr.filter((_, j) => j !== i))} aria-label="Remove supplement" title="Remove supplement"
+                          style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 15, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add row: optional photo + name + add button */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <label style={{ flexShrink: 0, cursor: "pointer" }}>
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setSuppPhoto)} />
+                    <div style={{ width: 46, height: 46, borderRadius: 12, border: `1.5px dashed ${suppPhoto ? C.blue : C.greenMid}`, background: suppPhoto ? "transparent" : C.greenLight, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {suppPhoto
+                        ? <img src={suppPhoto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : <span style={{ fontSize: 18 }}>📷</span>}
+                    </div>
+                  </label>
+                  <input
+                    style={{ ...iStyle, flex: 1, marginBottom: 0 }}
+                    placeholder="Supplement name (e.g. Creatine)"
+                    value={suppName}
+                    onChange={e => setSuppName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && suppName.trim()) {
+                        e.preventDefault();
+                        setSupplements(arr => [...arr, { name: suppName.trim(), photo_url: suppPhoto }]);
+                        setSuppName(""); setSuppPhoto(null);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!suppName.trim()) return;
+                      setSupplements(arr => [...arr, { name: suppName.trim(), photo_url: suppPhoto }]);
+                      setSuppName(""); setSuppPhoto(null);
+                    }}
+                    disabled={!suppName.trim()}
+                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "#374151", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
+                    + Add
+                  </button>
+                </div>
+              </div>
 
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🥗 Meal Details</div>
