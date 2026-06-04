@@ -46,6 +46,16 @@ function prettyBadgeId(id: string): string {
   return id.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
+// Emoji for a run sub-type (treadmill / outdoor / trail / other).
+function runTypeEmoji(rt: string): string {
+  const t = (rt || "").toLowerCase();
+  if (t.includes("tread")) return "🏃‍♂️";
+  if (t.includes("trail")) return "⛰️";
+  if (t.includes("out")) return "🌳";
+  if (t.includes("track")) return "🏟️";
+  return "🏃";
+}
+
 // Reusable "stat chip" for compact secondary stats that float around the hero
 function StatChip({ value, label, theme }: { value: ReactNode; label: string; theme: Theme }) {
   return (
@@ -376,8 +386,44 @@ export function CardioCard({ theme, recap }: { theme: Theme; recap: Recap }) {
           label="LONGEST RUN"
           theme={theme}
         />
-        <StatChip value={recap.cardio.cardioDays.length} label={recap.cardio.cardioDays.length === 1 ? "DAY ACTIVE" : "DAYS ACTIVE"} theme={theme} />
+        {recap.cardio.totalRuns > 0 ? (
+          <StatChip value={recap.cardio.totalRuns} label={recap.cardio.totalRuns === 1 ? "TOTAL RUN" : "TOTAL RUNS"} theme={theme} />
+        ) : (
+          <StatChip value={recap.cardio.cardioDays.length} label={recap.cardio.cardioDays.length === 1 ? "DAY ACTIVE" : "DAYS ACTIVE"} theme={theme} />
+        )}
+        {recap.cardio.fastestPaceMinPerMi !== null && (
+          <StatChip value={formatPace(recap.cardio.fastestPaceMinPerMi).replace("/mi", "")} label="FASTEST PACE / MI" theme={theme} />
+        )}
+        {recap.cardio.fastestPaceMinPerMi !== null && (
+          <StatChip value={recap.cardio.cardioDays.length} label={recap.cardio.cardioDays.length === 1 ? "DAY ACTIVE" : "DAYS ACTIVE"} theme={theme} />
+        )}
       </div>
+
+      {/* Runs by type — treadmill / outdoor / trail breakdown */}
+      {recap.cardio.runsByType.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 900, color: theme.textSub, letterSpacing: "0.18em", marginBottom: 6 }}>
+            HOW YOU RAN
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {recap.cardio.runsByType.map((r, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(8,20,40,0.50)", borderRadius: 10, padding: "8px 12px",
+                border: `1px solid ${theme.accent3}33`,
+              }}>
+                <span style={{ fontSize: 18 }}>{runTypeEmoji(r.runType)}</span>
+                <div style={{ flex: 1, minWidth: 0, fontWeight: 900, fontSize: 14, color: theme.text, textTransform: "capitalize" }}>
+                  {r.runType === "other" ? "Run" : `${r.runType} run`}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: theme.accent, whiteSpace: "nowrap" }}>
+                  {r.sessions}× {r.miles > 0 ? `· ${r.miles.toFixed(1)}mi` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Day-of-week breakdown */}
       {recap.cardio.cardioDays.length > 0 && (
@@ -521,6 +567,134 @@ export function WellnessCard({ theme, recap }: { theme: Theme; recap: Recap }) {
           ))}
         </div>
       )}
+    </CardFrame>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CARD: NUTRITION — avg macros hero, top food, biggest day, meals, restaurants
+// ═══════════════════════════════════════════════════════════════════════
+export function NutritionCard({ theme, recap }: { theme: Theme; recap: Recap }) {
+  const n = recap.nutrition;
+  return (
+    <CardFrame theme={theme}>
+      <div style={{
+        fontSize: 12, fontWeight: 900, color: theme.accent,
+        letterSpacing: "0.25em", marginBottom: 8,
+      }}>
+        🥗 NUTRITION · {n.daysLogged} {n.daysLogged === 1 ? "DAY" : "DAYS"} LOGGED
+      </div>
+
+      {/* Hero — average calories per day */}
+      <div style={{
+        fontSize: "var(--card-title-size)",
+        fontWeight: 900, color: theme.text,
+        lineHeight: 0.95, letterSpacing: theme.headerLetterSpacing,
+        textTransform: "uppercase",
+      }}>
+        {n.avgCalories > 0 ? "YOU AVERAGED" : "YOU LOGGED"}
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+        <div style={{
+          fontSize: "var(--card-num-size)",
+          fontWeight: 900, color: theme.accent,
+          lineHeight: 0.9, letterSpacing: theme.headerLetterSpacing,
+          fontStyle: theme.numberStyle === "italic" ? "italic" : "normal",
+        }}>
+          {(n.avgCalories > 0 ? n.avgCalories : n.entries).toLocaleString()}
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: theme.textSub }}>
+          {n.avgCalories > 0 ? "cal / day" : (n.entries === 1 ? "entry" : "entries")}
+        </div>
+      </div>
+
+      {/* Average macros grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 18 }}>
+        <StatChip value={`${n.avgProtein}g`} label="AVG PROTEIN" theme={theme} />
+        <StatChip value={`${n.avgCarbs}g`} label="AVG CARBS" theme={theme} />
+        <StatChip value={`${n.avgFat}g`} label="AVG FAT" theme={theme} />
+      </div>
+
+      {/* Highlights row: biggest day + total */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+        {n.biggestDay && (
+          <StatChip value={`${n.biggestDay.calories.toLocaleString()}`} label={`BIGGEST DAY · ${n.biggestDay.label.toUpperCase()}`} theme={theme} />
+        )}
+        {n.totalWaterOz > 0 && (
+          <StatChip value={`${n.totalWaterOz}oz`} label="TOTAL WATER" theme={theme} />
+        )}
+        {n.totalWaterOz === 0 && (
+          <StatChip value={n.totalCalories.toLocaleString()} label="TOTAL CALORIES" theme={theme} />
+        )}
+      </div>
+
+      {/* Most-logged food */}
+      {n.topFood && (
+        <div style={{
+          marginTop: 14, padding: "10px 14px",
+          background: "rgba(8,20,40,0.50)",
+          border: `1.5px solid ${theme.accent}55`,
+          borderRadius: 12,
+        }}>
+          <div style={{ fontSize: 9, fontWeight: 900, color: theme.accent, letterSpacing: "0.18em", marginBottom: 3 }}>
+            MOST LOGGED FOOD
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontWeight: 900, fontSize: 16, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {n.topFood.name}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: theme.textSub, whiteSpace: "nowrap" }}>
+              {n.topFood.count}×
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Meals + supplements + restaurants — compact rows */}
+      <div style={{ marginTop: 14, flex: 1, overflow: "hidden" }}>
+        {n.mealCounts.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 900, color: theme.textSub, letterSpacing: "0.18em", marginBottom: 6 }}>
+              MEALS LOGGED
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {n.mealCounts.slice(0, 5).map((m, i) => (
+                <div key={i} style={{
+                  background: "rgba(8,20,40,0.50)", border: `1px solid ${theme.accent3}33`,
+                  borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 800, color: theme.text,
+                }}>
+                  {m.meal} <span style={{ color: theme.accent }}>{m.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {n.topSupplement && (
+          <div style={{ fontSize: 12, color: theme.textSub, fontWeight: 700, marginBottom: 8 }}>
+            💊 {n.supplementCount} supplement{n.supplementCount === 1 ? "" : "s"} logged
+            {n.topSupplement ? ` · most: ${n.topSupplement.name}` : ""}
+          </div>
+        )}
+
+        {n.restaurants.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 900, color: theme.textSub, letterSpacing: "0.18em", marginBottom: 6 }}>
+              TAGGED ON LIVELEE
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {n.restaurants.slice(0, 4).map((r, i) => (
+                <div key={i} style={{
+                  background: "rgba(8,20,40,0.50)", border: `1px solid ${theme.accent3}33`,
+                  borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 800, color: theme.text,
+                }}>
+                  📍 {r.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </CardFrame>
   );
 }
