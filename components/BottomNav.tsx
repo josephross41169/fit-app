@@ -365,7 +365,7 @@ export default function BottomNav() {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", marginBottom: 32, padding: "0 4px" }}>
           {!collapsed && (
-            <span className="text-2xl font-black" style={{ color: PURPLE, whiteSpace: "nowrap" }}>FIT ⚡</span>
+            <span className="text-2xl font-black" style={{ color: PURPLE, whiteSpace: "nowrap" }}>Livelee</span>
           )}
           <button
             onClick={toggleSidebar}
