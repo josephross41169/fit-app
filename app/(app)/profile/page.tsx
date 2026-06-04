@@ -2942,16 +2942,24 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     if (!user) return false;
     // Strip any non-http URLs (base64 data: URLs aren't real persisted images)
     const httpOnly = next.filter(u => typeof u === 'string' && u.startsWith('http'));
-    const { error } = await supabase
-      .from('users')
-      .update({ highlights: httpOnly } as any)
-      .eq('id', user.id);
-    if (error) {
-      console.error("Failed to persist highlights:", error);
-      return false;
+    // The database is sometimes slow/overloaded, which made a save error out so
+    // the change rolled back and the highlight reappeared on reload. Retry
+    // transient failures a few times, and verify (.select) that a row actually
+    // changed before reporting success — so we never falsely think it saved.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ highlights: httpOnly } as any)
+        .eq('id', user.id)
+        .select('id');
+      if (!error && data && data.length > 0) {
+        try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(httpOnly)); } catch {}
+        return true;
+      }
+      if (error) console.error(`persistHighlights attempt ${attempt + 1} failed:`, error);
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
     }
-    try { localStorage.setItem(`fit_highlights_${user.id}`, JSON.stringify(httpOnly)); } catch {}
-    return true;
+    return false;
   }
 
   function addHighlight(e:React.ChangeEvent<HTMLInputElement>) {
