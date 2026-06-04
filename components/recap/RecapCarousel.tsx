@@ -34,6 +34,7 @@ import {
   LiftsCard,
   CardioCard,
   WellnessCard,
+  NutritionCard,
   PhotosCard,
   StreaksCard,
   AchievementsCard,
@@ -79,6 +80,11 @@ const CARD_DEFS: CardDescriptor[] = [
     key: "wellness",
     show: r => r.wellness.sessions > 0,
     render: (r, _s, t) => <WellnessCard theme={t} recap={r} />,
+  },
+  {
+    key: "nutrition",
+    show: r => r.nutrition.daysLogged > 0,
+    render: (r, _s, t) => <NutritionCard theme={t} recap={r} />,
   },
   {
     key: "photos",
@@ -183,7 +189,7 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
           try { const { data } = await p; return data; } catch { return null; }
         };
 
-        const [weekLogs, historyLogs, badges, profile] = await Promise.all([
+        const [weekLogs, historyLogs, badges, profile, nutritionLogs] = await Promise.all([
           safe(supabase
             .from("activity_logs")
             .select("id, log_type, workout_category, workout_type, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, logged_at, created_at")
@@ -207,9 +213,19 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
             .select("username")
             .eq("id", user.id)
             .single()),
+          // Nutrition logs for the week — macros, foods, supplements, meals.
+          // Separate query (the macro/food columns aren't on the workout
+          // select above) and safe() so a missing column can't blank the recap.
+          safe(supabase
+            .from("activity_logs")
+            .select("id, log_type, meal_type, calories_total, protein_g, carbs_g, fat_g, water_oz, food_items, supplements, logged_at, created_at")
+            .eq("user_id", user.id)
+            .eq("log_type", "nutrition")
+            .gte("logged_at", startIso)
+            .lte("logged_at", endIso)),
         ]);
         if (cancelled) return;
-        setDbg(`logs:${(weekLogs||[]).length} hist:${(historyLogs||[]).length} badges:${(badges||[]).length} · fetching posts…`);
+        setDbg(`logs:${(weekLogs||[]).length} hist:${(historyLogs||[]).length} badges:${(badges||[]).length} nut:${(nutritionLogs||[]).length} · fetching posts…`);
         // Posts: try the rich select (with location join + media columns)
         // first; if it errors for ANY reason, fall back to the minimal,
         // always-present columns. Either way we never throw.
@@ -263,7 +279,8 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
             (historyLogs || []) as any[],
             (badges || []) as any[],
             (postsData || []) as any[],
-            priorWeekLogs as any[]
+            priorWeekLogs as any[],
+            (nutritionLogs || []) as any[]
           );
         } catch (be: any) {
           buildErr = be?.message || String(be) || "unknown";
