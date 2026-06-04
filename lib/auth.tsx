@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
@@ -50,6 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  // Tracks the currently signed-in user's id without the stale-closure
+  // problem inside the async auth listener. Used to tell a *real* sign-in
+  // (different user / first sign-in) apart from the token-refresh and
+  // tab-focus events Supabase re-fires for the SAME user — so we don't
+  // needlessly re-set `user` and re-fetch the profile (which makes the whole
+  // app look like it reloaded every time you switch tabs).
+  const userIdRef = useRef<string | null>(null);
 
   async function fetchProfile(authUser: User): Promise<AuthUser> {
     try {
@@ -84,10 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(session);
       if (session?.user) {
+        userIdRef.current = session.user.id;
         setUser(session.user);
         setLoading(false);
         fetchProfile(session.user).then(withProfile => { if (mounted) setUser(withProfile); });
       } else {
+        userIdRef.current = null;
         setLoading(false);
       }
     }).catch(() => {
@@ -122,18 +131,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Real sign-out — honor it.
       if (event === 'SIGNED_OUT') {
+        userIdRef.current = null;
         setUser(null);
         setSession(null);
         setLoading(false);
         return;
       }
 
-      // Have a session — happy path. Mirror it into state.
+      // Have a session — happy path.
       if (newSession?.user) {
+        // Always mirror the latest session (the token may have rotated).
         setSession(newSession);
-        setUser(newSession.user);
         setLoading(false);
-        fetchProfile(newSession.user).then(withProfile => { if (mounted) setUser(withProfile); });
+        // BUT only re-set `user` + re-fetch the profile when the signed-in
+        // user actually CHANGED (a genuine new sign-in). Supabase re-fires
+        // SIGNED_IN / TOKEN_REFRESHED for the SAME user on token refresh and
+        // every time the tab regains focus — re-setting `user` there hands
+        // every component a new object reference and re-runs fetchProfile,
+        // which cascades a full re-render + data refetch (the "reloads on
+        // tab switch" the user noticed). Same id ⇒ no-op for `user`.
+        if (userIdRef.current !== newSession.user.id) {
+          userIdRef.current = newSession.user.id;
+          setUser(newSession.user);
+          fetchProfile(newSession.user).then(withProfile => { if (mounted) setUser(withProfile); });
+        }
         return;
       }
 
@@ -161,11 +182,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (refreshed?.session?.user) {
           // Recovered. Don't sign them out.
           setSession(refreshed.session);
-          setUser(refreshed.session.user);
           setLoading(false);
-          fetchProfile(refreshed.session.user).then(withProfile => { if (mounted) setUser(withProfile); });
+          if (userIdRef.current !== refreshed.session.user.id) {
+            userIdRef.current = refreshed.session.user.id;
+            setUser(refreshed.session.user);
+            fetchProfile(refreshed.session.user).then(withProfile => { if (mounted) setUser(withProfile); });
+          }
         } else {
           // Refresh truly failed — user is logged out for real.
+          userIdRef.current = null;
           setUser(null);
           setSession(null);
           setLoading(false);
@@ -192,10 +217,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Use getSession (cached) rather than the user state ref to avoid
       // stale-closure issues.
       supabase.auth.getSession().then(({ data }) => {
-        if (!data?.session) return;
+        const sess = data?.session;
+        if (!sess) return;
+        // Only force a refresh when the access token is actually near (or
+        // past) expiry. Refreshing on EVERY tab focus is what made the app
+        // re-fetch and feel like it reloaded each time you came back — and
+        // supabase-js already auto-refreshes on its own schedule, so the
+        // common case (token still valid) needs nothing here.
+        const expSec = (sess as any).expires_at as number | undefined;
+        if (!expSec) return;
+        const secondsLeft = expSec - Math.floor(Date.now() / 1000);
+        if (secondsLeft > 120) return; // still valid for >2 min — leave it alone
         // Best-effort. If the refresh returns a session, the
-        // onAuthStateChange listener above will update state. If it
-        // fails, we keep the existing session — user can still browse.
+        // onAuthStateChange listener above will update state (and only
+        // re-set `user` if the id changed). If it fails, we keep the
+        // existing session — user can still browse.
         supabase.auth.refreshSession().catch(() => {});
       }).catch(() => {});
     }
