@@ -184,26 +184,35 @@ export default function GroupHighlights({
     if (!currentUserId) return;
     setSaving(true);
     setSaveError(null);
-    try {
-      const res = await fetch("/api/group-photos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "save_group_highlights",
-          payload: { userId: currentUserId, groupId, urls: staged },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setSaveError(data.error || "Save failed");
-        setSaving(false);
-        return;
+    // The database is sometimes slow/overloaded, which made the save fail and
+    // the removed highlight reappear on reload. Retry transient failures a few
+    // times; bail immediately on a 403 (permission) since retrying won't help.
+    let lastErr = "Save failed";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch("/api/group-photos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "save_group_highlights",
+            payload: { userId: currentUserId, groupId, urls: staged },
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && !data.error) {
+          onSaved?.(staged);
+          setEditing(false);
+          setSaving(false);
+          return;
+        }
+        lastErr = data.error || "Save failed";
+        if (res.status === 403) break;
+      } catch (e: any) {
+        lastErr = e?.message || "Save failed";
       }
-      onSaved?.(staged);
-      setEditing(false);
-    } catch (e: any) {
-      setSaveError(e?.message || "Save failed");
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
     }
+    setSaveError(lastErr);
     setSaving(false);
   }
 
