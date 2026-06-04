@@ -58,6 +58,62 @@ function renderMotif(id: MotifId, theme: Theme, variant: "fill" | "topRight" | "
   const accent3 = theme.accent3;
 
   switch (id) {
+    case "paintSplash": {
+      // Splattered-paint look: a handful of soft organic blobs in the theme's
+      // splash palette, scattered across the card, surrounded by smaller
+      // droplets/flecks. Soft blur + varied opacity makes it read like wet
+      // paint rather than hard geometric shapes. Colors come from the theme
+      // so each week's palette flows through.
+      const palette = [accent, accent2, accent3, fill];
+      // A blobby organic path (roughly circular but lumpy), scaled/placed via transform.
+      const blob = (cx: number, cy: number, r: number, color: string, op: number, rot: number, key: string) => (
+        <path
+          key={key}
+          transform={`translate(${cx} ${cy}) rotate(${rot}) scale(${r})`}
+          d="M0.9,-0.4 C1.1,0.0 0.7,0.6 0.2,0.9 C-0.3,1.1 -0.9,0.8 -1.0,0.2 C-1.1,-0.4 -0.7,-0.9 -0.2,-1.0 C0.4,-1.1 0.7,-0.8 0.9,-0.4 Z"
+          fill={color}
+          opacity={op}
+        />
+      );
+      // Scattered round droplets/flecks.
+      const drop = (cx: number, cy: number, r: number, color: string, op: number, key: string) => (
+        <circle key={key} cx={cx} cy={cy} r={r} fill={color} opacity={op} />
+      );
+      return (
+        <g>
+          <defs>
+            <filter id="paintBlur" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="1.1" />
+            </filter>
+          </defs>
+          <g filter="url(#paintBlur)">
+            {/* Big soft splashes anchored to the corners so the center stays
+                a touch calmer for text. */}
+            {blob(16, 24, 20, palette[0], 0.85, 20, "b1")}
+            {blob(86, 40, 24, palette[1], 0.8, -35, "b2")}
+            {blob(24, 104, 26, palette[2], 0.78, 60, "b3")}
+            {blob(82, 120, 22, palette[3], 0.82, -15, "b4")}
+            {blob(54, 70, 16, palette[1], 0.5, 120, "b5")}
+            {/* Mid-size accent blobs */}
+            {blob(70, 88, 11, palette[0], 0.7, 200, "b6")}
+            {blob(40, 46, 9, palette[3], 0.65, 300, "b7")}
+          </g>
+          {/* Crisp droplets/flecks on top (not blurred) — the "splatter". */}
+          {drop(40, 18, 1.6, palette[1], 0.9, "d1")}
+          {drop(64, 28, 1.1, palette[0], 0.85, "d2")}
+          {drop(12, 56, 2.0, palette[2], 0.8, "d3")}
+          {drop(92, 64, 1.4, palette[3], 0.85, "d4")}
+          {drop(30, 80, 1.2, palette[0], 0.8, "d5")}
+          {drop(74, 56, 1.8, palette[2], 0.75, "d6")}
+          {drop(50, 110, 1.5, palette[1], 0.85, "d7")}
+          {drop(60, 128, 1.0, palette[3], 0.8, "d8")}
+          {drop(18, 126, 1.3, palette[0], 0.8, "d9")}
+          {drop(88, 100, 1.1, palette[1], 0.8, "d10")}
+          {drop(46, 92, 0.9, palette[2], 0.75, "d11")}
+          {drop(36, 34, 1.0, palette[3], 0.8, "d12")}
+        </g>
+      );
+    }
     case "warpedCircles":
       // Concentric rings drifting toward the bottom-right. Reads like the
       // optical-illusion patterns Spotify uses on their Wrapped cards.
