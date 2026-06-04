@@ -44,6 +44,37 @@ export default function CardFrame({ theme, children, className, style, hideBrand
       {/* Decorative motif — sits behind everything */}
       <Motif theme={theme} variant="fill" />
 
+      {/* Contrast scrim — sits BETWEEN the motif and the content. This is the
+          Spotify-Wrapped trick: the bold pattern stays, but a darkening
+          gradient keeps text legible everywhere instead of letting the
+          pattern bleed through the numbers. Darkest at the very top and
+          bottom (where headers / footer sit) and gently shaded through the
+          middle so a same-color motif (e.g. yellow circles under yellow text)
+          can't wash out the type. pointer-events:none so it never blocks taps. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 1,
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.30) 22%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.34) 78%, rgba(0,0,0,0.60) 100%)",
+        }}
+      />
+      {/* A soft vignette to push the corners down further and frame the card. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 1,
+          background:
+            "radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.38) 100%)",
+        }}
+      />
+
       {/* Brand label — fixed top-right corner, very small */}
       {!hideBrand && (
         <div
@@ -74,6 +105,10 @@ export default function CardFrame({ theme, children, className, style, hideBrand
           display: "flex",
           flexDirection: "column",
           zIndex: 2,
+          // Subtle shadow on every text element so numbers/labels stay crisp
+          // against the bold pattern behind them (Spotify does the same — text
+          // never relies on the background being plain).
+          textShadow: "0 1px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.6)",
         }}
       >
         {children}
