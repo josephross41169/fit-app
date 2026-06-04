@@ -884,6 +884,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             if (nutrition) {
               if (nutrition.calories>0) chips.push(chip("kcal","🥗",`${nutrition.calories} kcal`));
               if (nutrition.protein>0) chips.push(chip("pro","🥩",`${nutrition.protein}g protein`));
+              // Supplements — one chip each, alongside the nutrition chips.
+              ((nutrition as any).supplements || []).forEach((s: any, si: number) => {
+                if (s && s.name) chips.push(chip(`supp${si}`,"💊",s.name));
+              });
             }
             return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>{chips}</div>;
           })()}
@@ -2017,6 +2021,9 @@ export default function ProfilePage() {
         sugar:    0,
         notes: nutritionLogs.map((l: any) => l.notes).filter(Boolean).join(' · '),
         photoUrls: nutritionLogs.map((l: any) => l.photo_url).filter(Boolean),
+        // Flatten supplements from all of the day's nutrition logs into one
+        // list ({name, photo_url}) for the activity card.
+        supplements: nutritionLogs.flatMap((l: any) => Array.isArray(l.supplements) ? l.supplements : []),
         meals: nutritionLogs.map((l: any) => ({
           key:   l.meal_type || 'Meal',
           emoji: '🍽️',
