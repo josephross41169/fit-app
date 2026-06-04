@@ -43,7 +43,11 @@ export default function GroupBadges({
   const [totals, setTotals] = useState<GroupBadgeTotal[] | null>(null);
   const [openMetric, setOpenMetric] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [hidden, setHidden] = useState<string[]>(hiddenBadges || []);
+
+  // How many badges to show before "Show all" (collapsed preview).
+  const PREVIEW_COUNT = 4;
 
   useEffect(() => { setHidden(hiddenBadges || []); }, [hiddenBadges]);
 
@@ -65,8 +69,18 @@ export default function GroupBadges({
   }, [hidden, groupId, onHiddenChange]);
 
   // Visible badges = catalog minus hidden (owner in manage mode sees all).
-  const visible = (totals || GROUP_BADGES.map(d => ({ metric: d.metric, def: d, total: 0, tier: 0 })))
-    .filter(t => manage || !hidden.includes(t.metric));
+  // Sorted so earned (higher tier / more progress) badges surface first, so
+  // the collapsed preview shows the group's best badges.
+  const allVisible = (totals || GROUP_BADGES.map(d => ({ metric: d.metric, def: d, total: 0, tier: 0 })))
+    .filter(t => manage || !hidden.includes(t.metric))
+    .slice()
+    .sort((a, b) => (b.tier - a.tier) || (b.total - a.total));
+
+  // In manage mode show everything; otherwise collapse to a preview until
+  // the user expands.
+  const showAll = manage || expanded;
+  const visible = showAll ? allVisible : allVisible.slice(0, PREVIEW_COUNT);
+  const hiddenCount = allVisible.length - visible.length;
 
   return (
     <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.border}`, padding: 18, marginTop: 16 }}>
@@ -90,7 +104,7 @@ export default function GroupBadges({
       {totals === null ? (
         <div style={{ color: C.sub, fontSize: 13, padding: "16px 0", textAlign: "center" }}>Loading badges…</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(125px, 1fr))", gap: 9 }}>
           {visible.map(t => {
             const isHidden = hidden.includes(t.metric);
             const style = tierStyle(t.tier);
@@ -154,6 +168,16 @@ export default function GroupBadges({
             );
           })}
         </div>
+      )}
+
+      {/* Show all / Show less toggle (hidden in manage mode, where all show) */}
+      {totals !== null && !manage && allVisible.length > PREVIEW_COUNT && (
+        <button
+          onClick={() => { setExpanded(e => !e); if (expanded) setOpenMetric(null); }}
+          style={{ width: "100%", marginTop: 12, background: "transparent", color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 0", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}
+        >
+          {expanded ? "Show less ▲" : `Show all ${allVisible.length} badges ▾`}
+        </button>
       )}
 
       {/* Lazy contributor list — only mounts (and fetches) when a badge is open */}
