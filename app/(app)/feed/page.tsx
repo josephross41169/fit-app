@@ -3324,11 +3324,29 @@ export default function FeedPage() {
                     <div style={{ width:"100%",height:"100%",position:"relative" }}>
                       <img src={ImagePresets.thumb(myStory.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
                     </div>
-                  ) : (
-                    <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff" }}>
-                      {postingStory ? "…" : "＋"}
-                    </div>
-                  )}
+                  ) : (() => {
+                    // Empty state ("Add story"): show the user's own avatar as
+                    // the backdrop with a small ＋ badge in the corner — so the
+                    // tile isn't a blank circle. Falls back to the gradient ＋
+                    // when there's no avatar set.
+                    const myAvatar = (user as any)?.profile?.avatar_url || (user as any)?.user_metadata?.avatar_url || null;
+                    if (postingStory) {
+                      return (
+                        <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#fff" }}>…</div>
+                      );
+                    }
+                    return (
+                      <div style={{ width:"100%", height:"100%", position:"relative" }}>
+                        {myAvatar ? (
+                          <img src={myAvatar} loading="lazy" decoding="async" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                        ) : (
+                          <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)` }} />
+                        )}
+                        {/* ＋ badge — corner overlay so the avatar stays visible */}
+                        <div style={{ position:"absolute", bottom:-2, right:-2, width:22, height:22, borderRadius:"50%", background:C.blue, border:"2px solid #0D0D0D", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, lineHeight:1, color:"#fff" }}>＋</div>
+                      </div>
+                    );
+                  })()}
                 </TierFrame>
                 <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                   {myStory ? "Your story" : "Add story"}
