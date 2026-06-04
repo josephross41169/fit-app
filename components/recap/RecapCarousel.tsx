@@ -255,6 +255,7 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
         // take down the whole screen — we still render whatever we can.
         setDbg(`posts:${(postsData||[]).length} streak:${(streakLogs||[]).length} · building…`);
         let built: Recap | null = null;
+        let buildErr = "";
         try {
           built = buildRecap(
             weekStart,
@@ -265,10 +266,14 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
             priorWeekLogs as any[]
           );
         } catch (be: any) {
-          console.warn("[recap] buildRecap failed:", be?.message);
+          buildErr = be?.message || String(be) || "unknown";
+          console.warn("[recap] buildRecap failed:", be);
         }
         if (cancelled) return;
-        if (!built) { setError("Couldn't assemble your recap from this week's data."); return; }
+        if (!built) {
+          setError(`buildRecap crashed: ${buildErr || "returned nothing"} · (logs:${(weekLogs||[]).length} posts:${(postsData||[]).length} streak:${(streakLogs||[]).length})`);
+          return;
+        }
 
         setRecap(built);
         setUsername((profile as any)?.username || undefined);
