@@ -93,7 +93,7 @@ function renderCanvas(canvas: HTMLCanvasElement, data: ShareCardData) {
   // ── FIT brand ──────────────────────────────────────────────────────────────
   ctx.font = "bold 64px system-ui, -apple-system, sans-serif";
   ctx.fillStyle = "#ffffff";
-  ctx.fillText("FIT ⚡", 60, 100);
+  ctx.fillText("Livelee", 60, 100);
 
   // ── Tier badge ────────────────────────────────────────────────────────────
   const tier = data.tier && TIER_COLORS[data.tier] ? TIER_COLORS[data.tier] : TIER_COLORS.default;
