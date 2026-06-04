@@ -382,8 +382,8 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
 }
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; onLogSaved?: ()=>void; earnedBadges?: string[]; userLevel?: number };
-function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, onLogSaved, earnedBadges = [], userLevel = 1}:DayCardProps) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; onLogSaved?: ()=>void; earnedBadges?: string[]; userLevel?: number; editable?: boolean };
+function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, onLogSaved, earnedBadges = [], userLevel = 1, editable = true}:DayCardProps) {
   const { user } = useAuth();
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
@@ -1127,7 +1127,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   {workout.exercises&&workout.exercises.length>0&&<span>💪 {workout.exercises.length} exercise{workout.exercises.length!==1?'s':''}</span>}
                   {((workout as any).cardio||[]).length>0&&<span>🏃 {((workout as any).cardio||[]).length} cardio</span>}
                 </div>
-                <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>
+                {editable && <span onClick={e=>{e.stopPropagation();setWoBuf({...workout,cardio:(workout as any).cardio||[]});setEditWo(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>}
                 <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:woOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
@@ -1247,7 +1247,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E",marginBottom:20}}>
             <div style={{fontSize:34,marginBottom:8}}>😴</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No workout logged</div>
-            <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>
+            {editable && <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>}
           </div>
         )}
 
@@ -1297,7 +1297,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
                 <div style={{flex:1,minWidth:0,fontSize:13,color:C.sub}}>{nutrition.calories} kcal  ·  {nutrition.protein}g protein  ·  {nutrition.sugar}g sugar</div>
-                <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:"rgba(74,222,128,0.12)",color:"#4ADE80",border:"1px solid rgba(74,222,128,0.32)",cursor:"pointer"}}>✏️ Edit</span>
+                {editable && <span onClick={e=>{e.stopPropagation();setNutBuf({...nutrition});setEditNut(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:"rgba(74,222,128,0.12)",color:"#4ADE80",border:"1px solid rgba(74,222,128,0.32)",cursor:"pointer"}}>✏️ Edit</span>}
                 <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:nut?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
@@ -1421,7 +1421,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E"}}>
             <div style={{fontSize:34,marginBottom:8}}>🥗</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No nutrition logged</div>
-            <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>
+            {editable && <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>}
           </div>
         )}
 
@@ -1460,7 +1460,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
                 <div style={{flex:1,minWidth:0,fontSize:13,color:C.sub}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
-                <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>
+                {editable && <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>}
                 <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
                 </div>
@@ -1524,7 +1524,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E",marginTop:16}}>
             <div style={{fontSize:34,marginBottom:8}}>🌿</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No wellness logged</div>
-            <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>
+            {editable && <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>}
           </div>
         )}
         {/* ── BADGES ── */}
@@ -1660,9 +1660,21 @@ function ProfileSkeleton() {
   );
 }
 
-export default function ProfilePage() {
+export default function ProfilePage({ overrideUserId, overrideProfile }: { overrideUserId?: string | null; overrideProfile?: any } = {}) {
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
+
+  // ── Whose profile is shown vs. who is logged in ──────────────────────────
+  // When `overrideUserId` is passed (public /profile/[username] route), this
+  // page renders THAT user's profile read-only. With no override it renders
+  // the logged-in user's own profile exactly as before, so the owner view is
+  // byte-for-byte unchanged.
+  //   • viewUserId  — whose data we FETCH + display
+  //   • viewProfile — that user's profile row (for name/avatar/bio/counts/etc.)
+  //   • isOwn       — gates every owner-only control + mutation
+  const isOwn = !overrideUserId || overrideUserId === user?.id;
+  const viewUserId: string = (overrideUserId ?? user?.id) || "";
+  const viewProfile: any = overrideProfile ?? user?.profile ?? null;
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false);
@@ -1680,17 +1692,17 @@ export default function ProfilePage() {
     city: "",
   });
 
-  // Sync profile state from user data
+  // Sync profile state from the viewed user's data
   useEffect(() => {
-    if (user?.profile) {
+    if (viewProfile) {
       setProfile({
-        name: user.profile.full_name || "",
-        username: user.profile.username || "",
-        bio: user.profile.bio || "",
-        city: (user.profile as any).city || "",
+        name: viewProfile.full_name || "",
+        username: viewProfile.username || "",
+        bio: viewProfile.bio || "",
+        city: (viewProfile as any).city || "",
       });
     }
-  }, [user]);
+  }, [viewProfile]);
   const [bannerImg,setBanner] = useState<string|null>(null);
   const [profileImg,setAvatar]= useState<string|null>(null);
   // Video avatar URL — when set, the profile page renders a muted/looping
@@ -1769,7 +1781,7 @@ export default function ProfilePage() {
     // Now that the strip supports autoplay video tiles, we accept both.
     supabase.from('posts')
       .select('media_url, media_type, media_types')
-      .eq('user_id', user.id)
+      .eq('user_id', viewUserId)
       .eq('is_public', true)
       .not('media_url','is',null)
       .order('created_at', { ascending: false })
@@ -1780,7 +1792,7 @@ export default function ProfilePage() {
           .filter((url): url is string => Boolean(url));
         setFeedPhotos(urls);
       });
-  },[user?.id]);
+  },[viewUserId]);
 
   // ── Highlights state ──
   const [highlights,setHighlights] = useState<string[]>([]);
@@ -1823,7 +1835,7 @@ export default function ProfilePage() {
       } catch {}
     }
     loadHighlights();
-  }, [user?.id]);
+  }, [viewUserId]);
 
   // Track whether we've already initialized avatar/banner from auth.profile.
   // After upload we update the DB directly; the auth.profile value lags behind
@@ -1844,55 +1856,55 @@ export default function ProfilePage() {
       setBanner(latestUploadedBannerUrlRef.current);
       initedBannerRef.current = true;
     }
-    if (user?.profile?.avatar_url && !initedAvatarRef.current) {
-      setAvatar(user.profile.avatar_url);
+    if (viewProfile?.avatar_url && !initedAvatarRef.current) {
+      setAvatar(viewProfile.avatar_url);
       // Hydrate video URL if the user has one stored. Cast through any
       // because the column was added in a recent migration; the typed
-      // user.profile shape doesn't include it yet.
-      const vid = (user.profile as any)?.avatar_video_url;
+      // profile shape doesn't include it yet.
+      const vid = (viewProfile as any)?.avatar_video_url;
       if (vid) setAvatarVideoUrl(vid);
       initedAvatarRef.current = true;
     }
-    if (user?.profile?.banner_url && !initedBannerRef.current) {
-      setBanner(user.profile.banner_url);
+    if (viewProfile?.banner_url && !initedBannerRef.current) {
+      setBanner(viewProfile.banner_url);
       initedBannerRef.current = true;
     }
-    if (user?.id) {
-      // Load saved banner position
+    if (viewUserId) {
+      // Load saved banner position (own device only; viewed users miss → DB)
       try {
-        const savedPos = localStorage.getItem(`banner_position_${user.id}`);
+        const savedPos = localStorage.getItem(`banner_position_${viewUserId}`);
         if (savedPos !== null) setBannerPosition(parseFloat(savedPos));
       } catch {}
-      // Also check Supabase profile for saved banner_position
-      if ((user as any)?.profile?.banner_position !== undefined && (user as any)?.profile?.banner_position !== null) {
-        setBannerPosition((user as any).profile.banner_position);
+      // Also check the viewed profile for saved banner_position
+      if ((viewProfile as any)?.banner_position !== undefined && (viewProfile as any)?.banner_position !== null) {
+        setBannerPosition((viewProfile as any).banner_position);
       }
       // Banner zoom — local first, then Supabase
       try {
-        const savedScale = localStorage.getItem(`banner_scale_${user.id}`);
+        const savedScale = localStorage.getItem(`banner_scale_${viewUserId}`);
         if (savedScale !== null) setBannerScale(Math.max(100, Math.min(300, parseFloat(savedScale))));
       } catch {}
-      if ((user as any)?.profile?.banner_scale !== undefined && (user as any)?.profile?.banner_scale !== null) {
-        setBannerScale((user as any).profile.banner_scale);
+      if ((viewProfile as any)?.banner_scale !== undefined && (viewProfile as any)?.banner_scale !== null) {
+        setBannerScale((viewProfile as any).banner_scale);
       }
       // Load saved avatar position
       try {
-        const savedAvatarPos = localStorage.getItem(`avatar_position_${user.id}`);
+        const savedAvatarPos = localStorage.getItem(`avatar_position_${viewUserId}`);
         if (savedAvatarPos !== null) setAvatarPosition(parseFloat(savedAvatarPos));
       } catch {}
-      if ((user as any)?.profile?.avatar_position !== undefined && (user as any)?.profile?.avatar_position !== null) {
-        setAvatarPosition((user as any).profile.avatar_position);
+      if ((viewProfile as any)?.avatar_position !== undefined && (viewProfile as any)?.avatar_position !== null) {
+        setAvatarPosition((viewProfile as any).avatar_position);
       }
       // Avatar zoom
       try {
-        const savedAvatarScale = localStorage.getItem(`avatar_scale_${user.id}`);
+        const savedAvatarScale = localStorage.getItem(`avatar_scale_${viewUserId}`);
         if (savedAvatarScale !== null) setAvatarScale(Math.max(100, Math.min(300, parseFloat(savedAvatarScale))));
       } catch {}
-      if ((user as any)?.profile?.avatar_scale !== undefined && (user as any)?.profile?.avatar_scale !== null) {
-        setAvatarScale((user as any).profile.avatar_scale);
+      if ((viewProfile as any)?.avatar_scale !== undefined && (viewProfile as any)?.avatar_scale !== null) {
+        setAvatarScale((viewProfile as any).avatar_scale);
       }
     }
-  }, [user?.profile?.avatar_url, user?.profile?.banner_url, user?.id]);
+  }, [viewProfile?.avatar_url, viewProfile?.banner_url, viewUserId]);
   const [showAllPhotos,setShowAllPhotos] = useState(false);
   // Tagged-in modal state — opens when user taps the 🏷️ Tagged In button.
   // Modal lazily fetches its own data from /api/db get_tagged_posts so the
@@ -2074,12 +2086,12 @@ export default function ProfilePage() {
   // replaces — we don't try to merge new pages with existing because
   // the 500-row pull is cheap enough to just overwrite once.
   const loadActivityLogs = useCallback(async (limit: number) => {
-    if (!user) return;
+    if (!viewUserId) return;
     try {
       const { data } = await supabase
         .from('activity_logs')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', viewUserId)
         .order('logged_at', { ascending: false })
         .limit(limit);
 
@@ -2131,14 +2143,14 @@ export default function ProfilePage() {
         const { data } = await supabase
           .from('follows')
           .select('follower_id, users!follows_follower_id_fkey(id,username,full_name,avatar_url)')
-          .eq('following_id', user.id)
+          .eq('following_id', viewUserId)
           .limit(100);
         setSocialList((data || []).map((r:any) => r.users).filter(Boolean));
       } else {
         const { data } = await supabase
           .from('follows')
           .select('following_id, users!follows_following_id_fkey(id,username,full_name,avatar_url)')
-          .eq('follower_id', user.id)
+          .eq('follower_id', viewUserId)
           .limit(100);
         setSocialList((data || []).map((r:any) => r.users).filter(Boolean));
       }
@@ -2150,11 +2162,11 @@ export default function ProfilePage() {
   const [completedChallenges, setCompletedChallenges] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!viewUserId) return;
     supabase
       .from('challenge_participants')
       .select('*, challenges(name, emoji, group_id, deadline, is_active, groups(name))')
-      .eq('user_id', user.id)
+      .eq('user_id', viewUserId)
       .gt('score', 0)
       .then(({ data }) => {
         if (data) {
@@ -2170,7 +2182,7 @@ export default function ProfilePage() {
           setCompletedChallenges(completed);
         }
       });
-  }, [user?.id]);
+  }, [viewUserId]);
 
   // ── Badge state ──
   // Badges are fetched with the year column so yearly badges (like
@@ -2218,7 +2230,7 @@ export default function ProfilePage() {
 
   const reloadProfileGoals = useCallback(() => {
     if (!user) return;
-    supabase.from('goals').select('*').eq('user_id', user.id).eq('is_completed', false)
+    supabase.from('goals').select('*').eq('user_id', viewUserId).eq('is_completed', false)
       .order('created_at', { ascending: false }).limit(8)
       .then(({ data }) => {
         if (data) {
@@ -2268,7 +2280,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('badges').select('badge_id, year, id, pin_slot').eq('user_id', user.id)
+    supabase.from('badges').select('badge_id, year, id, pin_slot').eq('user_id', viewUserId)
       .then(({ data }) => {
         if (data) setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null })));
       });
@@ -2280,7 +2292,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user || profileGoalsHistoryTab !== "past") return;
     if (profilePastGoals.length > 0) return;
-    supabase.from('goals').select('*').eq('user_id', user.id)
+    supabase.from('goals').select('*').eq('user_id', viewUserId)
       .order('created_at', { ascending: false }).limit(20)
       .then(({ data }) => {
         if (!data) return;
@@ -2338,7 +2350,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user || !showAllBadgesModal) return;
-    getAllUserRivalryBadges(user.id).then(setRivalryBadges).catch(() => setRivalryBadges([]));
+    getAllUserRivalryBadges(viewUserId).then(setRivalryBadges).catch(() => setRivalryBadges([]));
   }, [user, showAllBadgesModal]);
 
   // Fetch current counts for each badge family so we can show progress like
@@ -2351,7 +2363,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user || !showAllBadgesModal) return;
     (async () => {
-      const uid = user.id;
+      const uid = viewUserId;
       try {
         const [
           // Existing
@@ -2639,7 +2651,7 @@ export default function ProfilePage() {
       }
     }
     loadCounters();
-  }, [user?.id, realDays.length]);
+  }, [viewUserId, realDays.length]);
 
   useEffect(() => {
     if (!user) return;
@@ -2649,19 +2661,19 @@ export default function ProfilePage() {
       const { count } = await supabase
         .from('activity_logs')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user!.id)
+        .eq('user_id', viewUserId)
         .gte('logged_at', since);
       const logsCount = count || 0;
       const info = getTierInfo(logsCount, 0);
       setTierInfo(info);
       setUserTier(info.tier);
-      // Persist tier back to DB for feed to pick up
-      if (user) {
+      // Persist tier back to DB for feed to pick up — only for your own profile.
+      if (isOwn && user) {
         supabase.from('users').update({ tier: info.tier, logs_last_28_days: logsCount } as any).eq('id', user.id).catch(() => {});
       }
     }
     loadTier();
-  }, [user?.id, realDays.length]);
+  }, [viewUserId, realDays.length]);
 
   // uploadPhoto imported from @/lib/uploadPhoto — server-side, bypasses RLS
 
@@ -3065,7 +3077,7 @@ export default function ProfilePage() {
   // (the business branch needs user.profile) and "flashes" the athlete
   // profile before snapping to the business view. Waiting for profile to
   // exist means we branch to the correct layout on the first paint.
-  if (!user.profile) {
+  if (!viewProfile) {
     return <ProfileSkeleton />;
   }
 
@@ -3076,11 +3088,11 @@ export default function ProfilePage() {
   // info. This branch applies to the LOGGED-IN user viewing their own
   // profile at /profile — the public profile at /profile/[username] already
   // has its own branch.
-  if (user?.profile && isBusinessAccount(user.profile)) {
+  if (viewProfile && isBusinessAccount(viewProfile)) {
     return (
       <BusinessProfileView
-        profile={user.profile}
-        currentUser={{ id: user.id }}
+        profile={viewProfile}
+        currentUser={{ id: user?.id }}
         // No message/block on own profile — they're the owner
       />
     );
@@ -4219,10 +4231,10 @@ export default function ProfilePage() {
             <input style={inputStyle} value={profile.username} onChange={e=>setProfile(p=>({...p,username:e.target.value}))} placeholder="Username"/>
             <textarea style={{...inputStyle,resize:"none"}} rows={3} value={profile.bio} onChange={e=>setProfile(p=>({...p,bio:e.target.value}))} placeholder="Bio"/>
             <input style={inputStyle} value={profile.city} onChange={e=>setProfile(p=>({...p,city:e.target.value}))} placeholder="City (e.g. Las Vegas, NV)"/>
-            {(user?.profile as any)?.account_type === 'business' && (
+            {(viewProfile as any)?.account_type === 'business' && (
               <>
-                <input style={inputStyle} value={(user?.profile as any)?.business_name || ''} readOnly placeholder="Business Name" />
-                <input style={inputStyle} value={(user?.profile as any)?.business_website || ''} readOnly placeholder="Website URL" />
+                <input style={inputStyle} value={(viewProfile as any)?.business_name || ''} readOnly placeholder="Business Name" />
+                <input style={inputStyle} value={(viewProfile as any)?.business_website || ''} readOnly placeholder="Website URL" />
               </>
             )}
             <div style={{display:"flex",gap:12,marginTop:8}}>
@@ -4257,9 +4269,9 @@ export default function ProfilePage() {
 
       {showTaggedPosts && user && (
         <TaggedPostsModal
-          userId={user.id}
-          displayName={profile.name || user.email || "You"}
-          isOwnProfile={true}
+          userId={viewUserId}
+          displayName={profile.name || (isOwn ? (user?.email || "You") : (profile.username || "User"))}
+          isOwnProfile={isOwn}
           onClose={() => setShowTaggedPosts(false)}
         />
       )}
@@ -4396,13 +4408,13 @@ export default function ProfilePage() {
                 <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
               )}
 
-              {(user?.profile as any)?.account_type === 'business' && (
+              {(viewProfile as any)?.account_type === 'business' && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
                   <span style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
-                    🏢 {(user?.profile as any)?.business_type || 'Business'}
+                    🏢 {(viewProfile as any)?.business_type || 'Business'}
                   </span>
-                  {(user?.profile as any)?.business_website && (
-                    <a href={(user?.profile as any)?.business_website} target="_blank" rel="noopener noreferrer"
+                  {(viewProfile as any)?.business_website && (
+                    <a href={(viewProfile as any)?.business_website} target="_blank" rel="noopener noreferrer"
                       style={{ background: "#1A2A1A", color: "#7C3AED", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
                       🔗 Website
                     </a>
@@ -4492,8 +4504,8 @@ export default function ProfilePage() {
 
             <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:14,borderRadius:16,overflow:"hidden",border:"1px solid #2A3A2A"}}>
               {[
-                {l:"Followers",v:user?.profile?.followers_count??0,onClick:()=>openSocialModal("followers")},
-                {l:"Following",v:user?.profile?.following_count??0,onClick:()=>openSocialModal("following")},
+                {l:"Followers",v:viewProfile?.followers_count??0,onClick:()=>openSocialModal("followers")},
+                {l:"Following",v:viewProfile?.following_count??0,onClick:()=>openSocialModal("following")},
               ].map((s,i)=>(
                 <div key={s.l} onClick={s.onClick}
                   style={{flex:1,textAlign:"center",cursor:"pointer",padding:"14px 10px",background:"#111811",transition:"background 0.15s",position:"relative",borderLeft:i>0?"1px solid #2A3A2A":"none"}}
@@ -4506,11 +4518,19 @@ export default function ProfilePage() {
             </div>
 
             <div style={{display:"flex", gap:8, width:"100%"}}>
-              <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
-                onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
-                onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
-                ✏️ Edit Profile
-              </button>
+              {isOwn ? (
+                <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#DDD6FE"}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
+                  ✏️ Edit Profile
+                </button>
+              ) : (
+                viewUserId && (
+                  <div style={{flex:1}}>
+                    <FollowButton targetUserId={viewUserId} />
+                  </div>
+                )
+              )}
               <button onClick={shareProfile} aria-label="Share profile" style={{
                 padding:"11px 14px", borderRadius:14, border:`1.5px solid ${C.purple}`,
                 background: "transparent", color: C.purple,
@@ -4572,7 +4592,8 @@ export default function ProfilePage() {
               )}
             </button>
 
-            {/* Customizations panel — shows what's unlocked at each level */}
+            {/* Customizations panel — shows what's unlocked at each level (owner only) */}
+            {isOwn && (
             <button
               onClick={() => setShowCustomizations(true)}
               style={{
@@ -4602,6 +4623,7 @@ export default function ProfilePage() {
                 Tap to see your unlocked profile rewards →
               </div>
             </button>
+            )}
 
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               {/* Title row — just the heading + Edit toggle. The three
@@ -4612,12 +4634,12 @@ export default function ProfilePage() {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights {highlights.length > 0 && <span style={{fontSize:12,color:C.sub,fontWeight:600,marginLeft:6}}>{highlights.length}</span>}</div>
                 <div style={{display:"flex",gap:6}}>
-                  {highlights.length > 0 && (
+                  {isOwn && highlights.length > 0 && (
                     <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#2D1F52",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
                       {editingHighlights ? "✓ Done" : "✏️ Edit"}
                     </button>
                   )}
-                  {highlights.length < HIGHLIGHT_SLOTS && (
+                  {isOwn && highlights.length < HIGHLIGHT_SLOTS && (
                     <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",border:"none",cursor:"pointer"}}>
                       + Add
                     </button>
@@ -4628,7 +4650,7 @@ export default function ProfilePage() {
               <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
                 <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
                 <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
-                <a href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</a>
+                {isOwn && (<a href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</a>)}
               </div>
               {/* Highlights strip — horizontal scroll. Same component used by
                   group highlights (HighlightsStrip from GroupHighlights.tsx).
@@ -4637,10 +4659,14 @@ export default function ProfilePage() {
                   top when editingHighlights is true so users can remove items
                   without losing the strip's visual flow. */}
               {highlights.length === 0 ? (
+                isOwn ? (
                 <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(124,58,237,0.06)",color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
                   <span style={{fontSize:24}}>+</span>
                   <span>Add highlights — photos and videos from your posts</span>
                 </button>
+                ) : (
+                  <div style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(124,58,237,0.06)",color:C.sub,fontWeight:700,fontSize:13,textAlign:"center"}}>No highlights yet</div>
+                )
               ) : editingHighlights ? (
                 // Edit mode: show items as small thumbnails with × buttons.
                 // We don't autoplay here so the user can focus on managing
@@ -4675,10 +4701,12 @@ export default function ProfilePage() {
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>🎯 Goals</div>
+                {isOwn && (
                 <button
                   onClick={()=>setShowGoalCreate(true)}
                   style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",border:"1.5px solid #3D2A6E",cursor:"pointer"}}
                 >+ New</button>
+                )}
               </div>
 
               {/* Active/Past toggle */}
@@ -4763,8 +4791,8 @@ export default function ProfilePage() {
               </div>
               {user && (
                 <TemplateGallery
-                  ownerId={user.id}
-                  isOwner={true}
+                  ownerId={viewUserId}
+                  isOwner={isOwn}
                   onCreateNew={() => router.push("/post?openBuilder=1")}
                   onUseDay={(template, dayIndex) => {
                     // Stash the picked day in sessionStorage and bounce
@@ -4826,6 +4854,7 @@ export default function ProfilePage() {
                     <DayCard
                       key={day.id}
                       day={day as any}
+                      editable={isOwn}
                       workoutLogId={(day as any)._workoutLogId}
                       nutritionLogIds={(day as any)._nutritionLogIds}
                       // wellnessLogIds was previously missing here, which forced
@@ -4947,7 +4976,7 @@ export default function ProfilePage() {
                 Badges since streaks reflect current behavior and badges
                 reflect lifetime achievements; current state should be more
                 prominent. */}
-            {user && <StreakSection userId={user.id} theme="purple" />}
+            {viewUserId && <StreakSection userId={viewUserId} theme="purple" />}
 
             {/* Badges & Awards */}
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(124,58,237,0.08)",marginBottom:20}}>
@@ -5057,13 +5086,15 @@ export default function ProfilePage() {
                   </>
                 );
               })()}
+              {isOwn && (
               <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement
               </button>
+              )}
             </div>
 
             {/* Body Weight Tracker */}
-            {user && <WeightTracker userId={user.id} />}
+            {viewUserId && <WeightTracker userId={viewUserId} />}
 
             <EditableList title="Favorite Brands" items={brands} onSave={setBrands} emptyItem={{emoji:"👟",name:"New Brand"}}
               renderItem={(item,i,setList)=>(
