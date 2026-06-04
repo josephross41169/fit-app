@@ -21,6 +21,7 @@ export default function PostDeleteMenu({
   ownerId,
   currentUserId,
   onDeleted,
+  table = "posts",
   tint = "#9CA3AF",
   surface = "#1A1228",
   border = "#2D1F52",
@@ -29,6 +30,10 @@ export default function PostDeleteMenu({
   ownerId?: string | null;
   currentUserId?: string | null;
   onDeleted?: () => void;
+  /** which table the post lives in. Group-feed posts are in "group_posts";
+   *  feed / profile posts are in "posts" (the default). Deleting from the
+   *  wrong table silently removes 0 rows, so the post reappears on refetch. */
+  table?: string;
   /** icon color */
   tint?: string;
   /** popover background */
@@ -62,7 +67,7 @@ export default function PostDeleteMenu({
     setBusy(true);
     try {
       const { error } = await supabase
-        .from("posts")
+        .from(table)
         .delete()
         .eq("id", postId)
         .eq("user_id", currentUserId);
