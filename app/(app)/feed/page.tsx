@@ -1728,7 +1728,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                 position: "relative" as const,
                 overflow: "hidden" as const,
                 boxShadow: "0 8px 24px rgba(245,158,11,0.3)",
-                color: "#fff",
+                color: "#4A2F00",
               }}>
                 {/* Sparkle/ray pattern in the corners. Pure CSS radial
                     gradients — cheap and crisp on any zoom. */}
