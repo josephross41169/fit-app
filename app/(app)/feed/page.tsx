@@ -1724,7 +1724,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                 margin: "0 18px 12px",
                 borderRadius: 18,
                 padding: "24px 20px",
-                background: "linear-gradient(135deg, #FFE680 0%, #FFC81F 55%, #EBA600 100%)",
+                background: "linear-gradient(135deg, #FFE15C 0%, #FFD21F 50%, #FFC400 100%)",
                 position: "relative" as const,
                 overflow: "hidden" as const,
                 boxShadow: "0 8px 24px rgba(245,158,11,0.3)",
