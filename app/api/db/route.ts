@@ -2771,6 +2771,26 @@ async function handlePOST(req: NextRequest) {
       return NextResponse.json({ post: data });
     }
 
+    // ── Delete group post ───────────────────────────────────────────────────
+    // Group posts are created with the service-role client (admin) so they
+    // bypass RLS. Deletes must go through the same path: a client-side delete
+    // relies on a "delete own posts" RLS policy that isn't guaranteed to exist
+    // in every database, and when it's missing the delete silently removes 0
+    // rows so the post reappears on the next load. We enforce ownership here.
+    if (action === 'delete_group_post') {
+      const { userId, postId } = payload;
+      if (!userId || !postId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const { data: postRow } = await admin.from('group_posts').select('user_id').eq('id', postId).single();
+      // Already gone — treat as success so the UI can drop it cleanly.
+      if (!postRow) return NextResponse.json({ ok: true });
+      if (postRow.user_id !== userId) {
+        return NextResponse.json({ error: 'You can only delete your own posts' }, { status: 403 });
+      }
+      const { error } = await admin.from('group_posts').delete().eq('id', postId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
     // ── Create group event ─────────────────────────────────────────────────
     if (action === 'create_group_event') {
       const { userId, groupId, name, description, event_date, location, price, emoji } = payload;
