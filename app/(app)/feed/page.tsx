@@ -1455,28 +1455,9 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         borderRadius: 20, marginBottom: 24, overflow: "hidden" as const,
         position: "relative" as const,
       }}>
-        {post.post_type === 'achievement' && (
-          // Gold "PR" ribbon in the top-right corner so the achievement
-          // reads at a glance even before the user scrolls past the
-          // header. Compact (no bigger than the username row) so it
-          // doesn't compete with the avatar.
-          <div style={{
-            position: "absolute" as const,
-            top: 12,
-            right: 14,
-            background: "linear-gradient(135deg, #F59E0B, #FBBF24)",
-            color: "#fff",
-            fontSize: 10,
-            fontWeight: 900,
-            letterSpacing: 0.5,
-            padding: "3px 9px",
-            borderRadius: 99,
-            boxShadow: "0 2px 6px rgba(245,158,11,0.4)",
-            zIndex: 1,
-          }}>
-            🏆 PR
-          </div>
-        )}
+        {/* (Removed the top-right "🏆 PR" ribbon — it overlapped the date
+            badge. The gold celebration card body already makes clear this is
+            a PR, so the extra corner badge was redundant.) */}
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
           <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
@@ -1501,7 +1482,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             <TierTitle tier={post.tier || "default"} />
             <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
           </div>
-          <div style={{ width:50,height:50,borderRadius:13,background:`linear-gradient(135deg,${C.gold},#FFD700)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(245,166,35,0.3)" }}>
+          <div style={{ width:50,height:50,borderRadius:13,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,0.3)" }}>
             <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
             <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
           </div>
@@ -1743,7 +1724,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                 margin: "0 18px 12px",
                 borderRadius: 18,
                 padding: "24px 20px",
-                background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 50%, #FCD34D 100%)",
+                background: "linear-gradient(135deg, #FFD24A 0%, #E0A82E 50%, #B8860B 100%)",
                 position: "relative" as const,
                 overflow: "hidden" as const,
                 boxShadow: "0 8px 24px rgba(245,158,11,0.3)",
