@@ -21,6 +21,7 @@ export default function PostDeleteMenu({
   ownerId,
   currentUserId,
   onDeleted,
+  deleteFn,
   table = "posts",
   tint = "#9CA3AF",
   surface = "#1A1228",
@@ -30,9 +31,11 @@ export default function PostDeleteMenu({
   ownerId?: string | null;
   currentUserId?: string | null;
   onDeleted?: () => void;
-  /** which table the post lives in. Group-feed posts are in "group_posts";
-   *  feed / profile posts are in "posts" (the default). Deleting from the
-   *  wrong table silently removes 0 rows, so the post reappears on refetch. */
+  /** Custom delete operation. When provided it's used INSTEAD of the built-in
+   *  client-side delete — e.g. group posts go through an admin API route so the
+   *  delete isn't silently blocked by RLS. Should throw if the delete fails. */
+  deleteFn?: () => Promise<void>;
+  /** which table the post lives in (used only when deleteFn is not given). */
   table?: string;
   /** icon color */
   tint?: string;
@@ -66,12 +69,16 @@ export default function PostDeleteMenu({
     if (busy || !currentUserId) return;
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq("id", postId)
-        .eq("user_id", currentUserId);
-      if (error) throw error;
+      if (deleteFn) {
+        await deleteFn();
+      } else {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq("id", postId)
+          .eq("user_id", currentUserId);
+        if (error) throw error;
+      }
       setOpen(false);
       setConfirming(false);
       onDeleted?.();
