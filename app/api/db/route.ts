@@ -1398,6 +1398,7 @@ async function handlePOST(req: NextRequest) {
         biking:   { beginner: { metric: 'distance', value: 30,  unit: 'miles'    }, intermediate: { metric: 'distance', value: 100, unit: 'miles' }, elite: { metric: 'distance', value: 200, unit: 'miles' } },
         lifting:  { beginner: { metric: 'count',    value: 6,   unit: 'workouts' }, intermediate: { metric: 'count',    value: 10,  unit: 'workouts' }, elite: { metric: 'count',    value: 14,  unit: 'workouts' } },
         swimming: { beginner: { metric: 'duration', value: 60,  unit: 'min'      }, intermediate: { metric: 'duration', value: 180, unit: 'min'   }, elite: { metric: 'duration', value: 360, unit: 'min'   } },
+        rowing:   { beginner: { metric: 'distance', value: 10000, unit: 'meters' }, intermediate: { metric: 'distance', value: 30000, unit: 'meters' }, elite: { metric: 'distance', value: 60000, unit: 'meters' } },
         combat:   { beginner: { metric: 'count',    value: 4,   unit: 'sessions'}, intermediate: { metric: 'count',    value: 8,   unit: 'sessions'}, elite: { metric: 'count',    value: 12,  unit: 'sessions'} },
       };
       const tierConfig = TARGETS[category]?.[tier];
