@@ -1034,10 +1034,11 @@ export default function PostPage() {
   // -- PR Detection · run after saving workout -------------------------------
   async function detectPRs(userId: string, savedExercises: Exercise[]): Promise<PRResult[]> {
     if (!savedExercises || savedExercises.length === 0) return [];
-    const prs: PRResult[] = [];
+    // Pre-compute the best (weight × reps) volume for each exercise in this
+    // submission.
+    const submitted: { name: string; bestWeight: number; reps: number; volume: number }[] = [];
     for (const ex of savedExercises) {
       if (!ex.name) continue;
-      // Find best set volume in this submission (weight · reps)
       const reps = parseFloat(ex.reps) || 0;
       const weights = ex.weights && ex.weights.length > 0 ? ex.weights : [ex.weight || ''];
       let bestWeight = 0;
@@ -1046,39 +1047,57 @@ export default function PostPage() {
         if (wNum > bestWeight) bestWeight = wNum;
       }
       if (bestWeight <= 0 || reps <= 0) continue;
-      const newVolume = bestWeight * reps;
-      // Check existing PR for this exercise
-      const { data: existing } = await supabase
-        .from('personal_records')
-        .select('volume, weight, reps')
-        .eq('user_id', userId)
-        .eq('exercise_name', ex.name)
-        .order('volume', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      submitted.push({ name: ex.name, bestWeight, reps, volume: bestWeight * reps });
+    }
+    if (submitted.length === 0) return [];
+
+    // ONE query for every exercise's existing records (was previously a
+    // separate round-trip per exercise — the main reason saves dragged on a
+    // slow DB). Ordered by volume desc so the first row we see per exercise is
+    // its current best.
+    const names = Array.from(new Set(submitted.map(s => s.name)));
+    const { data: existingRows } = await supabase
+      .from('personal_records')
+      .select('exercise_name, volume, weight, reps')
+      .eq('user_id', userId)
+      .in('exercise_name', names)
+      .order('volume', { ascending: false });
+    const bestByName = new Map<string, any>();
+    for (const r of existingRows || []) {
+      if (!bestByName.has((r as any).exercise_name)) bestByName.set((r as any).exercise_name, r);
+    }
+
+    const prs: PRResult[] = [];
+    const toInsert: any[] = [];
+    const nowIso = new Date().toISOString();
+    for (const s of submitted) {
+      const existing = bestByName.get(s.name);
       const existingVolume = existing?.volume || 0;
-      if (newVolume > existingVolume) {
-        // New PR! Upsert (insert new record)
-        await supabase.from('personal_records').insert({
+      if (s.volume > existingVolume) {
+        toInsert.push({
           user_id: userId,
-          exercise_name: ex.name,
-          weight: bestWeight,
-          reps: reps,
-          volume: newVolume,
-          logged_at: new Date().toISOString(),
+          exercise_name: s.name,
+          weight: s.bestWeight,
+          reps: s.reps,
+          volume: s.volume,
+          logged_at: nowIso,
         });
         prs.push({
-          exercise: ex.name,
-          weight: bestWeight,
-          reps,
+          exercise: s.name,
+          weight: s.bestWeight,
+          reps: s.reps,
           isNew: !existing,
-          // Carry the previous max so the feed-post composer can render
-          // a delta ("+15 lb"). null/undefined when this is the user's
-          // first ever entry for this lift.
           previousWeight: existing ? (existing as any).weight : undefined,
           previousReps: existing ? (existing as any).reps : undefined,
         });
+        // Treat as the new best within this submission so a repeated lift in
+        // the same workout doesn't double-count.
+        bestByName.set(s.name, { volume: s.volume, weight: s.bestWeight, reps: s.reps });
       }
+    }
+    // ONE batch insert for all new PRs (was an insert per PR).
+    if (toInsert.length > 0) {
+      await supabase.from('personal_records').insert(toInsert);
     }
     return prs;
   }
@@ -1452,6 +1471,14 @@ export default function PostPage() {
       submittingRef.current = false;
       setSaveError(error.message || "Something went wrong. Please try again.");
     } else {
+      // The log itself is now saved. Flip to the success screen immediately so
+      // the user is NOT held on the spinner while the (currently overloaded) DB
+      // grinds through the secondary work below — badges, XP, PR detection and
+      // the PR feed-post. The page stays mounted (the `saved` screen renders in
+      // place, no navigation), so all of that still completes in the background.
+      // This is the fix for saves feeling like they take 20+ seconds: the wait
+      // was the chain of follow-up queries, not the save itself.
+      setSaved(true);
       // -- Auto-award activity badges ----------------------------------------
       // NOTE: now passes woCategory (standardized) so badge-award can reliably
       // detect category (running/lifting/etc.) instead of keyword-matching
@@ -1602,6 +1629,20 @@ export default function PostPage() {
             // Best-effort fire-and-forget. Failure here doesn't block
             // the workout save or the in-app PR celebration screen.
             try {
+              // Cap PR feed-posts at ONE per day. Logging several PRs in a day
+              // was flooding the For You feed. The in-app PR celebration screen
+              // and the saved personal_records are unaffected — we only skip the
+              // extra *feed posts* once a PR has already been posted today.
+              const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+              const { count: prPostsToday } = await supabase
+                .from('posts')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .eq('post_type', 'achievement')
+                .gte('created_at', dayStart.toISOString());
+              if (prPostsToday && prPostsToday > 0) {
+                // Already posted a PR today — skip the feed post.
+              } else {
               const lines = detectedPRs.map(pr => {
                 const head = `${pr.exercise} ${pr.weight}×${pr.reps}`;
                 if (pr.isNew || pr.previousWeight === undefined) {
@@ -1652,11 +1693,11 @@ export default function PostPage() {
                 prPostRow.post_type = 'general';
                 await supabase.from('posts').insert(prPostRow);
               }
+              }
             } catch { /* feed-post creation is non-fatal */ }
           }
         } catch {}
       }
-      setSaved(true);
     }
   }
 
