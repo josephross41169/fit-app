@@ -2231,6 +2231,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // pay the query for everyone.
   const [profilePastGoals, setProfilePastGoals] = useState<any[]>([]);
   const [profileGoalsHistoryTab, setProfileGoalsHistoryTab] = useState<"active"|"past">("active");
+  // FIT-61: tapping a goal opens a detail panel showing full progress and how
+  // much time is left until its deadline (window_end).
+  const [goalDetail, setGoalDetail] = useState<any | null>(null);
   // Controls the create-goal modal mounted at the bottom of this page.
   // Lives on profile so the +New button doesn't have to navigate to /post
   // (which no longer has a goal tab anyway).
@@ -4788,11 +4791,16 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                       const isPast = profileGoalsHistoryTab === "past";
                       const completedSuccessfully = g.is_completed === true;
                       return (
-                        <div key={g.id} style={{
+                        <div key={g.id}
+                          onClick={() => setGoalDetail(g)}
+                          role="button"
+                          title="View goal details"
+                          style={{
                           background: isPast && completedSuccessfully ? "rgba(74,222,128,0.08)" : "#1A1228",
                           borderRadius:14, padding:"10px 12px",
                           border:`1px solid ${isPast && completedSuccessfully ? "#4ADE80" : "#3D2A6E"}`,
                           opacity: isPast && !completedSuccessfully ? 0.7 : 1,
+                          cursor:"pointer",
                         }}>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                             <span style={{fontSize:16}}>{g.emoji || "🎯"}</span>
@@ -4802,6 +4810,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             <div style={{fontSize:10,fontWeight:800,color: completedSuccessfully ? "#4ADE80" : C.purple,flexShrink:0}}>
                               {completedSuccessfully ? "✓ Done" : `${Math.round(g.current)}/${g.target}`}
                             </div>
+                            <span style={{fontSize:14,color:"#6D5BA8",flexShrink:0,marginLeft:2}}>›</span>
                           </div>
                           <div style={{height:5,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
                             <div style={{
@@ -5164,6 +5173,89 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           onCreated={() => { setShowGoalCreate(false); reloadProfileGoals(); }}
         />
       )}
+
+      {/* FIT-61: Goal detail panel. Tapping any goal opens this — it answers
+          "how much time do I have left?" up top, then full progress + the
+          start/deadline dates. Read-only, so it works on anyone's profile. */}
+      {goalDetail && (() => {
+        const g = goalDetail;
+        const target = Number(g.target) || 0;
+        const current = Number(g.current) || 0;
+        const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+        const completed = g.is_completed === true;
+        const now = Date.now();
+        const endMs = g.window_end ? new Date(g.window_end).getTime() : null;
+        const ended = endMs != null && endMs <= now;
+        const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+        let timeLeft = "No deadline set";
+        let timeTone: string = C.sub;
+        if (completed) { timeLeft = "Goal completed 🎉"; timeTone = "#4ADE80"; }
+        else if (endMs != null) {
+          const diff = endMs - now;
+          if (diff <= 0) {
+            const daysAgo = Math.floor(-diff / 86400000);
+            timeLeft = daysAgo <= 0 ? "Deadline passed today" : `Ended ${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`;
+            timeTone = "#EF4444";
+          } else {
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            if (days >= 1) timeLeft = `${days} day${days === 1 ? "" : "s"}${hours ? ` ${hours} hr` : ""} left`;
+            else if (hours >= 1) timeLeft = `${hours} hour${hours === 1 ? "" : "s"} left`;
+            else timeLeft = `${Math.max(1, Math.floor(diff / 60000))} min left`;
+            timeTone = days <= 1 ? "#F59E0B" : C.purple;
+          }
+        }
+        const remaining = Math.max(0, target - current);
+        return (
+          <div onClick={() => setGoalDetail(null)} style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.78)", display:"flex", alignItems:"center", justifyContent:"center", padding:18 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width:"100%", maxWidth:380, background:"#15101F", borderRadius:20, border:`1px solid #3D2A6E`, padding:20, boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
+              <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:16 }}>
+                <span style={{ fontSize:34, lineHeight:1 }}>{g.emoji || "🎯"}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:900, fontSize:18, color:C.text, lineHeight:1.2 }}>{g.title}</div>
+                  <div style={{ fontSize:12, fontWeight:800, marginTop:4, color: completed ? "#4ADE80" : (ended ? "#EF4444" : C.purple) }}>
+                    {completed ? "✓ Completed" : (ended ? "Ended" : "Active")}
+                  </div>
+                </div>
+                <button onClick={() => setGoalDetail(null)} style={{ width:32, height:32, borderRadius:"50%", border:"none", background:"#2D1F52", color:C.text, fontSize:18, cursor:"pointer", flexShrink:0 }}>×</button>
+              </div>
+
+              <div style={{ background:"#1A1228", borderRadius:14, border:`1px solid #3D2A6E`, padding:"14px 16px", marginBottom:14 }}>
+                <div style={{ fontSize:11, color:C.sub, fontWeight:700, marginBottom:4, letterSpacing:0.5 }}>TIME LEFT</div>
+                <div style={{ fontSize:20, fontWeight:900, color:timeTone }}>{timeLeft}</div>
+              </div>
+
+              <div style={{ marginBottom:14 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+                  <span style={{ fontSize:13, fontWeight:800, color:C.text }}>
+                    {Math.round(current * 10) / 10} / {target}{g.unit ? ` ${g.unit}` : ""}
+                  </span>
+                  <span style={{ fontSize:13, fontWeight:900, color: completed ? "#4ADE80" : C.purple }}>{Math.round(pct)}%</span>
+                </div>
+                <div style={{ height:10, background:"#0D0D0D", borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background: completed ? "linear-gradient(90deg,#4ADE80,#22C55E)" : `linear-gradient(90deg,${C.purple},#A78BFA)`, borderRadius:99 }}/>
+                </div>
+                {!completed && remaining > 0 && (
+                  <div style={{ fontSize:12, color:C.sub, marginTop:6 }}>
+                    {Math.round(remaining * 10) / 10}{g.unit ? ` ${g.unit}` : ""} to go
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1, background:"#1A1228", borderRadius:12, border:`1px solid #2D1F52`, padding:"10px 12px" }}>
+                  <div style={{ fontSize:10, color:C.sub, fontWeight:700, marginBottom:3 }}>STARTED</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:C.text }}>{fmtDate(g.window_start || g.created_at)}</div>
+                </div>
+                <div style={{ flex:1, background:"#1A1228", borderRadius:12, border:`1px solid #2D1F52`, padding:"10px 12px" }}>
+                  <div style={{ fontSize:10, color:C.sub, fontWeight:700, marginBottom:3 }}>DEADLINE</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:C.text }}>{g.window_end ? fmtDate(g.window_end) : "No deadline"}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
