@@ -2903,6 +2903,19 @@ export default function GroupPage() {
           {/* ── LEADERBOARD ── */}
           {tab==="leaderboard" && (
             <div>
+              {/* Group Badges — the desktop sidebar shows these, but that
+                  sidebar is hidden on mobile, so render them here under the
+                  Board section on phones (hidden on desktop to avoid dupes). */}
+              {dbGroup?.id && (
+                <div className="groups-mobile-tab-content" style={{ marginBottom: 16 }}>
+                  <GroupBadges
+                    groupId={dbGroup.id}
+                    isOwner={isOwnerDB}
+                    hiddenBadges={Array.isArray(dbGroup.hidden_group_badges) ? dbGroup.hidden_group_badges : []}
+                    onHiddenChange={(next) => setDbGroup((g: any) => g ? { ...g, hidden_group_badges: next } : g)}
+                  />
+                </div>
+              )}
               {displayLeaderboard.length === 0 ? (
                 <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"24px", textAlign:"center" }}>
                   <div style={{ fontSize:24, marginBottom:8 }}>🏆</div>
