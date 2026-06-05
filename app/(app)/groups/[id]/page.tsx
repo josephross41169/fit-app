@@ -2831,7 +2831,15 @@ export default function GroupPage() {
                       postId={post.id}
                       ownerId={post.userId}
                       currentUserId={currentUser?.id}
-                      table="group_posts"
+                      deleteFn={async () => {
+                        const res = await fetch('/api/db', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'delete_group_post', payload: { userId: currentUser?.id, postId: post.id } }),
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || data.error) throw new Error(data.error || 'Delete failed');
+                      }}
                       onDeleted={() => setDbPosts(prev => prev.filter((x:any) => x.id !== post.id))}
                       tint={C.sub}
                       surface={C.white}
