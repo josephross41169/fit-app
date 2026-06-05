@@ -10,7 +10,7 @@ import { uploadPhoto } from "./uploadPhoto";
 
 export type RivalCategory =
   | "running" | "walking" | "biking" | "lifting"
-  | "swimming" | "combat" | "wellness";
+  | "swimming" | "rowing" | "combat" | "wellness";
 
 export type RivalTier = "beginner" | "intermediate" | "mayhem";
 
@@ -43,6 +43,10 @@ export const COMPETITIONS: Record<RivalCategory, { id: string; label: string }[]
   ],
   swimming: [
     { id: "most_distance", label: "Most distance"   },
+    { id: "most_sessions", label: "Most sessions"   },
+  ],
+  rowing:   [
+    { id: "most_distance", label: "Most meters"     },
     { id: "most_sessions", label: "Most sessions"   },
   ],
   combat:   [
