@@ -46,6 +46,7 @@ const CATEGORIES: { id: RivalCategory; emoji: string; name: string; desc: string
   { id: "biking",    emoji: "🚴", name: "Biking",        desc: "Miles, climbs, and speed"        },
   { id: "lifting",   emoji: "🏋️", name: "Lifting",       desc: "Volume, PRs, and raw strength"  },
   { id: "swimming",  emoji: "🏊", name: "Swimming",      desc: "Laps, distance, and stroke"      },
+  { id: "rowing",    emoji: "🚣", name: "Rowing",        desc: "Meters, distance, and power"    },
   { id: "combat",    emoji: "🥊", name: "Combat Sports", desc: "Rounds, sessions, and intensity" },
   { id: "wellness",  emoji: "🧘", name: "Wellness",      desc: "Meditation, mobility, recovery"  },
 ];
@@ -1075,6 +1076,7 @@ const BUDDY_CATEGORIES: Array<{ id: string; emoji: string; name: string; desc: s
   { id: "biking",   emoji: "🚴", name: "Biking",   desc: "Cycling miles total" },
   { id: "lifting",  emoji: "🏋️", name: "Lifting",  desc: "Workout sessions" },
   { id: "swimming", emoji: "🏊", name: "Swimming", desc: "Pool time" },
+  { id: "rowing",   emoji: "🚣", name: "Rowing",   desc: "Meters together over 14 days" },
   { id: "combat",   emoji: "🥊", name: "Combat",   desc: "Boxing / MMA sessions" },
 ];
 
