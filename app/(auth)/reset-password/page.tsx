@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
       if (error) throw error;
       setSuccess(true);
       // Auto-redirect to feed after a moment so the success message is seen
-      setTimeout(() => router.push("/feed"), 1800);
+      setTimeout(() => router.push("/profile"), 1800);
     } catch (e: any) {
       setError(e?.message || "Couldn't update password. Try the link again.");
       setLoading(false);
