@@ -1,6 +1,6 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
-import { generatePlan, swapExercise, Goal, Level, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
+import { useState, useCallback, useEffect, CSSProperties } from "react";
+import { generatePlan, swapExercise, Goal, Level, Sex, Injury, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
 import { Equipment, EQUIPMENT_TYPES } from "@/lib/exercises";
 import { getExerciseImage } from "@/lib/exerciseImages";
 
@@ -40,6 +40,31 @@ const DAYS_OPTIONS: { value: 3 | 4 | 5 | 6; label: string }[] = [
   { value: 4, label: "4 days" },
   { value: 5, label: "5 days" },
   { value: 6, label: "6 days" },
+];
+
+const SEX_OPTIONS: { value: Sex; label: string }[] = [
+  { value: "male",   label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other",  label: "Prefer not to say" },
+];
+
+const MINUTES_OPTIONS: { value: number; label: string }[] = [
+  { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" },
+  { value: 60, label: "60 min" },
+  { value: 75, label: "75 min" },
+  { value: 90, label: "90 min" },
+];
+
+const INJURY_OPTIONS: { value: Injury; label: string }[] = [
+  { value: "knee",       label: "Knee" },
+  { value: "shoulder",   label: "Shoulder" },
+  { value: "lower_back", label: "Lower back" },
+  { value: "elbow",      label: "Elbow" },
+  { value: "wrist",      label: "Wrist" },
+  { value: "neck",       label: "Neck" },
+  { value: "hip",        label: "Hip" },
+  { value: "ankle",      label: "Ankle" },
 ];
 
 // Equipment groups for UI
@@ -257,6 +282,15 @@ export default function WorkoutPlanPage() {
   const [generating, setGenerating] = useState(false);
   const [activeEquipGroup, setActiveEquipGroup] = useState<string>("🏋️ Full Gym");
 
+  // ── Personalization (all optional) ──
+  const [sex, setSex] = useState<Sex | "">("");
+  const [age, setAge] = useState<string>("");
+  const [heightFt, setHeightFt] = useState<string>("");
+  const [heightIn, setHeightIn] = useState<string>("");
+  const [weightLb, setWeightLb] = useState<string>("");
+  const [minutes, setMinutes] = useState<number | null>(null);
+  const [injuries, setInjuries] = useState<Injury[]>([]);
+
   // Restore the most recent plan from localStorage on mount so users see
   // their last generated plan when they return to this page (instead of
   // having to re-generate).
@@ -285,7 +319,18 @@ export default function WorkoutPlanPage() {
   const generate = useCallback(() => {
     setGenerating(true);
     setTimeout(() => {
-      const config: PlanConfig = { goal, level, daysPerWeek: days, equipment };
+      const totalIn = (parseInt(heightFt) || 0) * 12 + (parseInt(heightIn) || 0);
+      const lb = parseFloat(weightLb) || 0;
+      const ageNum = parseInt(age) || 0;
+      const config: PlanConfig = {
+        goal, level, daysPerWeek: days, equipment,
+        sex: sex || undefined,
+        age: ageNum > 0 ? ageNum : undefined,
+        heightCm: totalIn > 0 ? Math.round(totalIn * 2.54) : undefined,
+        weightKg: lb > 0 ? Math.round(lb * 0.453592) : undefined,
+        minutesPerSession: minutes || undefined,
+        injuries: injuries.length > 0 ? injuries : undefined,
+      };
       const newPlan = generatePlan(config);
       setPlan(newPlan);
       setGenerating(false);
@@ -298,7 +343,7 @@ export default function WorkoutPlanPage() {
         }));
       } catch { /* localStorage might be full or disabled */ }
     }, 600);
-  }, [goal, level, days, equipment]);
+  }, [goal, level, days, equipment, sex, age, heightFt, heightIn, weightLb, minutes, injuries]);
 
   // Swap a single exercise in a single training day for a different one
   // from the same muscle group. Updates state AND localStorage so the
@@ -334,6 +379,17 @@ export default function WorkoutPlanPage() {
       return updated;
     });
   }, [equipment]);
+
+  // BMI readout (rough guide only — see note in the UI). US units in, metric math.
+  const _totalIn = (parseInt(heightFt) || 0) * 12 + (parseInt(heightIn) || 0);
+  const _lb = parseFloat(weightLb) || 0;
+  const bmi = _totalIn > 0 && _lb > 0 ? (703 * _lb) / (_totalIn * _totalIn) : null;
+  const bmiCat = bmi === null ? "" : bmi < 18.5 ? "Underweight" : bmi < 25 ? "Normal" : bmi < 30 ? "Overweight" : "Obese";
+  const inputStyle: CSSProperties = {
+    width: "100%", padding: "11px 12px", borderRadius: 12, boxSizing: "border-box",
+    background: "#161616", border: `1.5px solid ${C.border}`, color: C.text,
+    fontSize: 15, fontWeight: 700, outline: "none",
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -392,6 +448,53 @@ export default function WorkoutPlanPage() {
           </div>
         </div>
 
+        {/* Sex */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Sex <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional</span></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {SEX_OPTIONS.map(s => (
+              <button key={s.value} onClick={() => setSex(prev => prev === s.value ? "" : s.value)} style={{
+                flex: 1, padding: "12px 8px", borderRadius: 12, cursor: "pointer", textAlign: "center",
+                background: sex === s.value ? C.purpleBg : "#161616",
+                border: `1.5px solid ${sex === s.value ? C.purple : C.border}`,
+                transition: "all 0.15s",
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{s.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* About You — age + body (drives recovery + BMI guidance) */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>About You <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional, sharpens the plan</span></div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 90px" }}>
+              <div style={{ fontSize: 11, color: C.sub, marginBottom: 5 }}>Age</div>
+              <input type="number" inputMode="numeric" value={age} onChange={e => setAge(e.target.value)} placeholder="—" style={inputStyle} />
+            </div>
+            <div style={{ flex: "1 1 70px" }}>
+              <div style={{ fontSize: 11, color: C.sub, marginBottom: 5 }}>Height (ft)</div>
+              <input type="number" inputMode="numeric" value={heightFt} onChange={e => setHeightFt(e.target.value)} placeholder="—" style={inputStyle} />
+            </div>
+            <div style={{ flex: "1 1 70px" }}>
+              <div style={{ fontSize: 11, color: C.sub, marginBottom: 5 }}>Height (in)</div>
+              <input type="number" inputMode="numeric" value={heightIn} onChange={e => setHeightIn(e.target.value)} placeholder="—" style={inputStyle} />
+            </div>
+            <div style={{ flex: "1 1 90px" }}>
+              <div style={{ fontSize: 11, color: C.sub, marginBottom: 5 }}>Weight (lb)</div>
+              <input type="number" inputMode="numeric" value={weightLb} onChange={e => setWeightLb(e.target.value)} placeholder="—" style={inputStyle} />
+            </div>
+          </div>
+          {bmi !== null && (
+            <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
+              <span style={{ color: C.purple, fontWeight: 800 }}>BMI {bmi.toFixed(1)}</span>
+              <span style={{ fontWeight: 700, color: C.text }}> · {bmiCat}</span>
+              <span style={{ color: C.sub }}> — a rough guide only; your goal and experience drive the plan far more than this number.</span>
+            </div>
+          )}
+        </div>
+
         {/* Days per week */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Days Per Week</div>
@@ -405,6 +508,24 @@ export default function WorkoutPlanPage() {
               }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.value}</div>
                 <div style={{ fontSize: 10, color: C.sub }}>days</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Time per session — drives how many exercises per day */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Time Per Session <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional</span></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {MINUTES_OPTIONS.map(m => (
+              <button key={m.value} onClick={() => setMinutes(prev => prev === m.value ? null : m.value)} style={{
+                flex: 1, padding: "12px 6px", borderRadius: 12, cursor: "pointer", textAlign: "center",
+                background: minutes === m.value ? C.purpleBg : "#161616",
+                border: `1.5px solid ${minutes === m.value ? C.purple : C.border}`,
+                transition: "all 0.15s",
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.value}</div>
+                <div style={{ fontSize: 10, color: C.sub }}>min</div>
               </button>
             ))}
           </div>
@@ -436,6 +557,26 @@ export default function WorkoutPlanPage() {
                 transition: "all 0.15s",
               }}>{eq}</button>
             ))}
+          </div>
+        </div>
+
+        {/* Injuries / areas to protect — swaps out exercises that load them */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Injuries / Areas to Protect <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional</span></div>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 10, opacity: 0.9 }}>We'll swap out exercises that stress these areas.</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {INJURY_OPTIONS.map(inj => {
+              const on = injuries.includes(inj.value);
+              return (
+                <button key={inj.value} onClick={() => setInjuries(prev => on ? prev.filter(x => x !== inj.value) : [...prev, inj.value])} style={{
+                  padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  background: on ? "#2D1B69" : "#161616",
+                  color: on ? "#C4B5FD" : C.sub,
+                  border: `1px solid ${on ? C.purple : C.border}`,
+                  transition: "all 0.15s",
+                }}>{on ? "✓ " : ""}{inj.label}</button>
+              );
+            })}
           </div>
         </div>
 
