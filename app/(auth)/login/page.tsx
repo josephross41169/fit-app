@@ -36,7 +36,7 @@ export default function LoginPage() {
         setError(error.message);
         setLoading(false);
       } else {
-        router.push("/feed");
+        router.push("/profile");
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
