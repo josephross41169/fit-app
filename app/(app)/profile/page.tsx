@@ -190,8 +190,8 @@ function Lightbox({ src, photos, onClose, onChange, canDelete, onDelete }: { src
   );
 }
 
-type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[];repsArr?:string[]};
-type CardioEntry = {type:string;duration:string;distance:string;run_type?:string};
+type Exercise   = {name:string;sets:number;reps:number;weight:string;weights?:string[];repsArr?:string[];notes?:string};
+type CardioEntry = {type:string;duration:string;distance:string;run_type?:string;note?:string};
 
 // Maps a run subtype (stored on the cardio entry as `run_type` by the post
 // page) to a display label. Non-running cardio has no run_type and falls
@@ -1173,18 +1173,33 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           const weightDisplay = wsArr.length > 1
                             ? wsArr.join(' / ') + ' lbs'
                             : (wsArr[0] || ex.weight || '—');
-                          // Per-set reps, mirroring the weight column. repsArr holds one
-                          // entry per set; fall back to the single `reps` for older logs.
-                          const rArr: string[] = ex.repsArr && Array.isArray(ex.repsArr) ? ex.repsArr : [];
+                          // How many sets this row has — prefer the weight column's
+                          // count so reps and weight line up; fall back to `sets`.
+                          const setCount = wsArr.length > 1 ? wsArr.length : (ex.sets || 1);
+                          // Use saved per-set reps when we actually have more than one;
+                          // otherwise repeat the single value so OLDER logs (which only
+                          // stored one rep count) still show one number per set instead
+                          // of a lone figure next to a multi-set weight.
+                          const savedReps: string[] = Array.isArray(ex.repsArr)
+                            ? ex.repsArr.filter((r: any) => r !== '' && r != null)
+                            : [];
+                          const rArr: string[] = savedReps.length > 1
+                            ? ex.repsArr
+                            : Array(Math.max(1, setCount)).fill(String(ex.reps ?? ''));
                           const repsDisplay = rArr.length > 1
                             ? rArr.join(' / ')
-                            : (rArr[0] || ex.reps || '—');
+                            : (rArr[0] || String(ex.reps ?? '') || '—');
                           return (
-                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 44px 76px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                              <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
-                              <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
-                              <span style={{fontSize:12,fontWeight:800,color:C.purple,textAlign:"center",whiteSpace:"nowrap"}}>{repsDisplay}</span>
-                              <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center",whiteSpace:"nowrap"}}>{weightDisplay}</span>
+                            <div key={i}>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 44px 76px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                                <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                                <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
+                                <span style={{fontSize:12,fontWeight:800,color:C.purple,textAlign:"center",whiteSpace:"nowrap"}}>{repsDisplay}</span>
+                                <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center",whiteSpace:"nowrap"}}>{weightDisplay}</span>
+                              </div>
+                              {ex.notes && String(ex.notes).trim().length > 0 && (
+                                <div style={{fontSize:12,color:C.sub,padding:"2px 8px 8px",lineHeight:1.4,whiteSpace:"pre-wrap"}}>📝 {ex.notes}</div>
+                              )}
                             </div>
                           );
                         })}
@@ -1202,14 +1217,19 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                           </div>
                           {carList.map((c: any, i: number)=>(
-                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                              <span style={{fontSize:14,fontWeight:600,color:C.text}}>{
-                                (String(c.type||'').toLowerCase()==='running' && c.run_type && RUN_TYPE_LABELS[c.run_type])
-                                  ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
-                                  : c.type
-                              }</span>
-                              <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{fmtDur(c.duration)}</span>
-                              <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
+                            <div key={i}>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                                <span style={{fontSize:14,fontWeight:600,color:C.text}}>{
+                                  (String(c.type||'').toLowerCase()==='running' && c.run_type && RUN_TYPE_LABELS[c.run_type])
+                                    ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
+                                    : c.type
+                                }</span>
+                                <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{fmtDur(c.duration)}</span>
+                                <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
+                              </div>
+                              {c.note && String(c.note).trim().length > 0 && (
+                                <div style={{fontSize:12,color:C.sub,padding:"2px 4px 6px",lineHeight:1.4,whiteSpace:"pre-wrap"}}>📝 {c.note}</div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -2025,6 +2045,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               reps: parseInt(e.reps) || 0,
               weight: e.weight || '—',
               weights: Array.isArray(e.weights) ? e.weights : [],
+              repsArr: Array.isArray(e.repsArr) ? e.repsArr : [],
+              notes: e.notes || '',
             }))
           : [],
         cardio: Array.isArray(w.cardio)
@@ -2033,6 +2055,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               duration: c.duration || '—',
               distance: c.distance || '',
               run_type: c.run_type || undefined,
+              note: c.note || '',
             }))
           : [],
       }));
