@@ -162,7 +162,7 @@ function ReactionBar({
 }
 
 type Comment = { id: number; user: string; avatar: string; text: string; time: string; };
-type Exercise = { name: string; sets: number; reps: number; weight: string; };
+type Exercise = { name: string; sets: number; reps: number; weight: string; weights?: string[]; repsArr?: string[]; };
 type Meal = { key: string; emoji: string; name: string; cal: number; };
 type Post = {
   id: number;
@@ -849,17 +849,28 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
       {open && (
         <div style={{ background:"#1E2235",padding:"10px 14px" }}>
           {exercises.length > 0 && (<>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 42px 42px 72px",gap:5,paddingBottom:6,marginBottom:4,borderBottom:"1px solid #2A2D3E" }}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 30px 58px 88px",gap:5,paddingBottom:6,marginBottom:4,borderBottom:"1px solid #2A2D3E" }}>
               {["Exercise","Sets","Reps","Weight"].map(h => <span key={h} style={{ fontSize:9,fontWeight:800,color:C.darkSub,textTransform:"uppercase",letterSpacing:0.5 }}>{h}</span>)}
             </div>
-            {exercises.map((ex,i) => (
-              <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 42px 42px 72px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
-                <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{ex.name}</span>
-                <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.sets}</span>
-                <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.reps}</span>
-                <span style={{ fontSize:12,fontWeight:800,color:C.gold,textAlign:"center" }}>{ex.weight}</span>
-              </div>
-            ))}
+            {exercises.map((ex,i) => {
+              const wsArr: string[] = Array.isArray(ex.weights) ? ex.weights : [];
+              const weightDisplay = wsArr.length > 1 ? wsArr.join(' / ') + ' lbs' : (wsArr[0] || ex.weight || '—');
+              // Show one rep number per set. Use saved per-set reps when there's
+              // more than one; otherwise repeat the single value so older logs
+              // (which only stored one rep count) still line up with the sets.
+              const setCount = wsArr.length > 1 ? wsArr.length : (ex.sets || 1);
+              const savedReps: string[] = Array.isArray(ex.repsArr) ? ex.repsArr.filter((r: any) => r !== '' && r != null) : [];
+              const rArr: string[] = savedReps.length > 1 ? (ex.repsArr as string[]) : Array(Math.max(1, setCount)).fill(String(ex.reps ?? ''));
+              const repsDisplay = rArr.length > 1 ? rArr.join(' / ') : (rArr[0] || String(ex.reps ?? '') || '—');
+              return (
+                <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 30px 58px 88px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
+                  <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ex.name}</span>
+                  <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.sets}</span>
+                  <span style={{ fontSize:11,fontWeight:900,color:C.blue,textAlign:"center",whiteSpace:"nowrap" }}>{repsDisplay}</span>
+                  <span style={{ fontSize:11,fontWeight:800,color:C.gold,textAlign:"center",whiteSpace:"nowrap" }}>{weightDisplay}</span>
+                </div>
+              );
+            })}
             {/* Volume footer */}
             {totalVol > 0 && (
               <div style={{ display:"flex", justifyContent:"flex-end", gap:12, paddingTop:8, marginTop:4, borderTop:"1px solid #2A2D3E", fontSize:11 }}>
@@ -3070,7 +3081,7 @@ export default function FeedPage() {
         type: wl.workout_type || 'Workout',
         duration: wl.workout_duration_min ? fmtDur(wl.workout_duration_min) : '—',
         calories: wl.workout_calories || 0,
-        exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—' })) : [],
+        exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—', weights: Array.isArray(e.weights) ? e.weights : undefined, repsArr: Array.isArray(e.repsArr) ? e.repsArr : undefined })) : [],
         cardio: Array.isArray(wl.cardio) ? wl.cardio.map((c: any) => ({
           type: c.type || 'Cardio',
           duration: c.duration || '—',
