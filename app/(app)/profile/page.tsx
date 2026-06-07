@@ -1165,7 +1165,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   return (
                     <div key={key}>
                       {exList.length > 0 && (<>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 44px 76px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
                           {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
                         </div>
                         {exList.map((ex: any, i: number) => {
@@ -1173,12 +1173,18 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           const weightDisplay = wsArr.length > 1
                             ? wsArr.join(' / ') + ' lbs'
                             : (wsArr[0] || ex.weight || '—');
+                          // Per-set reps, mirroring the weight column. repsArr holds one
+                          // entry per set; fall back to the single `reps` for older logs.
+                          const rArr: string[] = ex.repsArr && Array.isArray(ex.repsArr) ? ex.repsArr : [];
+                          const repsDisplay = rArr.length > 1
+                            ? rArr.join(' / ')
+                            : (rArr[0] || ex.reps || '—');
                           return (
-                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 48px 48px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 44px 76px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
                               <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
                               <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
-                              <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.reps}</span>
-                              <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center"}}>{weightDisplay}</span>
+                              <span style={{fontSize:12,fontWeight:800,color:C.purple,textAlign:"center",whiteSpace:"nowrap"}}>{repsDisplay}</span>
+                              <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center",whiteSpace:"nowrap"}}>{weightDisplay}</span>
                             </div>
                           );
                         })}
