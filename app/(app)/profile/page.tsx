@@ -19,6 +19,7 @@ const WorkoutProgressGraphs = lazy(() => import("@/components/WorkoutProgressGra
 import ActivityShareButton from "@/components/ActivityShareButton";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
+import GetStartedChecklist from "@/components/GetStartedChecklist";
 import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
 import { computeTier, getTierInfo } from "@/lib/tiers";
 import { ImagePresets } from "@/lib/imageUrls";
@@ -4355,6 +4356,21 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       )}
 
       <div className="profile-outer" style={{maxWidth:1200,padding:"20px 24px 32px",margin:"0 auto"}}>
+
+        {/* Get-started checklist — owner-only, disappears once everything's done */}
+        {isOwn && user && (
+          <GetStartedChecklist
+            userId={user.id}
+            onAction={(key) => {
+              if (key === "profile") setEditProfile(true);
+              else if (key === "goal") setShowGoalCreate(true);
+              else if (key === "device") router.push("/settings");
+              else if (key === "workout") router.push("/post");
+              else if (key === "follow") router.push("/discover");
+              else if (key === "group") router.push("/connect");
+            }}
+          />
+        )}
 
         {/* Profile header */}
         <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:24,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
