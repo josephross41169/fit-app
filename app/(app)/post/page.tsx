@@ -444,6 +444,8 @@ export default function PostPage() {
   const [cardioBlockDuration, setCardioBlockDuration] = useState("");
   const [cardioBlockDurationSec, setCardioBlockDurationSec] = useState("");
   const [cardioBlockDistance, setCardioBlockDistance] = useState("");
+  // Optional free-text note for the cardio block (e.g. "easy recovery pace").
+  const [cardioNote, setCardioNote] = useState("");
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
   // Kept separate from woDuration (which is the lifting block's duration)
   // so users can have BOTH "Sports + Lifting" with independent times.
@@ -822,6 +824,7 @@ export default function PostPage() {
           setCardioBlockDuration(cMin); setCardioBlockDurationSec(cSec);
         }
         setCardioBlockDistance(firstCardio ? String(firstCardio.miles ?? firstCardio.distance ?? '') : '');
+        setCardioNote(firstCardio?.note || '');
         // Restore run subtype if it was a running log
         if (data.workout_category === "running" && firstCardio?.run_type) {
           setCardioRunType(firstCardio.run_type);
@@ -836,6 +839,7 @@ export default function PostPage() {
           setCardioBlockDuration(cMin); setCardioBlockDurationSec(cSec);
         }
         setCardioBlockDistance(data.cardio[0].distance ? String(data.cardio[0].distance) : (data.cardio[0].miles ? String(data.cardio[0].miles) : ''));
+        setCardioNote(data.cardio[0].note || '');
         if (data.cardio[0].run_type) setCardioRunType(data.cardio[0].run_type);
       } else if (hasExercises) {
         setIncludeCardio(false);
@@ -1243,6 +1247,7 @@ export default function PostPage() {
             if (cardioSubcategory === "running") {
               cardioEntry.run_type = cardioRunType;
             }
+            if (cardioNote.trim()) cardioEntry.note = cardioNote.trim();
             if (distNum > 0) cardioEntry.miles = distNum;
             if (distNum > 0 && durNum > 0) {
               if (cardioSubcategory === "running") cardioEntry.pace_min_per_mile = durNum / distNum;
@@ -2866,6 +2871,10 @@ export default function PostPage() {
                           <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance ({distUnit})</label>
                           <input style={iStyle} type="text" inputMode="decimal" placeholder={cardioSubcategory === "swimming" ? "1000" : cardioSubcategory === "rowing" ? "2000" : "3.2"} value={cardioBlockDistance} onChange={e => setCardioBlockDistance(e.target.value)} />
                         </div>
+                      </div>
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Note</label>
+                        <input style={iStyle} type="text" placeholder="How'd the cardio feel? (optional)" value={cardioNote} onChange={e => setCardioNote(e.target.value)} />
                       </div>
                       {showPace && (
                         <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.greenMid}` }}>
