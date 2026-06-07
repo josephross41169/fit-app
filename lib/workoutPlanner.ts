@@ -9,6 +9,8 @@ import { EXERCISES, Exercise, Equipment, Category } from "./exercises";
 export type Goal = "strength" | "hypertrophy" | "fat_loss" | "endurance" | "athletic";
 export type Level = "beginner" | "intermediate" | "advanced";
 export type Split = "full_body" | "upper_lower" | "ppl" | "ppl_x2" | "bro" | "hybrid";
+export type Sex = "male" | "female" | "other";
+export type Injury = "knee" | "shoulder" | "lower_back" | "elbow" | "wrist" | "neck" | "hip" | "ankle";
 
 export interface PlanConfig {
   goal: Goal;
@@ -16,6 +18,13 @@ export interface PlanConfig {
   daysPerWeek: 3 | 4 | 5 | 6;
   equipment: Equipment[];
   focusMuscles?: Category[]; // optional bias
+  // ── Personalization (all optional — each one refines the plan when given) ──
+  sex?: Sex;                   // sets sensible recovery/rest defaults
+  age?: number;                // years — older trainees get a bit less volume + more rest
+  heightCm?: number;           // for BMI guidance only
+  weightKg?: number;           // for BMI guidance only
+  minutesPerSession?: number;  // 30 | 45 | 60 | 75 | 90 — drives exercises per day
+  injuries?: Injury[];         // areas to protect — violating moves get swapped out
 }
 
 export interface PlannedExercise {
@@ -165,11 +174,109 @@ function buildDay(
   return { dayNum, label, focus, exercises: planned, estimatedMinutes: Math.round(estimatedMinutes) };
 }
 
+// ── Personalization helpers ────────────────────────────────────────────────────
+// Injury → exercise-name keywords to avoid (matched case-insensitively as
+// substrings, so this is robust to the exact names in the library). We keep the
+// staple compounds (e.g. we do NOT blanket-ban squats for knees) and instead
+// drop the higher-risk movements, then swap in a safer same-category option.
+const INJURY_AVOID: Record<Injury, string[]> = {
+  knee:       ["jump", "plyo", "sprint", "box ", "lunge", "leg extension", "pistol", "skater", "step-up", "step up"],
+  shoulder:   ["overhead press", "behind", "upright row", "dip", "snatch", "jerk", "push press", "arnold"],
+  lower_back: ["deadlift", "barbell row", "pendlay", "good morning", "bent over", "bent-over", "t-bar"],
+  elbow:      ["skullcrusher", "skull crusher", "close grip", "close-grip", "preacher", "overhead extension", "overhead tricep"],
+  wrist:      ["barbell curl", "reverse curl", "front squat", "upright row"],
+  neck:       ["behind the neck", "behind-the-neck", "behind neck", "overhead press"],
+  hip:        ["good morning", "sumo", "deficit", "deep"],
+  ankle:      ["jump", "plyo", "sprint", "box ", "standing calf", "calf raise"],
+};
+
+function violatesInjury(name: string, injuries?: Injury[]): boolean {
+  if (!injuries || injuries.length === 0) return false;
+  const n = name.toLowerCase();
+  return injuries.some(inj => (INJURY_AVOID[inj] || []).some(kw => n.includes(kw)));
+}
+
+// Swap any exercise that loads an injured area for a safe same-category,
+// same-equipment alternative. If no safe alternative exists in the user's
+// equipment, the exercise is left in place — a partial plan beats an empty day.
+function applyInjuries(days: TrainingDay[], injuries: Injury[] | undefined, equipment: Equipment[]) {
+  if (!injuries || injuries.length === 0) return;
+  for (const day of days) {
+    const dayNames = new Set(day.exercises.map(e => e.name));
+    for (let i = 0; i < day.exercises.length; i++) {
+      const ex = day.exercises[i];
+      if (!violatesInjury(ex.name, injuries)) continue;
+      const candidates = EXERCISES.filter(e =>
+        e.category === ex.category &&
+        e.category !== "Cardio" && e.category !== "Stretching" &&
+        equipment.includes(e.equipment) &&
+        !dayNames.has(e.name) &&
+        !violatesInjury(e.name, injuries)
+      );
+      if (candidates.length === 0) continue;
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      dayNames.delete(ex.name);
+      dayNames.add(pick.name);
+      day.exercises[i] = { ...ex, name: pick.name, category: pick.category, equipment: pick.equipment, muscles: pick.muscles };
+    }
+  }
+}
+
+// Rest tiers low → high. Nudges rest up (older = more recovery) or down (women
+// recover faster between sets on isolation work).
+const REST_TIERS = ["30s", "45s", "60s", "90s", "2-3 min", "3-5 min"];
+function shiftRest(rest: string, dir: 1 | -1): string {
+  const i = REST_TIERS.indexOf(rest);
+  if (i === -1) return rest;
+  return REST_TIERS[Math.max(0, Math.min(REST_TIERS.length - 1, i + dir))];
+}
+
+// Age & sex tuning — conservative by design. Older trainees get a touch less
+// volume on the big lifts and a bit more rest (recovery capacity declines with
+// age). Women recover faster between sets, so we trim rest slightly on isolation
+// work. These set sensible defaults; they don't overhaul the programming.
+function applyAgeSex(days: TrainingDay[], age?: number, sex?: Sex) {
+  for (const day of days) {
+    for (const ex of day.exercises) {
+      const compound = isCompound(ex.name);
+      if (age && age >= 60) {
+        if (ex.sets > 2) ex.sets -= 1;
+        ex.rest = shiftRest(ex.rest, 1);
+      } else if (age && age >= 50) {
+        if (compound && ex.sets > 3) ex.sets -= 1;
+        ex.rest = shiftRest(ex.rest, 1);
+      }
+      if (sex === "female" && !compound) ex.rest = shiftRest(ex.rest, -1);
+    }
+  }
+}
+
+// Recompute a day's time estimate after sets/rest were adjusted — mirrors the
+// formula in buildDay so estimates stay consistent across the app.
+function recalcMinutes(day: TrainingDay) {
+  const mins = day.exercises.reduce((acc, ex) => {
+    const restSecs = ex.rest === "3-5 min" ? 240 : ex.rest === "2-3 min" ? 150 : ex.rest === "90s" ? 90 : ex.rest === "60s" ? 60 : 45;
+    return acc + ex.sets * (45 + restSecs / 1000 * 60);
+  }, 0) / 60 + 10;
+  day.estimatedMinutes = Math.round(mins);
+}
+
+// Exercises per day from session length (falls back to the level default).
+function exercisesForSession(minutes: number | undefined, level: Level): number {
+  const base = level === "beginner" ? 5 : level === "intermediate" ? 6 : 7;
+  if (!minutes) return base;
+  if (minutes <= 30) return Math.max(3, Math.min(base, 4));
+  if (minutes <= 45) return Math.min(base, 5);
+  if (minutes <= 60) return base;
+  if (minutes <= 75) return base + 1;
+  return Math.min(9, base + 2);
+}
+
 // ── Split strategies ──────────────────────────────────────────────────────────
 
 export function generatePlan(config: PlanConfig): WeeklyPlan {
-  const { goal, level, daysPerWeek, equipment } = config;
-  const exPerDay = level === "beginner" ? 5 : level === "intermediate" ? 6 : 7;
+  const { goal, level, daysPerWeek, equipment, sex, age, minutesPerSession, injuries, heightCm, weightKg } = config;
+  const exPerDay = exercisesForSession(minutesPerSession, level);
 
   let days: TrainingDay[] = [];
   let split: Split;
@@ -242,6 +349,12 @@ export function generatePlan(config: PlanConfig): WeeklyPlan {
     restDays = [7];
   }
 
+  // ── Personalization post-pass ─────────────────────────────────────────────
+  // Runs before volume/time are tallied so the totals reflect the adjustments.
+  applyInjuries(days, injuries, equipment);
+  applyAgeSex(days, age, sex);
+  days.forEach(recalcMinutes);
+
   // ── Tips by goal ─────────────────────────────────────────────────────────
   const TIPS: Record<Goal, string[]> = {
     strength: [
@@ -278,6 +391,23 @@ export function generatePlan(config: PlanConfig): WeeklyPlan {
 
   const totalSets = days.flatMap(d => d.exercises).reduce((acc, ex) => acc + ex.sets, 0);
 
+  // Tailored tips from the personalization inputs — shown ahead of the goal tips
+  // so the plan visibly reflects what the user told us.
+  const personalTips: string[] = [];
+  if (injuries && injuries.length > 0) {
+    const NAME: Record<Injury, string> = { knee:"knees", shoulder:"shoulders", lower_back:"lower back", elbow:"elbows", wrist:"wrists", neck:"neck", hip:"hips", ankle:"ankles" };
+    personalTips.push(`Your plan steers around movements that stress your ${injuries.map(i => NAME[i]).join(", ")}. If anything still bothers you, tap 🔄 to swap it.`);
+  }
+  if (age && age >= 50) personalTips.push("We trimmed a little volume and added rest — recovery matters more past 50. Warm up thoroughly before the heavy sets.");
+  if (sex === "female") personalTips.push("Shorter rests on isolation work suit faster between-set recovery — push the reps on those.");
+  if (minutesPerSession && minutesPerSession <= 45) personalTips.push("Tight on time? Superset opposing muscles (e.g. chest + back) to fit the work into your window.");
+  if (heightCm && weightKg) {
+    const m = heightCm / 100;
+    const bmi = weightKg / (m * m);
+    if (bmi >= 30) personalTips.push("Starting lighter and lower-impact is the smart play — protect the joints now, build intensity as you progress.");
+    else if (bmi < 18.5) personalTips.push("Eating enough to support training is half the battle at your bodyweight — prioritize protein and a slight calorie surplus.");
+  }
+
   return {
     split,
     splitName,
@@ -285,7 +415,7 @@ export function generatePlan(config: PlanConfig): WeeklyPlan {
     level,
     days,
     restDays,
-    tips: TIPS[goal],
+    tips: [...personalTips, ...TIPS[goal]],
     weeklyVolume: `${totalSets} sets / week`,
   };
 }
