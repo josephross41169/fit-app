@@ -25,8 +25,9 @@ interface Tab {
 
 const tabs: Tab[] = [
   // ── Mobile primary nav (4 tabs + More button) ────────────────────────────
+  // Home = the user's own profile (the app's landing page). House icon, first.
   {
-    href: "/feed", label: "Feed", slot: "primary",
+    href: "/profile", label: "Home", slot: "primary",
     icon: (active) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
@@ -34,12 +35,17 @@ const tabs: Tab[] = [
       </svg>
     ),
   },
+  // Social = the combined Feed + Discover surface. The feed page hosts the
+  // For You / Following sub-tabs; Discover is reached from there. Stacked-cards
+  // icon to read as "the social stream."
   {
-    href: "/discover", label: "Discover", slot: "primary",
+    href: "/feed", label: "Social", slot: "primary",
     icon: (active) => (
       <svg viewBox="0 0 24 24" fill="none" stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        <rect x="3" y="4" width="18" height="13" rx="2" />
+        <line x1="7" y1="20" x2="17" y2="20" />
+        <line x1="9" y1="17" x2="9" y2="20" />
+        <line x1="15" y1="17" x2="15" y2="20" />
       </svg>
     ),
   },
@@ -112,17 +118,7 @@ const tabs: Tab[] = [
   },
 
   // ── Desktop-only / hidden on mobile ──────────────────────────────────────
-  // Profile is reached on mobile by tapping the avatar in the top header.
-  // Desktop sidebar still shows it.
-  {
-    href: "/profile", label: "Profile", slot: "primary",
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    ),
-  },
+  // (Profile now lives at the top as "Home".)
   // Notifications: bell on the feed header replaces this on mobile.
   {
     href: "/notifications", label: "Alerts", slot: "hidden",
