@@ -48,32 +48,55 @@ async function fetchCounts(userId: string) {
     // unread messages across them. We can't push this into one query
     // without an RPC because Supabase RLS on `messages` blocks anything
     // not joined through `conversation_participants` first.
-    const { data: parts } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", userId);
+    //
+    // Each section captures its own Supabase `error` and is independent: if
+    // the messages count fails (e.g. RLS on `messages` rejects the direct
+    // client query — a 500), we keep the previous message count and STILL
+    // run the notifications count below, instead of throwing out of the whole
+    // function. Previously a throw here meant a single failing section took
+    // out the other and the realtime loop kept retrying it.
+    let msgCount = unreadMessages; // default: keep prior value on failure
+    try {
+      const { data: parts, error: partsErr } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", userId);
 
-    let msgCount = 0;
-    if (parts && parts.length > 0) {
-      const convIds = parts.map((p: any) => p.conversation_id);
-      const { count } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("conversation_id", convIds)
-        .neq("sender_id", userId)
-        .is("read_at", null);
-      msgCount = count || 0;
-    }
+      if (!partsErr) {
+        if (parts && parts.length > 0) {
+          const convIds = parts.map((p: any) => p.conversation_id);
+          const { count, error: msgErr } = await supabase
+            .from("messages")
+            .select("id", { count: "exact", head: true })
+            .in("conversation_id", convIds)
+            .neq("sender_id", userId)
+            .is("read_at", null);
+          if (!msgErr) msgCount = count || 0;
+        } else {
+          msgCount = 0; // no conversations → genuinely zero unread
+        }
+      }
+    } catch { /* keep prior msgCount */ }
 
     // ── Notifications ──
-    const { count: nCount } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("recipient_id", userId)
-      .is("read_at", null);
+    // Column names must match the actual `notifications` table: the server
+    // API (/api/db get_notifications + mark_notifications_read) uses
+    // `user_id` and a boolean `read` column. An earlier version of this hook
+    // queried `recipient_id` / `read_at`, which don't exist on the table —
+    // that produced the repeating 400s in the console (Supabase rejecting the
+    // query) and meant the notification badge never populated on web.
+    let notifCount = unreadNotifs; // default: keep prior value on failure
+    try {
+      const { count: nCount, error: nErr } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("read", false);
+      if (!nErr) notifCount = nCount || 0;
+    } catch { /* keep prior notifCount */ }
 
     unreadMessages = msgCount;
-    unreadNotifs = nCount || 0;
+    unreadNotifs = notifCount;
     notify();
   } catch {
     // Don't reset to 0 on transient errors — keep stale value so the badge
