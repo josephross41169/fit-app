@@ -1735,10 +1735,10 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                 margin: "0 18px 12px",
                 borderRadius: 18,
                 padding: "24px 20px",
-                background: "linear-gradient(135deg, #FFE15C 0%, #FFD21F 50%, #FFC400 100%)",
+                background: "linear-gradient(135deg, #FFEF8A 0%, #FFE234 45%, #FFD60A 100%)",
                 position: "relative" as const,
                 overflow: "hidden" as const,
-                boxShadow: "0 8px 24px rgba(245,158,11,0.3)",
+                boxShadow: "0 8px 24px rgba(255,200,20,0.40)",
                 color: "#4A2F00",
               }}>
                 {/* Sparkle/ray pattern in the corners. Pure CSS radial
