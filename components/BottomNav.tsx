@@ -36,16 +36,14 @@ const tabs: Tab[] = [
     ),
   },
   // Social = the combined Feed + Discover surface. The feed page hosts the
-  // For You / Following sub-tabs; Discover is reached from there. Stacked-cards
-  // icon to read as "the social stream."
+  // For You / Following sub-tabs; Discover is reached from there.
+  // Stacked-cards icon (overlapping panels) to read as "the social stream."
   {
     href: "/feed", label: "Social", slot: "primary",
     icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
-        <rect x="3" y="4" width="18" height="13" rx="2" />
-        <line x1="7" y1="20" x2="17" y2="20" />
-        <line x1="9" y1="17" x2="9" y2="20" />
-        <line x1="15" y1="17" x2="15" y2="20" />
+      <svg viewBox="0 0 24 24" fill="none" stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+        <rect x="3" y="8" width="14" height="12" rx="2" />
+        <path d="M7 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
       </svg>
     ),
   },
