@@ -889,11 +889,53 @@ function WorldTab() {
 }
 
 // -----------------------------------------------------------------------------
+// DISCOVER TAB — find new people, creators, and brands to follow
+// -----------------------------------------------------------------------------
+function DiscoverTab() {
+  return (
+    <div className="discover-layout" style={{ display:"flex", gap:48, alignItems:"flex-start", maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px" }}>
+
+      {/* LEFT: People to discover */}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
+          <div style={{ fontSize:36 }}>🧭</div>
+          <div>
+            <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Discover People</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>Trending creators and accounts to follow</div>
+          </div>
+        </div>
+
+        {/* Trending people */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:12 }}>🔥 Trending People</div>
+          {TRENDING_PEOPLE.map((p,i) => <TrendingPersonCard key={p.id} person={p} rank={i+1} />)}
+        </div>
+
+        {/* Suggested accounts */}
+        <div style={{ marginTop:24 }}>
+          <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:12 }}>💡 Suggested For You</div>
+          {SUGGESTED_ACCOUNTS.map(a => <SuggestedCard key={a.id} account={a} />)}
+        </div>
+      </div>
+
+      {/* RIGHT: Brands to discover */}
+      <div className="discover-sidebar" style={{ width:320, flexShrink:0 }}>
+        <div style={{ marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}` }}>
+          <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>🔥 Trending Brands</div>
+          <div style={{ fontSize:11,color:C.darkSub }}>Top brands this week</div>
+        </div>
+        {TRENDING_BRANDS.map((b,i) => <BrandCard key={b.id} brand={b} rank={i+1} />)}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // MAIN PAGE
 // -----------------------------------------------------------------------------
 export default function DiscoverPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"local" | "world">("local");
+  const [tab, setTab] = useState<"local" | "world" | "discover">("local");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{id:string;username:string;full_name:string;avatar_url:string|null}[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -1173,7 +1215,7 @@ export default function DiscoverPage() {
 
         {/* Tabs */}
         <div style={{ maxWidth:1200,margin:"0 auto",padding:"0 24px",display:"flex",gap:0,marginTop:12 }}>
-          {(["local","world"] as const).map(t => (
+          {(["local","world","discover"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               padding:"10px 28px",
               fontWeight:800,
@@ -1188,14 +1230,16 @@ export default function DiscoverPage() {
               alignItems:"center",
               gap:8,
             }}>
-              {t === "local" ? "📍 Local" : "🌍 Worldwide"}
+              {t === "local" ? "📍 Local" : t === "world" ? "🌍 Worldwide" : "🧭 Discover"}
             </button>
           ))}
         </div>
       </div>
 
       {/* -- Tab content -- */}
-      {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} dbEvents={dbEvents} showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} /> : <WorldTab />}
+      {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} dbEvents={dbEvents} showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} />
+        : tab === "world" ? <WorldTab />
+        : <DiscoverTab />}
 
       {/* -- Change City Overlay -- */}
       {showChangeCityOverlay && (
