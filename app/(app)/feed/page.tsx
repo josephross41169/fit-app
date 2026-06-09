@@ -183,7 +183,7 @@ type Post = {
   likes: number;
   liked: boolean;
   comments: Comment[];
-  workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string}[]; photoUrls?: string[]; } | null;
+  workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string;meters?:number|null;miles?:number|null;laps?:number|null;est_calories?:number|null}[]; photoUrls?: string[]; } | null;
   nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; photoUrls?: string[]; } | null;
   wellness: { entries: { emoji: string; activity: string; notes: string; duration?: number; loggedAt?: string; }[]; photoUrls?: string[]; } | null;
   // 'achievement' posts get a distinct gold treatment in the feed (the
@@ -839,7 +839,14 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, padding:"4px 9px", borderRadius:99, background:"rgba(124,58,237,0.18)", border:"1px solid rgba(124,58,237,0.35)" }}>
                   <span style={{ fontWeight:800, color:"#E2E8F0" }}>{c.type}</span>
                   {c.duration && <span style={{ color:C.blue, fontWeight:700 }}>· {fmtDur(c.duration)}</span>}
-                  {c.distance && <span style={{ color:C.gold, fontWeight:700 }}>· {c.distance}</span>}
+                  {/* Swim logged by laps → show meters + miles instead of raw distance */}
+                  {c.meters != null ? (
+                    <span style={{ color:C.gold, fontWeight:700 }}>· {Number(c.meters).toLocaleString()}m / {Number(c.miles).toLocaleString()}mi</span>
+                  ) : c.distance ? (
+                    <span style={{ color:C.gold, fontWeight:700 }}>· {c.distance}</span>
+                  ) : null}
+                  {c.laps != null && <span style={{ color:"#93C5FD", fontWeight:700 }}>· {c.laps} laps</span>}
+                  {c.est_calories != null && <span style={{ color:"#FB923C", fontWeight:700 }}>· 🔥{Number(c.est_calories).toLocaleString()}</span>}
                 </div>
               ))}
             </div>
@@ -3086,6 +3093,12 @@ export default function FeedPage() {
           type: c.type || 'Cardio',
           duration: c.duration || '—',
           distance: c.distance || '',
+          // Swim-pool + calorie fields (added with the home-pool feature).
+          // The loader must carry these explicitly or they vanish on display.
+          meters: c.meters ?? null,
+          miles: c.miles ?? null,
+          laps: c.laps ?? null,
+          est_calories: c.est_calories ?? null,
         })) : [],
         notes: wl.notes,
         photoUrls: normalizePhotoUrls(wl.photo_url, wl.media_url, wl.media_urls),
