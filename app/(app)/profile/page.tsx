@@ -1273,8 +1273,6 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           </div>
                         </div>
                       )}
-                        </div>
-                      )}
                       {exList.length === 0 && carList.length === 0 && (
                         <div style={{textAlign:"center",padding:"12px 0",color:C.sub,fontSize:13}}>No exercises logged</div>
                       )}
