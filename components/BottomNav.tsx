@@ -60,7 +60,9 @@ const tabs: Tab[] = [
     ),
   },
   {
-    href: "/connect", label: "Connect", slot: "primary",
+    // "Groups" lands directly on the My Groups tab of the connect page so the
+    // user's own groups are one tap away (no separate nav item needed).
+    href: "/connect?tab=mygroups", label: "Groups", slot: "primary",
     icon: (active) => (
       <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -72,16 +74,6 @@ const tabs: Tab[] = [
   },
 
   // ── More sheet (mobile) ──────────────────────────────────────────────────
-  // "My Groups" deep-links to the connect page. There's no /groups index
-  // page right now — connect doubles as the groups browser.
-  {
-    href: "/connect?tab=mygroups", label: "My Groups", slot: "more",
-    icon: (active) => (
-      <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: active ? 18 : 16, filter: active ? "none" : "grayscale(0.4)" }}>
-        👥
-      </div>
-    ),
-  },
   {
     href: "/stats", label: "Stats", slot: "more",
     icon: (active) => (
@@ -307,7 +299,7 @@ export default function BottomNav() {
         {/* 4 primary tabs + More button */}
         <div className="flex items-center justify-around px-2 safe-nav">
           {primaryTabs.map((tab) => {
-            const active = pathname === tab.href;
+            const active = pathname === tab.href.split('?')[0];
             const badge = getBadge(tab.href);
             return (
               <Link key={tab.href} href={tab.href}
