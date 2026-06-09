@@ -1216,38 +1216,63 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                       </>)}
                       {carList.length > 0 && (
                         <div style={{marginTop: exList.length > 0 ? 12 : 0, paddingTop: exList.length > 0 ? 12 : 0, borderTop: exList.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
-                          <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>🏃 Cardio</div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,paddingBottom:6,marginBottom:4,borderBottom:`1px solid ${C.purpleMid}`}}>
-                            {["Type","Duration","Distance"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
-                          </div>
-                          {carList.map((c: any, i: number)=>(
-                            <div key={i}>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px",gap:8,padding:"8px 4px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                                <span style={{fontSize:14,fontWeight:600,color:C.text}}>{
-                                  (String(c.type||'').toLowerCase()==='running' && c.run_type && RUN_TYPE_LABELS[c.run_type])
-                                    ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
-                                    : c.type
-                                }</span>
-                                <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{fmtDur(c.duration)}</span>
-                                <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{
-                                  c.meters != null
-                                    ? `${Number(c.meters).toLocaleString()}m`
-                                    : (c.distance || '—')
-                                }</span>
-                              </div>
-                              {/* Swim detail + calories line (when present) */}
-                              {(c.meters != null || c.laps != null || c.est_calories != null) && (
-                                <div style={{display:"flex",gap:10,flexWrap:"wrap",padding:"0 4px 4px",fontSize:11,color:C.sub}}>
-                                  {c.miles != null && <span>🏊 {Number(c.miles).toLocaleString()} mi</span>}
-                                  {c.laps != null && <span>· {c.laps} laps</span>}
-                                  {c.est_calories != null && <span style={{color:"#FB923C",fontWeight:700}}>· 🔥 {Number(c.est_calories).toLocaleString()} kcal</span>}
+                          <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10}}>🏃 Cardio</div>
+                          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                            {carList.map((c: any, i: number)=>{
+                              const typeLabel = (String(c.type||'').toLowerCase()==='running' && c.run_type && RUN_TYPE_LABELS[c.run_type])
+                                ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
+                                : c.type;
+                              const dur = fmtDur(c.duration);
+                              const distDisplay = c.meters != null ? `${Number(c.meters).toLocaleString()} m` : (c.distance || null);
+                              return (
+                                <div key={i} style={{background:"#0D0A1A",borderRadius:12,border:`1px solid ${C.purpleMid}`,padding:"12px 14px"}}>
+                                  {/* Header row: type + emoji */}
+                                  <div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:(dur||distDisplay||c.note||c.est_calories!=null)?10:0,textTransform:"capitalize"}}>{typeLabel}</div>
+                                  {/* Stat chips */}
+                                  {(dur || distDisplay || c.miles!=null || c.laps!=null || c.est_calories!=null) && (
+                                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                                      {dur && (
+                                        <div style={{background:`${C.purpleMid}55`,borderRadius:8,padding:"6px 10px",minWidth:0}}>
+                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Duration</div>
+                                          <div style={{fontSize:14,fontWeight:800,color:C.purple}}>{dur}</div>
+                                        </div>
+                                      )}
+                                      {distDisplay && (
+                                        <div style={{background:`${C.purpleMid}55`,borderRadius:8,padding:"6px 10px",minWidth:0}}>
+                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Distance</div>
+                                          <div style={{fontSize:14,fontWeight:800,color:C.gold}}>{distDisplay}</div>
+                                        </div>
+                                      )}
+                                      {c.miles != null && (
+                                        <div style={{background:`${C.purpleMid}55`,borderRadius:8,padding:"6px 10px",minWidth:0}}>
+                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Miles</div>
+                                          <div style={{fontSize:14,fontWeight:800,color:C.gold}}>{Number(c.miles).toLocaleString()}</div>
+                                        </div>
+                                      )}
+                                      {c.laps != null && (
+                                        <div style={{background:`${C.purpleMid}55`,borderRadius:8,padding:"6px 10px",minWidth:0}}>
+                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Laps</div>
+                                          <div style={{fontSize:14,fontWeight:800,color:"#93C5FD"}}>{c.laps}</div>
+                                        </div>
+                                      )}
+                                      {c.est_calories != null && (
+                                        <div style={{background:"rgba(251,146,60,0.12)",borderRadius:8,padding:"6px 10px",minWidth:0}}>
+                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Calories</div>
+                                          <div style={{fontSize:14,fontWeight:800,color:"#FB923C"}}>🔥 {Number(c.est_calories).toLocaleString()}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Note */}
+                                  {c.note && String(c.note).trim().length > 0 && (
+                                    <div style={{fontSize:12,color:C.sub,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.purpleMid}`,lineHeight:1.5,whiteSpace:"pre-wrap"}}>📝 {c.note}</div>
+                                  )}
                                 </div>
-                              )}
-                              {c.note && String(c.note).trim().length > 0 && (
-                                <div style={{fontSize:12,color:C.sub,padding:"2px 4px 6px",lineHeight:1.4,whiteSpace:"pre-wrap"}}>📝 {c.note}</div>
-                              )}
-                            </div>
-                          ))}
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                         </div>
                       )}
                       {exList.length === 0 && carList.length === 0 && (
