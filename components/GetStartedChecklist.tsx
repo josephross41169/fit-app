@@ -31,6 +31,10 @@ export default function GetStartedChecklist({
     avatar: boolean; banner: boolean; bio: boolean;
   }>(null);
   const [dismissed, setDismissed] = useState(false);
+  // Collapsed by default — the full 6-row list was eating the whole Home
+  // screen. We show just the header + the first incomplete step, with a
+  // "Show all" toggle to reveal the rest.
+  const [expanded, setExpanded] = useState(false);
 
   // Per-device dismiss flag.
   useEffect(() => {
@@ -100,6 +104,12 @@ export default function GetStartedChecklist({
   };
   const pct = Math.round((doneCount / items.length) * 100);
 
+  // When collapsed: show only the first incomplete step (the user's clear
+  // "next action"). When expanded: show every row.
+  const firstUndone = items.find(i => !i.done);
+  const visibleItems = expanded ? items : (firstUndone ? [firstUndone] : []);
+  const remaining = items.length - doneCount;
+
   return (
     <div style={{
       background: "linear-gradient(135deg,#1B1430,#140E26)",
@@ -111,20 +121,28 @@ export default function GetStartedChecklist({
         color: "#6B7280", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4,
       }}>×</button>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <span style={{ fontSize: 20 }}>🚀</span>
-        <span style={{ fontSize: 17, fontWeight: 900, color: "#F0F0F0" }}>Get started with Livelee</span>
-      </div>
-      <div style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 12, paddingRight: 24 }}>
-        {doneCount} of {items.length} done — finish setting up to get the most out of the app.
-      </div>
-
-      <div style={{ height: 8, borderRadius: 99, background: "#2A2140", overflow: "hidden", marginBottom: 16 }}>
-        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${PURPLE},#A78BFA)`, transition: "width 0.4s" }} />
-      </div>
+      {/* Header is now a toggle — tap anywhere on it to expand/collapse. */}
+      <button onClick={() => setExpanded(v => !v)} style={{
+        display: "block", width: "100%", textAlign: "left", background: "none",
+        border: "none", padding: 0, cursor: "pointer",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, paddingRight: 24 }}>
+          <span style={{ fontSize: 20 }}>🚀</span>
+          <span style={{ fontSize: 17, fontWeight: 900, color: "#F0F0F0" }}>Get started with Livelee</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+        <div style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 12 }}>
+          {doneCount} of {items.length} done{!expanded && remaining > 0 ? ` — ${remaining} step${remaining === 1 ? "" : "s"} left, tap to see all` : " — finish setting up to get the most out of the app."}
+        </div>
+        <div style={{ height: 8, borderRadius: 99, background: "#2A2140", overflow: "hidden", marginBottom: 16 }}>
+          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${PURPLE},#A78BFA)`, transition: "width 0.4s" }} />
+        </div>
+      </button>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {items.map(it => (
+        {visibleItems.map(it => (
           <button
             key={it.key}
             onClick={() => { if (!it.done) onAction(it.key); }}
@@ -161,6 +179,16 @@ export default function GetStartedChecklist({
           </button>
         ))}
       </div>
+
+      {/* Show all / Show less — only when there's more than one step to show. */}
+      {items.length > 1 && (
+        <button onClick={() => setExpanded(v => !v)} style={{
+          width: "100%", marginTop: 10, background: "none", border: "none",
+          color: "#A78BFA", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 6,
+        }}>
+          {expanded ? "Show less" : `Show all ${items.length} steps`}
+        </button>
+      )}
     </div>
   );
 }
