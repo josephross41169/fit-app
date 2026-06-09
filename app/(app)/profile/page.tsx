@@ -948,28 +948,24 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       {/* BODY */}
       {open && <div style={{padding:"24px 24px 28px",borderTop:`2px solid ${C.purpleMid}`,background:"#1E1530"}}>
 
-        {/* Photos */}
+        {/* Photos — display only. Photos are added from the Post page, so the
+            "Add Photos" button + dropzone are removed here. Section hidden when
+            there are no photos. */}
+        {photos.length > 0 && (
         <div style={{marginBottom:24}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Photos</span>
-            <label style={{fontSize:13,fontWeight:700,padding:"6px 16px",borderRadius:20,background:"#2D1F52",color:"#A78BFA",cursor:"pointer"}}>
-              📷 Add Photos<input type="file" accept="image/*" multiple style={{display:"none"}} onChange={onFiles}/>
-            </label>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
             {photos.map((src,i)=>(
               <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
                 <img onClick={()=>setLb(src)} src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
-                <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>
+                {editable && <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>}
               </div>
             ))}
-            <label style={{width:108,height:108,borderRadius:16,border:`2px dashed ${C.purpleMid}`,background:"#1A1230",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",gap:4}}>
-              <span style={{fontSize:28,color:C.purple}}>+</span>
-              <span style={{fontSize:12,fontWeight:600,color:C.purple}}>Add</span>
-              <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={onFiles}/>
-            </label>
           </div>
         </div>
+        )}
 
         {/* ── WORKOUT ── */}
         {editWo ? (
@@ -1467,11 +1463,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>
           </div>
         ) : (
-          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E"}}>
-            <div style={{fontSize:34,marginBottom:8}}>🥗</div>
-            <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No nutrition logged</div>
-            {editable && <button onClick={()=>{setNutBuf({calories:0,protein:0,carbs:0,fat:0,sugar:0,meals:[]});setEditNut(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Nutrition</button>}
-          </div>
+          // Nutrition is logged only from the Post page — no empty-state prompt
+          // or "+ Log Nutrition" button here. When there's nothing logged, the
+          // section simply doesn't render.
+          null
         )}
 
         {/* ── WELLNESS ── */}
@@ -1570,11 +1565,9 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
             </div>}
           </div>
         ) : (
-          <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#1A1230",border:"2px solid #3D2A6E",marginTop:16}}>
-            <div style={{fontSize:34,marginBottom:8}}>🌿</div>
-            <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No wellness logged</div>
-            {editable && <button onClick={()=>{setWellBuf({entries:[]});setEditWell(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Log Wellness</button>}
-          </div>
+          // Wellness is logged only from the Post page — no empty-state prompt
+          // or "+ Log Wellness" button here.
+          null
         )}
         {/* ── BADGES ── */}
         {earnedBadges.length > 0 && (
