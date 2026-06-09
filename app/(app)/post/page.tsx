@@ -1403,7 +1403,12 @@ export default function PostPage() {
         const workoutPayload = {
           workout_category: effectiveWoCategory,         // standardized — drives stats/badges/rivalries
           workout_type: woType || null,                  // user's name for this workout ("Push Day A")
-          workout_duration_min: effectiveDuration,
+          // workout_duration_min is an INTEGER column in the DB, but the
+          // minutes+seconds inputs produce decimal minutes (e.g. 20:25 → 20.4167).
+          // Round to whole minutes for storage to avoid "invalid input syntax
+          // for type integer". Per-entry precise durations are preserved on the
+          // cardio JSON (entry.duration), so pace math stays exact.
+          workout_duration_min: effectiveDuration != null ? Math.round(effectiveDuration) : null,
           exercises: useExercises ? normalizedExercises : null,
           cardio: cardioPayload,
           notes: woNotes || null,
