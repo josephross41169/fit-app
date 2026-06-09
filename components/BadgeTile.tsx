@@ -361,11 +361,13 @@ export function BadgeTile({
       textAlign: "center",
       border: `2px solid ${style.border}`,
       background: style.gradient,
-      // Compact mode (used in the profile preview grid) intentionally uses
-      // a tighter glow. The full 36px glow extends well past the cell and
-      // makes the badge visually appear offset within the equal-width
-      // grid columns. Tighter glow keeps the visual center of each tile
-      // aligned with its actual center.
+      // Uniform height so tiles line up evenly in the grid whether or not a
+      // given badge shows a progress bar. Flex column with the content area
+      // growing keeps the rank pill anchored at the bottom of every tile.
+      minHeight: compact ? 132 : 200,
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "space-between",
       boxShadow: compact
         ? `0 0 6px ${style.glow}, 0 0 12px ${style.glow}, inset 0 1px 0 rgba(255,255,255,0.3)`
         : `0 0 14px ${style.glow}, 0 0 36px ${style.glow}, 0 0 16px ${theme.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
@@ -494,17 +496,18 @@ export function BadgeTile({
           backdropFilter: "blur(4px)",
           border: `1px solid ${style.accentColor}`,
           borderRadius: 99,
-          // Compact preview tiles are narrow (3-up grid), so reduce horizontal
-          // padding and letter-spacing so the rank label ("BRONZE", "SILVER",
-          // etc.) fits inside the tile without overflowing right.
-          padding: compact ? "2px 6px" : "2px 9px",
-          fontSize: 9, fontWeight: 900,
+          // Compact preview tiles are narrow (3-up grid). Use tighter padding,
+          // a smaller font, and minimal letter-spacing so the full rank label
+          // ("BRONZE", "SILVER", "PLATINUM"…) always fits without clipping.
+          padding: compact ? "2px 7px" : "2px 9px",
+          fontSize: compact ? 8 : 9, fontWeight: 900,
           color: style.accentColor,
-          letterSpacing: compact ? 0.4 : 0.8,
+          letterSpacing: compact ? 0.2 : 0.8,
           textShadow: "0 1px 2px rgba(0,0,0,0.8)",
           whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "clip",
+          // No clipping — show the full word. Long labels just shrink via the
+          // smaller compact font above rather than getting cut off.
+          overflow: "visible",
         }}>
           {style.name}
         </div>
