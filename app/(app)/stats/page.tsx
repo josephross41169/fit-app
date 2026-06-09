@@ -162,6 +162,26 @@ function MiniNum({label,value,color=C.text}:{label:string;value:string|number;co
     </div>
   );
 }
+// A single labelled input for the private body-metrics form.
+function MetricField({label,k,metrics,setMetrics,placeholder,type="decimal"}:{
+  label:string;k:string;metrics:Record<string,string>;
+  setMetrics:React.Dispatch<React.SetStateAction<Record<string,string>>>;
+  placeholder?:string;type?:"decimal"|"date";
+}){
+  return(
+    <div>
+      <label style={{fontSize:10,fontWeight:700,color:C.sub,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:0.8}}>{label}</label>
+      <input
+        type={type==="date"?"date":"text"}
+        inputMode={type==="date"?undefined:"decimal"}
+        placeholder={placeholder}
+        value={metrics[k]||""}
+        onChange={e=>setMetrics(m=>({...m,[k]:type==="date"?e.target.value:e.target.value.replace(/[^0-9.]/g,"")}))}
+        style={{width:"100%",background:"#0D0D0D",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box"}}
+      />
+    </div>
+  );
+}
 function SecHead({title,right}:{title:string;right?:React.ReactNode}){
   return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,marginTop:26}}>
@@ -354,6 +374,13 @@ export default function StatsPage(){
   const [weightNotes,setWeightNotes]=useState("");
   const [weightPublic,setWeightPublic]=useState(false);
   const [weightSaving,setWeightSaving]=useState(false);
+  // ── Advanced body metrics (PRIVATE — only the user sees these) ──────────
+  // Stored as columns on the users table. Powers the cardio calorie estimator.
+  const [metrics,setMetrics]=useState<Record<string,string>>({});
+  const [metricsSaving,setMetricsSaving]=useState(false);
+  const [metricsSaved,setMetricsSaved]=useState(false);
+  const [showMetrics,setShowMetrics]=useState(false);
+  const [metricsUpdatedAt,setMetricsUpdatedAt]=useState<string|null>(null);
   const [savingGoals,setSavingGoals]=useState(false);
 
   // Goals
@@ -547,6 +574,51 @@ export default function StatsPage(){
       setShowWeightModal(false);
     } catch(e:any) { alert("Error: " + e.message); }
     setWeightSaving(false);
+  }
+
+  // ── Load the user's saved body metrics once ──────────────────────────────
+  const METRIC_COLS = [
+    "body_weight_lbs","height_in","date_of_birth","biological_sex","resting_hr",
+    "body_fat_pct","lean_mass_lbs","fat_mass_lbs","muscle_mass_lbs","bone_mass_lbs",
+    "body_water_pct","bmr_kcal","visceral_fat","metabolic_age",
+  ];
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("users")
+      .select(METRIC_COLS.join(",") + ",body_metrics_updated_at")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }: any) => {
+        if (!data) return;
+        const m: Record<string,string> = {};
+        for (const c of METRIC_COLS) {
+          if (data[c] !== null && data[c] !== undefined) m[c] = String(data[c]);
+        }
+        setMetrics(m);
+        setMetricsUpdatedAt(data.body_metrics_updated_at || null);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  async function saveMetrics() {
+    if (!user) return;
+    setMetricsSaving(true);
+    try {
+      const payload: Record<string, any> = { body_metrics_updated_at: new Date().toISOString() };
+      for (const c of METRIC_COLS) {
+        const v = metrics[c];
+        if (v === undefined || v === "") { payload[c] = null; continue; }
+        // date_of_birth + biological_sex are non-numeric; rest are numbers.
+        payload[c] = (c === "date_of_birth" || c === "biological_sex") ? v : (parseFloat(v) || null);
+      }
+      const { error } = await supabase.from("users").update(payload).eq("id", user.id);
+      if (error) { alert("Error saving metrics: " + error.message); setMetricsSaving(false); return; }
+      setMetricsUpdatedAt(payload.body_metrics_updated_at);
+      setMetricsSaved(true);
+      setTimeout(() => setMetricsSaved(false), 2500);
+    } catch(e:any) { alert("Error: " + e.message); }
+    setMetricsSaving(false);
   }
 
   async function saveGoals(){
@@ -2436,6 +2508,67 @@ export default function StatsPage(){
 
           {/* ═══════════════════════════════════════════════ BODY ══ */}
           {tab==="body"&&(<>
+            {/* ── ADVANCED BODY METRICS (PRIVATE) ──────────────────────────
+                Collapsible card. Powers the cardio calorie estimator on the
+                Post page. Explicitly private — only this user ever sees it. */}
+            <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.border}`,marginBottom:14,overflow:"hidden"}}>
+              <button onClick={()=>setShowMetrics(v=>!v)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:"none",border:"none",cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:20}}>🔒</span>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{fontWeight:900,fontSize:14,color:C.text}}>Advanced Body Metrics</div>
+                    <div style={{fontSize:11,color:C.sub}}>Private · powers calorie estimates</div>
+                  </div>
+                </div>
+                <span style={{fontSize:18,color:C.sub,transform:showMetrics?"rotate(180deg)":"none",transition:"transform 0.2s"}}>⌄</span>
+              </button>
+
+              {showMetrics && (
+                <div style={{padding:"0 16px 16px"}}>
+                  {/* Privacy banner — make it unmistakable */}
+                  <div style={{background:"rgba(59,130,246,0.1)",border:"1px solid #3B82F6",borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:"#93C5FD",lineHeight:1.5}}>
+                    🔒 <b>Only you can see this.</b> These metrics are never shown on your public profile or to anyone else. They're used privately to estimate calories burned during cardio.
+                  </div>
+
+                  <div style={{fontSize:10,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>Core (needed for estimates)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                    <MetricField label="Weight (lbs)" k="body_weight_lbs" metrics={metrics} setMetrics={setMetrics} placeholder="180" />
+                    <MetricField label="Height (in)" k="height_in" metrics={metrics} setMetrics={setMetrics} placeholder="70" />
+                    <MetricField label="Date of birth" k="date_of_birth" metrics={metrics} setMetrics={setMetrics} type="date" />
+                    <div>
+                      <label style={{fontSize:10,fontWeight:700,color:C.sub,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:0.8}}>Biological sex</label>
+                      <select value={metrics.biological_sex||""} onChange={e=>setMetrics(m=>({...m,biological_sex:e.target.value}))} style={{width:"100%",background:"#0D0D0D",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box"}}>
+                        <option value="">—</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{fontSize:10,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>From a body scan / smart scale (optional · improves accuracy)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                    <MetricField label="Resting HR (bpm)" k="resting_hr" metrics={metrics} setMetrics={setMetrics} placeholder="60" />
+                    <MetricField label="Body fat %" k="body_fat_pct" metrics={metrics} setMetrics={setMetrics} placeholder="18" />
+                    <MetricField label="Lean mass (lbs)" k="lean_mass_lbs" metrics={metrics} setMetrics={setMetrics} placeholder="145" />
+                    <MetricField label="Fat mass (lbs)" k="fat_mass_lbs" metrics={metrics} setMetrics={setMetrics} placeholder="32" />
+                    <MetricField label="Muscle mass (lbs)" k="muscle_mass_lbs" metrics={metrics} setMetrics={setMetrics} placeholder="78" />
+                    <MetricField label="Bone mass (lbs)" k="bone_mass_lbs" metrics={metrics} setMetrics={setMetrics} placeholder="7" />
+                    <MetricField label="Body water %" k="body_water_pct" metrics={metrics} setMetrics={setMetrics} placeholder="55" />
+                    <MetricField label="BMR (kcal/day)" k="bmr_kcal" metrics={metrics} setMetrics={setMetrics} placeholder="1750" />
+                    <MetricField label="Visceral fat" k="visceral_fat" metrics={metrics} setMetrics={setMetrics} placeholder="8" />
+                    <MetricField label="Metabolic age" k="metabolic_age" metrics={metrics} setMetrics={setMetrics} placeholder="30" />
+                  </div>
+
+                  <button onClick={saveMetrics} disabled={metricsSaving} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:metricsSaving?"#2D1F52":metricsSaved?C.green:"linear-gradient(135deg,#7C3AED,#A78BFA)",color:"#fff",fontWeight:900,fontSize:14,cursor:metricsSaving?"not-allowed":"pointer"}}>
+                    {metricsSaving?"Saving…":metricsSaved?"✓ Saved":"Save Metrics"}
+                  </button>
+                  {metricsUpdatedAt && (
+                    <div style={{fontSize:10,color:C.sub,textAlign:"center",marginTop:8}}>Last updated {fmt(metricsUpdatedAt)}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* ── BODY WEIGHT SECTION ──────────────────────────────────── */}
             {/* Hero: current weight + total change in selected range. Color
                 cues green when trending down, red when up — same convention
