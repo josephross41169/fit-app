@@ -5165,6 +5165,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               position:"relative",
                               overflow:"hidden",
                               border:"2px solid transparent",
+                              // Match BadgeTile compact sizing so all three tile
+                              // types line up evenly in the sidebar grid.
+                              minHeight:132,
+                              display:"flex",
+                              flexDirection:"column",
+                              alignItems:"center",
+                              justifyContent:"center",
                               background: `
                                 linear-gradient(#0A0A14, #0A0A14) padding-box,
                                 linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
@@ -5195,6 +5202,11 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               position:"relative",
                               overflow:"hidden",
                               border:"2px solid #F472B6",
+                              minHeight:132,
+                              display:"flex",
+                              flexDirection:"column",
+                              alignItems:"center",
+                              justifyContent:"center",
                               background:"linear-gradient(135deg, #4C1D4D, #2B1550, #183B4E)",
                               animation:"birthdayPulse 3s ease-in-out infinite",
                             }}>
