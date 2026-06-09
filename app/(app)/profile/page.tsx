@@ -798,6 +798,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         type: c.type || 'Cardio',
         duration: c.duration || undefined,
         distance: c.distance || undefined,
+        // Swim-pool + calorie fields — must be carried or the swim row shows blank.
+        meters: c.meters ?? undefined,
+        miles: c.miles ?? undefined,
+        laps: c.laps ?? undefined,
+        run_type: c.run_type ?? undefined,
+        note: c.note ?? undefined,
+        est_calories: c.est_calories ?? undefined,
       })),
     } : null,
     nutrition: nutrition ? {
@@ -1226,8 +1233,20 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                                     : c.type
                                 }</span>
                                 <span style={{fontSize:14,fontWeight:700,color:C.purple,textAlign:"center"}}>{fmtDur(c.duration)}</span>
-                                <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{c.distance}</span>
+                                <span style={{fontSize:14,fontWeight:700,color:C.gold,textAlign:"center"}}>{
+                                  c.meters != null
+                                    ? `${Number(c.meters).toLocaleString()}m`
+                                    : (c.distance || '—')
+                                }</span>
                               </div>
+                              {/* Swim detail + calories line (when present) */}
+                              {(c.meters != null || c.laps != null || c.est_calories != null) && (
+                                <div style={{display:"flex",gap:10,flexWrap:"wrap",padding:"0 4px 4px",fontSize:11,color:C.sub}}>
+                                  {c.miles != null && <span>🏊 {Number(c.miles).toLocaleString()} mi</span>}
+                                  {c.laps != null && <span>· {c.laps} laps</span>}
+                                  {c.est_calories != null && <span style={{color:"#FB923C",fontWeight:700}}>· 🔥 {Number(c.est_calories).toLocaleString()} kcal</span>}
+                                </div>
+                              )}
                               {c.note && String(c.note).trim().length > 0 && (
                                 <div style={{fontSize:12,color:C.sub,padding:"2px 4px 6px",lineHeight:1.4,whiteSpace:"pre-wrap"}}>📝 {c.note}</div>
                               )}
@@ -2057,6 +2076,11 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               distance: c.distance || '',
               run_type: c.run_type || undefined,
               note: c.note || '',
+              // Swim-pool + calorie fields so the swim row isn't blank.
+              meters: c.meters ?? undefined,
+              miles: c.miles ?? undefined,
+              laps: c.laps ?? undefined,
+              est_calories: c.est_calories ?? undefined,
             }))
           : [],
       }));
