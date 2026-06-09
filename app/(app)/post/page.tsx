@@ -545,7 +545,13 @@ export default function PostPage() {
   // Push the current form entry into the list and reset the form.
   function addCardioEntry() {
     const e = buildCardioEntry();
-    if (!e) return;
+    if (!e) {
+      // Nothing entered yet — flash a hint instead of doing nothing silently.
+      setCardioAddHint(true);
+      setTimeout(() => setCardioAddHint(false), 3000);
+      return;
+    }
+    setCardioAddHint(false);
     setCardioEntries(prev => [...prev, e]);
     clearCardioForm();
   }
@@ -578,6 +584,9 @@ export default function PostPage() {
   // form for the next. On save we combine this list with the current form
   // entry. Each item already carries its computed fields (meters, calories…).
   const [cardioEntries, setCardioEntries] = useState<any[]>([]);
+  // Brief inline hint shown if the user taps "Add another cardio" with an
+  // empty form — clearer than a silently-disabled button.
+  const [cardioAddHint, setCardioAddHint] = useState(false);
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
   // Kept separate from woDuration (which is the lifting block's duration)
   // so users can have BOTH "Sports + Lifting" with independent times.
@@ -3103,22 +3112,27 @@ export default function PostPage() {
                       })()}
 
                       {/* ── ADD ANOTHER CARDIO ── lets the user log multiple
-                          cardio activities in one workout. Disabled until the
-                          current form has something worth adding. */}
+                          cardio activities in one workout. Always tappable;
+                          if the form is empty it shows a hint rather than
+                          appearing dead/disabled. */}
                       <button
                         onClick={addCardioEntry}
-                        disabled={!buildCardioEntry()}
                         style={{
                           width: "100%", marginTop: 12, padding: "11px",
-                          borderRadius: 10, border: `1.5px dashed ${buildCardioEntry() ? C.blue : C.border}`,
+                          borderRadius: 10, border: `1.5px dashed ${C.blue}`,
                           background: "transparent",
-                          color: buildCardioEntry() ? "#A78BFA" : C.sub,
+                          color: "#A78BFA",
                           fontWeight: 800, fontSize: 13,
-                          cursor: buildCardioEntry() ? "pointer" : "not-allowed",
+                          cursor: "pointer",
                         }}
                       >
                         + Add another cardio
                       </button>
+                      {cardioAddHint && (
+                        <div style={{ fontSize: 11, color: C.gold, marginTop: 6, textAlign: "center" }}>
+                          Fill in this cardio (duration or distance) first, then tap to add it.
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
