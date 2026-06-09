@@ -497,6 +497,73 @@ export default function PostPage() {
       .catch(() => {});
   }, [user]);
 
+  // Build a cardio entry object from the CURRENT form state. Shared by the
+  // "Add another cardio" button and the final save so both produce identical
+  // shapes. Returns null if there's nothing meaningful entered.
+  function buildCardioEntry(): any | null {
+    const durNum = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
+    const distNum = parseFloat(cardioBlockDistance) || 0;
+    if (durNum <= 0 && distNum <= 0 && !(useSwimPool && swimResult)) return null;
+
+    const entry: any = {
+      type: cardioSubcategory,
+      distance: cardioBlockDistance || null,
+      duration: durNum > 0 ? durNum : null,
+    };
+    if (cardioSubcategory === "swimming" && useSwimPool && swimResult) {
+      entry.pool_length = parseFloat(poolLength) || null;
+      entry.pool_unit = poolUnit;
+      entry.laps = parseInt(swimLaps) || null;
+      entry.meters = swimResult.meters;
+      entry.miles = swimResult.miles;
+    }
+    if (bodyMetrics && durNum > 0) {
+      const est = estimateCardioCalories(cardioSubcategory, durNum, bodyMetrics);
+      if (est) { entry.est_calories = est.kcal; entry.est_calories_method = est.method; }
+    }
+    if (cardioSubcategory === "running") entry.run_type = cardioRunType;
+    if (cardioNote.trim()) entry.note = cardioNote.trim();
+    if (distNum > 0 && !entry.miles) entry.miles = distNum;
+    if (distNum > 0 && durNum > 0) {
+      if (cardioSubcategory === "running") entry.pace_min_per_mile = durNum / distNum;
+      else if (cardioSubcategory === "cycling" || cardioSubcategory === "biking") entry.mph = (distNum / durNum) * 60;
+      else if (cardioSubcategory === "swimming") entry.pace_min_per_100 = (durNum / distNum) * 100;
+    }
+    return entry;
+  }
+
+  // Clear the cardio form fields (after adding one to the list).
+  function clearCardioForm() {
+    setCardioBlockDuration("");
+    setCardioBlockDurationSec("");
+    setCardioBlockDistance("");
+    setCardioNote("");
+    setSwimLaps("");
+    // Keep cardioSubcategory, run type, and pool length — likely reused.
+  }
+
+  // Push the current form entry into the list and reset the form.
+  function addCardioEntry() {
+    const e = buildCardioEntry();
+    if (!e) return;
+    setCardioEntries(prev => [...prev, e]);
+    clearCardioForm();
+  }
+
+  function removeCardioEntry(idx: number) {
+    setCardioEntries(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  // A short human label for a saved cardio chip.
+  function cardioChipLabel(e: any): string {
+    const parts: string[] = [e.type || "Cardio"];
+    if (e.duration) parts.push(`${Math.round(e.duration)}m`);
+    if (e.meters != null) parts.push(`${Number(e.meters).toLocaleString()}m`);
+    else if (e.distance) parts.push(String(e.distance));
+    if (e.est_calories != null) parts.push(`🔥${e.est_calories}`);
+    return parts.join(" · ");
+  }
+
   // When pool mode is on and we have a result, the swim's stored distance is
   // the computed YARDS (swimming's native unit in this app), kept in sync.
   useEffect(() => {
@@ -506,6 +573,11 @@ export default function PostPage() {
   }, [useSwimPool, cardioSubcategory, swimResult?.yards]);
   // Optional free-text note for the cardio block (e.g. "easy recovery pace").
   const [cardioNote, setCardioNote] = useState("");
+  // Multiple cardio activities per workout. The form above edits ONE "current"
+  // cardio entry; pressing "Add another cardio" pushes it here and clears the
+  // form for the next. On save we combine this list with the current form
+  // entry. Each item already carries its computed fields (meters, calories…).
+  const [cardioEntries, setCardioEntries] = useState<any[]>([]);
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
   // Kept separate from woDuration (which is the lifting block's duration)
   // so users can have BOTH "Sports + Lifting" with independent times.
@@ -868,10 +940,15 @@ export default function PostPage() {
         setCardioType(data.cardio[0].type || '');
         setCardioDuration(data.cardio[0].duration || '');
         setCardioDistance(data.cardio[0].distance || '');
+        // Multi-cardio: the form edits the FIRST entry; any additional saved
+        // entries go into the chips list so they aren't lost on re-save.
+        if (data.cardio.length > 1) {
+          setCardioEntries(data.cardio.slice(1));
+        }
       }
       // Restore toggle state for combined workouts. The block fields take
       // precedence over the legacy single-category state for the new UI.
-      const hasCardio = !!(data.cardio && data.cardio.length > 0 && (data.cardio[0].duration || data.cardio[0].distance || data.cardio[0].miles));
+      const hasCardio = !!(data.cardio && data.cardio.length > 0 && data.cardio.some((c: any) => c.duration || c.distance || c.miles));
       const hasExercises = exs.length > 0;
       const cardioCats = ["running","walking","biking","swimming","rowing"];
       // If saved as a cardio category in single-mode, toggle includeCardio on and copy fields into block state
@@ -1289,55 +1366,18 @@ export default function PostPage() {
         } else {
           // Cardio-mode — process toggles
           if (includeCardio) {
-            const distNum = parseFloat(cardioBlockDistance) || 0;
-            // Combine the minutes + seconds inputs into decimal minutes. This
-            // drives both the stored duration and the pace calc, so a 17:22 run
-            // paces correctly instead of being truncated to 17:00.
-            const durNum  = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
-            const cardioEntry: any = {
-              type: cardioSubcategory,
-              distance: cardioBlockDistance || null,
-              // Store the decimal-minutes value (e.g. 17.3667). Display layers
-              // format it back to MM:SS. Kept as a number for consistency.
-              duration: durNum > 0 ? durNum : null,
-            };
-            // Swim pool data — if the user logged by laps, persist the pool
-            // setup and the auto-computed meters/miles so the card and stats
-            // can show them without recomputing.
-            if (cardioSubcategory === "swimming" && useSwimPool && swimResult) {
-              cardioEntry.pool_length = parseFloat(poolLength) || null;
-              cardioEntry.pool_unit = poolUnit;
-              cardioEntry.laps = parseInt(swimLaps) || null;
-              cardioEntry.meters = swimResult.meters;
-              cardioEntry.miles = swimResult.miles;
-            }
-            // Estimated calories burned (MET- or HR-based). Stored on the entry
-            // so the feed/profile/stats can display it. Null when body metrics
-            // (at minimum body weight) aren't set — the UI hides it then.
-            if (bodyMetrics && durNum > 0) {
-              const est = estimateCardioCalories(cardioSubcategory, durNum, bodyMetrics);
-              if (est) {
-                cardioEntry.est_calories = est.kcal;
-                cardioEntry.est_calories_method = est.method;
-              }
-            }
-            // Persist run subtype (outdoor / treadmill / trail / hiit) so the
-            // stats page can break running stats down further. Only meaningful
-            // for runs; ignored for other cardio types.
-            if (cardioSubcategory === "running") {
-              cardioEntry.run_type = cardioRunType;
-            }
-            if (cardioNote.trim()) cardioEntry.note = cardioNote.trim();
-            if (distNum > 0) cardioEntry.miles = distNum;
-            if (distNum > 0 && durNum > 0) {
-              if (cardioSubcategory === "running") cardioEntry.pace_min_per_mile = durNum / distNum;
-              else if (cardioSubcategory === "cycling" || cardioSubcategory === "biking") cardioEntry.mph = (distNum / durNum) * 60;
-              else if (cardioSubcategory === "swimming") cardioEntry.pace_min_per_100 = (durNum / distNum) * 100;
-            }
-            cardioPayload = [cardioEntry];
-            // Keep the fractional minutes in the day total too (no rounding,
-            // so seconds aren't lost when there's only a cardio block).
-            effectiveDuration = (effectiveDuration || 0) + (durNum > 0 ? durNum : 0);
+            // Build the current form's cardio entry (if anything's entered),
+            // then combine with any previously-added entries from the list.
+            // This is what makes MULTIPLE cardio activities per workout work.
+            const currentEntry = buildCardioEntry();
+            const allCardio = [...cardioEntries];
+            if (currentEntry) allCardio.push(currentEntry);
+            cardioPayload = allCardio.length > 0 ? allCardio : null;
+
+            // Sum every cardio entry's minutes into the day total (no rounding,
+            // so seconds aren't lost). Covers the whole list, not just one.
+            const totalCardioMin = allCardio.reduce((s, e) => s + (Number(e.duration) || 0), 0);
+            effectiveDuration = (effectiveDuration || 0) + totalCardioMin;
           }
 
           // Set workout_category — primary classifier for badges/stats/rivalries.
@@ -2907,6 +2947,19 @@ export default function PostPage() {
                   return (
                     <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
                       <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>🏃 Cardio</div>
+
+                      {/* Already-added cardio activities (multi-cardio support) */}
+                      {cardioEntries.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                          {cardioEntries.map((e, idx) => (
+                            <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(124,58,237,0.16)", border: "1px solid rgba(124,58,237,0.35)" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "#E2E8F0" }}>{cardioChipLabel(e)}</span>
+                              <button onClick={() => removeCardioEntry(idx)} aria-label="Remove" style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 2, flexShrink: 0 }}>×</button>
+                            </div>
+                          ))}
+                          <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>Add another below, or fill it in and hit save.</div>
+                        </div>
+                      )}
                       <div style={{ marginBottom: 10 }}>
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
                         <select style={iStyle} value={cardioSubcategory} onChange={e => setCardioSubcategory(e.target.value)}>
@@ -3043,6 +3096,24 @@ export default function PostPage() {
                         }
                         return null;
                       })()}
+
+                      {/* ── ADD ANOTHER CARDIO ── lets the user log multiple
+                          cardio activities in one workout. Disabled until the
+                          current form has something worth adding. */}
+                      <button
+                        onClick={addCardioEntry}
+                        disabled={!buildCardioEntry()}
+                        style={{
+                          width: "100%", marginTop: 12, padding: "11px",
+                          borderRadius: 10, border: `1.5px dashed ${buildCardioEntry() ? C.blue : C.border}`,
+                          background: "transparent",
+                          color: buildCardioEntry() ? "#A78BFA" : C.sub,
+                          fontWeight: 800, fontSize: 13,
+                          cursor: buildCardioEntry() ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        + Add another cardio
+                      </button>
                     </div>
                   );
                 })()}
