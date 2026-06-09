@@ -3825,7 +3825,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             {/* Content */}
             <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
               {badgesTab === "fitness" && (
-                fitnessCount === 0 && completedChallenges.length === 0 ? (
+                fitnessCount === 0 ? (
                   <div style={{textAlign:"center",padding:"60px 20px",color:C.sub}}>
                     <div style={{fontSize:40,marginBottom:12}}>🏆</div>
                     <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No badges earned yet</div>
@@ -3959,28 +3959,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         </div>
                       );
                     })}
-                    {/* Challenge completion badges still get their own gold tiles */}
-                    {completedChallenges.map((cp: any, i: number) => {
-                      const ch = cp.challenges;
-                      if (!ch) return null;
-                      const style = TIER_STYLES[3];
-                      return (
-                        <div key={`challenge-${i}`} style={{
-                          borderRadius:16,
-                          padding:"16px 10px",
-                          textAlign:"center",
-                          border:`1.5px solid ${style.border}`,
-                          background: style.gradient,
-                          boxShadow:`0 0 16px ${style.glow}`,
-                          display:"flex",flexDirection:"column",
-                          alignItems:"center",justifyContent:"center",
-                        }}>
-                          <div style={{fontSize:32,marginBottom:6}}>{ch.emoji || '🏆'}</div>
-                          <div style={{fontWeight:800,fontSize:11,color:style.textColor,lineHeight:1.3,marginBottom:4}}>{ch.name}</div>
-                          <div style={{fontSize:9,color:style.accentColor,lineHeight:1.3}}>Score: {cp.score}</div>
-                        </div>
-                      );
-                    })}
+                    {/* Group-challenge completions are intentionally NOT shown
+                        here — those belong on the group page, not the personal
+                        profile's fitness badges. */}
                   </div>
                 )
               )}
@@ -5154,7 +5135,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 // tier ornaments, shimmer) instead of the old hand-rolled
                 // gold-bordered tiles which referenced renamed badge IDs.
                 const previewFamilies: DisplayBadge[] = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
-                const totalBadges = previewFamilies.length + completedChallenges.length;
+                // Group-challenge completions are excluded from the profile's
+                // badge count — they live on the group page now.
+                const totalBadges = previewFamilies.length;
 
                 if (totalBadges === 0) {
                   return (
