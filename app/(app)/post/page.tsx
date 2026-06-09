@@ -13,6 +13,7 @@ import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@
 import { syncGroupBadgesForUser } from "@/lib/groupBadges";
 import { BADGES } from "@/lib/badges";
 import { awardXp } from "@/lib/xp";
+import { swimDistance, estimateCardioCalories, type PoolUnit, type BodyMetrics } from "@/lib/calorieEstimate";
 
 import { FitbitConnect } from "@/components/FitbitConnect";
 import { FitbitActivityCard } from "@/components/FitbitActivityCard";
@@ -444,6 +445,65 @@ export default function PostPage() {
   const [cardioBlockDuration, setCardioBlockDuration] = useState("");
   const [cardioBlockDurationSec, setCardioBlockDurationSec] = useState("");
   const [cardioBlockDistance, setCardioBlockDistance] = useState("");
+  // ── Swim "home pool" mode ──────────────────────────────────────────────
+  // When swimming, the user can enter their pool length + number of laps
+  // instead of a raw distance. A lap = there AND back = 2 pool lengths.
+  // We auto-convert to meters + miles and feed the result into the distance.
+  // The pool length + unit persist on this device so it's set-once.
+  const [useSwimPool, setUseSwimPool] = useState(false);
+  const [poolLength, setPoolLength] = useState("");
+  const [poolUnit, setPoolUnit] = useState<"ft" | "m" | "yd">("yd");
+  const [swimLaps, setSwimLaps] = useState("");
+
+  // Load the saved home-pool settings once on mount (set-once convenience).
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("livelee_home_pool");
+      if (saved) {
+        const p = JSON.parse(saved);
+        if (p.length) setPoolLength(String(p.length));
+        if (p.unit) setPoolUnit(p.unit);
+        if (p.length) setUseSwimPool(true); // they've set one before → default on
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Persist pool length + unit whenever they change (not the laps — those vary).
+  useEffect(() => {
+    try {
+      if (poolLength) {
+        localStorage.setItem("livelee_home_pool", JSON.stringify({ length: poolLength, unit: poolUnit }));
+      }
+    } catch { /* ignore */ }
+  }, [poolLength, poolUnit]);
+
+  // Computed swim distance from laps + pool. null until both are present.
+  const swimResult = swimDistance(
+    parseFloat(swimLaps) || 0,
+    parseFloat(poolLength) || 0,
+    poolUnit as PoolUnit,
+  );
+
+  // User's private body metrics (for cardio calorie estimation). Loaded once.
+  const [bodyMetrics, setBodyMetrics] = useState<BodyMetrics | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("users")
+      .select("body_weight_lbs,height_in,date_of_birth,biological_sex,resting_hr,body_fat_pct,lean_mass_lbs,bmr_kcal")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }: any) => { if (data) setBodyMetrics(data); })
+      .catch(() => {});
+  }, [user]);
+
+  // When pool mode is on and we have a result, the swim's stored distance is
+  // the computed YARDS (swimming's native unit in this app), kept in sync.
+  useEffect(() => {
+    if (useSwimPool && cardioSubcategory === "swimming" && swimResult) {
+      setCardioBlockDistance(String(swimResult.yards));
+    }
+  }, [useSwimPool, cardioSubcategory, swimResult?.yards]);
   // Optional free-text note for the cardio block (e.g. "easy recovery pace").
   const [cardioNote, setCardioNote] = useState("");
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
@@ -1241,6 +1301,26 @@ export default function PostPage() {
               // format it back to MM:SS. Kept as a number for consistency.
               duration: durNum > 0 ? durNum : null,
             };
+            // Swim pool data — if the user logged by laps, persist the pool
+            // setup and the auto-computed meters/miles so the card and stats
+            // can show them without recomputing.
+            if (cardioSubcategory === "swimming" && useSwimPool && swimResult) {
+              cardioEntry.pool_length = parseFloat(poolLength) || null;
+              cardioEntry.pool_unit = poolUnit;
+              cardioEntry.laps = parseInt(swimLaps) || null;
+              cardioEntry.meters = swimResult.meters;
+              cardioEntry.miles = swimResult.miles;
+            }
+            // Estimated calories burned (MET- or HR-based). Stored on the entry
+            // so the feed/profile/stats can display it. Null when body metrics
+            // (at minimum body weight) aren't set — the UI hides it then.
+            if (bodyMetrics && durNum > 0) {
+              const est = estimateCardioCalories(cardioSubcategory, durNum, bodyMetrics);
+              if (est) {
+                cardioEntry.est_calories = est.kcal;
+                cardioEntry.est_calories_method = est.method;
+              }
+            }
             // Persist run subtype (outdoor / treadmill / trail / hiit) so the
             // stats page can break running stats down further. Only meaningful
             // for runs; ignored for other cardio types.
@@ -2869,9 +2949,55 @@ export default function PostPage() {
                         </div>
                         <div style={{ flex: 1 }}>
                           <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance ({distUnit})</label>
-                          <input style={iStyle} type="text" inputMode="decimal" placeholder={cardioSubcategory === "swimming" ? "1000" : cardioSubcategory === "rowing" ? "2000" : "3.2"} value={cardioBlockDistance} onChange={e => setCardioBlockDistance(e.target.value)} />
+                          <input style={iStyle} type="text" inputMode="decimal" placeholder={cardioSubcategory === "swimming" ? "1000" : cardioSubcategory === "rowing" ? "2000" : "3.2"} value={cardioBlockDistance} onChange={e => setCardioBlockDistance(e.target.value)} disabled={cardioSubcategory === "swimming" && useSwimPool} />
                         </div>
                       </div>
+
+                      {/* ── SWIM HOME-POOL MODE (swimming only) ── */}
+                      {cardioSubcategory === "swimming" && (
+                        <div style={{ marginTop: 10, background: "rgba(59,130,246,0.06)", borderRadius: 12, padding: 12, border: `1px solid ${C.blue}` }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: useSwimPool ? 12 : 0 }}>
+                            <input type="checkbox" checked={useSwimPool} onChange={e => setUseSwimPool(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.blue }} />
+                            <span style={{ fontSize: 12, fontWeight: 800, color: "#93C5FD" }}>🏊 Track by laps in my pool</span>
+                          </label>
+
+                          {useSwimPool && (
+                            <>
+                              <div style={{ display: "flex", gap: 10 }}>
+                                <div style={{ flex: 1 }}>
+                                  <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Pool length</label>
+                                  <div style={{ display: "flex", gap: 6 }}>
+                                    <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="decimal" placeholder="25" value={poolLength} onChange={e => setPoolLength(e.target.value)} />
+                                    <select style={{ ...iStyle, width: 64, flexShrink: 0 }} value={poolUnit} onChange={e => setPoolUnit(e.target.value as "ft" | "m" | "yd")}>
+                                      <option value="yd">yd</option>
+                                      <option value="m">m</option>
+                                      <option value="ft">ft</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Laps</label>
+                                  <input style={iStyle} type="text" inputMode="numeric" placeholder="20" value={swimLaps} onChange={e => setSwimLaps(e.target.value.replace(/[^0-9]/g, ""))} />
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 10, color: C.sub, marginTop: 6 }}>1 lap = there & back (2 pool lengths)</div>
+
+                              {swimResult && (
+                                <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                                  <div style={{ flex: 1, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                                    <div style={{ fontSize: 18, fontWeight: 900, color: C.gold }}>{swimResult.meters.toLocaleString()}</div>
+                                    <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>meters</div>
+                                  </div>
+                                  <div style={{ flex: 1, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                                    <div style={{ fontSize: 18, fontWeight: 900, color: C.gold }}>{swimResult.miles.toLocaleString()}</div>
+                                    <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>miles</div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Note</label>
                         <input style={iStyle} type="text" placeholder="How'd the cardio feel? (optional)" value={cardioNote} onChange={e => setCardioNote(e.target.value)} />
@@ -2886,6 +3012,37 @@ export default function PostPage() {
                           </div>
                         </div>
                       )}
+
+                      {/* ── ESTIMATED CALORIES (needs body metrics + duration) ── */}
+                      {(() => {
+                        const durNum = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
+                        const est = bodyMetrics && durNum > 0
+                          ? estimateCardioCalories(cardioSubcategory, durNum, bodyMetrics)
+                          : null;
+                        if (est) {
+                          return (
+                            <div style={{ marginTop: 10, background: "rgba(245,158,11,0.08)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.gold}` }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>
+                                Calories · estimated
+                              </div>
+                              <div style={{ fontSize: 16, fontWeight: 900, color: C.gold }}>
+                                🔥 {est.kcal.toLocaleString()} kcal
+                              </div>
+                            </div>
+                          );
+                        }
+                        // Prompt to add metrics if duration is set but no metrics
+                        if (durNum > 0 && !bodyMetrics?.body_weight_lbs) {
+                          return (
+                            <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px dashed ${C.border}` }}>
+                              <div style={{ fontSize: 11, color: C.sub }}>
+                                💡 Add your body metrics in <span style={{ fontWeight: 800, color: "#93C5FD" }}>Stats</span> to see estimated calories burned.
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   );
                 })()}
