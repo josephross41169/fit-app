@@ -3840,7 +3840,7 @@ export default function PostPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {foodItems.map((item, i) => (
                       <div key={i} style={{ background: '#0D0D0D', borderRadius: 14, padding: '10px 12px', border: '1px solid #2D1B69' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: item.protein ? 6 : 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                           <input
                             style={{ ...iStyle, flex: 1, fontSize: 13, padding: '7px 10px' }}
                             placeholder="Food name"
@@ -3897,24 +3897,24 @@ export default function PostPage() {
                           <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))} aria-label="Remove item" title="Remove item"
                             style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 20, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
                         </div>
-                        {/* Macro detail row */}
-                        {(item.protein || item.carbs || item.fat) && (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>
-                            <span style={{ fontSize: 10, color: '#9CA3AF' }}>Per serving</span>
-                            {['protein', 'carbs', 'fat'].map(k => (
-                              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <input
-                                  style={{ ...iStyle, width: 52, padding: '4px 6px', fontSize: 11, textAlign: 'center' as const }}
-                                  type="text" inputMode="decimal" placeholder="0"
-                                  value={(item as any)[k] || ''}
-                                  onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, [k]: e.target.value } : x))}
-                                />
-                                <span style={{ fontSize: 10, color: '#9CA3AF' }}>{k[0].toUpperCase()}</span>
-                              </div>
-                            ))}
-                            {item.servingSize && <span style={{ fontSize: 10, color: '#6B7280' }}>{item.servingSize}</span>}
-                          </div>
-                        )}
+                        {/* Macro detail row — ALWAYS editable so manually-added
+                            foods (and favorites saved from them) can carry
+                            protein/carbs/fat, not just foods from the database. */}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center', marginTop: 6 }}>
+                          <span style={{ fontSize: 10, color: '#9CA3AF' }}>Macros</span>
+                          {['protein', 'carbs', 'fat'].map(k => (
+                            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <input
+                                style={{ ...iStyle, width: 52, padding: '4px 6px', fontSize: 11, textAlign: 'center' as const }}
+                                type="text" inputMode="decimal" placeholder="0"
+                                value={(item as any)[k] || ''}
+                                onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, [k]: e.target.value } : x))}
+                              />
+                              <span style={{ fontSize: 10, color: '#9CA3AF' }}>{k[0].toUpperCase()}</span>
+                            </div>
+                          ))}
+                          {item.servingSize && <span style={{ fontSize: 10, color: '#6B7280' }}>{item.servingSize}</span>}
+                        </div>
                       </div>
                     ))}
                     {/* Auto-calculated totals */}
