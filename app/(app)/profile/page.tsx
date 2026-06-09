@@ -1572,7 +1572,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         {/* ── BADGES ── */}
         {earnedBadges.length > 0 && (
           <div style={{ marginTop:16, paddingTop:14, borderTop:`1px solid ${C.purpleMid}` }}>
-            <div style={{ fontSize:11, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>🏆 Badges</div>
+            <div style={{ fontSize:11, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>🏆 Badges Earned{earnedBadges.length === 1 ? "" : ` · ${earnedBadges.length}`}</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
               {(showAllBadges ? earnedBadges : earnedBadges.slice(0, 3)).map(badgeId => {
                 const badge = BADGES.find(b => b.id === badgeId);
@@ -2271,6 +2271,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // Badges are fetched with the year column so yearly badges (like
   // "2026 Birthday Workout") can display the correct year.
   const [earnedBadges,setEarnedBadges] = useState<EarnedBadge[]>([]);
+  // badge_id → "YYYY-MM-DD" of the day it was earned (local). Lets each day's
+  // activity card show only that day's badges instead of the whole collection.
+  const [badgeEarnedDay,setBadgeEarnedDay] = useState<Record<string,string>>({});
   // Active goals shown on profile under highlights. Public goals only.
   const [profileGoals, setProfileGoals] = useState<any[]>([]);
   // Past (completed or expired) goals — same source, different filter.
@@ -2366,9 +2369,23 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('badges').select('badge_id, year, id, pin_slot').eq('user_id', viewUserId)
+    supabase.from('badges').select('badge_id, year, id, pin_slot, earned_at').eq('user_id', viewUserId)
       .then(({ data }) => {
-        if (data) setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null })));
+        if (data) {
+          setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null })));
+          // Map badge_id → the day it was earned (YYYY-MM-DD, local) so each
+          // day's activity card can show ONLY the badges earned that day,
+          // instead of the user's whole lifetime collection.
+          const dayMap: Record<string, string> = {};
+          for (const b of data) {
+            if (b.earned_at) {
+              const d = new Date(b.earned_at);
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              dayMap[b.badge_id] = key;
+            }
+          }
+          setBadgeEarnedDay(dayMap);
+        }
       });
     reloadProfileGoals();
   }, [user, reloadProfileGoals]);
@@ -4980,7 +4997,17 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                       // Wiring it through means edits actually update existing
                       // rows.
                       wellnessLogIds={(day as any)._wellnessLogIds}
-                      earnedBadges={earnedBadges.map(b => b.badge_id)}
+                      earnedBadges={(() => {
+                        // Only badges earned on THIS day. Match the day's local
+                        // date against the badge_id → earned-day map. Falls back
+                        // to none (rather than the whole collection) if a day
+                        // has no date — so old behavior of showing everything
+                        // can't recur.
+                        const dd = (day as any)._date ? new Date((day as any)._date) : null;
+                        if (!dd) return [];
+                        const key = `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`;
+                        return earnedBadges.map(b => b.badge_id).filter(id => badgeEarnedDay[id] === key);
+                      })()}
                       userLevel={progressInfo?.level ?? 1}
                       // Refresh the profile's goal panel after a save so the
                       // user sees their goals tick up immediately. Without
