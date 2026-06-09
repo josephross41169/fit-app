@@ -48,6 +48,202 @@ const iStyle = {
   boxSizing: "border-box" as const,
 };
 
+// ── Cardio entry (one logged cardio activity) ───────────────────────────────
+// A workout can hold several of these. Each renders its own full <CardioForm>.
+type CardioEntry = {
+  type: string;            // running | cycling | swimming | rowing | hiit | ...
+  runType: string;         // outdoor | treadmill | trail | hiit (running only)
+  durMin: string;          // minutes (string for the input)
+  durSec: string;          // seconds
+  distance: string;        // miles / yards / meters depending on type
+  note: string;
+  useSwimPool: boolean;
+  poolLength: string;
+  poolUnit: "ft" | "m" | "yd";
+  laps: string;
+};
+
+function newCardioEntry(): CardioEntry {
+  // Default pool length/unit are pulled from the saved home-pool if present.
+  let poolLength = "", poolUnit: "ft" | "m" | "yd" = "yd";
+  try {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("livelee_home_pool") : null;
+    if (saved) { const p = JSON.parse(saved); if (p.length) poolLength = String(p.length); if (p.unit) poolUnit = p.unit; }
+  } catch { /* ignore */ }
+  return { type: "running", runType: "outdoor", durMin: "", durSec: "", distance: "", note: "", useSwimPool: !!poolLength, poolLength, poolUnit, laps: "" };
+}
+
+// Small helpers used by the cardio form (mirrors the component versions).
+function _combineMinSec(minStr: string, secStr: string): number | null {
+  const m = parseInt(minStr) || 0; const s = parseInt(secStr) || 0;
+  if (m <= 0 && s <= 0) return null;
+  return m + s / 60;
+}
+function _clampSec(v: string): string {
+  const n = v.replace(/[^0-9]/g, "");
+  if (n === "") return "";
+  return String(Math.min(59, parseInt(n)));
+}
+
+// Self-contained form for ONE cardio entry. The parent owns the array and
+// passes the entry + an onChange that patches fields + an optional onRemove.
+function CardioForm({
+  entry, index, onChange, onRemove, bodyMetrics, swimDistanceFn, estCaloriesFn,
+}: {
+  entry: CardioEntry;
+  index: number;
+  onChange: (patch: Partial<CardioEntry>) => void;
+  onRemove?: () => void;
+  bodyMetrics: BodyMetrics | null;
+  swimDistanceFn: typeof swimDistance;
+  estCaloriesFn: typeof estimateCardioCalories;
+}) {
+  const durNum = _combineMinSec(entry.durMin, entry.durSec) || 0;
+  const distNum = parseFloat(entry.distance) || 0;
+  const showPace = ["running", "cycling", "biking", "swimming"].includes(entry.type);
+  const distUnit = entry.type === "swimming" ? "yards" : entry.type === "rowing" ? "meters" : "miles";
+
+  const swimRes = entry.type === "swimming" && entry.useSwimPool
+    ? swimDistanceFn(parseFloat(entry.laps) || 0, parseFloat(entry.poolLength) || 0, entry.poolUnit as PoolUnit)
+    : null;
+
+  let paceText = "";
+  if (distNum > 0 && durNum > 0) {
+    if (entry.type === "running") {
+      const p = durNum / distNum; const m = Math.floor(p); const s = Math.round((p - m) * 60);
+      paceText = `${m}:${s.toString().padStart(2, "0")} min/mi`;
+    } else if (entry.type === "cycling" || entry.type === "biking") {
+      paceText = `${((distNum / durNum) * 60).toFixed(1)} mph`;
+    } else if (entry.type === "swimming") {
+      const p = (durNum / distNum) * 100; const m = Math.floor(p); const s = Math.round((p - m) * 60);
+      paceText = `${m}:${s.toString().padStart(2, "0")} min/100yd`;
+    }
+  }
+
+  const est = bodyMetrics && durNum > 0 ? estCaloriesFn(entry.type, durNum, bodyMetrics) : null;
+
+  return (
+    <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}`, position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA" }}>🏃 Cardio{index > 0 ? ` #${index + 1}` : ""}</div>
+        {onRemove && (
+          <button onClick={onRemove} aria-label="Remove this cardio" style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 2 }}>×</button>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
+        <select style={iStyle} value={entry.type} onChange={e => onChange({ type: e.target.value })}>
+          <option value="running">🏃 Running</option>
+          <option value="cycling">🚴 Cycling</option>
+          <option value="swimming">🏊 Swimming</option>
+          <option value="rowing">🚣 Rowing</option>
+          <option value="elliptical">⚡ Elliptical</option>
+          <option value="hiit">🔥 HIIT</option>
+          <option value="stairclimber">🪜 Stair Climber</option>
+          <option value="walking">🚶 Walking</option>
+          <option value="hiking">🥾 Hiking</option>
+          <option value="other">💪 Other</option>
+        </select>
+      </div>
+
+      {entry.type === "running" && (
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Run Type</label>
+          <select style={iStyle} value={entry.runType} onChange={e => onChange({ runType: e.target.value })}>
+            <option value="outdoor">🌆 Outdoor Run</option>
+            <option value="treadmill">🏃 Treadmill</option>
+            <option value="trail">🌲 Trail Run</option>
+            <option value="hiit">⚡ HIIT Run</option>
+          </select>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={entry.durMin} onChange={e => onChange({ durMin: e.target.value.replace(/[^0-9]/g, "") })} />
+            <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
+            <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={entry.durSec} onChange={e => onChange({ durSec: _clampSec(e.target.value) })} />
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance ({distUnit})</label>
+          <input style={iStyle} type="text" inputMode="decimal" placeholder={entry.type === "swimming" ? "1000" : entry.type === "rowing" ? "2000" : "3.2"} value={entry.distance} onChange={e => onChange({ distance: e.target.value })} disabled={entry.type === "swimming" && entry.useSwimPool} />
+        </div>
+      </div>
+
+      {entry.type === "swimming" && (
+        <div style={{ marginTop: 10, background: "rgba(59,130,246,0.06)", borderRadius: 12, padding: 12, border: `1px solid ${C.blue}` }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: entry.useSwimPool ? 12 : 0 }}>
+            <input type="checkbox" checked={entry.useSwimPool} onChange={e => onChange({ useSwimPool: e.target.checked })} style={{ width: 16, height: 16, accentColor: C.blue }} />
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#93C5FD" }}>🏊 Track by laps in my pool</span>
+          </label>
+          {entry.useSwimPool && (
+            <>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Pool length</label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="decimal" placeholder="25" value={entry.poolLength} onChange={e => { onChange({ poolLength: e.target.value }); try { localStorage.setItem("livelee_home_pool", JSON.stringify({ length: e.target.value, unit: entry.poolUnit })); } catch {} }} />
+                    <select style={{ ...iStyle, width: 64, flexShrink: 0 }} value={entry.poolUnit} onChange={e => { onChange({ poolUnit: e.target.value as "ft" | "m" | "yd" }); try { localStorage.setItem("livelee_home_pool", JSON.stringify({ length: entry.poolLength, unit: e.target.value })); } catch {} }}>
+                      <option value="yd">yd</option>
+                      <option value="m">m</option>
+                      <option value="ft">ft</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Laps</label>
+                  <input style={iStyle} type="text" inputMode="numeric" placeholder="20" value={entry.laps} onChange={e => onChange({ laps: e.target.value.replace(/[^0-9]/g, "") })} />
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: C.sub, marginTop: 6 }}>1 lap = there &amp; back (2 pool lengths)</div>
+              {swimRes && (
+                <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: C.gold }}>{swimRes.meters.toLocaleString()}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>meters</div>
+                  </div>
+                  <div style={{ flex: 1, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: C.gold }}>{swimRes.miles.toLocaleString()}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>miles</div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 10 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Note</label>
+        <input style={iStyle} type="text" placeholder="How'd the cardio feel? (optional)" value={entry.note} onChange={e => onChange({ note: e.target.value })} />
+      </div>
+
+      {showPace && (
+        <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.greenMid}` }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Pace · auto-calculated</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: paceText ? C.gold : C.sub }}>{paceText || "Enter distance + duration"}</div>
+        </div>
+      )}
+
+      {est ? (
+        <div style={{ marginTop: 10, background: "rgba(245,158,11,0.08)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.gold}` }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Calories · estimated</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: C.gold }}>🔥 {est.kcal.toLocaleString()} kcal</div>
+        </div>
+      ) : (durNum > 0 && !bodyMetrics?.body_weight_lbs) ? (
+        <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px dashed ${C.border}` }}>
+          <div style={{ fontSize: 11, color: C.sub }}>💡 Add your body metrics in <span style={{ fontWeight: 800, color: "#93C5FD" }}>Stats</span> to see estimated calories burned.</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
 // `reps` (singular string) is kept for backward compat — it becomes the
 // "default" rep count used to seed the per-set repsArr. `repsArr` is the
 // new source of truth: one entry per set so users can log pyramid sets
@@ -436,53 +632,21 @@ export default function PostPage() {
   // (decoupled from woCategory/woDuration/woDistance which now serve "single mode")
   const [includeCardio, setIncludeCardio] = useState(false);
   const [includeLifting, setIncludeLifting] = useState(true);
-  const [cardioSubcategory, setCardioSubcategory] = useState<string>("running");
-  // For "running" only — subtype lets the stats page break runs into
-  // outdoor / treadmill / trail / HIIT-run since these have noticeably
-  // different metrics worth tracking separately. Ignored for non-run
-  // cardio types. Stored on the cardio entry as `run_type`.
-  const [cardioRunType, setCardioRunType] = useState<string>("outdoor");
-  const [cardioBlockDuration, setCardioBlockDuration] = useState("");
-  const [cardioBlockDurationSec, setCardioBlockDurationSec] = useState("");
-  const [cardioBlockDistance, setCardioBlockDistance] = useState("");
-  // ── Swim "home pool" mode ──────────────────────────────────────────────
-  // When swimming, the user can enter their pool length + number of laps
-  // instead of a raw distance. A lap = there AND back = 2 pool lengths.
-  // We auto-convert to meters + miles and feed the result into the distance.
-  // The pool length + unit persist on this device so it's set-once.
-  const [useSwimPool, setUseSwimPool] = useState(false);
-  const [poolLength, setPoolLength] = useState("");
-  const [poolUnit, setPoolUnit] = useState<"ft" | "m" | "yd">("yd");
-  const [swimLaps, setSwimLaps] = useState("");
 
-  // Load the saved home-pool settings once on mount (set-once convenience).
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("livelee_home_pool");
-      if (saved) {
-        const p = JSON.parse(saved);
-        if (p.length) setPoolLength(String(p.length));
-        if (p.unit) setPoolUnit(p.unit);
-        if (p.length) setUseSwimPool(true); // they've set one before → default on
-      }
-    } catch { /* ignore */ }
-  }, []);
+  // ── Multiple cardio entries ───────────────────────────────────────────────
+  // A workout can hold several cardio activities, each its own full form
+  // (type, duration, distance, swim pool, note…). Start with one blank entry.
+  const [cardios, setCardios] = useState<CardioEntry[]>([newCardioEntry()]);
 
-  // Persist pool length + unit whenever they change (not the laps — those vary).
-  useEffect(() => {
-    try {
-      if (poolLength) {
-        localStorage.setItem("livelee_home_pool", JSON.stringify({ length: poolLength, unit: poolUnit }));
-      }
-    } catch { /* ignore */ }
-  }, [poolLength, poolUnit]);
-
-  // Computed swim distance from laps + pool. null until both are present.
-  const swimResult = swimDistance(
-    parseFloat(swimLaps) || 0,
-    parseFloat(poolLength) || 0,
-    poolUnit as PoolUnit,
-  );
+  function patchCardio(index: number, patch: Partial<CardioEntry>) {
+    setCardios(prev => prev.map((c, i) => i === index ? { ...c, ...patch } : c));
+  }
+  function addCardio() {
+    setCardios(prev => [...prev, newCardioEntry()]);
+  }
+  function removeCardio(index: number) {
+    setCardios(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== index));
+  }
 
   // User's private body metrics (for cardio calorie estimation). Loaded once.
   const [bodyMetrics, setBodyMetrics] = useState<BodyMetrics | null>(null);
@@ -497,96 +661,49 @@ export default function PostPage() {
       .catch(() => {});
   }, [user]);
 
-  // Build a cardio entry object from the CURRENT form state. Shared by the
-  // "Add another cardio" button and the final save so both produce identical
-  // shapes. Returns null if there's nothing meaningful entered.
-  function buildCardioEntry(): any | null {
-    const durNum = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
-    const distNum = parseFloat(cardioBlockDistance) || 0;
-    if (durNum <= 0 && distNum <= 0 && !(useSwimPool && swimResult)) return null;
+  // Convert ONE CardioEntry (form shape) into the saved entry shape, with all
+  // computed fields (meters/miles/pace/calories). Returns null if empty.
+  function cardioEntryToPayload(c: CardioEntry): any | null {
+    const durNum = _combineMinSec(c.durMin, c.durSec) || 0;
+    const distNum = parseFloat(c.distance) || 0;
+    const swimRes = c.type === "swimming" && c.useSwimPool
+      ? swimDistance(parseFloat(c.laps) || 0, parseFloat(c.poolLength) || 0, c.poolUnit as PoolUnit)
+      : null;
+    if (durNum <= 0 && distNum <= 0 && !swimRes) return null;
 
     const entry: any = {
-      type: cardioSubcategory,
-      distance: cardioBlockDistance || null,
+      type: c.type,
+      distance: c.distance || null,
       duration: durNum > 0 ? durNum : null,
     };
-    if (cardioSubcategory === "swimming" && useSwimPool && swimResult) {
-      entry.pool_length = parseFloat(poolLength) || null;
-      entry.pool_unit = poolUnit;
-      entry.laps = parseInt(swimLaps) || null;
-      entry.meters = swimResult.meters;
-      entry.miles = swimResult.miles;
+    if (swimRes) {
+      entry.pool_length = parseFloat(c.poolLength) || null;
+      entry.pool_unit = c.poolUnit;
+      entry.laps = parseInt(c.laps) || null;
+      entry.meters = swimRes.meters;
+      entry.miles = swimRes.miles;
     }
     if (bodyMetrics && durNum > 0) {
-      const est = estimateCardioCalories(cardioSubcategory, durNum, bodyMetrics);
+      const est = estimateCardioCalories(c.type, durNum, bodyMetrics);
       if (est) { entry.est_calories = est.kcal; entry.est_calories_method = est.method; }
     }
-    if (cardioSubcategory === "running") entry.run_type = cardioRunType;
-    if (cardioNote.trim()) entry.note = cardioNote.trim();
+    if (c.type === "running") entry.run_type = c.runType;
+    if (c.note.trim()) entry.note = c.note.trim();
     if (distNum > 0 && !entry.miles) entry.miles = distNum;
     if (distNum > 0 && durNum > 0) {
-      if (cardioSubcategory === "running") entry.pace_min_per_mile = durNum / distNum;
-      else if (cardioSubcategory === "cycling" || cardioSubcategory === "biking") entry.mph = (distNum / durNum) * 60;
-      else if (cardioSubcategory === "swimming") entry.pace_min_per_100 = (durNum / distNum) * 100;
+      if (c.type === "running") entry.pace_min_per_mile = durNum / distNum;
+      else if (c.type === "cycling" || c.type === "biking") entry.mph = (distNum / durNum) * 60;
+      else if (c.type === "swimming") entry.pace_min_per_100 = (durNum / distNum) * 100;
     }
     return entry;
   }
 
-  // Clear the cardio form fields (after adding one to the list).
-  function clearCardioForm() {
-    setCardioBlockDuration("");
-    setCardioBlockDurationSec("");
-    setCardioBlockDistance("");
-    setCardioNote("");
-    setSwimLaps("");
-    // Keep cardioSubcategory, run type, and pool length — likely reused.
+  // All non-empty cardio entries as save payloads.
+  function buildCardioPayload(): any[] {
+    return cardios.map(cardioEntryToPayload).filter(Boolean) as any[];
   }
-
-  // Push the current form entry into the list and reset the form.
-  function addCardioEntry() {
-    const e = buildCardioEntry();
-    if (!e) {
-      // Nothing entered yet — flash a hint instead of doing nothing silently.
-      setCardioAddHint(true);
-      setTimeout(() => setCardioAddHint(false), 3000);
-      return;
-    }
-    setCardioAddHint(false);
-    setCardioEntries(prev => [...prev, e]);
-    clearCardioForm();
-  }
-
-  function removeCardioEntry(idx: number) {
-    setCardioEntries(prev => prev.filter((_, i) => i !== idx));
-  }
-
-  // A short human label for a saved cardio chip.
-  function cardioChipLabel(e: any): string {
-    const parts: string[] = [e.type || "Cardio"];
-    if (e.duration) parts.push(`${Math.round(e.duration)}m`);
-    if (e.meters != null) parts.push(`${Number(e.meters).toLocaleString()}m`);
-    else if (e.distance) parts.push(String(e.distance));
-    if (e.est_calories != null) parts.push(`🔥${e.est_calories}`);
-    return parts.join(" · ");
-  }
-
-  // When pool mode is on and we have a result, the swim's stored distance is
-  // the computed YARDS (swimming's native unit in this app), kept in sync.
-  useEffect(() => {
-    if (useSwimPool && cardioSubcategory === "swimming" && swimResult) {
-      setCardioBlockDistance(String(swimResult.yards));
-    }
-  }, [useSwimPool, cardioSubcategory, swimResult?.yards]);
-  // Optional free-text note for the cardio block (e.g. "easy recovery pace").
+  // Optional free-text note (legacy single-field — kept for other code paths).
   const [cardioNote, setCardioNote] = useState("");
-  // Multiple cardio activities per workout. The form above edits ONE "current"
-  // cardio entry; pressing "Add another cardio" pushes it here and clears the
-  // form for the next. On save we combine this list with the current form
-  // entry. Each item already carries its computed fields (meters, calories…).
-  const [cardioEntries, setCardioEntries] = useState<any[]>([]);
-  // Brief inline hint shown if the user taps "Add another cardio" with an
-  // empty form — clearer than a silently-disabled button.
-  const [cardioAddHint, setCardioAddHint] = useState(false);
   // Duration for the "Or a different type" block (HIIT/yoga/sports/etc).
   // Kept separate from woDuration (which is the lifting block's duration)
   // so users can have BOTH "Sports + Lifting" with independent times.
@@ -944,49 +1061,51 @@ export default function PostPage() {
         };
       });
       setExercises(exs);
-      // Restore cardio
+      // Restore cardio into the `cardios` array (one CardioForm per entry).
+      const restoreCardios = (rows: any[]): CardioEntry[] => rows.map((c: any) => {
+        const [cMin, cSec] = splitMinSec(c.duration);
+        return {
+          type: c.type || "running",
+          runType: c.run_type || "outdoor",
+          durMin: cMin, durSec: cSec,
+          distance: c.distance ? String(c.distance) : (c.miles ? String(c.miles) : ""),
+          note: c.note || "",
+          useSwimPool: c.pool_length != null,
+          poolLength: c.pool_length != null ? String(c.pool_length) : "",
+          poolUnit: (c.pool_unit as "ft" | "m" | "yd") || "yd",
+          laps: c.laps != null ? String(c.laps) : "",
+        };
+      });
       if (data.cardio && data.cardio.length > 0) {
         setCardioType(data.cardio[0].type || '');
         setCardioDuration(data.cardio[0].duration || '');
         setCardioDistance(data.cardio[0].distance || '');
-        // Multi-cardio: the form edits the FIRST entry; any additional saved
-        // entries go into the chips list so they aren't lost on re-save.
-        if (data.cardio.length > 1) {
-          setCardioEntries(data.cardio.slice(1));
-        }
+        setCardios(restoreCardios(data.cardio));
       }
-      // Restore toggle state for combined workouts. The block fields take
-      // precedence over the legacy single-category state for the new UI.
+      // Restore toggle state for combined workouts.
       const hasCardio = !!(data.cardio && data.cardio.length > 0 && data.cardio.some((c: any) => c.duration || c.distance || c.miles));
       const hasExercises = exs.length > 0;
       const cardioCats = ["running","walking","biking","swimming","rowing"];
-      // If saved as a cardio category in single-mode, toggle includeCardio on and copy fields into block state
       if (cardioCats.includes(data.workout_category) && !hasExercises) {
         setIncludeCardio(true);
         setIncludeLifting(false);
-        setCardioSubcategory(data.workout_category);
-        {
+        // Legacy single-mode log with no cardio[] array — synthesize one entry
+        // from the workout category + duration so it shows in the form.
+        if (!hasCardio) {
           const [cMin, cSec] = splitMinSec(data.workout_duration_min);
-          setCardioBlockDuration(cMin); setCardioBlockDurationSec(cSec);
-        }
-        setCardioBlockDistance(firstCardio ? String(firstCardio.miles ?? firstCardio.distance ?? '') : '');
-        setCardioNote(firstCardio?.note || '');
-        // Restore run subtype if it was a running log
-        if (data.workout_category === "running" && firstCardio?.run_type) {
-          setCardioRunType(firstCardio.run_type);
+          setCardios([{
+            ...newCardioEntry(),
+            type: data.workout_category,
+            durMin: cMin, durSec: cSec,
+            distance: firstCardio ? String(firstCardio.miles ?? firstCardio.distance ?? "") : "",
+            note: firstCardio?.note || "",
+            runType: (data.workout_category === "running" && firstCardio?.run_type) ? firstCardio.run_type : "outdoor",
+          }]);
         }
       } else if (hasCardio && hasExercises) {
-        // Combined workout — both blocks active
+        // Combined workout — both blocks active (cardios already set above).
         setIncludeCardio(true);
         setIncludeLifting(true);
-        setCardioSubcategory(data.cardio[0].type || 'running');
-        {
-          const [cMin, cSec] = splitMinSec(data.cardio[0].duration);
-          setCardioBlockDuration(cMin); setCardioBlockDurationSec(cSec);
-        }
-        setCardioBlockDistance(data.cardio[0].distance ? String(data.cardio[0].distance) : (data.cardio[0].miles ? String(data.cardio[0].miles) : ''));
-        setCardioNote(data.cardio[0].note || '');
-        if (data.cardio[0].run_type) setCardioRunType(data.cardio[0].run_type);
       } else if (hasExercises) {
         setIncludeCardio(false);
         setIncludeLifting(true);
@@ -1375,12 +1494,8 @@ export default function PostPage() {
         } else {
           // Cardio-mode — process toggles
           if (includeCardio) {
-            // Build the current form's cardio entry (if anything's entered),
-            // then combine with any previously-added entries from the list.
-            // This is what makes MULTIPLE cardio activities per workout work.
-            const currentEntry = buildCardioEntry();
-            const allCardio = [...cardioEntries];
-            if (currentEntry) allCardio.push(currentEntry);
+            // All cardio entries (each its own full form) → save payload.
+            const allCardio = buildCardioPayload();
             cardioPayload = allCardio.length > 0 ? allCardio : null;
 
             // Sum every cardio entry's minutes into the day total (no rounding,
@@ -1391,11 +1506,11 @@ export default function PostPage() {
 
           // Set workout_category — primary classifier for badges/stats/rivalries.
           // If both blocks active, lifting wins as the primary (most weight bearing).
-          // If only cardio, use the cardio subcategory.
+          // If only cardio, use the FIRST cardio entry's type.
           if (includeLifting) {
             effectiveWoCategory = "lifting";
           } else if (includeCardio) {
-            effectiveWoCategory = cardioSubcategory;
+            effectiveWoCategory = cardios[0]?.type || "running";
           } else {
             effectiveWoCategory = woCategory;
           }
@@ -2937,205 +3052,34 @@ export default function PostPage() {
                 </div>
 
                 {/* ── CARDIO BLOCK — only when toggle on ─────────────────── */}
-                {includeCardio && (() => {
-                  const distNum = parseFloat(cardioBlockDistance) || 0;
-                  const durNum  = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
-                  let paceText = "";
-                  if (distNum > 0 && durNum > 0) {
-                    if (cardioSubcategory === "running") {
-                      const p = durNum / distNum;
-                      const m = Math.floor(p);
-                      const s = Math.round((p - m) * 60);
-                      paceText = `${m}:${s.toString().padStart(2, "0")} min/mi`;
-                    } else if (cardioSubcategory === "cycling" || cardioSubcategory === "biking") {
-                      paceText = `${((distNum / durNum) * 60).toFixed(1)} mph`;
-                    } else if (cardioSubcategory === "swimming") {
-                      const p = (durNum / distNum) * 100;
-                      const m = Math.floor(p);
-                      const s = Math.round((p - m) * 60);
-                      paceText = `${m}:${s.toString().padStart(2, "0")} min/100yd`;
-                    }
-                  }
-                  const showPace = ["running","cycling","biking","swimming"].includes(cardioSubcategory);
-                  const distUnit = cardioSubcategory === "swimming" ? "yards" : cardioSubcategory === "rowing" ? "meters" : "miles";
-                  return (
-                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>🏃 Cardio</div>
+                {includeCardio && (
+                  <>
+                    {cardios.map((c, i) => (
+                      <CardioForm
+                        key={i}
+                        entry={c}
+                        index={i}
+                        onChange={(patch) => patchCardio(i, patch)}
+                        onRemove={cardios.length > 1 ? () => removeCardio(i) : undefined}
+                        bodyMetrics={bodyMetrics}
+                        swimDistanceFn={swimDistance}
+                        estCaloriesFn={estimateCardioCalories}
+                      />
+                    ))}
+                    <button
+                      onClick={addCardio}
+                      style={{
+                        width: "100%", marginBottom: 14, padding: "11px",
+                        borderRadius: 10, border: `1.5px dashed ${C.blue}`,
+                        background: "transparent", color: "#A78BFA",
+                        fontWeight: 800, fontSize: 13, cursor: "pointer",
+                      }}
+                    >
+                      + Add another cardio
+                    </button>
+                  </>
+                )}
 
-                      {/* Already-added cardio activities (multi-cardio support) */}
-                      {cardioEntries.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                          {cardioEntries.map((e, idx) => (
-                            <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(124,58,237,0.16)", border: "1px solid rgba(124,58,237,0.35)" }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: "#E2E8F0" }}>{cardioChipLabel(e)}</span>
-                              <button onClick={() => removeCardioEntry(idx)} aria-label="Remove" style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 2, flexShrink: 0 }}>×</button>
-                            </div>
-                          ))}
-                          <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>Add another below, or fill it in and hit save.</div>
-                        </div>
-                      )}
-                      <div style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Type</label>
-                        <select style={iStyle} value={cardioSubcategory} onChange={e => setCardioSubcategory(e.target.value)}>
-                          <option value="running">🏃 Running</option>
-                          <option value="cycling">🚴 Cycling</option>
-                          <option value="swimming">🏊 Swimming</option>
-                          <option value="rowing">🚣 Rowing</option>
-                          <option value="elliptical">⚡ Elliptical</option>
-                          <option value="hiit">🔥 HIIT</option>
-                          <option value="stairclimber">🪜 Stair Climber</option>
-                          <option value="walking">🚶 Walking</option>
-                          <option value="hiking">🥾 Hiking</option>
-                          <option value="other">💪 Other</option>
-                        </select>
-                      </div>
-                      {/* Run subtype — only shown when cardio type is running.
-                          Lets the stats page distinguish road runs (where pace
-                          comparisons make sense) from treadmill (no wind), trail
-                          (elevation matters more than pace), and HIIT runs
-                          (interval workouts where avg pace is meaningless). */}
-                      {cardioSubcategory === "running" && (
-                        <div style={{ marginBottom: 10 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Run Type</label>
-                          <select style={iStyle} value={cardioRunType} onChange={e => setCardioRunType(e.target.value)}>
-                            <option value="outdoor">🌆 Outdoor Run</option>
-                            <option value="treadmill">🏃 Treadmill</option>
-                            <option value="trail">🌲 Trail Run</option>
-                            <option value="hiit">⚡ HIIT Run</option>
-                          </select>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={cardioBlockDuration} onChange={e => setCardioBlockDuration(e.target.value.replace(/[^0-9]/g, ""))} />
-                            <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
-                            <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={cardioBlockDurationSec} onChange={e => setCardioBlockDurationSec(clampSecInput(e.target.value))} />
-                          </div>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Distance ({distUnit})</label>
-                          <input style={iStyle} type="text" inputMode="decimal" placeholder={cardioSubcategory === "swimming" ? "1000" : cardioSubcategory === "rowing" ? "2000" : "3.2"} value={cardioBlockDistance} onChange={e => setCardioBlockDistance(e.target.value)} disabled={cardioSubcategory === "swimming" && useSwimPool} />
-                        </div>
-                      </div>
-
-                      {/* ── SWIM HOME-POOL MODE (swimming only) ── */}
-                      {cardioSubcategory === "swimming" && (
-                        <div style={{ marginTop: 10, background: "rgba(59,130,246,0.06)", borderRadius: 12, padding: 12, border: `1px solid ${C.blue}` }}>
-                          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: useSwimPool ? 12 : 0 }}>
-                            <input type="checkbox" checked={useSwimPool} onChange={e => setUseSwimPool(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.blue }} />
-                            <span style={{ fontSize: 12, fontWeight: 800, color: "#93C5FD" }}>🏊 Track by laps in my pool</span>
-                          </label>
-
-                          {useSwimPool && (
-                            <>
-                              <div style={{ display: "flex", gap: 10 }}>
-                                <div style={{ flex: 1 }}>
-                                  <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Pool length</label>
-                                  <div style={{ display: "flex", gap: 6 }}>
-                                    <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="decimal" placeholder="25" value={poolLength} onChange={e => setPoolLength(e.target.value)} />
-                                    <select style={{ ...iStyle, width: 64, flexShrink: 0 }} value={poolUnit} onChange={e => setPoolUnit(e.target.value as "ft" | "m" | "yd")}>
-                                      <option value="yd">yd</option>
-                                      <option value="m">m</option>
-                                      <option value="ft">ft</option>
-                                    </select>
-                                  </div>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Laps</label>
-                                  <input style={iStyle} type="text" inputMode="numeric" placeholder="20" value={swimLaps} onChange={e => setSwimLaps(e.target.value.replace(/[^0-9]/g, ""))} />
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 10, color: C.sub, marginTop: 6 }}>1 lap = there & back (2 pool lengths)</div>
-
-                              {swimResult && (
-                                <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-                                  <div style={{ flex: 1, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
-                                    <div style={{ fontSize: 18, fontWeight: 900, color: C.gold }}>{swimResult.meters.toLocaleString()}</div>
-                                    <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>meters</div>
-                                  </div>
-                                  <div style={{ flex: 1, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
-                                    <div style={{ fontSize: 18, fontWeight: 900, color: C.gold }}>{swimResult.miles.toLocaleString()}</div>
-                                    <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>miles</div>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                      <div style={{ marginTop: 10 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Note</label>
-                        <input style={iStyle} type="text" placeholder="How'd the cardio feel? (optional)" value={cardioNote} onChange={e => setCardioNote(e.target.value)} />
-                      </div>
-                      {showPace && (
-                        <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.greenMid}` }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>
-                            Pace · auto-calculated
-                          </div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: paceText ? C.gold : C.sub }}>
-                            {paceText || "Enter distance + duration"}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ── ESTIMATED CALORIES (needs body metrics + duration) ── */}
-                      {(() => {
-                        const durNum = combineMinSec(cardioBlockDuration, cardioBlockDurationSec) || 0;
-                        const est = bodyMetrics && durNum > 0
-                          ? estimateCardioCalories(cardioSubcategory, durNum, bodyMetrics)
-                          : null;
-                        if (est) {
-                          return (
-                            <div style={{ marginTop: 10, background: "rgba(245,158,11,0.08)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.gold}` }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>
-                                Calories · estimated
-                              </div>
-                              <div style={{ fontSize: 16, fontWeight: 900, color: C.gold }}>
-                                🔥 {est.kcal.toLocaleString()} kcal
-                              </div>
-                            </div>
-                          );
-                        }
-                        // Prompt to add metrics if duration is set but no metrics
-                        if (durNum > 0 && !bodyMetrics?.body_weight_lbs) {
-                          return (
-                            <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px dashed ${C.border}` }}>
-                              <div style={{ fontSize: 11, color: C.sub }}>
-                                💡 Add your body metrics in <span style={{ fontWeight: 800, color: "#93C5FD" }}>Stats</span> to see estimated calories burned.
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-
-                      {/* ── ADD ANOTHER CARDIO ── lets the user log multiple
-                          cardio activities in one workout. Always tappable;
-                          if the form is empty it shows a hint rather than
-                          appearing dead/disabled. */}
-                      <button
-                        onClick={addCardioEntry}
-                        style={{
-                          width: "100%", marginTop: 12, padding: "11px",
-                          borderRadius: 10, border: `1.5px dashed ${C.blue}`,
-                          background: "transparent",
-                          color: "#A78BFA",
-                          fontWeight: 800, fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                      >
-                        + Add another cardio
-                      </button>
-                      {cardioAddHint && (
-                        <div style={{ fontSize: 11, color: C.gold, marginTop: 6, textAlign: "center" }}>
-                          Fill in this cardio (duration or distance) first, then tap to add it.
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
 
                 {/* ── LIFTING DURATION (only when lifting toggled on) ── */}
                 {includeLifting && (
