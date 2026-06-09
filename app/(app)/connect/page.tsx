@@ -850,8 +850,8 @@ function ConnectPageInner() {
       <div style={{ position:"sticky", top:0, zIndex:100, background:C.white, borderBottom:`2px solid ${C.greenLight}` }}>
         <div className="connect-header-row" style={{ maxWidth:1200, margin:"0 auto", padding:"14px 24px 0", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", rowGap:10 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginRight:8 }}>
-            <span style={{ fontSize:20 }}>🤝</span>
-            <span style={{ fontWeight:900, fontSize:20, color:C.text }}>Connect</span>
+            <span style={{ fontSize:20 }}>👥</span>
+            <span style={{ fontWeight:900, fontSize:20, color:C.text }}>Groups</span>
           </div>
           <div style={{ flex:"1 1 200px", minWidth:0, maxWidth:380, display:"flex", alignItems:"center", gap:10, background:C.greenLight, borderRadius:24, padding:"8px 16px", border:`1.5px solid ${C.greenMid}` }}>
             <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:16, height:16, flexShrink:0 }}>
