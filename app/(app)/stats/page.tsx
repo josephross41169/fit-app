@@ -725,15 +725,19 @@ export default function StatsPage(){
   const allCardio=workoutLogs.flatMap(l=>Array.isArray(l.cardio)?l.cardio.map((c:any)=>({...c,logged_at:l.logged_at})):[]);
   const cardioSessions=workoutLogs.filter(l=>Array.isArray(l.cardio)&&l.cardio.length>0).length;
   const liftingSessions=workoutLogs.filter(l=>Array.isArray(l.exercises)&&l.exercises.length>0).length;
+  // A cardio entry's distance in miles. Pool swims store their distance in
+  // `miles` (computed from laps) rather than the free-text `distance` field,
+  // so fall back to it — otherwise swims count as 0 in the breakdown.
+  const cardioMiles=(c:any):number=>(parseFloat(String(c.distance))||0)||(parseFloat(String(c.miles))||0);
   const totalCardioMin=allCardio.reduce((s:number,c:any)=>s+(parseFloat(String(c.duration))||0),0);
-  const totalCardioMiles=allCardio.reduce((s:number,c:any)=>s+(parseFloat(String(c.distance))||0),0);
+  const totalCardioMiles=allCardio.reduce((s:number,c:any)=>s+cardioMiles(c),0);
   const cardioTypes=(()=>{
     type Bucket = {count:number;totalDist:number;totalDur:number;longest:number;};
     const t:Record<string,Bucket>={};
     allCardio.forEach((c:any)=>{
       const tp=normalizeCardio(c.type||"Cardio");
       if(!t[tp]) t[tp]={count:0,totalDist:0,totalDur:0,longest:0};
-      const dist = parseFloat(String(c.distance))||0;
+      const dist = cardioMiles(c);
       const dur = parseFloat(String(c.duration))||0;
       t[tp].count++;
       t[tp].totalDist += dist;
