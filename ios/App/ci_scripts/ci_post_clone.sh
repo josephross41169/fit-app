@@ -3,14 +3,14 @@
 # ci_post_clone.sh — runs on Xcode Cloud right AFTER it clones the repo,
 # BEFORE it resolves Swift packages / builds.
 #
-# Fixes two things that otherwise break the build:
-#   1. node_modules is gitignored, so the Capacitor plugins that Package.swift
-#      points at (../../../node_modules/@capacitor/*) don't exist on the build
-#      machine. We run `npm install` to recreate them.
-#   2. Xcode Cloud disables automatic Swift package resolution and demands a
-#      committed Package.resolved. Rather than rely on a hand-written one, we
-#      let Xcode resolve packages here so a valid Package.resolved is produced
-#      before the Archive step runs.
+# Fixes the chain of things that aren't committed to git but the iOS build needs:
+#   1. node_modules (gitignored) — the Capacitor plugins Package.swift points at.
+#      => npm install
+#   2. Swift package resolution (Xcode Cloud disables auto-resolution).
+#      => xcodebuild -resolvePackageDependencies (Package.resolved is also committed)
+#   3. The iOS app's `public/` folder (the web build) and `config.xml`, which
+#      Capacitor generates and are NOT in git.
+#      => npx cap sync ios  (copies `out/` -> ios/App/App/public and writes config.xml)
 
 set -e
 
@@ -29,9 +29,12 @@ echo "Node: $(node -v)  npm: $(npm -v)"
 
 npm install
 
-# --- 2. Resolve Swift packages so Package.resolved exists/updates ---
-# Point at the project's workspace and let SwiftPM resolve dependencies,
-# which writes the required Package.resolved into xcshareddata/swiftpm.
+# --- 2. Capacitor sync: generates ios/App/App/public + config.xml ---
+# `out/` (the committed Next.js static export) is the webDir source.
+echo "Running Capacitor sync for iOS…"
+npx cap sync ios
+
+# --- 3. Resolve Swift packages so Package.resolved is present/valid ---
 echo "Resolving Swift package dependencies…"
 xcodebuild -resolvePackageDependencies \
   -project "ios/App/App.xcodeproj" \
