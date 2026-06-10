@@ -3,14 +3,17 @@
 # ci_post_clone.sh — runs on Xcode Cloud right AFTER it clones the repo,
 # BEFORE it resolves Swift packages / builds.
 #
-# Fixes the chain of things that aren't committed to git but the iOS build needs:
-#   1. node_modules (gitignored) — the Capacitor plugins Package.swift points at.
-#      => npm install
-#   2. Swift package resolution (Xcode Cloud disables auto-resolution).
-#      => xcodebuild -resolvePackageDependencies (Package.resolved is also committed)
-#   3. The iOS app's `public/` folder (the web build) and `config.xml`, which
-#      Capacitor generates and are NOT in git.
-#      => npx cap sync ios  (copies `out/` -> ios/App/App/public and writes config.xml)
+# Produces everything the iOS build needs that ISN'T committed to git:
+#   1. node_modules (gitignored) — the Capacitor plugins Package.swift uses.
+#   2. The real web build in out/ (only a placeholder index.html is committed)
+#      AND the iOS app's public/ folder + config.xml.
+#      `npm run build:mobile` does both: it runs `next build` (static export)
+#      with middleware/api stashed, then `cap sync` to copy out/ -> iOS public/
+#      and write config.xml.
+#   3. Swift package resolution: handled automatically by the build; we do NOT
+#      commit a Package.resolved (it goes stale after cap sync regenerates the
+#      package graph), so this script removes any stale one so Xcode resolves
+#      fresh.
 
 set -e
 
@@ -29,17 +32,17 @@ echo "Node: $(node -v)  npm: $(npm -v)"
 
 npm install
 
-# --- 2. Capacitor sync: generates ios/App/App/public + config.xml ---
-# `out/` (the committed Next.js static export) is the webDir source.
-echo "Running Capacitor sync for iOS…"
-npx cap sync ios
+# --- 2. Build the real web app AND sync it into iOS (out/, public/, config.xml) ---
+echo "Building mobile web bundle + syncing iOS (npm run build:mobile)…"
+npm run build:mobile
 
-# --- 3. Resolve Swift packages so Package.resolved is present/valid ---
-echo "Resolving Swift package dependencies…"
-xcodebuild -resolvePackageDependencies \
-  -project "ios/App/App.xcodeproj" \
-  -scheme "App" \
-  -clonedSourcePackagesDirPath "$CI_DERIVED_DATA_PATH/SourcePackages" \
-  || echo "resolvePackageDependencies returned non-zero (continuing; archive step will resolve)"
+# --- 3. Remove any committed/stale Package.resolved so Xcode resolves fresh ---
+# (cap sync above can change the package graph; a stale resolved file makes
+#  Xcode Cloud fail with "out-of-date resolved file".)
+RESOLVED="ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+if [ -f "$RESOLVED" ]; then
+  echo "Removing stale Package.resolved so Xcode regenerates it…"
+  rm -f "$RESOLVED"
+fi
 
 echo "===== ci_post_clone: done ====="
