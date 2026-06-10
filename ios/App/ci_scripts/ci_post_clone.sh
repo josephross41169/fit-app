@@ -3,17 +3,14 @@
 # ci_post_clone.sh — runs on Xcode Cloud right AFTER it clones the repo,
 # BEFORE it resolves Swift packages / builds.
 #
-# Produces everything the iOS build needs that ISN'T committed to git:
+# Produces everything the iOS build needs that ISN'T committed to git, in the
+# right order so the committed Package.resolved stays valid:
 #   1. node_modules (gitignored) — the Capacitor plugins Package.swift uses.
-#   2. The real web build in out/ (only a placeholder index.html is committed)
-#      AND the iOS app's public/ folder + config.xml.
-#      `npm run build:mobile` does both: it runs `next build` (static export)
-#      with middleware/api stashed, then `cap sync` to copy out/ -> iOS public/
-#      and write config.xml.
-#   3. Swift package resolution: handled automatically by the build; we do NOT
-#      commit a Package.resolved (it goes stale after cap sync regenerates the
-#      package graph), so this script removes any stale one so Xcode resolves
-#      fresh.
+#   2. The real web build + iOS public/ + config.xml  (npm run build:mobile).
+#   3. AFTER cap sync (which can rewrite CapApp-SPM/Package.swift), explicitly
+#      resolve Swift packages so the Package.resolved on disk matches the
+#      current graph. Xcode Cloud disables AUTOMATIC resolution, so we resolve
+#      EXPLICITLY here and write the result to the exact path Xcode Cloud reads.
 
 set -e
 
@@ -29,20 +26,21 @@ if ! command -v node >/dev/null 2>&1; then
   brew install node
 fi
 echo "Node: $(node -v)  npm: $(npm -v)"
-
 npm install
 
 # --- 2. Build the real web app AND sync it into iOS (out/, public/, config.xml) ---
 echo "Building mobile web bundle + syncing iOS (npm run build:mobile)…"
 npm run build:mobile
 
-# --- 3. Remove any committed/stale Package.resolved so Xcode resolves fresh ---
-# (cap sync above can change the package graph; a stale resolved file makes
-#  Xcode Cloud fail with "out-of-date resolved file".)
-RESOLVED="ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-if [ -f "$RESOLVED" ]; then
-  echo "Removing stale Package.resolved so Xcode regenerates it…"
-  rm -f "$RESOLVED"
-fi
+# --- 3. Explicitly resolve Swift packages so Package.resolved matches the
+#        post-sync graph. This is what satisfies Xcode Cloud's requirement for
+#        a present, up-to-date resolved file when auto-resolution is disabled. ---
+echo "Resolving Swift package dependencies (writing Package.resolved)…"
+xcodebuild -resolvePackageDependencies \
+  -project "ios/App/App.xcodeproj" \
+  -scheme "App"
+
+echo "Resolved file now at:"
+ls -l "ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" || true
 
 echo "===== ci_post_clone: done ====="
