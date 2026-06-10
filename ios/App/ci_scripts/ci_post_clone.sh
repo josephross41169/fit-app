@@ -2,15 +2,28 @@
 
 # ci_post_clone.sh — runs on Xcode Cloud after clone, before its build steps.
 #
-# The hard problem: npm run build:mobile runs cap sync, which rewrites
-# CapApp-SPM/Package.swift, so ANY pre-committed Package.resolved is stale by
-# the time Xcode Cloud validates it ("out-of-date resolved file"). The fix:
-# AFTER cap sync, regenerate Package.resolved in place so it matches the
-# post-sync graph, then Xcode Cloud's check passes.
+# Root cause of the persistent "out-of-date resolved file ... not allowed when
+# automatic dependency resolution is disabled" failures:
+# Xcode Cloud sets two Xcode defaults that prevent Swift Package Manager from
+# resolving LOCAL path packages (our 6 @capacitor/* plugins in CapApp-SPM):
+#   IDEPackageOnlyUseVersionsFromResolvedFile = YES
+#   IDEDisableAutomaticPackageResolution      = YES
+# With those set, SPM refuses to resolve the local packages and errors out,
+# regardless of what Package.resolved contains.
+#
+# Fix (proven for Capacitor/local-package projects on Xcode Cloud): delete those
+# defaults here so Xcode resolves packages normally during the build.
 
 set -e
 
 echo "===== ci_post_clone: start ====="
+
+# Remove the flags Xcode Cloud injects that break local-package resolution.
+# Use '|| true' so the script doesn't fail if a key isn't set.
+defaults delete com.apple.dt.Xcode IDEPackageOnlyUseVersionsFromResolvedFile 2>/dev/null || true
+defaults delete com.apple.dt.Xcode IDEDisableAutomaticPackageResolution 2>/dev/null || true
+echo "Cleared IDEPackageOnlyUseVersionsFromResolvedFile / IDEDisableAutomaticPackageResolution."
+
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 echo "Repo root: $(pwd)"
 
@@ -22,34 +35,8 @@ fi
 echo "Node: $(node -v)  npm: $(npm -v)"
 npm install
 
-# 2. Real web build + Capacitor iOS sync (writes public/, config.xml; rewrites Package.swift)
+# 2. Real web build + Capacitor iOS sync (writes public/, config.xml)
 echo "Building mobile bundle + syncing iOS..."
 npm run build:mobile
-
-# 3. Regenerate Package.resolved to match the post-cap-sync graph. Disable set -e
-#    around the resolve so a non-zero exit cannot abort the run; verify after.
-echo "Resolving Swift package dependencies in place..."
-set +e
-xcodebuild -resolvePackageDependencies \
-  -project "ios/App/App.xcodeproj" \
-  -scheme "App"
-RESOLVE_RC=$?
-set -e
-echo "resolvePackageDependencies exit code: $RESOLVE_RC"
-
-RESOLVED="ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-if [ -f "$RESOLVED" ]; then
-  echo "Package.resolved present after resolve:"
-  cat "$RESOLVED"
-else
-  echo "WARN: Package.resolved not found; searching DerivedData..."
-  GEN="$(find "$HOME/Library/Developer/Xcode/DerivedData" -name 'Package.resolved' 2>/dev/null | head -1)"
-  if [ -n "$GEN" ]; then
-    echo "Copying generated resolved file from $GEN"
-    mkdir -p "$(dirname "$RESOLVED")"
-    cp "$GEN" "$RESOLVED"
-    cat "$RESOLVED"
-  fi
-fi
 
 echo "===== ci_post_clone: done ====="
