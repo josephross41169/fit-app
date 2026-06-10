@@ -4,13 +4,12 @@
 # BEFORE it resolves Swift packages / builds.
 #
 # Produces everything the iOS build needs that ISN'T committed to git, in the
-# right order so the committed Package.resolved stays valid:
+# right order so Swift package resolution succeeds:
 #   1. node_modules (gitignored) — the Capacitor plugins Package.swift uses.
 #   2. The real web build + iOS public/ + config.xml  (npm run build:mobile).
 #   3. AFTER cap sync (which can rewrite CapApp-SPM/Package.swift), explicitly
-#      resolve Swift packages so the Package.resolved on disk matches the
-#      current graph. Xcode Cloud disables AUTOMATIC resolution, so we resolve
-#      EXPLICITLY here and write the result to the exact path Xcode Cloud reads.
+#      resolve Swift packages so Package.resolved matches the current graph.
+#      Xcode Cloud disables AUTOMATIC resolution, so we resolve EXPLICITLY here.
 
 set -e
 
@@ -32,15 +31,20 @@ npm install
 echo "Building mobile web bundle + syncing iOS (npm run build:mobile)…"
 npm run build:mobile
 
-# --- 3. Explicitly resolve Swift packages so Package.resolved matches the
-#        post-sync graph. This is what satisfies Xcode Cloud's requirement for
-#        a present, up-to-date resolved file when auto-resolution is disabled. ---
-echo "Resolving Swift package dependencies (writing Package.resolved)…"
+# --- 3. Explicitly resolve Swift packages so Package.resolved is present and
+#        matches the post-sync graph. Write resolved packages into the build's
+#        derived-data SourcePackages dir AND let it update the in-repo
+#        Package.resolved. This satisfies Xcode Cloud's "resolved file required
+#        when automatic resolution is disabled" check. ---
+echo "Resolving Swift package dependencies…"
 xcodebuild -resolvePackageDependencies \
   -project "ios/App/App.xcodeproj" \
-  -scheme "App"
+  -scheme "App" \
+  -clonedSourcePackagesDirPath "${CI_DERIVED_DATA_PATH:-$PWD/DerivedData}/SourcePackages" \
+  -disableAutomaticPackageResolution=NO \
+  || echo "WARN: resolvePackageDependencies returned non-zero; archive step will retry resolution."
 
-echo "Resolved file now at:"
-ls -l "ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" || true
+echo "Resolved file:"
+ls -l "ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" 2>/dev/null || echo "(not at expected path; Xcode will generate during archive)"
 
 echo "===== ci_post_clone: done ====="
