@@ -2,19 +2,18 @@
 
 # ci_post_clone.sh — runs on Xcode Cloud after clone, before its build steps.
 #
-# Confirmed build sequence on Xcode Cloud:
-#   [this script] -> "Resolve package dependencies" (Xcode Cloud's own step) -> build
+# Build sequence on Xcode Cloud (confirmed from logs):
+#   [this script] -> "Resolve package dependencies" -> "Check project configuration" -> archive
 #
-# The "Resolve package dependencies" step runs with automatic resolution
-# DISABLED, so if a committed Package.resolved exists that doesn't match the
-# current package graph, it errors ("out-of-date resolved file ... not allowed").
+# Xcode Cloud runs with automatic package resolution DISABLED. From the logs we
+# learned it requires BOTH:
+#   - a committed Package.resolved that EXISTS, and
+#   - one that MATCHES the current package graph (after cap sync rewrites it).
+# A missing file -> "a resolved file is required". A stale file -> "out-of-date".
 #
-# Because npm run build:mobile runs cap sync, which regenerates
-# CapApp-SPM/Package.swift, ANY pre-committed Package.resolved becomes stale.
-#
-# Fix: after building, DELETE the committed Package.resolved. With no stale file
-# present, Xcode Cloud's resolve step resolves the (post-sync) graph fresh and
-# succeeds.
+# This script makes the file exist AND match, by resolving packages ourselves
+# (which produces a Package.resolved with the correct originHash) and copying it
+# into the path Xcode Cloud checks.
 
 set -e
 
@@ -34,15 +33,36 @@ npm install
 echo "Building mobile bundle + syncing iOS..."
 npm run build:mobile
 
-# 3. Remove any committed/stale Package.resolved so Xcode Cloud's resolve step
-#    (which follows this script) resolves the current graph fresh instead of
-#    rejecting a stale file.
-RESOLVED="ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-if [ -f "$RESOLVED" ]; then
-  echo "Removing stale committed Package.resolved: $RESOLVED"
-  rm -f "$RESOLVED"
+# 3. Resolve Swift packages, then ensure the resolved file is at the path Xcode
+#    Cloud checks. Resolving writes Package.resolved into DerivedData; we copy it
+#    into the committed workspace location so the "Check project configuration"
+#    step finds a present, matching file.
+DERIVED="$PWD/_derived_resolve"
+echo "Resolving Swift package dependencies into $DERIVED ..."
+xcodebuild -resolvePackageDependencies \
+  -project "ios/App/App.xcodeproj" \
+  -scheme "App" \
+  -derivedDataPath "$DERIVED"
+
+DEST_DIR="ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
+DEST="$DEST_DIR/Package.resolved"
+mkdir -p "$DEST_DIR"
+
+# Find the Package.resolved that the resolver just generated and copy it in.
+GENERATED="$(find "$DERIVED" -name 'Package.resolved' -print 2>/dev/null | head -1)"
+if [ -n "$GENERATED" ]; then
+  echo "Copying resolver output -> $DEST"
+  cp "$GENERATED" "$DEST"
+  echo "Final Package.resolved:"
+  cat "$DEST"
 else
-  echo "No committed Package.resolved present (good)."
+  if [ -f "$DEST" ]; then
+    echo "Package.resolved already present at workspace path:"
+    cat "$DEST"
+  else
+    echo "ERROR: no Package.resolved produced by resolver." >&2
+    exit 1
+  fi
 fi
 
 echo "===== ci_post_clone: done ====="
