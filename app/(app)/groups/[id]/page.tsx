@@ -961,7 +961,11 @@ export default function GroupPage() {
     name: dbGroup.name,
     category: dbGroup.category || 'General',
     emoji: dbGroup.emoji || '💪',
-    members: dbGroup.member_count || 0,
+    // FIT-68: the stored member_count can be stale (e.g. 0 for a brand-new
+    // group whose only member is the owner). Never show fewer than the members
+    // we actually loaded; for large groups whose list is truncated, fall back
+    // to the stored count if it's higher.
+    members: Math.max(dbMembers.length, dbGroup.member_count || 0),
     isLocal: !dbGroup.is_online,
     city: dbGroup.location || 'Online',
     meetFrequency: dbGroup.meet_frequency || '',
