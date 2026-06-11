@@ -120,7 +120,13 @@ function CardioForm({
     }
   }
 
-  const est = bodyMetrics && durNum > 0 ? estCaloriesFn(entry.type, durNum, bodyMetrics) : null;
+  // Calorie estimate. If there's no duration but it's a pool swim with a
+  // computed distance, estimate from that distance so swims logged purely by
+  // laps still show an approximate burn.
+  const swimMeters = swimRes?.meters ?? null;
+  const est = bodyMetrics
+    ? estCaloriesFn(entry.type, durNum > 0 ? durNum : null, bodyMetrics, null, swimMeters)
+    : null;
 
   return (
     <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}`, position: "relative" }}>
@@ -234,7 +240,7 @@ function CardioForm({
           <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Calories · estimated</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: C.gold }}>🔥 {est.kcal.toLocaleString()} kcal</div>
         </div>
-      ) : (durNum > 0 && !bodyMetrics?.body_weight_lbs) ? (
+      ) : ((durNum > 0 || swimMeters) && !bodyMetrics?.body_weight_lbs) ? (
         <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px dashed ${C.border}` }}>
           <div style={{ fontSize: 11, color: C.sub }}>💡 Add your body metrics in <span style={{ fontWeight: 800, color: "#93C5FD" }}>Stats</span> to see estimated calories burned.</div>
         </div>
@@ -683,8 +689,9 @@ export default function PostPage() {
       entry.meters = swimRes.meters;
       entry.miles = swimRes.miles;
     }
-    if (bodyMetrics && durNum > 0) {
-      const est = estimateCardioCalories(c.type, durNum, bodyMetrics);
+    const estSwimMeters = swimRes ? swimRes.meters : null;
+    if (bodyMetrics && (durNum > 0 || estSwimMeters)) {
+      const est = estimateCardioCalories(c.type, durNum > 0 ? durNum : null, bodyMetrics, null, estSwimMeters);
       if (est) { entry.est_calories = est.kcal; entry.est_calories_method = est.method; }
     }
     if (c.type === "running") entry.run_type = c.runType;
