@@ -72,6 +72,25 @@ const MET: Record<string, number> = {
   other: 6.0,
 };
 
+// Typical moderate pace in minutes per 100 m, used ONLY to estimate a session
+// duration when distance is known but no time was logged — so a swim tracked
+// by laps (distance only) can still show an approximate calorie burn.
+const PACE_MIN_PER_100M: Record<string, number> = {
+  swimming: 2.2, // ~2:12 / 100 m, moderate recreational pace
+};
+
+// Estimate session minutes from a distance in meters using the activity's
+// typical pace. Returns null when no pace is defined for the type.
+export function estimateMinutesFromMeters(
+  type: string,
+  meters: number | null | undefined,
+): number | null {
+  const m = num(meters);
+  const pace = PACE_MIN_PER_100M[type];
+  if (!m || !pace) return null;
+  return (m / 100) * pace;
+}
+
 export type CalorieEstimate = {
   kcal: number;
   method: "heart_rate" | "met";
@@ -88,8 +107,13 @@ export function estimateCardioCalories(
   minutes: number | null | undefined,
   metrics: BodyMetrics,
   avgHr?: number | null,
+  distanceMeters?: number | null,
 ): CalorieEstimate | null {
-  const mins = num(minutes);
+  // If no duration was logged but the distance is known (e.g. a swim tracked
+  // by laps), estimate a duration from a typical pace so we can still show an
+  // approximate burn instead of nothing.
+  let mins = num(minutes);
+  if (!mins && distanceMeters != null) mins = estimateMinutesFromMeters(type, distanceMeters);
   const wLbs = num(metrics.body_weight_lbs);
   if (!mins) return null;
 
