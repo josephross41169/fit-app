@@ -1,6 +1,29 @@
+"use client";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function LandingPage() {
+  const router = useRouter();
+  // If already signed in, the marketing page isn't the right landing — send
+  // the user straight to their Home (profile). Show a dark splash (not the
+  // marketing copy) while we check, so logged-in users never see a flash.
+  const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled && data.session) { router.replace("/profile"); return; }
+      } catch { /* no session check — fall through to marketing */ }
+      if (!cancelled) setChecking(false);
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
+  if (checking) return <div style={{ minHeight: "100vh", background: "#0D0D0D" }} />;
+
   const features = [
     { icon: "💪", title: "Log Workouts", desc: "Track every rep, set, and PR" },
     { icon: "🥗", title: "Track Nutrition", desc: "Log meals and hit your macros" },
