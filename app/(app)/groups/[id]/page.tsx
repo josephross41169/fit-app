@@ -824,13 +824,21 @@ export default function GroupPage() {
         // Both are merged so legacy events keep displaying alongside new ones.
         // We filter out PAST events (>24h old) so the events tab doesn't fill
         // up with stale stuff. Events with no date set (date_tbd) always show.
-        const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-        const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
-        const isUpcoming = (dateStr: string | null | undefined) =>
-          !dateStr || new Date(dateStr).getTime() > cutoff;
+        // FIT-67: keep an event in "Upcoming" until it's actually over.
+        //  • no date (TBD)   → always show
+        //  • has an end time → show until that end time passes
+        //  • no end time     → show until the END OF ITS START DAY
+        const isUpcoming = (dateStr: string | null | undefined, endStr?: string | null) => {
+          if (!dateStr) return true;
+          const now = Date.now();
+          if (endStr) return new Date(endStr).getTime() > now;
+          const endOfDay = new Date(dateStr);
+          endOfDay.setHours(23, 59, 59, 999);
+          return endOfDay.getTime() > now;
+        };
 
         const legacyEvents = ((data.events || []) as any[])
-          .filter((e: any) => isUpcoming(e.event_date));
+          .filter((e: any) => isUpcoming(e.event_date, e.end_date));
 
         // ── Parallel fan-out ───────────────────────────────────────────
         // Steps 3-5 below all depend on `data.group.id` but NOT on each
@@ -847,7 +855,7 @@ export default function GroupPage() {
           // member-vs-non-member access gate.
           supabase
             .from("events_with_counts")
-            .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved, is_public, creator_id")
+            .select("id, title, description, category, event_date, end_date, date_tbd, location_name, price, image_url, going_count, approved, is_public, creator_id")
             .eq("group_id", data.group.id)
             // Show every approved event, PLUS the viewer's own events even if
             // still pending review — so an event you just created never silently
@@ -874,7 +882,7 @@ export default function GroupPage() {
         // Filter out past events here too (date_tbd events are kept since
         // they have no date to compare).
         const adapted = (newEvents || [])
-          .filter((e: any) => e.date_tbd || isUpcoming(e.event_date))
+          .filter((e: any) => e.date_tbd || isUpcoming(e.event_date, e.end_date))
           .map((e: any) => ({
             id: e.id,
             name: e.title,
@@ -1149,14 +1157,21 @@ export default function GroupPage() {
       if (dbId) {
         const { data: newEvents } = await supabase
           .from("events_with_counts")
-          .select("id, title, description, category, event_date, date_tbd, location_name, price, image_url, going_count, approved")
+          .select("id, title, description, category, event_date, end_date, date_tbd, location_name, price, image_url, going_count, approved")
           .eq("group_id", dbId)
           .eq("is_public", true)
           .or("approved.is.null,approved.eq.true")
           .order("event_date", { ascending: true });
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const isUpcoming = (dateStr: string | null | undefined, endStr?: string | null) => {
+          if (!dateStr) return true;
+          const now = Date.now();
+          if (endStr) return new Date(endStr).getTime() > now;
+          const endOfDay = new Date(dateStr);
+          endOfDay.setHours(23, 59, 59, 999);
+          return endOfDay.getTime() > now;
+        };
         const adapted = (newEvents || [])
-          .filter((e: any) => e.date_tbd || !e.event_date || new Date(e.event_date).getTime() > cutoff)
+          .filter((e: any) => e.date_tbd || isUpcoming(e.event_date, e.end_date))
           .map((e: any) => ({
             id: e.id,
             name: e.title,
