@@ -189,6 +189,16 @@ export default function GetStartedChecklist({
           {expanded ? "Show less" : `Show all ${items.length} steps`}
         </button>
       )}
+
+      {/* Permanent opt-out — for users who can't (or don't want to) finish a
+          step like connecting Apple Health, so the card never stays stuck on
+          screen forever. Hides it for good on this device. */}
+      <button onClick={dismiss} style={{
+        width: "100%", marginTop: 4, background: "none", border: "none",
+        color: "#6B7280", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 6,
+      }}>
+        Don&apos;t show this again
+      </button>
     </div>
   );
 }
