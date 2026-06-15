@@ -861,7 +861,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
             </div>
             {exercises.map((ex,i) => {
               const wsArr: string[] = Array.isArray(ex.weights) ? ex.weights : [];
-              const weightDisplay = wsArr.length > 1 ? wsArr.join(' / ') + ' lbs' : (wsArr[0] || ex.weight || '—');
+              const weightDisplay = ex.bodyweight ? 'Bodyweight' : (wsArr.length > 1 ? wsArr.join(' / ') + ' lbs' : (wsArr[0] || ex.weight || '—'));
               // Show one rep number per set. Use saved per-set reps when there's
               // more than one; otherwise repeat the single value so older logs
               // (which only stored one rep count) still line up with the sets.
