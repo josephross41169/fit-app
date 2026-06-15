@@ -160,7 +160,6 @@ function CardioForm({
             <option value="outdoor">🌆 Outdoor Run</option>
             <option value="treadmill">🏃 Treadmill</option>
             <option value="trail">🌲 Trail Run</option>
-            <option value="hiit">⚡ HIIT Run</option>
           </select>
         </div>
       )}
@@ -254,7 +253,7 @@ function CardioForm({
 // "default" rep count used to seed the per-set repsArr. `repsArr` is the
 // new source of truth: one entry per set so users can log pyramid sets
 // like 12/8/6 without losing data. Same pattern as `weights`.
-type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string };
+type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string; bodyweight?: boolean };
 type PrevSet = { weight: string; reps: string };
 type PrevSession = { date: string; sets: PrevSet[] };
 type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string; photoUrl?: string };
@@ -1291,6 +1290,7 @@ export default function PostPage() {
           weights: ex.weights || [],
           repsArr: ex.repsArr || [],
           notes: ex.notes || undefined,
+          bodyweight: ex.bodyweight || false,
         })),
       }).select().single();
       if (data) {
@@ -1464,6 +1464,7 @@ export default function PostPage() {
             weights,
             repsArr,
             notes: ex.notes || undefined,
+            bodyweight: ex.bodyweight || false,
           };
         });
 
@@ -3345,11 +3346,25 @@ export default function PostPage() {
                         }} />
                       </div>
 
+                      {/* Bodyweight toggle — for exercises with no added weight
+                          (push-ups, pull-ups, dips, air squats…). Hides the
+                          weight inputs and records the exercise as bodyweight. */}
+                      <button type="button"
+                        onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, bodyweight: !x.bodyweight } : x))}
+                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", marginBottom: 10,
+                          background: ex.bodyweight ? "rgba(124,58,237,0.15)" : "transparent",
+                          border: `1.5px solid ${ex.bodyweight ? C.blue : C.greenMid}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                          border: `2px solid ${ex.bodyweight ? C.blue : C.sub}`, background: ex.bodyweight ? C.blue : "transparent",
+                          color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.bodyweight ? "✓" : ""}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.bodyweight ? "#C4B5FD" : C.sub }}>Bodyweight (no added weight)</span>
+                      </button>
+
                       {/* Per-set rows — each set has its own reps + weight
                           inputs side-by-side, with quick +2.5/+5/+10 lb
                           buttons. Lets users log pyramid sets, drop sets,
                           warm-up sets etc. without losing detail. */}
-                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Reps × Weight (per set)</label>
+                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>{ex.bodyweight ? "Reps (per set)" : "Reps × Weight (per set)"}</label>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {Array.from({ length: numSets }).map((_, s) => {
                           function updateW(delta: number) {
@@ -3368,7 +3383,7 @@ export default function PostPage() {
                               {/* Reps for this specific set. Free-text but
                                   numeric keypad on mobile so it feels native. */}
                               <input
-                                style={{ ...iStyle, width: 56, padding: "7px 8px", fontSize: 13, textAlign: "center" as const, flexShrink: 0 }}
+                                style={ex.bodyweight ? { ...iStyle, flex: 1, padding: "7px 10px", fontSize: 13 } : { ...iStyle, width: 56, padding: "7px 8px", fontSize: 13, textAlign: "center" as const, flexShrink: 0 }}
                                 type="text" inputMode="numeric" placeholder="reps"
                                 value={(ex.repsArr || [])[s] ?? ''}
                                 onChange={e => setExercises(exs => exs.map((x, j) => {
@@ -3381,6 +3396,9 @@ export default function PostPage() {
                                   return { ...x, repsArr: rs, reps: rs[0] || x.reps };
                                 }))}
                               />
+                              {ex.bodyweight ? (
+                                <span style={{ fontSize: 11, fontWeight: 800, color: C.sub, flexShrink: 0, padding: "0 6px" }}>bodyweight</span>
+                              ) : (<>
                               <span style={{ fontSize: 12, color: C.sub, fontWeight: 700, flexShrink: 0 }}>×</span>
                               <input
                                 style={{ ...iStyle, flex: 1, padding: "7px 10px", fontSize: 13 }}
@@ -3399,6 +3417,7 @@ export default function PostPage() {
                                   +{d}
                                 </button>
                               ))}
+                              </>)}
                             </div>
                           );
                         })}
