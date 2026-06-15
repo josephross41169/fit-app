@@ -202,7 +202,7 @@ const RUN_TYPE_LABELS: Record<string,string> = {
   outdoor:  "outdoor run",
   treadmill:"treadmill run",
   trail:    "trail run",
-  hiit:     "HIIT run",
+  hiit:     "HIIT",
 };
 // Returns the label to group/display a cardio entry under. For running
 // entries with a known run_type we use the subtype label (so the summary
@@ -1174,9 +1174,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                         </div>
                         {exList.map((ex: any, i: number) => {
                           const wsArr: string[] = ex.weights && Array.isArray(ex.weights) ? ex.weights : [];
-                          const weightDisplay = wsArr.length > 1
-                            ? wsArr.join(' / ') + ' lbs'
-                            : (wsArr[0] || ex.weight || '—');
+                          const weightDisplay = ex.bodyweight
+                            ? 'Bodyweight'
+                            : (wsArr.length > 1
+                              ? wsArr.join(' / ') + ' lbs'
+                              : (wsArr[0] || ex.weight || '—'));
                           // How many sets this row has — prefer the weight column's
                           // count so reps and weight line up; fall back to `sets`.
                           const setCount = wsArr.length > 1 ? wsArr.length : (ex.sets || 1);
