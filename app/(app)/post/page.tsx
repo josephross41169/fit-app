@@ -775,6 +775,22 @@ export default function PostPage() {
   const [suppFavorites, setSuppFavorites] = useState<SavedSupplement[]>([]);
   const [suppFavRefresh, setSuppFavRefresh] = useState(0);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+  // Add a food, but if the same food (by name + calories) is already in the
+  // list, just bump its quantity instead of adding a duplicate row — so
+  // logging the same favorite twice shows one row as "×2" (one photo), not two.
+  const addOrIncrementFood = (item: FoodItem) => {
+    setFoodItems(f => {
+      const key = (item.name || '').trim().toLowerCase();
+      const idx = key
+        ? f.findIndex(x => (x.name || '').trim().toLowerCase() === key && String(x.calories ?? '') === String(item.calories ?? ''))
+        : -1;
+      if (idx >= 0) {
+        const add = parseInt(item.qty || '1') || 1;
+        return f.map((x, j) => j === idx ? { ...x, qty: String((parseInt(x.qty || '1') || 1) + add) } : x);
+      }
+      return [...f, item];
+    });
+  };
   // Bumped after star-to-save so the FoodFavorites bar re-fetches.
   const [favoritesRefreshKey, setFavoritesRefreshKey] = useState(0);
   const [protein, setProtein] = useState("");
@@ -1603,10 +1619,10 @@ export default function PostPage() {
           ? JSON.stringify(combinedPhotos)
           : nutPhotoUrl;
         // Auto-calculate macros from food items if available
-        const autoCalNut = foodItems.reduce((s, f) => s + (parseFloat(f.calories) || 0), 0);
-        const autoProtNut = foodItems.reduce((s, f) => s + (parseFloat((f as any).protein || '0') || 0), 0);
-        const autoCarbsNut = foodItems.reduce((s, f) => s + (parseFloat((f as any).carbs || '0') || 0), 0);
-        const autoFatNut = foodItems.reduce((s, f) => s + (parseFloat((f as any).fat || '0') || 0), 0);
+        const autoCalNut = foodItems.reduce((s, f) => s + (parseFloat(f.calories) || 0) * (parseInt(f.qty || '1') || 1), 0);
+        const autoProtNut = foodItems.reduce((s, f) => s + (parseFloat((f as any).protein || '0') || 0) * (parseInt(f.qty || '1') || 1), 0);
+        const autoCarbsNut = foodItems.reduce((s, f) => s + (parseFloat((f as any).carbs || '0') || 0) * (parseInt(f.qty || '1') || 1), 0);
+        const autoFatNut = foodItems.reduce((s, f) => s + (parseFloat((f as any).fat || '0') || 0) * (parseInt(f.qty || '1') || 1), 0);
         const finalProtein = autoProtNut > 0 ? autoProtNut : (protein ? parseFloat(protein) : null);
         const finalCarbs = autoCarbsNut > 0 ? autoCarbsNut : (carbs ? parseFloat(carbs) : null);
         const finalFat = autoFatNut > 0 ? autoFatNut : (fat ? parseFloat(fat) : null);
@@ -3502,15 +3518,15 @@ export default function PostPage() {
             if (!goalsLoaded && user) fetchMacroGoalsAndTotals();
 
             // Auto-calculated totals from food items
-            const autoCalories = foodItems.reduce((s, f) => s + (parseFloat(f.calories) || 0), 0);
-            const autoProtein = foodItems.reduce((s, f) => s + (parseFloat(f.protein || '0') || 0), 0);
-            const autoCarbs = foodItems.reduce((s, f) => s + (parseFloat(f.carbs || '0') || 0), 0);
-            const autoFat = foodItems.reduce((s, f) => s + (parseFloat(f.fat || '0') || 0), 0);
+            const autoCalories = foodItems.reduce((s, f) => s + (parseFloat(f.calories) || 0) * (parseInt(f.qty || '1') || 1), 0);
+            const autoProtein = foodItems.reduce((s, f) => s + (parseFloat(f.protein || '0') || 0) * (parseInt(f.qty || '1') || 1), 0);
+            const autoCarbs = foodItems.reduce((s, f) => s + (parseFloat(f.carbs || '0') || 0) * (parseInt(f.qty || '1') || 1), 0);
+            const autoFat = foodItems.reduce((s, f) => s + (parseFloat(f.fat || '0') || 0) * (parseInt(f.qty || '1') || 1), 0);
             // Use auto-calculated if items exist, else fall back to manual fields
             const displayProtein = autoProtein > 0 ? String(Math.round(autoProtein)) : protein;
             const displayCarbs = autoCarbs > 0 ? String(Math.round(autoCarbs)) : carbs;
             const displayFat = autoFat > 0 ? String(Math.round(autoFat)) : fat;
-            const displayCalories = autoCalories > 0 ? autoCalories : parseFloat(foodItems.reduce((s, f) => String(parseFloat(s) + (parseFloat(f.calories) || 0)), '0') || '0');
+            const displayCalories = autoCalories > 0 ? autoCalories : parseFloat(foodItems.reduce((s, f) => String(parseFloat(s) + (parseFloat(f.calories) || 0) * (parseInt(f.qty || '1') || 1)), '0') || '0');
 
             function MacroBar({ label, current, goal, color }: { label: string; current: number; goal: number; color: string }) {
               const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
@@ -3795,7 +3811,7 @@ export default function PostPage() {
                     refreshKey={favoritesRefreshKey}
                     onSetMealType={(mt: string) => setMealType(mt)}
                     onAddFood={(food: SavedFoodItem) => {
-                      setFoodItems(f => [...f, {
+                      addOrIncrementFood({
                         name: food.name,
                         calories: String(food.calories ?? ""),
                         protein: food.protein !== undefined ? String(food.protein) : undefined,
@@ -3804,7 +3820,7 @@ export default function PostPage() {
                         servingSize: food.servingSize,
                         qty: food.qty || "1",
                         photoUrl: food.photoUrl,
-                      }]);
+                      });
                       // If this favorite has a saved photo, auto-attach it to
                       // the nutrition post (so it shows on the activity/share
                       // card). It's already an uploaded URL; the submit logic
@@ -3847,7 +3863,7 @@ export default function PostPage() {
                 {/* Food search */}
                 <FoodSearchInput
                   onSelect={(food) => {
-                    setFoodItems(f => [...f, {
+                    addOrIncrementFood({
                       name: food.name,
                       calories: String(food.calories),
                       protein: String(food.protein),
@@ -3855,7 +3871,7 @@ export default function PostPage() {
                       fat: String(food.fat),
                       servingSize: food.servingSize,
                       qty: '1',
-                    }]);
+                    });
                   }}
                 />
                 {foodItems.length === 0 ? (
@@ -3927,6 +3943,19 @@ export default function PostPage() {
                             foods (and favorites saved from them) can carry
                             protein/carbs/fat, not just foods from the database. */}
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center', marginTop: 6 }}>
+                          {/* Quantity — how many of this item you had. Multiplies
+                              into the calorie/macro totals; keeps one row (one
+                              photo) instead of duplicating. */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 2 }}>
+                            <span style={{ fontSize: 10, color: '#9CA3AF' }}>Qty</span>
+                            <button onClick={() => setFoodItems(f => f.map((x, j) => j === i ? { ...x, qty: String(Math.max(1, (parseInt(x.qty || '1') || 1) - 1)) } : x))}
+                              aria-label="Decrease quantity"
+                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #2D1B69', background: '#2D1F52', color: '#A78BFA', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>−</button>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0', minWidth: 22, textAlign: 'center' as const }}>×{parseInt(item.qty || '1') || 1}</span>
+                            <button onClick={() => setFoodItems(f => f.map((x, j) => j === i ? { ...x, qty: String((parseInt(x.qty || '1') || 1) + 1) } : x))}
+                              aria-label="Increase quantity"
+                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #2D1B69', background: '#2D1F52', color: '#A78BFA', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>+</button>
+                          </div>
                           <span style={{ fontSize: 10, color: '#9CA3AF' }}>Macros</span>
                           {['protein', 'carbs', 'fat'].map(k => (
                             <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
