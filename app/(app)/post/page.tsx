@@ -289,14 +289,18 @@ type PRResult = {
 function ExerciseSearchInput({
   value,
   onChange,
+  onPick,
+  history,
   style,
 }: {
   value: string;
   onChange: (name: string) => void;
+  onPick?: (name: string) => void;
+  history?: string[];
   style: React.CSSProperties;
 }) {
   const [query, setQuery] = useState(value);
-  const [results, setResults] = useState<typeof EXERCISES>([]);
+  const [results, setResults] = useState<{ name: string; sub: string; fromHistory: boolean }[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -306,11 +310,21 @@ function ExerciseSearchInput({
     setQuery(q);
     if (q.length < 2) { setResults([]); setOpen(false); return; }
     const lower = q.toLowerCase();
-    const matches = EXERCISES.filter(e =>
+    // Your own previously-logged exercises come first — tapping one autofills
+    // your last sets / reps / weight.
+    const hist = (history || [])
+      .filter(n => n.toLowerCase().includes(lower))
+      .slice(0, 5)
+      .map(n => ({ name: n, sub: 'Your history · autofills last sets', fromHistory: true }));
+    const seen = new Set(hist.map(h => h.name.toLowerCase()));
+    const db = EXERCISES.filter(e =>
       e.name.toLowerCase().includes(lower) ||
       e.category.toLowerCase().includes(lower) ||
       e.muscles.some(m => m.toLowerCase().includes(lower))
-    ).slice(0, 8);
+    ).filter(e => !seen.has(e.name.toLowerCase()))
+      .slice(0, 8)
+      .map(e => ({ name: e.name, sub: `${e.category} · ${e.equipment} · ${e.muscles[0]}`, fromHistory: false }));
+    const matches = [...hist, ...db].slice(0, 8);
     setResults(matches);
     setOpen(matches.length > 0);
   }
@@ -318,6 +332,7 @@ function ExerciseSearchInput({
   function select(name: string) {
     setQuery(name);
     onChange(name);
+    onPick?.(name);
     setResults([]);
     setOpen(false);
   }
@@ -360,9 +375,11 @@ function ExerciseSearchInput({
                 cursor: 'pointer', borderBottom: i < results.length - 1 ? '1px solid #2D1B69' : 'none',
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0' }}>{ex.name}</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>
-                {ex.category} · {ex.equipment} · {ex.muscles[0]}
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {ex.fromHistory && <span style={{ fontSize: 11 }}>⭐</span>}{ex.name}
+              </div>
+              <div style={{ fontSize: 11, color: ex.fromHistory ? '#A78BFA' : '#9CA3AF', marginTop: 1 }}>
+                {ex.sub}
               </div>
             </button>
           ))}
@@ -624,6 +641,10 @@ export default function PostPage() {
   const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [prevSessions, setPrevSessions] = useState<Record<string, PrevSession | null>>({});
+  // Cache of the user's previously-logged exercises (most recent set data per
+  // name) — powers autocomplete suggestions and one-tap autofill of last
+  // sets/reps/weight on the post form.
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { name: string; sets: string; weights: string[]; repsArr: string[]; weight: string; reps: string; bodyweight?: boolean }>>({});
   const [cardioType, setCardioType] = useState("");
   const [cardioDuration, setCardioDuration] = useState("");
   const [cardioDistance, setCardioDistance] = useState("");
@@ -961,6 +982,70 @@ export default function PostPage() {
       }
     } catch {}
   }, [user, prevSessions]);
+
+  // Load the user's exercise history once (distinct exercises with their most
+  // recent set data) so search can suggest them and autofill on tap.
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('exercises, logged_at')
+        .eq('user_id', user.id)
+        .eq('log_type', 'workout')
+        .not('exercises', 'is', null)
+        .order('logged_at', { ascending: false })
+        .limit(50);
+      if (!data || !alive) return;
+      const map: Record<string, { name: string; sets: string; weights: string[]; repsArr: string[]; weight: string; reps: string; bodyweight?: boolean }> = {};
+      for (const log of data) {
+        const exArray: any[] = log.exercises || [];
+        for (const e of exArray) {
+          const nm = (e?.name || '').trim();
+          if (!nm) continue;
+          const key = nm.toLowerCase();
+          if (map[key]) continue; // first hit = most recent (logs are desc)
+          const weights = Array.isArray(e.weights) ? e.weights.map((w: any) => String(w ?? '')) : [];
+          const repsArr = Array.isArray(e.repsArr) ? e.repsArr.map((r: any) => String(r ?? '')) : [];
+          map[key] = {
+            name: nm,
+            sets: String(e.sets ?? (weights.length || 1)),
+            weights,
+            repsArr,
+            weight: String(e.weight ?? (weights[0] ?? '')),
+            reps: String(e.reps ?? (repsArr[0] ?? '')),
+            bodyweight: !!e.bodyweight,
+          };
+        }
+      }
+      if (alive) setExerciseHistory(map);
+    })();
+    return () => { alive = false; };
+  }, [user]);
+
+  // One-tap autofill: when a suggestion is picked, drop in that exercise's last
+  // sets/reps/weight so the user only edits what changed.
+  const applyExerciseHistory = (i: number, name: string) => {
+    const h = exerciseHistory[name.trim().toLowerCase()];
+    setExercises(exs => exs.map((x, j) => {
+      if (j !== i) return x;
+      if (!h) return { ...x, name };
+      const setCount = parseInt(h.sets) || (h.weights.length || 1);
+      const weights = h.weights.length > 0 ? h.weights : Array(setCount).fill(h.weight || '');
+      const repsArr = h.repsArr.length > 0 ? h.repsArr : Array(setCount).fill(h.reps || '');
+      return {
+        ...x,
+        name,
+        sets: String(setCount),
+        weights,
+        repsArr,
+        weight: weights[0] || h.weight || '',
+        reps: repsArr[0] || h.reps || '',
+        bodyweight: h.bodyweight,
+      };
+    }));
+  };
 
   // -- Import a training day from the AI Plan ------------------------------
   // Pulls a TrainingDay's exercises into the form. Sets all sets to the
@@ -3322,10 +3407,12 @@ export default function PostPage() {
                         <ExerciseSearchInput
                           value={ex.name}
                           style={iStyle}
+                          history={Object.values(exerciseHistory).map(h => h.name)}
                           onChange={name => {
                             setExercises(exs => exs.map((x, j) => j === i ? { ...x, name } : x));
                             if (name.length >= 2) fetchPrevSession(name);
                           }}
+                          onPick={name => { applyExerciseHistory(i, name); if (name.length >= 2) fetchPrevSession(name); }}
                         />
                         <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} aria-label="Remove exercise" title="Remove exercise"
                           style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 22, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
