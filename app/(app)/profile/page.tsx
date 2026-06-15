@@ -1168,16 +1168,20 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                   }, 0);
                   return (
                     <div key={key}>
-                      {exList.length > 0 && (<>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 44px 76px 80px",gap:8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
-                          {["Exercise","Sets","Reps","Weight"].map(h=><span key={h} style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>{h}</span>)}
+                      {exList.length > 0 && (
+                        <div style={{background:"#0D0A1A",border:`1px solid ${C.purpleMid}`,borderRadius:14,padding:"12px 14px"}}>
+                        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
+                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>Exercise</span>
+                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"center"}}>Sets</span>
+                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"center"}}>Reps</span>
+                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"right"}}>Weight</span>
                         </div>
                         {exList.map((ex: any, i: number) => {
                           const wsArr: string[] = ex.weights && Array.isArray(ex.weights) ? ex.weights : [];
                           const weightDisplay = ex.bodyweight
                             ? 'Bodyweight'
                             : (wsArr.length > 1
-                              ? wsArr.join(' / ') + ' lbs'
+                              ? wsArr.join(' / ')
                               : (wsArr[0] || ex.weight || '—'));
                           // How many sets this row has — prefer the weight column's
                           // count so reps and weight line up; fall back to `sets`.
@@ -1197,11 +1201,11 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             : (rArr[0] || String(ex.reps ?? '') || '—');
                           return (
                             <div key={i}>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 44px 76px 80px",gap:8,padding:"10px 8px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,alignItems:"center",padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
                                 <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
-                                <span style={{fontSize:15,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
-                                <span style={{fontSize:12,fontWeight:800,color:C.purple,textAlign:"center",whiteSpace:"nowrap"}}>{repsDisplay}</span>
-                                <span style={{fontSize:12,fontWeight:800,color:C.gold,textAlign:"center",whiteSpace:"nowrap"}}>{weightDisplay}</span>
+                                <span style={{fontSize:14,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
+                                <span style={{fontSize:11,fontWeight:800,color:C.purple,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{repsDisplay}</span>
+                                <span style={{fontSize:11,fontWeight:800,color:C.gold,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{weightDisplay}</span>
                               </div>
                               {ex.notes && String(ex.notes).trim().length > 0 && (
                                 <div style={{fontSize:12,color:C.sub,padding:"2px 8px 8px",lineHeight:1.4,whiteSpace:"pre-wrap"}}>📝 {ex.notes}</div>
@@ -1215,7 +1219,8 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             <span style={{fontSize:12,color:C.sub}}><strong style={{color:C.gold,fontWeight:800}}>📊 {totalVol>=1000?`${(totalVol/1000).toFixed(1)}k`:totalVol.toFixed(0)} lbs</strong> total volume</span>
                           </div>
                         )}
-                      </>)}
+                        </div>
+                      )}
                       {carList.length > 0 && (
                         <div style={{marginTop: exList.length > 0 ? 12 : 0, paddingTop: exList.length > 0 ? 12 : 0, borderTop: exList.length > 0 ? `1px solid ${C.purpleMid}` : "none"}}>
                           <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10}}>🏃 Cardio</div>
