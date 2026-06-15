@@ -90,7 +90,7 @@ const RUN_TYPE_CHIP_LABELS: Record<string, string> = {
   outdoor:   'Outdoor Run',
   treadmill: 'Treadmill Run',
   trail:     'Trail Run',
-  hiit:      'HIIT Run',
+  hiit:      'HIIT',
 };
 
 // Chip label for a cardio ENTRY (not just its type string). Running entries
