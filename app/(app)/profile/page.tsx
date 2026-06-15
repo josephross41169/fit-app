@@ -2148,7 +2148,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           key:   l.meal_type || 'Meal',
           emoji: '🍽️',
           name:  Array.isArray(l.food_items) && l.food_items.length > 0
-                   ? l.food_items.map((f: any) => f.name).join(', ')
+                   ? l.food_items.map((f: any) => (parseInt(f.qty || '1') || 1) > 1 ? `${f.name} ×${parseInt(f.qty)}` : f.name).join(', ')
                    : (l.notes || 'Logged meal'),
           cal:   l.calories_total || 0,
         })),
