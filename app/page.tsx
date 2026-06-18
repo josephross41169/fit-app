@@ -12,14 +12,32 @@ export default function LandingPage() {
   const [checking, setChecking] = useState(true);
   useEffect(() => {
     let cancelled = false;
+
+    // SAFETY NET: never let the splash hang forever. On iOS Capacitor the
+    // session read (Keychain + Supabase) can in rare cases stall — if it does,
+    // we must still show the marketing page rather than a permanent blank
+    // dark screen (this caused App Store rejection 2.1: "blank screen on
+    // launch"). After 2.5s we give up waiting and reveal the page regardless.
+    const failSafe = setTimeout(() => {
+      if (!cancelled) setChecking(false);
+    }, 2500);
+
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
-        if (!cancelled && data.session) { router.replace("/profile"); return; }
+        if (!cancelled && data.session) {
+          clearTimeout(failSafe);
+          router.replace("/profile");
+          return;
+        }
       } catch { /* no session check — fall through to marketing */ }
-      if (!cancelled) setChecking(false);
+      if (!cancelled) {
+        clearTimeout(failSafe);
+        setChecking(false);
+      }
     })();
-    return () => { cancelled = true; };
+
+    return () => { cancelled = true; clearTimeout(failSafe); };
   }, [router]);
 
   if (checking) return <div style={{ minHeight: "100vh", background: "#0D0D0D" }} />;
