@@ -61,6 +61,8 @@ type CardioEntry = {
   poolLength: string;
   poolUnit: "ft" | "m" | "yd";
   laps: string;
+  resistance: string;      // cycling only: light | moderate | heavy | max
+  incline: string;         // walking only: average incline % (string for input)
 };
 
 function newCardioEntry(): CardioEntry {
@@ -70,7 +72,7 @@ function newCardioEntry(): CardioEntry {
     const saved = typeof window !== "undefined" ? localStorage.getItem("livelee_home_pool") : null;
     if (saved) { const p = JSON.parse(saved); if (p.length) poolLength = String(p.length); if (p.unit) poolUnit = p.unit; }
   } catch { /* ignore */ }
-  return { type: "running", runType: "outdoor", durMin: "", durSec: "", distance: "", note: "", useSwimPool: !!poolLength, poolLength, poolUnit, laps: "" };
+  return { type: "running", runType: "outdoor", durMin: "", durSec: "", distance: "", note: "", useSwimPool: !!poolLength, poolLength, poolUnit, laps: "", resistance: "moderate", incline: "" };
 }
 
 // Small helpers used by the cardio form (mirrors the component versions).
@@ -125,7 +127,10 @@ function CardioForm({
   // laps still show an approximate burn.
   const swimMeters = swimRes?.meters ?? null;
   const est = bodyMetrics
-    ? estCaloriesFn(entry.type, durNum > 0 ? durNum : null, bodyMetrics, null, swimMeters)
+    ? estCaloriesFn(entry.type, durNum > 0 ? durNum : null, bodyMetrics, null, swimMeters, {
+        resistance: entry.type === "cycling" || entry.type === "biking" ? entry.resistance : null,
+        inclinePct: entry.type === "walking" && entry.incline ? parseFloat(entry.incline) : null,
+      })
     : null;
 
   return (
@@ -161,6 +166,27 @@ function CardioForm({
             <option value="treadmill">🏃 Treadmill</option>
             <option value="trail">🌲 Trail Run</option>
           </select>
+        </div>
+      )}
+
+      {(entry.type === "cycling" || entry.type === "biking") && (
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Resistance Level</label>
+          <select style={iStyle} value={entry.resistance || "moderate"} onChange={e => onChange({ resistance: e.target.value })}>
+            <option value="light">🟢 Light · easy spin</option>
+            <option value="moderate">🟡 Moderate · steady effort</option>
+            <option value="heavy">🟠 Heavy · hard climb</option>
+            <option value="max">🔴 Max · standing sprint</option>
+          </select>
+          <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>Higher resistance increases the calorie estimate.</div>
+        </div>
+      )}
+
+      {entry.type === "walking" && (
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Avg Incline (%)</label>
+          <input style={iStyle} type="text" inputMode="decimal" placeholder="e.g. 5" value={entry.incline} onChange={e => onChange({ incline: e.target.value.replace(/[^0-9.]/g, "") })} />
+          <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>Average treadmill or hill grade. Factors into calories (0–15%).</div>
         </div>
       )}
 
@@ -711,10 +737,15 @@ export default function PostPage() {
     }
     const estSwimMeters = swimRes ? swimRes.meters : null;
     if (bodyMetrics && (durNum > 0 || estSwimMeters)) {
-      const est = estimateCardioCalories(c.type, durNum > 0 ? durNum : null, bodyMetrics, null, estSwimMeters);
+      const est = estimateCardioCalories(c.type, durNum > 0 ? durNum : null, bodyMetrics, null, estSwimMeters, {
+        resistance: c.type === "cycling" || c.type === "biking" ? c.resistance : null,
+        inclinePct: c.type === "walking" && c.incline ? parseFloat(c.incline) : null,
+      });
       if (est) { entry.est_calories = est.kcal; entry.est_calories_method = est.method; }
     }
     if (c.type === "running") entry.run_type = c.runType;
+    if ((c.type === "cycling" || c.type === "biking") && c.resistance) entry.resistance = c.resistance;
+    if (c.type === "walking" && c.incline) entry.incline = parseFloat(c.incline) || null;
     if (c.note.trim()) entry.note = c.note.trim();
     if (distNum > 0 && !entry.miles) entry.miles = distNum;
     if (distNum > 0 && durNum > 0) {
@@ -1181,6 +1212,8 @@ export default function PostPage() {
           poolLength: c.pool_length != null ? String(c.pool_length) : "",
           poolUnit: (c.pool_unit as "ft" | "m" | "yd") || "yd",
           laps: c.laps != null ? String(c.laps) : "",
+          resistance: c.resistance || "moderate",
+          incline: c.incline != null ? String(c.incline) : "",
         };
       });
       if (data.cardio && data.cardio.length > 0) {
@@ -3153,8 +3186,8 @@ export default function PostPage() {
                       // e.g. "Sports + Lifting" or "HIIT + Lifting".
                       setIncludeCardio(false);
                     }}>
-                    <option value="">— Pick one (HIIT, Yoga, etc.) —</option>
-                    {WORKOUT_CATEGORIES.filter(c => !["running","walking","biking","swimming","rowing","lifting"].includes(c.id)).map(c => (
+                    <option value="">— Pick one (Yoga, Pilates, etc.) —</option>
+                    {WORKOUT_CATEGORIES.filter(c => !["running","walking","biking","swimming","rowing","lifting","hiit"].includes(c.id)).map(c => (
                       <option key={c.id} value={c.id}>{c.emoji}  {c.label}</option>
                     ))}
                   </select>
