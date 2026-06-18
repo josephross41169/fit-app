@@ -12,16 +12,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-// Service role key is required because we need to read across tables
-// regardless of RLS — RLS would block aggregating notes from a group
-// the requesting user isn't a member of, but we want to allow this for
-// non-private groups. The route checks membership manually for private
-// groups.
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const admin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+// This route reads env (service-role key) and must NOT be evaluated during the
+// build's static page-data collection — otherwise the build fails with
+// "supabaseKey is required" when the key isn't present in the build context.
+// The fix has two parts: (1) force-dynamic so Next.js doesn't try to
+// pre-render this route, and (2) build the Supabase admin client lazily inside
+// the handler (via getAdmin()) rather than at module top-level, so the
+// createClient() call only runs at request time when the runtime env vars are
+// guaranteed present. Every other service-role route in this app is build-safe;
+// group-photos was creating its client at import time, which broke the build.
+export const dynamic = 'force-dynamic';
+
+function getAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  // Service role key is required because we need to read across tables
+  // regardless of RLS — RLS would block aggregating notes from a group
+  // the requesting user isn't a member of, but we want to allow this for
+  // non-private groups. The route checks membership manually for private
+  // groups.
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // Each photo returned to the client looks like this. `source` lets the UI
 // chip-filter ("Posts | Notes | Wars") and `meta` carries optional context
@@ -46,6 +59,7 @@ type GroupPhoto = {
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = getAdmin();
     const body = await req.json();
     const { action, payload } = body || {};
 
