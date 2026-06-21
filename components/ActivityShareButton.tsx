@@ -58,6 +58,11 @@ interface Props {
   data: ShareCardData;
   filename?: string;
   style?: React.CSSProperties;
+  // When provided, the button renders as a full-width row (icon + this text)
+  // and the ENTIRE row is the click target. This fixes the menu bug where the
+  // tiny icon was the only clickable part and a separate text label beside it
+  // did nothing.
+  label?: string;
 }
 
 // ─── Error boundary: contains any crash inside the share button ─────────────
@@ -101,7 +106,7 @@ function isMobileDevice(): boolean {
   );
 }
 
-function ActivityShareButtonInner({ data, filename = "livelee-activity", style }: Props) {
+function ActivityShareButtonInner({ data, filename = "livelee-activity", style, label }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function handleClick(e: React.MouseEvent) {
@@ -175,6 +180,37 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
     } finally {
       setBusy(false);
     }
+  }
+
+  // Full-row mode: icon + label, entire row clickable. Used in menus so the
+  // user can tap the text (not just a tiny icon) to share.
+  if (label) {
+    return (
+      <button
+        onClick={handleClick}
+        disabled={busy}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 10,
+          border: "none",
+          background: "transparent",
+          color: "#F0F0F0",
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: busy ? "default" : "pointer",
+          textAlign: "left",
+          ...style,
+        }}
+        aria-label="Share activity card as image"
+      >
+        <span style={{ fontSize: 16, lineHeight: 1 }}>{busy ? "⏳" : "📸"}</span>
+        <span>{busy ? "Generating…" : label}</span>
+      </button>
+    );
   }
 
   return (
