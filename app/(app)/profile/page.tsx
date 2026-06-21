@@ -1230,13 +1230,18 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                                 ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
                                 : c.type;
                               const dur = fmtDur(c.duration);
-                              // `distDisplay` shows meters for pool swims (distinct from the
-                              // miles chip, e.g. "1,099.7 m" alongside "0.683" mi). For land
-                              // cardio (running/cycling/walking) the distance IS the miles value,
-                              // so showing both produced a redundant "DISTANCE 8 / MILES 8". Only
-                              // show the Distance chip when it carries a meters value (swims) —
-                              // otherwise the Miles chip already covers it.
-                              const distDisplay = c.meters != null ? `${Number(c.meters).toLocaleString()} m` : null;
+                              // Show BOTH meters and miles so the two chips are always
+                              // distinct numbers. Swims store an exact meters value; land
+                              // cardio (running/cycling/walking) only stores miles, so we
+                              // derive meters from miles (1 mi = 1609.344 m). This replaces
+                              // the old "Distance" chip that duplicated the Miles value
+                              // (e.g. "DISTANCE 3.58 / MILES 3.58").
+                              const metersVal = c.meters != null
+                                ? Number(c.meters)
+                                : (c.miles != null ? Number(c.miles) * 1609.344 : null);
+                              const distDisplay = metersVal != null
+                                ? `${(Math.round(metersVal * 10) / 10).toLocaleString()} m`
+                                : null;
                               return (
                                 <div key={i} style={{background:"#0D0A1A",borderRadius:12,border:`1px solid ${C.purpleMid}`,padding:"12px 14px"}}>
                                   {/* Header row: type + emoji */}
@@ -1252,7 +1257,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                                       )}
                                       {distDisplay && (
                                         <div style={{background:`${C.purpleMid}55`,borderRadius:8,padding:"6px 10px",minWidth:0}}>
-                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Distance</div>
+                                          <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Meters</div>
                                           <div style={{fontSize:14,fontWeight:800,color:C.gold}}>{distDisplay}</div>
                                         </div>
                                       )}
