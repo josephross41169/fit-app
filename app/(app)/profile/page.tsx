@@ -920,15 +920,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                       <span style={{fontSize:16}}>🖼️</span> View photo
                     </button>
                   )}
-                  {/* Share — ActivityShareButton handles the whole flow; styled as a row */}
-                  <div onClick={()=>setMenuOpen(false)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,cursor:"pointer"}}>
-                    <ActivityShareButton
-                      data={shareData}
-                      filename={`livelee-${day.id.replace(/\//g,'-')}`}
-                      style={{width:22,height:22,fontSize:13,background:"transparent",border:"none",color:C.text}}
-                    />
-                    <span style={{color:C.text,fontSize:14,fontWeight:600}}>Share as image</span>
-                  </div>
+                  {/* Share — ActivityShareButton renders the whole clickable row
+                       (icon + label). Previously the button was a tiny icon with a
+                       separate dead text label beside it, so tapping "Share as image"
+                       only closed the menu and never fired the share. */}
+                  <ActivityShareButton
+                    data={shareData}
+                    filename={`livelee-${day.id.replace(/\//g,'-')}`}
+                    label="Share as image"
+                  />
                   {onDelete && (!confirmDel
                     ? <button onClick={()=>setConfirmDel(true)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:"#F87171",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
                         <span style={{fontSize:16}}>🗑️</span> Delete
