@@ -109,6 +109,15 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
     if (busy) return;
     setBusy(true);
 
+    // On iOS Safari/WebKit, navigator.share() must run inside the user gesture.
+    // Because we have to `await fetch` the rendered PNG first, the gesture is
+    // lost by the time share() would fire, so iOS silently ignores it — which
+    // is why the button "did nothing." To stay reliable we (1) try the native
+    // share sheet, and (2) if it's unavailable OR throws (gesture lost, not
+    // supported, etc.), fall back to opening/downloading the PNG so something
+    // always happens.
+    const mobile = isMobileDevice();
+
     try {
       // Ask the server to render the card. Photos + layout + fonts are all
       // handled server-side; we just get a finished PNG back.
@@ -122,29 +131,43 @@ function ActivityShareButtonInner({ data, filename = "livelee-activity", style }
       const blob = await res.blob();
       const fname = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
       const file = new File([blob], fname, { type: "image/png" });
+      const url = URL.createObjectURL(blob);
 
-      // Mobile → native share sheet (Save to Photos, Messages, etc).
+      // Mobile → try the native share sheet (Save to Photos, Messages, etc).
       if (
-        isMobileDevice() &&
+        mobile &&
         typeof (navigator as any).canShare === "function" &&
         (navigator as any).canShare({ files: [file] })
       ) {
         try {
           await (navigator as any).share({ files: [file], title: "My Livelee activity" });
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
           return;
         } catch (shareErr: any) {
-          if (shareErr?.name === "AbortError") return; // user cancelled — fine
+          if (shareErr?.name === "AbortError") {
+            // User cancelled the share sheet — that's fine, clean up and stop.
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            return;
+          }
+          // Any other error (gesture lost, NotAllowedError, etc.) → fall through
+          // to the open/download fallback below so the button still does something.
         }
       }
 
-      // Desktop (and any non-mobile/unsupported case) → download.
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // Fallback for: desktop, share unsupported, or share() that failed.
+      // On iOS a programmatic <a download> click is unreliable, so open the
+      // image in a new tab — the user can then long-press → "Save to Photos".
+      // On desktop the download attribute works and saves the file directly.
+      if (mobile) {
+        window.open(url, "_blank");
+      } else {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("[share] generation failed", err);
