@@ -183,7 +183,20 @@ function Lightbox({ src, photos, onClose, onChange, canDelete, onDelete }: { src
       {hasNext && (
         <button onClick={(e) => { e.stopPropagation(); onChange?.(photos![idx + 1]); }} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, zIndex: 2 }}>{'>'}</button>
       )}
-      <img src={ImagePresets.full(src)} loading="eager" decoding="async" onClick={(e) => e.stopPropagation()} style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <img src={ImagePresets.full(src)} loading="eager" decoding="async" onClick={(e) => e.stopPropagation()} onError={(e) => {
+        // The stored photo URL can 404 (file deleted from storage but the URL
+        // still saved on the record). Instead of a blank dark screen, swap in
+        // a small "unavailable" notice so the user understands what happened.
+        const im = e.target as HTMLImageElement;
+        im.style.display = 'none';
+        const note = im.nextElementSibling as HTMLElement | null;
+        if (note && note.dataset.fallback === '1') note.style.display = 'flex';
+      }} style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} alt='' />
+      <div data-fallback="1" style={{ display: 'none', flexDirection: 'column', alignItems: 'center', gap: 10, color: '#fff', textAlign: 'center', padding: 24 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 40 }}>🖼️</div>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Photo unavailable</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', maxWidth: 280 }}>This image is no longer stored. It may have been removed.</div>
+      </div>
       {photos && idx !== -1 && photos.length > 1 && (
         <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: '#fff', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,0.5)', padding: '6px 14px', borderRadius: 99 }}>{idx + 1} / {photos.length}</div>
       )}
@@ -421,7 +434,28 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     nutPhotos.forEach((url: string) => {
       if (!allPhotos.includes(url)) allPhotos.push(url);
     });
-    if (allPhotos.length > 0) setPhotos(allPhotos);
+    if (allPhotos.length === 0) return;
+
+    // Show what we have immediately, then prune any URLs that 404 (files that
+    // were deleted from storage but whose URL is still saved on the record).
+    // Without this, "View photo" could open a dead photo_url and show a blank
+    // screen. We keep a URL on any network error (offline, CORS) to avoid
+    // hiding a photo that's actually fine.
+    setPhotos(allPhotos);
+    let cancelled = false;
+    (async () => {
+      const checks = await Promise.all(allPhotos.map(async (url) => {
+        try {
+          const r = await fetch(url, { method: 'HEAD' });
+          return r.status === 404 ? null : url; // drop only confirmed-missing
+        } catch {
+          return url; // network/CORS error → keep it, don't falsely hide
+        }
+      }));
+      const alive = checks.filter((u): u is string => !!u);
+      if (!cancelled && alive.length !== allPhotos.length) setPhotos(alive);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   function onFiles(e:React.ChangeEvent<HTMLInputElement>) {
