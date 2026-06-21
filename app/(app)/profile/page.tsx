@@ -1230,7 +1230,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                                 ? RUN_TYPE_LABELS[c.run_type].replace(/\b\w/g, ch=>ch.toUpperCase())
                                 : c.type;
                               const dur = fmtDur(c.duration);
-                              const distDisplay = c.meters != null ? `${Number(c.meters).toLocaleString()} m` : (c.distance || null);
+                              // `distDisplay` shows meters for pool swims (distinct from the
+                              // miles chip, e.g. "1,099.7 m" alongside "0.683" mi). For land
+                              // cardio (running/cycling/walking) the distance IS the miles value,
+                              // so showing both produced a redundant "DISTANCE 8 / MILES 8". Only
+                              // show the Distance chip when it carries a meters value (swims) —
+                              // otherwise the Miles chip already covers it.
+                              const distDisplay = c.meters != null ? `${Number(c.meters).toLocaleString()} m` : null;
                               return (
                                 <div key={i} style={{background:"#0D0A1A",borderRadius:12,border:`1px solid ${C.purpleMid}`,padding:"12px 14px"}}>
                                   {/* Header row: type + emoji */}
