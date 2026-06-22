@@ -279,7 +279,17 @@ function CardioForm({
 // "default" rep count used to seed the per-set repsArr. `repsArr` is the
 // new source of truth: one entry per set so users can log pyramid sets
 // like 12/8/6 without losing data. Same pattern as `weights`.
-type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string; bodyweight?: boolean };
+type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string; bodyweight?: boolean;
+  // Ab/finisher circuit: logged as one timed block (name + minutes) instead of
+  // the full sets/reps/weight grid. `circuitMinutes` holds the duration, and
+  // `circuitMoves` optionally lists the individual exercises in the circuit for
+  // users who want to record them.
+  isCircuit?: boolean; circuitMinutes?: string; circuitMoves?: string[];
+};
+
+function newCircuit(): Exercise {
+  return { name: "Ab circuit", sets: "", reps: "", weight: "", weights: [], isCircuit: true, circuitMinutes: "", circuitMoves: [] };
+}
 type PrevSet = { weight: string; reps: string };
 type PrevSession = { date: string; sets: PrevSet[] };
 type FoodItem = { name: string; calories: string; protein?: string; carbs?: string; fat?: string; servingSize?: string; qty?: string; photoUrl?: string };
@@ -1195,6 +1205,17 @@ export default function PostPage() {
       // logs only have a single `reps` value — fan it out to fill repsArr
       // so the UI shows it across all sets.
       const exs: Exercise[] = (data.exercises || []).map((ex: any) => {
+        // Restore ab/finisher circuits as circuit entries so they edit with the
+        // compact name+minutes UI rather than the sets/reps grid.
+        if (ex.isCircuit) {
+          return {
+            name: ex.name || 'Ab circuit',
+            sets: '', reps: '', weight: '', weights: [], repsArr: [],
+            isCircuit: true,
+            circuitMinutes: ex.circuitMinutes != null ? String(ex.circuitMinutes) : '',
+            circuitMoves: Array.isArray(ex.circuitMoves) ? ex.circuitMoves.map((m: any) => String(m)) : [],
+          };
+        }
         const setCount = parseInt(String(ex.sets)) || 3;
         return {
           name: ex.name || '',
@@ -1595,6 +1616,20 @@ export default function PostPage() {
         // The legacy `reps` field is kept set to repsArr[0] so older code paths
         // (PR detection, badge engines, exports) still see a meaningful value.
         const normalizedExercises = exercises.map(ex => {
+          // Ab/finisher circuit: store as a circuit entry (name + minutes +
+          // optional moves) rather than forcing it into the sets/reps/weight
+          // shape. Display code checks `isCircuit` to render it as one block.
+          if (ex.isCircuit) {
+            const moves = (ex.circuitMoves || []).map(m => String(m).trim()).filter(Boolean);
+            return {
+              name: ex.name || 'Ab circuit',
+              isCircuit: true,
+              circuitMinutes: ex.circuitMinutes || '',
+              circuitMoves: moves,
+              // Keep these so older readers that expect them don't choke.
+              sets: '', reps: '', weight: '', weights: [], repsArr: [],
+            };
+          }
           const setCount = parseInt(String(ex.sets)) || 1;
           const weights = ex.weights && ex.weights.length > 0
             ? ex.weights
@@ -3433,10 +3468,16 @@ export default function PostPage() {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
-                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"] }])}
-                    style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
-                    + Add Exercise
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setExercises(ex => [...ex, newCircuit()])}
+                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                      + Ab Circuit
+                    </button>
+                    <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"] }])}
+                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                      + Add Exercise
+                    </button>
+                  </div>
                 </div>
                 {exercises.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet · click + Add Exercise</div>
@@ -3445,6 +3486,59 @@ export default function PostPage() {
                   {exercises.map((ex, i) => {
                     const numSets = parseInt(ex.sets) || 1;
                     const prev = prevSessions[ex.name];
+                    // Ab/finisher circuit: a compact card with an editable name, a
+                    // minutes input, and an optional list of individual moves —
+                    // instead of the full sets/reps/weight grid.
+                    if (ex.isCircuit) {
+                      return (
+                        <div key={i} style={{ background: "#0D0D0D", borderRadius: 16, padding: 14, border: `1px solid ${C.greenMid}` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                            <span style={{ fontSize: 18 }} aria-hidden="true">🔥</span>
+                            <input
+                              style={{ ...iStyle, flex: 1 }}
+                              placeholder="Circuit name (e.g. Ab circuit)"
+                              value={ex.name}
+                              onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                            />
+                            <button onClick={() => setExercises(exs => exs.filter((_, j) => j !== i))} aria-label="Remove circuit" title="Remove circuit"
+                              style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 22, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                          </div>
+                          {/* Duration */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: C.sub }}>Duration</span>
+                            <input
+                              style={{ ...iStyle, width: 90, textAlign: "center" }}
+                              type="text" inputMode="numeric" placeholder="min"
+                              value={ex.circuitMinutes || ""}
+                              onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, circuitMinutes: e.target.value.replace(/[^0-9]/g, "") } : x))}
+                            />
+                            <span style={{ fontSize: 13, color: C.sub }}>minutes</span>
+                          </div>
+                          {/* Optional individual moves */}
+                          {(ex.circuitMoves || []).length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                              {(ex.circuitMoves || []).map((mv, mi) => (
+                                <div key={mi} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ color: C.sub, fontSize: 13 }}>•</span>
+                                  <input
+                                    style={{ ...iStyle, flex: 1, fontSize: 13, padding: "7px 10px" }}
+                                    placeholder="e.g. Hanging leg raises"
+                                    value={mv}
+                                    onChange={e => setExercises(exs => exs.map((x, j) => j === i ? { ...x, circuitMoves: (x.circuitMoves || []).map((m, k) => k === mi ? e.target.value : m) } : x))}
+                                  />
+                                  <button onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, circuitMoves: (x.circuitMoves || []).filter((_, k) => k !== mi) } : x))} aria-label="Remove move"
+                                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 18, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <button onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, circuitMoves: [...(x.circuitMoves || []), ""] } : x))}
+                            style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 20, border: `1.5px dashed ${C.greenMid}`, background: "transparent", color: C.sub, cursor: "pointer" }}>
+                            + Add ab exercise (optional)
+                          </button>
+                        </div>
+                      );
+                    }
                     return (
                     <div key={i} style={{ background: "#0D0D0D", borderRadius: 16, padding: 14, border: `1px solid ${C.greenMid}` }}>
                       {/* Exercise name · search input */}
