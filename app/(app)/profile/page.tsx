@@ -1196,6 +1196,28 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"right"}}>Weight</span>
                         </div>
                         {exList.map((ex: any, i: number) => {
+                          // Ab/finisher circuit: render as a single labeled block
+                          // (name · X min, plus any listed moves) instead of the
+                          // sets/reps/weight grid which would be blank for it.
+                          if (ex.isCircuit) {
+                            const mins = ex.circuitMinutes ? `${ex.circuitMinutes} min` : null;
+                            const moves: string[] = Array.isArray(ex.circuitMoves) ? ex.circuitMoves.filter((m: any) => String(m).trim()) : [];
+                            return (
+                              <div key={i} style={{padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:C.text,overflowWrap:"anywhere",wordBreak:"break-word",lineHeight:1.3}}>🔥 {ex.name || 'Ab circuit'}</span>
+                                  {mins && <span style={{fontSize:12,fontWeight:800,color:C.gold,flexShrink:0}}>{mins}</span>}
+                                </div>
+                                {moves.length > 0 && (
+                                  <div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:6}}>
+                                    {moves.map((m, mi) => (
+                                      <span key={mi} style={{fontSize:11,color:C.sub,background:"#15111E",border:"1px solid #2E2440",borderRadius:99,padding:"3px 9px"}}>{m}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
                           const wsArr: string[] = ex.weights && Array.isArray(ex.weights) ? ex.weights : [];
                           const weightDisplay = ex.bodyweight
                             ? 'Bodyweight'
