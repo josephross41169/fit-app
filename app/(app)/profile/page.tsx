@@ -16,7 +16,6 @@ import WeightTracker from "@/components/WeightTracker";
 // Lazy-load WorkoutProgressGraphs — it's a chart-heavy component that lives
 // below the fold. Defers loading until the user actually scrolls to it.
 const WorkoutProgressGraphs = lazy(() => import("@/components/WorkoutProgressGraphs"));
-import ActivityShareButton from "@/components/ActivityShareButton";
 import { TierFrame, TierBadgeChip, TierTitle } from "@/components/TierFrame";
 import { CreateGoalModal } from "@/components/GoalsTab";
 import GetStartedChecklist from "@/components/GetStartedChecklist";
@@ -413,6 +412,10 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const [editWell,setEditWell] = useState(false);
   const [photos,setPhotos]   = useState<string[]>([]);
   const [lb,setLb]           = useState<string|null>(null);
+  // "View photo" renders the clean Livelee stats card (the shareable graphic the
+  // user screenshots) by fetching /api/share-card and showing the PNG in the
+  // lightbox. cardLoading drives the spinner while it generates.
+  const [cardLoading,setCardLoading] = useState(false);
   const [workout,setWorkout]     = useState<Workout|null>(day.workout ? {...day.workout as Workout, cardio:(day.workout as any).cardio || []} : null);
   const [nutrition,setNutrition] = useState<Nutrition|null>(day.nutrition as Nutrition|null);
   const [wellness,setWellness]   = useState<Wellness|null>((day as any).wellness as Wellness | null ?? null);
@@ -864,8 +867,34 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     } : null,
   };
 
+  // Generate the clean Livelee stats card and open it in the lightbox so the
+  // user can screenshot it for other social apps. This is what the "View photo"
+  // button now does — the card (with branding + food pics) is the shareable
+  // graphic, not the raw uploaded photo.
+  async function viewCard() {
+    setMenuOpen(false);
+    if (cardLoading) return;
+    setCardLoading(true);
+    try {
+      const res = await fetch("/api/share-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(shareData),
+      });
+      if (!res.ok) throw new Error(`share-card ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setLb(url);
+    } catch (err) {
+      console.error("[view-card] failed", err);
+      alert("Couldn't generate the card. Please try again.");
+    } finally {
+      setCardLoading(false);
+    }
+  }
+
   return (<>
-    {lb && <Lightbox src={lb} onClose={()=>setLb(null)}/>}
+    {lb && <Lightbox src={lb} onClose={()=>{ if (lb.startsWith("blob:")) URL.revokeObjectURL(lb); setLb(null); }}/>}
     <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
 
       {/* HEADER */}
@@ -949,20 +978,9 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 {/* tap-away backdrop */}
                 <div onClick={()=>{setMenuOpen(false);setConfirmDel(false);}} style={{position:"fixed",inset:0,zIndex:40}}/>
                 <div style={{position:"absolute",top:38,right:0,zIndex:41,minWidth:184,background:"#1B1330",border:`1px solid ${C.purpleMid}`,borderRadius:14,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",overflow:"hidden",padding:4,display:"flex",flexDirection:"column",gap:2}}>
-                  {photos.length>0 && (
-                    <button onClick={()=>{setLb(photos[0]);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:C.text,fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
-                      <span style={{fontSize:16}}>🖼️</span> View photo
-                    </button>
-                  )}
-                  {/* Share — ActivityShareButton renders the whole clickable row
-                       (icon + label). Previously the button was a tiny icon with a
-                       separate dead text label beside it, so tapping "Share as image"
-                       only closed the menu and never fired the share. */}
-                  <ActivityShareButton
-                    data={shareData}
-                    filename={`livelee-${day.id.replace(/\//g,'-')}`}
-                    label="Share as image"
-                  />
+                  <button onClick={viewCard} disabled={cardLoading} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:C.text,fontSize:14,fontWeight:600,cursor:cardLoading?"default":"pointer",textAlign:"left"}}>
+                    <span style={{fontSize:16}}>{cardLoading ? "⏳" : "🖼️"}</span> {cardLoading ? "Generating…" : "View photo"}
+                  </button>
                   {onDelete && (!confirmDel
                     ? <button onClick={()=>setConfirmDel(true)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:"#F87171",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
                         <span style={{fontSize:16}}>🗑️</span> Delete
