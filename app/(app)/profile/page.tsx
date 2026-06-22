@@ -1220,8 +1220,8 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             : (rArr[0] || String(ex.reps ?? '') || '—');
                           return (
                             <div key={i}>
-                              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,alignItems:"center",padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                                <span style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,alignItems:"start",padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                                <span style={{fontSize:13,fontWeight:600,color:C.text,overflowWrap:"anywhere",wordBreak:"break-word",lineHeight:1.3}}>{ex.name}</span>
                                 <span style={{fontSize:14,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
                                 <span style={{fontSize:11,fontWeight:800,color:C.purple,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{repsDisplay}</span>
                                 <span style={{fontSize:11,fontWeight:800,color:C.gold,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{weightDisplay}</span>
