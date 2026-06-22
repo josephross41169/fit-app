@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Export compliance: the app uses only standard HTTPS/TLS (exempt
+	     encryption), so declare non-exempt encryption = false. This removes the
+	     "missing compliance" question Apple raises on every submission and
+	     avoids review delays. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
