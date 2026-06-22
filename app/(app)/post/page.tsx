@@ -23,7 +23,7 @@ import MentionInput from "@/components/MentionInput";
 import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
 import FoodFavorites from "@/components/FoodFavorites";
 import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSupplement, type SavedSupplement } from "@/lib/savedSupplements";
-import { saveFood, saveMeal, type SavedFoodItem } from "@/lib/savedFoods";
+import { saveFood, saveMeal, fetchSavedFoods, type SavedFoodItem, type SavedFood } from "@/lib/savedFoods";
 
 const C = {
   blue: "#7C3AED",
@@ -845,6 +845,18 @@ export default function PostPage() {
   };
   // Bumped after star-to-save so the FoodFavorites bar re-fetches.
   const [favoritesRefreshKey, setFavoritesRefreshKey] = useState(0);
+  // Autocomplete: the user's previously-logged foods, used to suggest matches
+  // as they type a food name so they can one-tap autofill name + macros from
+  // the last time they logged it. Loaded once; refreshed when a new favorite
+  // is saved (favoritesRefreshKey).
+  const [savedFoodsList, setSavedFoodsList] = useState<SavedFood[]>([]);
+  // Index of the food-item row whose name field is currently focused, so the
+  // suggestions dropdown only renders under the active input. null = none.
+  const [foodAutofillIdx, setFoodAutofillIdx] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchSavedFoods(user.id).then(setSavedFoodsList).catch(() => {});
+  }, [user?.id, favoritesRefreshKey]);
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
@@ -4003,12 +4015,59 @@ export default function PostPage() {
                     {foodItems.map((item, i) => (
                       <div key={i} style={{ background: '#0D0D0D', borderRadius: 14, padding: '10px 12px', border: '1px solid #2D1B69' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                           <input
-                            style={{ ...iStyle, flex: 1, fontSize: 13, padding: '7px 10px' }}
+                            style={{ ...iStyle, width: '100%', fontSize: 13, padding: '7px 10px' }}
                             placeholder="Food name"
                             value={item.name}
                             onChange={e => setFoodItems(f => f.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                            onFocus={() => setFoodAutofillIdx(i)}
+                            onBlur={() => setTimeout(() => setFoodAutofillIdx(c => c === i ? null : c), 150)}
                           />
+                          {(() => {
+                            // Suggest previously-logged foods matching what's typed.
+                            // One-tap fills name + all macros from the last time it
+                            // was logged. Hidden once a row already has macros so it
+                            // doesn't get in the way after a pick.
+                            if (foodAutofillIdx !== i) return null;
+                            const q = (item.name || '').trim().toLowerCase();
+                            if (q.length < 2) return null;
+                            const matches = savedFoodsList
+                              .filter(s => !s.is_meal && s.name && s.name.toLowerCase().includes(q))
+                              .slice(0, 6);
+                            if (matches.length === 0) return null;
+                            return (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, background: '#1B1330', border: '1px solid #2E2440', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+                                {matches.map((s) => (
+                                  <button
+                                    key={s.id}
+                                    onMouseDown={() => {
+                                      // Autofill this row from the saved food.
+                                      setFoodItems(f => f.map((x, j) => j === i ? {
+                                        ...x,
+                                        name: s.name,
+                                        calories: String(s.calories ?? ''),
+                                        protein: s.protein != null ? String(s.protein) : x.protein,
+                                        carbs: s.carbs != null ? String(s.carbs) : x.carbs,
+                                        fat: s.fat != null ? String(s.fat) : x.fat,
+                                        servingSize: s.serving_size || x.servingSize,
+                                        photoUrl: s.photo_url || x.photoUrl,
+                                      } : x));
+                                      setFoodAutofillIdx(null);
+                                    }}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid #241B38' }}
+                                  >
+                                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#F0F0F0', fontSize: 13, fontWeight: 600 }}>
+                                      {s.name}
+                                      {s.serving_size ? <span style={{ color: '#9CA3AF', fontWeight: 400 }}> · {s.serving_size}</span> : null}
+                                    </span>
+                                    <span style={{ flexShrink: 0, color: '#F5A623', fontSize: 12, fontWeight: 700 }}>{s.calories} cal</span>
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                          </div>
                           <input
                             style={{ ...iStyle, width: 70, flexShrink: 0, fontSize: 13, padding: '7px 8px', textAlign: 'center' as const }}
                             type="text" inputMode="numeric" placeholder="kcal"
