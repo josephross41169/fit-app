@@ -4016,10 +4016,18 @@ export default function PostPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Food Items</div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setShowAIScanner(true)}
-                      style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-                      🤖 Scan with AI
-                    </button>
+                    {/* "Scan with AI" is only shown when the feature is enabled
+                        via env flag. The scan calls /api/ai-food-scan which needs
+                        ANTHROPIC_API_KEY on the server; if that key isn't set the
+                        endpoint 503s and the button looks broken to an App Store
+                        reviewer (Guideline 2.1). Enable by setting BOTH
+                        ANTHROPIC_API_KEY (server) and NEXT_PUBLIC_AI_SCAN_ENABLED=true. */}
+                    {process.env.NEXT_PUBLIC_AI_SCAN_ENABLED === "true" && (
+                      <button onClick={() => setShowAIScanner(true)}
+                        style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                        🤖 Scan with AI
+                      </button>
+                    )}
                     <button onClick={() => setFoodItems(f => [...f, { name: "", calories: "" }])}
                       style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
                       + Manual
