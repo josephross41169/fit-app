@@ -17,6 +17,13 @@ export function FitbitConnect() {
   const [loading, setLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
 
+  // Only surface the Fitbit integration when it's actually configured. Without
+  // a client ID the connect button can only show a "not yet configured" alert,
+  // which reads as an unfinished feature to an App Store reviewer (Guideline
+  // 2.1). Hiding the whole banner when unconfigured keeps the UI clean; it
+  // reappears automatically once NEXT_PUBLIC_FITBIT_CLIENT_ID is set in the build.
+  const fitbitConfigured = !!process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
+
   useEffect(() => {
     if (!user) return;
     checkConnection();
@@ -77,6 +84,9 @@ export function FitbitConnect() {
       console.error('Error disconnecting Fitbit:', error);
     }
   }
+
+  // Not configured → render nothing (no dead "connect" button for reviewers).
+  if (!fitbitConfigured) return null;
 
   if (loading) return <div style={{ color: '#9CA3AF' }}>Loading...</div>;
 
