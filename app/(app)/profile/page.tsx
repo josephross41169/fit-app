@@ -305,7 +305,8 @@ const MONTHS_SHORT_MC = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","
 function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const now = new Date();
-  const dt = new Date((mDays[0] as any)._date || 0);
+  // Fall back to "now" (not 0 / the 1969 epoch) if a day is missing its date.
+  const dt = new Date((mDays[0] as any)?._date || Date.now());
   const isCurrentYear = dt.getFullYear() === now.getFullYear();
   const label = isCurrentYear
     ? MONTHS_FULL_MC[dt.getMonth()]
@@ -315,7 +316,7 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
   const totalWellness  = mDays.filter((d:any) => d.wellness).length;
   const firstDay = mDays[mDays.length - 1];
   const lastDay  = mDays[0];
-  const dateRange = `${MONTHS_SHORT_MC[new Date((firstDay as any)._date||0).getMonth()]} ${new Date((firstDay as any)._date||0).getDate()} – ${MONTHS_SHORT_MC[new Date((lastDay as any)._date||0).getMonth()]} ${new Date((lastDay as any)._date||0).getDate()}`;
+  const dateRange = `${MONTHS_SHORT_MC[new Date((firstDay as any)?._date||Date.now()).getMonth()]} ${new Date((firstDay as any)?._date||Date.now()).getDate()} – ${MONTHS_SHORT_MC[new Date((lastDay as any)?._date||Date.now()).getMonth()]} ${new Date((lastDay as any)?._date||Date.now()).getDate()}`;
 
   return (
     <div style={{ marginBottom: 10 }}>
@@ -2109,8 +2110,20 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
     const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const days: typeof DAYS = Array.from(byDate.entries()).map(([dateKey, logs]) => {
-      const [month, day, year] = dateKey.split('/').map(Number);
-      const date = new Date(year, month - 1, day);
+      // dateKey is normally MM/DD/YYYY, but some logs can carry an ISO-style
+      // YYYY-MM-DD key. Parsing the wrong format yields NaN → new Date(NaN) →
+      // the Unix epoch, which showed up as a "December 1969" header in the
+      // activity log. Detect the format and fall back to today's date if the
+      // key still can't be parsed, so a bad key never renders as 1969.
+      let date: Date;
+      if (dateKey.includes('-')) {
+        const [y, m, d] = dateKey.split('-').map(Number);
+        date = new Date(y, (m || 1) - 1, d || 1);
+      } else {
+        const [month, day, year] = dateKey.split('/').map(Number);
+        date = new Date(year, (month || 1) - 1, day || 1);
+      }
+      if (isNaN(date.getTime())) date = new Date();
       const dayName = DAY_NAMES[date.getDay()];
       const today = new Date();
       const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
