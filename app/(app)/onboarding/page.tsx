@@ -1,546 +1,496 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { isBusinessAccount } from "@/lib/businessTypes";
+import {
+  isHealthKitAvailable,
+  requestHealthKitPermissions,
+  runHealthKitSync,
+} from "@/lib/healthkit";
+import { getFitbitAuthURL } from "@/lib/fitbit";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New-user onboarding.
+//
+// Deliberately NOT a fitness-program questionnaire (goal / macros / equipment) —
+// that intake never matched what people actually do in Livelee, and program
+// details are asked in-context inside the AI planner instead. This flow only
+// covers what maps to the app on day one: who you are, and who you're with.
+//
+//   0 Welcome   → what Livelee is
+//   1 Profile   → photo, banner, name, bio (live preview)
+//   2 Sync      → Apple Health (iPhone) / Fitbit (when configured) — optional
+//   3 People    → follow a few suggested athletes
+//   4 Groups    → join a few popular groups
+//   5 Done      → commit everything, drop into the feed
+//
+// Every step is skippable. Nothing is written until the final "Jump into
+// Livelee" (or the welcome "Skip for now"), so users can toggle freely without
+// needing unfollow / leave actions mid-flow.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const C = {
   purple: "#7C3AED",
   purpleDark: "#6D28D9",
-  purpleLight: "#F3F0FF",
-  purpleMid: "#DDD6FE",
+  purpleSoft: "#A78BFA",
+  purpleGhost: "rgba(124,58,237,0.14)",
   gold: "#F5A623",
-  text: "#F0F0F0",
+  green: "#22C55E",
+  teal: "#00B0B9",
+  text: "#F2F2F4",
   sub: "#9CA3AF",
+  dim: "#6B7280",
   bg: "#0D0D0D",
-  card: "#111111",
-  border: "#1A1228",
+  card: "#121212",
+  card2: "#17171F",
+  raised: "#1C1B26",
+  border: "#232030",
+  border2: "#2C2838",
 };
 
-const FITNESS_GOALS = [
-  { id: "lose_fat", emoji: "🔥", label: "Lose Fat", desc: "Cut body fat and get leaner" },
-  { id: "build_muscle", emoji: "💪", label: "Build Muscle", desc: "Gain strength and size" },
-  { id: "maintain", emoji: "⚖️", label: "Maintain", desc: "Stay consistent and healthy" },
-  { id: "improve_cardio", emoji: "🏃", label: "Cardio / Endurance", desc: "Run faster, go longer" },
-  { id: "sports_performance", emoji: "⚡", label: "Athletic Performance", desc: "Train for sport" },
-  { id: "wellness", emoji: "🧘", label: "Wellness & Recovery", desc: "Reduce stress, sleep better" },
-];
+type SuggestedUser = {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  followers_count: number | null;
+};
 
-const ACTIVITY_LEVELS = [
-  { id: "sedentary", emoji: "🪑", label: "Sedentary", desc: "Little to no exercise" },
-  { id: "light", emoji: "🚶", label: "Lightly Active", desc: "1–3 days/week" },
-  { id: "moderate", emoji: "🏋️", label: "Moderately Active", desc: "3–5 days/week" },
-  { id: "very", emoji: "⚡", label: "Very Active", desc: "6–7 days/week" },
-  { id: "athlete", emoji: "🏆", label: "Athlete", desc: "2× a day or competitive" },
-];
+const TOTAL = 4; // profile, sync, people, groups carry the progress bar
+const LAST = 5; // index of the "done" screen
 
-const FOCUS_AREAS = [
-  { id: "chest", emoji: "💪", label: "Chest" },
-  { id: "back", emoji: "🦾", label: "Back" },
-  { id: "shoulders", emoji: "🏋️", label: "Shoulders" },
-  { id: "arms", emoji: "💪", label: "Arms" },
-  { id: "legs", emoji: "🦵", label: "Legs" },
-  { id: "core", emoji: "🎯", label: "Core" },
-  { id: "cardio", emoji: "🏃", label: "Cardio" },
-  { id: "full_body", emoji: "⚡", label: "Full Body" },
-];
-
-const EQUIPMENT = [
-  { id: "full_gym", emoji: "🏋️", label: "Full Gym" },
-  { id: "home_gym", emoji: "🏠", label: "Home Gym" },
-  { id: "dumbbells", emoji: "💪", label: "Dumbbells Only" },
-  { id: "bodyweight", emoji: "🤸", label: "Bodyweight" },
-  { id: "resistance_bands", emoji: "🔄", label: "Resistance Bands" },
-  { id: "cardio_machines", emoji: "🚴", label: "Cardio Machines" },
-];
-
-type Step = 1 | 2 | 3 | 4 | 5;
-
-function ProgressBar({ step, total }: { step: number; total: number }) {
-  return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 32 }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1, height: 4, borderRadius: 2,
-            background: i < step ? C.purple : "#2A2A2A",
-            transition: "background 0.3s ease",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function SelectChip({
-  selected, onClick, emoji, label, desc,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  emoji: string;
-  label: string;
-  desc?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", gap: 12,
-        padding: "14px 16px", borderRadius: 16,
-        border: `2px solid ${selected ? C.purple : "#2A2A2A"}`,
-        background: selected ? "rgba(124,58,237,0.12)" : C.card,
-        cursor: "pointer", textAlign: "left", width: "100%",
-        transition: "all 0.15s",
-        boxShadow: selected ? `0 0 0 1px ${C.purple}40` : "none",
-      }}
-    >
-      <span style={{ fontSize: 26, flexShrink: 0 }}>{emoji}</span>
-      <div>
-        <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{label}</div>
-        {desc && <div style={{ fontSize: 12, color: C.sub, marginTop: 1 }}>{desc}</div>}
-      </div>
-      {selected && (
-        <div style={{
-          marginLeft: "auto", width: 22, height: 22, borderRadius: "50%",
-          background: C.purple, display: "flex", alignItems: "center",
-          justifyContent: "center", flexShrink: 0, fontSize: 12, color: "#fff", fontWeight: 900,
-        }}>✓</div>
-      )}
-    </button>
-  );
-}
-
-function ChipGrid({
-  items, selected, onToggle, cols = 2,
-}: {
-  items: { id: string; emoji: string; label: string }[];
-  selected: string[];
-  onToggle: (id: string) => void;
-  cols?: number;
-}) {
-  return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${cols}, 1fr)`,
-      gap: 10,
-    }}>
-      {items.map(item => {
-        const isSelected = selected.includes(item.id);
-        return (
-          <button
-            key={item.id}
-            onClick={() => onToggle(item.id)}
-            style={{
-              padding: "12px 10px", borderRadius: 14,
-              border: `2px solid ${isSelected ? C.purple : "#2A2A2A"}`,
-              background: isSelected ? "rgba(124,58,237,0.12)" : C.card,
-              cursor: "pointer", display: "flex", flexDirection: "column",
-              alignItems: "center", gap: 6,
-              transition: "all 0.15s",
-            }}
-          >
-            <span style={{ fontSize: 22 }}>{item.emoji}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: isSelected ? "#A78BFA" : C.sub }}>
-              {item.label}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
+function stepConfig(step: number, saving: boolean) {
+  switch (step) {
+    case 0: return { primary: "Set up my profile", ghost: true, skip: false, back: false, prog: 0 };
+    case 1: return { primary: "Continue", ghost: false, skip: true, back: true, prog: 1 };
+    case 2: return { primary: "Continue", ghost: false, skip: true, back: true, prog: 2 };
+    case 3: return { primary: "Continue", ghost: false, skip: true, back: true, prog: 3 };
+    case 4: return { primary: "Finish setup", ghost: false, skip: true, back: true, prog: 4 };
+    default: return { primary: saving ? "Setting up…" : "Jump into Livelee", ghost: false, skip: false, back: false, prog: 4 };
+  }
 }
 
 export default function OnboardingPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
-  // Business accounts get a completely different onboarding flow — no goals,
-  // no macros, no tier/rivals talk. They go to /onboarding/business instead.
-  useEffect(() => {
-    if (!user) return;
-    if (isBusinessAccount(user.profile)) {
-      router.replace("/onboarding/business");
-    }
-  }, [user, router]);
-
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Step 1 — Profile basics
+  // profile
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  // Step 2 — Goal
-  const [goal, setGoal] = useState("");
-  const [activityLevel, setActivityLevel] = useState("");
+  // activity sync
+  const [healthAvailable, setHealthAvailable] = useState(false);
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [healthConnected, setHealthConnected] = useState(false);
+  const fitbitConfigured = !!process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
 
-  // Step 3 — Focus areas + equipment
-  const [focusAreas, setFocusAreas] = useState<string[]>([]);
-  const [equipment, setEquipment] = useState<string[]>([]);
+  // social
+  const [people, setPeople] = useState<SuggestedUser[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [follows, setFollows] = useState<Set<string>>(new Set());
+  const [joins, setJoins] = useState<Set<string>>(new Set());
 
-  // Step 4 — Macro goals
-  const [calories, setCalories] = useState("2500");
-  const [protein, setProtein] = useState("180");
-  const [carbs, setCarbs] = useState("250");
-  const [fat, setFat] = useState("70");
-  const [waterOz, setWaterOz] = useState("100");
+  const username = user?.profile?.username || "newathlete";
 
-  function toggleFocus(id: string) {
-    setFocusAreas(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id]);
+  // Detect HealthKit on the client only (it's false during SSR) to avoid a
+  // hydration mismatch on the sync step.
+  useEffect(() => {
+    setHealthAvailable(isHealthKitAvailable());
+  }, []);
+
+  // Guard + load. Already-onboarded users and business accounts don't belong
+  // here; everyone else gets their suggestions fetched for the social steps.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (isBusinessAccount(user.profile)) {
+      router.replace("/feed");
+      return;
+    }
+    if ((user.profile as any)?.onboarded === true) {
+      router.replace("/feed");
+      return;
+    }
+    loadSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading]);
+
+  async function loadSuggestions() {
+    if (!user) return;
+    try {
+      const [pplRes, grpRes] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id, username, full_name, avatar_url, followers_count")
+          .neq("id", user.id)
+          .order("followers_count", { ascending: false })
+          .limit(8),
+        supabase
+          .from("groups")
+          .select("*")
+          .order("members_count", { ascending: false })
+          .limit(6),
+      ]);
+      if (pplRes.data) setPeople(pplRes.data as SuggestedUser[]);
+      if (grpRes.data) setGroups(grpRes.data as any[]);
+    } catch {
+      /* suggestions are optional — the empty states handle a miss */
+    }
   }
-  function toggleEquipment(id: string) {
-    setEquipment(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id]);
-  }
 
-  // Auto-suggest macros based on goal
-  function suggestMacros() {
-    if (goal === "lose_fat") { setCalories("2000"); setProtein("200"); setCarbs("180"); setFat("60"); }
-    else if (goal === "build_muscle") { setCalories("3000"); setProtein("220"); setCarbs("300"); setFat("80"); }
-    else if (goal === "improve_cardio") { setCalories("2400"); setProtein("160"); setCarbs("280"); setFat("65"); }
-    else { setCalories("2500"); setProtein("180"); setCarbs("250"); setFat("70"); }
-  }
-
-  function loadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => setAvatarPreview(ev.target!.result as string);
-    r.readAsDataURL(f);
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>, which: "avatar" | "banner") {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = reader.result as string;
+      if (which === "avatar") setAvatarPreview(url);
+      else setBannerPreview(url);
+    };
+    reader.readAsDataURL(file);
     e.target.value = "";
   }
 
-  async function handleFinish() {
-    if (!user) return;
-    setSaving(true);
-
+  async function connectHealth() {
+    if (!user || healthBusy) return;
+    setHealthBusy(true);
     try {
-      let avatarUrl: string | null = null;
-      if (avatarPreview) {
-        avatarUrl = await uploadPhoto(avatarPreview, "avatars", `${user.id}/avatar.jpg`);
+      const ok = await requestHealthKitPermissions(user.id);
+      if (ok) {
+        setHealthConnected(true);
+        // Fire-and-forget the first import so stats aren't empty on arrival.
+        runHealthKitSync(user.id).catch(() => {});
       }
-
-      const updateData: Record<string, any> = {
-        onboarded: true,
-        nutrition_goals: {
-          calories: parseFloat(calories) || 2500,
-          protein: parseFloat(protein) || 180,
-          carbs: parseFloat(carbs) || 250,
-          fat: parseFloat(fat) || 70,
-          water_oz: parseFloat(waterOz) || 100,
-        },
-        fitness_goal: goal || null,
-        activity_level: activityLevel || null,
-        focus_areas: focusAreas.length > 0 ? focusAreas : null,
-        equipment_access: equipment.length > 0 ? equipment : null,
-      };
-      if (displayName.trim()) updateData.full_name = displayName.trim();
-      if (bio.trim()) updateData.bio = bio.trim();
-      if (avatarUrl) updateData.avatar_url = avatarUrl;
-
-      await supabase.from("users").update(updateData).eq("id", user.id);
-    } catch {}
-
-    setSaving(false);
-    router.push("/profile");
+    } catch {
+      /* user can always connect later from Settings */
+    }
+    setHealthBusy(false);
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "13px 16px",
-    borderRadius: 14,
-    border: "1.5px solid #2A2A2A",
-    background: C.card,
-    fontSize: 15,
-    color: C.text,
-    outline: "none",
-    boxSizing: "border-box",
-  };
+  function connectFitbit() {
+    if (!user) return;
+    const clientId = process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
+    if (!clientId) return;
+    const state = `${user.id}_${Date.now()}_${Math.random()}`;
+    const redirectUri = `${window.location.origin}/api/fitbit-callback`;
+    window.location.href = getFitbitAuthURL(clientId, redirectUri, state);
+  }
 
-  const canProceed: Record<Step, boolean> = {
-    1: true, // optional
-    2: !!goal && !!activityLevel,
-    3: focusAreas.length > 0 && equipment.length > 0,
-    4: true, // pre-filled
-    5: true,
-  };
+  function toggleFollow(id: string) {
+    setFollows((prev) => {
+      const nextSet = new Set(prev);
+      if (nextSet.has(id)) nextSet.delete(id);
+      else nextSet.add(id);
+      return nextSet;
+    });
+  }
 
-  const TOTAL_STEPS = 5;
+  function toggleJoin(id: string) {
+    setJoins((prev) => {
+      const nextSet = new Set(prev);
+      if (nextSet.has(id)) nextSet.delete(id);
+      else nextSet.add(id);
+      return nextSet;
+    });
+  }
+
+  function goNext() {
+    if (step < LAST) setStep((s) => s + 1);
+    else handleFinish();
+  }
+  function goBack() {
+    if (step > 0) setStep((s) => s - 1);
+  }
+
+  async function handleFinish() {
+    if (!user || saving) return;
+    setSaving(true);
+    try {
+      let avatarUrl: string | null = null;
+      let bannerUrl: string | null = null;
+      if (avatarPreview) avatarUrl = await uploadPhoto(avatarPreview, "avatars", `${user.id}/avatar.jpg`);
+      if (bannerPreview) bannerUrl = await uploadPhoto(bannerPreview, "avatars", `${user.id}/banner.jpg`);
+
+      const update: Record<string, any> = { onboarded: true };
+      if (displayName.trim()) update.full_name = displayName.trim();
+      if (bio.trim()) update.bio = bio.trim();
+      if (avatarUrl) update.avatar_url = avatarUrl;
+      if (bannerUrl) update.banner_url = bannerUrl;
+      await (supabase.from("users") as any).update(update).eq("id", user.id);
+
+      const followIds = Array.from(follows);
+      if (followIds.length) {
+        await supabase
+          .from("follows")
+          .insert(followIds.map((fid) => ({ follower_id: user.id, following_id: fid })) as any);
+      }
+
+      const groupIds = Array.from(joins);
+      for (const gid of groupIds) {
+        try {
+          await fetch("/api/db", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "join_group", payload: { userId: user.id, groupId: gid } }),
+          });
+        } catch {
+          /* one failed join shouldn't block finishing setup */
+        }
+      }
+    } catch {
+      /* never trap the user in onboarding — fall through to the app */
+    }
+    setSaving(false);
+    router.push("/feed");
+  }
+
+  if (loading || !user) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 38, height: 38, borderRadius: "50%", border: "4px solid #2D1B69", borderTopColor: C.purple, animation: "ob-spin 0.8s linear infinite" }} />
+        <style>{`@keyframes ob-spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    );
+  }
+
+  const cfg = stepConfig(step, saving);
+  const progressPct = (cfg.prog / TOTAL) * 100;
+  const initial = (displayName.trim() || username).charAt(0).toUpperCase();
 
   return (
-    <div style={{
-      minHeight: "100vh", background: C.bg,
-      display: "flex", flexDirection: "column",
-      alignItems: "center",
-      padding: "32px 20px 100px",
-    }}>
-      <div style={{ width: "100%", maxWidth: 480 }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, display: "flex", flexDirection: "column", maxWidth: 560, margin: "0 auto" }}>
+      <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onPickFile(e, "avatar")} />
+      <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onPickFile(e, "banner")} />
 
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🦾</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>
-            Step {step} of {TOTAL_STEPS}
-          </div>
+      {/* top bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 12px", background: C.bg, position: "sticky", top: 0, zIndex: 10 }}>
+        <button onClick={goBack} aria-label="Back" style={{ width: 34, height: 34, borderRadius: "50%", border: `1px solid ${C.border2}`, background: C.card2, color: C.text, fontSize: 18, cursor: "pointer", visibility: cfg.back ? "visible" : "hidden", flex: "0 0 auto" }}>‹</button>
+        <div style={{ flex: 1, height: 6, borderRadius: 99, background: "#211E2C", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${progressPct}%`, borderRadius: 99, background: `linear-gradient(90deg, ${C.purple}, ${C.purpleSoft})`, transition: "width 0.4s ease" }} />
         </div>
+        <button onClick={goNext} style={{ fontSize: 13.5, fontWeight: 600, color: C.sub, background: "none", border: "none", cursor: "pointer", visibility: cfg.skip ? "visible" : "hidden", flex: "0 0 auto" }}>Skip</button>
+      </div>
 
-        <ProgressBar step={step} total={TOTAL_STEPS} />
+      {/* scroll area */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 22px 24px" }}>
 
-        {/* ─── STEP 1: Profile Photo + Name ─────────────────────── */}
-        {step === 1 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div>
-              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>Let's set up your profile</h2>
-              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>You can always change this later.</p>
-            </div>
-
-            {/* Avatar upload */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <label style={{ cursor: "pointer" }}>
-                <div style={{
-                  width: 100, height: 100, borderRadius: "50%",
-                  background: avatarPreview ? "transparent" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
-                  border: "3px solid #7C3AED",
-                  overflow: "hidden",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 36,
-                }}>
-                  {avatarPreview
-                    ? <img src={avatarPreview} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-                    : "📷"
-                  }
+        {/* 0 — WELCOME */}
+        {step === 0 && (
+          <div>
+            <div style={{ width: 74, height: 74, borderRadius: 22, margin: "8px 0 22px", background: `linear-gradient(135deg, ${C.purple}, #9D5CFF)`, boxShadow: "0 14px 34px rgba(124,58,237,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 38 }}>⚡</div>
+            <h1 style={{ fontSize: 29, lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.5px", color: "#fff" }}>Welcome to Livelee.</h1>
+            <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.sub, marginTop: 10 }}>The home for your training. Log every lift, run, and recovery session — then share the journey, line up rivals, and find people who push you harder.</p>
+            <div style={{ marginTop: 24 }}>
+              {[
+                { i: "📈", t: "Log what you train", s: "Lifting, cardio, wellness, nutrition — one place, with stats that actually add up." },
+                { i: "🔥", t: "Compete with rivals", s: "Head-to-head matchups and group challenges that keep you showing up." },
+                { i: "🤝", t: "Find your people", s: "Join groups, follow athletes, and share wins in a feed that's all fitness." },
+              ].map((v, idx) => (
+                <div key={idx} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "15px 0", borderBottom: idx < 2 ? `1px solid ${C.border}` : "none" }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 13, flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, background: C.purpleGhost, border: "1px solid rgba(124,58,237,0.25)" }}>{v.i}</div>
+                  <div>
+                    <div style={{ fontSize: 15.5, fontWeight: 750, color: C.text }}>{v.t}</div>
+                    <div style={{ fontSize: 13, color: C.sub, marginTop: 3, lineHeight: 1.45 }}>{v.s}</div>
+                  </div>
                 </div>
-                <input type="file" accept="image/*" style={{ display: "none" }} onChange={loadAvatar} />
-              </label>
-              <div style={{ fontSize: 13, color: C.sub }}>Tap to add profile photo</div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Display Name</label>
-              <input style={inputStyle} placeholder="Your name" value={displayName} onChange={e => setDisplayName(e.target.value)} />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Bio (optional)</label>
-              <textarea
-                rows={3}
-                style={{ ...inputStyle, resize: "none" }}
-                placeholder="What drives you? What are you working toward?"
-                value={bio}
-                onChange={e => setBio(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ─── STEP 2: Fitness Goal + Activity Level ─────────────── */}
-        {step === 2 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div>
-              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>What's your main goal?</h2>
-              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>We'll personalize your experience.</p>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {FITNESS_GOALS.map(g => (
-                <SelectChip
-                  key={g.id}
-                  selected={goal === g.id}
-                  onClick={() => setGoal(g.id)}
-                  emoji={g.emoji}
-                  label={g.label}
-                  desc={g.desc}
-                />
               ))}
             </div>
+          </div>
+        )}
 
-            <div>
-              <h3 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: "0 0 12px" }}>Activity level</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ACTIVITY_LEVELS.map(a => (
-                  <SelectChip
-                    key={a.id}
-                    selected={activityLevel === a.id}
-                    onClick={() => setActivityLevel(a.id)}
-                    emoji={a.emoji}
-                    label={a.label}
-                    desc={a.desc}
-                  />
-                ))}
+        {/* 1 — PROFILE */}
+        {step === 1 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "1.4px", textTransform: "uppercase", color: C.purpleSoft, marginBottom: 10 }}>Step 1 of 4</div>
+            <h1 style={{ fontSize: 29, lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.5px", color: "#fff" }}>Make it yours.</h1>
+            <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.sub, marginTop: 10 }}>Add a photo and a couple words. This is how your crew sees you in the feed and on the leaderboard.</p>
+
+            {/* live preview */}
+            <div style={{ borderRadius: 20, overflow: "hidden", background: C.card, border: `1px solid ${C.border}`, margin: "18px 0 22px", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}>
+              <div style={{ height: 96, position: "relative", background: bannerPreview ? `url(${bannerPreview}) center/cover` : "linear-gradient(120deg,#241B40,#3A2A66 60%,#1c1830)" }}>
+                {!bannerPreview && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>🖼️ add a banner</div>}
+                <div style={{ width: 72, height: 72, borderRadius: "50%", border: `3px solid ${C.card}`, position: "absolute", left: 18, bottom: -30, background: avatarPreview ? `url(${avatarPreview}) center/cover` : C.raised, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: C.purpleSoft }}>{!avatarPreview && "🙂"}</div>
+              </div>
+              <div style={{ padding: "38px 18px 18px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{displayName.trim() || "Your name"}</div>
+                <div style={{ fontSize: 13, color: C.purpleSoft, marginTop: 1 }}>@{username}</div>
+                <div style={{ fontSize: 13.5, color: C.sub, marginTop: 9, lineHeight: 1.45, minHeight: 18 }}>{bio.trim() || "Your bio shows up here."}</div>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* ─── STEP 3: Focus Areas + Equipment ───────────────────── */}
-        {step === 3 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div>
-              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>What do you train?</h2>
-              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>Pick all that apply.</p>
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text, margin: "0 0 12px" }}>Focus areas</h3>
-              <ChipGrid items={FOCUS_AREAS} selected={focusAreas} onToggle={toggleFocus} cols={4} />
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text, margin: "0 0 12px" }}>Equipment access</h3>
-              <ChipGrid items={EQUIPMENT} selected={equipment} onToggle={toggleEquipment} cols={3} />
-            </div>
-          </div>
-        )}
-
-        {/* ─── STEP 4: Macro Goals ────────────────────────────────── */}
-        {step === 4 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div>
-              <h2 style={{ fontSize: 28, fontWeight: 900, color: C.text, margin: "0 0 6px" }}>Set your daily targets</h2>
-              <p style={{ fontSize: 15, color: C.sub, margin: 0 }}>Used for your nutrition progress bars.</p>
-            </div>
-
-            {goal && (
-              <button
-                onClick={suggestMacros}
-                style={{
-                  padding: "12px 16px", borderRadius: 14,
-                  border: "2px solid #7C3AED", background: "rgba(124,58,237,0.1)",
-                  color: "#A78BFA", fontWeight: 800, fontSize: 14, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 8,
-                }}
-              >
-                ✨ Auto-suggest macros for my goal
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <button onClick={() => avatarInputRef.current?.click()} style={{ flex: 1, border: avatarPreview ? `1px solid ${C.purple}` : `1px dashed ${C.border2}`, borderRadius: 14, background: avatarPreview ? C.purpleGhost : C.card2, padding: "14px 10px", textAlign: "center", cursor: "pointer", color: C.text }}>
+                <div style={{ fontSize: 20 }}>📷</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: avatarPreview ? C.purpleSoft : C.sub, marginTop: 5 }}>{avatarPreview ? "Photo added" : "Profile photo"}</div>
               </button>
-            )}
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {[
-                { label: "Daily Calories", unit: "kcal", val: calories, set: setCalories },
-                { label: "Protein", unit: "g/day", val: protein, set: setProtein },
-                { label: "Carbs", unit: "g/day", val: carbs, set: setCarbs },
-                { label: "Fat", unit: "g/day", val: fat, set: setFat },
-                { label: "Water", unit: "oz/day", val: waterOz, set: setWaterOz },
-              ].map(f => (
-                <div key={f.label}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    {f.label} <span style={{ color: "#6B7280" }}>({f.unit})</span>
-                  </label>
-                  <input
-                    style={inputStyle}
-                    type="text"
-                    inputMode="numeric"
-                    value={f.val}
-                    onChange={e => f.set(e.target.value)}
-                  />
-                </div>
-              ))}
+              <button onClick={() => bannerInputRef.current?.click()} style={{ flex: 1, border: bannerPreview ? `1px solid ${C.purple}` : `1px dashed ${C.border2}`, borderRadius: 14, background: bannerPreview ? C.purpleGhost : C.card2, padding: "14px 10px", textAlign: "center", cursor: "pointer", color: C.text }}>
+                <div style={{ fontSize: 20 }}>🖼️</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: bannerPreview ? C.purpleSoft : C.sub, marginTop: 5 }}>{bannerPreview ? "Banner added" : "Banner image"}</div>
+              </button>
             </div>
 
-            <div style={{ background: C.card, borderRadius: 16, padding: "14px 16px", border: "1.5px solid #2A2A2A" }}>
-              <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>
-                💡 These power your daily nutrition progress bars on the Log screen. You can update them anytime under Nutrition → Edit Goals.
-              </div>
+            <div style={{ marginBottom: 13 }}>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: C.sub, marginBottom: 7 }}>Display name</label>
+              <input value={displayName} maxLength={30} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Jordan Rivera" style={{ width: "100%", background: C.card2, border: `1px solid ${C.border2}`, borderRadius: 13, padding: "13px 14px", color: C.text, fontSize: 15 }} />
             </div>
-          </div>
-        )}
-
-        {/* ─── STEP 5: Welcome / Ready ────────────────────────────── */}
-        {step === 5 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24, alignItems: "center", textAlign: "center" }}>
-            <div style={{ fontSize: 72 }}>🏆</div>
             <div>
-              <h2 style={{ fontSize: 32, fontWeight: 900, color: C.text, margin: "0 0 10px" }}>You're all set!</h2>
-              <p style={{ fontSize: 16, color: C.sub, margin: 0, lineHeight: 1.6 }}>
-                Start logging your first workout, track your nutrition, and climb the ranks. The grind starts now.
-              </p>
-            </div>
-
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                { emoji: "🏋️", text: "Log workouts & track PRs" },
-                { emoji: "🥗", text: "Track nutrition with macro goals" },
-                { emoji: "⚔️", text: "Get matched with rivals" },
-                { emoji: "🏆", text: "Earn badges & climb tier ranks" },
-                { emoji: "📊", text: "See your progress in Stats" },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 12,
-                    background: C.card, borderRadius: 14, padding: "12px 16px",
-                    border: "1.5px solid #2A2A2A", textAlign: "left",
-                  }}
-                >
-                  <span style={{ fontSize: 22 }}>{item.emoji}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item.text}</span>
-                </div>
-              ))}
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: C.sub, marginBottom: 7 }}>Short bio</label>
+              <textarea value={bio} rows={2} maxLength={120} onChange={(e) => setBio(e.target.value)} placeholder="What are you training for?" style={{ width: "100%", background: C.card2, border: `1px solid ${C.border2}`, borderRadius: 13, padding: "13px 14px", color: C.text, fontSize: 15, fontFamily: "inherit", resize: "none" }} />
             </div>
           </div>
         )}
 
-        {/* Navigation buttons */}
-        <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
-          {step > 1 && (
-            <button
-              onClick={() => setStep(s => (s - 1) as Step)}
-              style={{
-                flex: 1, padding: "15px 0", borderRadius: 16,
-                border: "1.5px solid #2A2A2A", background: "transparent",
-                color: C.sub, fontWeight: 800, fontSize: 15, cursor: "pointer",
-              }}
-            >
-              ← Back
-            </button>
-          )}
+        {/* 2 — SYNC ACTIVITY */}
+        {step === 2 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "1.4px", textTransform: "uppercase", color: C.purpleSoft, marginBottom: 10 }}>Step 2 of 4</div>
+            <h1 style={{ fontSize: 29, lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.5px", color: "#fff" }}>Sync your activity.</h1>
+            <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.sub, marginTop: 10 }}>Connect a tracker and your past workouts, steps, and heart rate flow straight in — so your stats and profile aren&apos;t empty on day one.</p>
 
-          {step < TOTAL_STEPS ? (
-            <button
-              onClick={() => setStep(s => (s + 1) as Step)}
-              disabled={!canProceed[step]}
-              style={{
-                flex: 2, padding: "15px 0", borderRadius: 16,
-                border: "none",
-                background: canProceed[step]
-                  ? "linear-gradient(135deg, #7C3AED, #A78BFA)"
-                  : "#2A2A2A",
-                color: canProceed[step] ? "#fff" : "#6B7280",
-                fontWeight: 900, fontSize: 16, cursor: canProceed[step] ? "pointer" : "not-allowed",
-                transition: "all 0.2s",
-              }}
-            >
-              {step === 1 ? "Let's Go →" : "Next →"}
-            </button>
-          ) : (
-            <button
-              onClick={handleFinish}
-              disabled={saving}
-              style={{
-                flex: 2, padding: "15px 0", borderRadius: 16,
-                border: "none",
-                background: saving ? "#2A2A2A" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
-                color: saving ? "#6B7280" : "#fff",
-                fontWeight: 900, fontSize: 16,
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
-            >
-              {saving ? "Setting up..." : "🚀 Start Your Journey"}
-            </button>
-          )}
-        </div>
+            <div style={{ marginTop: 20 }}>
+              {healthAvailable && (
+                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 16, border: `1.5px solid ${healthConnected ? C.green : C.border2}`, borderRadius: 18, background: healthConnected ? "rgba(34,197,94,0.08)" : C.card, marginBottom: 12 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 15, flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 27, background: "#fff" }}>❤️</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>Apple Health</div>
+                    <div style={{ fontSize: 12.5, color: C.sub, marginTop: 3, lineHeight: 1.4 }}>Workouts, steps &amp; heart rate from your iPhone &amp; Watch.</div>
+                  </div>
+                  <button onClick={connectHealth} disabled={healthBusy || healthConnected} style={{ flex: "0 0 auto", border: `1.5px solid ${healthConnected ? C.green : C.purple}`, background: healthConnected ? C.green : "transparent", color: healthConnected ? "#fff" : C.purpleSoft, fontSize: 13.5, fontWeight: 800, borderRadius: 99, padding: "9px 17px", cursor: healthConnected ? "default" : "pointer" }}>{healthConnected ? "Connected ✓" : healthBusy ? "…" : "Connect"}</button>
+                </div>
+              )}
 
-        {/* Skip link (step 1 only) */}
-        {step === 1 && (
-          <button
-            onClick={() => setStep(2)}
-            style={{ display: "block", width: "100%", marginTop: 14, background: "none", border: "none", color: C.sub, fontSize: 13, cursor: "pointer" }}
-          >
-            Skip for now
-          </button>
+              {fitbitConfigured && (
+                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 16, border: `1.5px solid ${C.border2}`, borderRadius: 18, background: C.card, marginBottom: 12 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 15, flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 27, background: C.teal }}>⌚</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>Fitbit</div>
+                    <div style={{ fontSize: 12.5, color: C.sub, marginTop: 3, lineHeight: 1.4 }}>Daily activity, sleep &amp; resting heart rate.</div>
+                  </div>
+                  <button onClick={connectFitbit} style={{ flex: "0 0 auto", border: `1.5px solid ${C.purple}`, background: "transparent", color: C.purpleSoft, fontSize: 13.5, fontWeight: 800, borderRadius: 99, padding: "9px 17px", cursor: "pointer" }}>Connect</button>
+                </div>
+              )}
+
+              {!healthAvailable && !fitbitConfigured && (
+                <div style={{ padding: 16, border: `1px solid ${C.border}`, borderRadius: 16, background: C.card2, fontSize: 13.5, color: C.sub, lineHeight: 1.5 }}>
+                  Activity sync is available in the iPhone app. You can connect Apple Health anytime from Settings once you&apos;re in.
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginTop: 16, padding: "13px 14px", borderRadius: 13, background: C.card2, border: `1px solid ${C.border}`, fontSize: 12.5, color: C.sub, lineHeight: 1.45 }}>
+              <span>🔒</span>
+              <span>You choose exactly what Livelee can read, and you can disconnect anytime in Settings.</span>
+            </div>
+          </div>
+        )}
+
+        {/* 3 — PEOPLE */}
+        {step === 3 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "1.4px", textTransform: "uppercase", color: C.purpleSoft, marginBottom: 10 }}>Step 3 of 4</div>
+            <h1 style={{ fontSize: 29, lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.5px", color: "#fff" }}>Find your people.</h1>
+            <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.sub, marginTop: 10 }}>Follow a few athletes and your feed&apos;s got something in it the moment you walk in.</p>
+
+            <div style={{ marginTop: 18 }}>
+              {people.length === 0 && (
+                <div style={{ padding: 16, border: `1px solid ${C.border}`, borderRadius: 16, background: C.card2, fontSize: 13.5, color: C.sub, lineHeight: 1.5 }}>
+                  No suggestions yet — you can discover and follow athletes anytime from the Discover tab.
+                </div>
+              )}
+              {people.map((p) => {
+                const on = follows.has(p.id);
+                const name = p.full_name || p.username || "Athlete";
+                const av = (name || "A").charAt(0).toUpperCase();
+                return (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: 13, border: `1px solid ${C.border}`, borderRadius: 16, background: C.card, marginBottom: 11 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "50%", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, color: "#fff", fontWeight: 800, background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : C.purple }}>{!p.avatar_url && av}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 750, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                      <div style={{ fontSize: 12.5, color: C.sub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{p.username || "athlete"}{p.followers_count ? ` · ${p.followers_count} followers` : ""}</div>
+                    </div>
+                    <button onClick={() => toggleFollow(p.id)} style={{ flex: "0 0 auto", border: `1.5px solid ${C.purple}`, background: on ? C.purple : "transparent", color: on ? "#fff" : C.purpleSoft, fontSize: 13.5, fontWeight: 800, borderRadius: 99, padding: "8px 17px", cursor: "pointer" }}>{on ? "Following" : "Follow"}</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 4 — GROUPS */}
+        {step === 4 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "1.4px", textTransform: "uppercase", color: C.purpleSoft, marginBottom: 10 }}>Step 4 of 4</div>
+            <h1 style={{ fontSize: 29, lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.5px", color: "#fff" }}>Join a group.</h1>
+            <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.sub, marginTop: 10 }}>Groups are where the challenges and leaderboards live. Jump into a few that match your vibe.</p>
+
+            <div style={{ marginTop: 18 }}>
+              {groups.length === 0 && (
+                <div style={{ padding: 16, border: `1px solid ${C.border}`, borderRadius: 16, background: C.card2, fontSize: 13.5, color: C.sub, lineHeight: 1.5 }}>
+                  No groups to show yet — you can browse and join groups anytime from the Connect tab.
+                </div>
+              )}
+              {groups.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
+                  {groups.map((g) => {
+                    const on = joins.has(g.id);
+                    const emoji = (g as any).emoji || "🏋️";
+                    const members = g.members_count ?? 0;
+                    return (
+                      <button key={g.id} onClick={() => toggleJoin(g.id)} style={{ textAlign: "left", border: `1.5px solid ${on ? C.purple : C.border2}`, borderRadius: 16, background: C.card, padding: 14, cursor: "pointer", position: "relative", overflow: "hidden", color: C.text }}>
+                        <span style={{ position: "absolute", top: 11, right: 11, fontSize: 11, fontWeight: 800, padding: "4px 9px", borderRadius: 99, background: on ? C.purple : C.card2, color: on ? "#fff" : C.sub, border: `1px solid ${on ? C.purple : C.border2}` }}>{on ? "Joined ✓" : "Join"}</span>
+                        <div style={{ fontSize: 26 }}>{emoji}</div>
+                        <div style={{ fontSize: 14.5, fontWeight: 800, color: C.text, marginTop: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 6 }}>{g.name}</div>
+                        <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{members} member{members === 1 ? "" : "s"}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 5 — DONE */}
+        {step === 5 && (
+          <div>
+            <div style={{ width: 96, height: 96, borderRadius: "50%", margin: "30px auto 24px", background: `linear-gradient(135deg, ${C.purple}, #9D5CFF)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, boxShadow: "0 16px 40px rgba(124,58,237,0.5)" }}>🎉</div>
+            <h1 style={{ fontSize: 29, lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.5px", color: "#fff", textAlign: "center" }}>You&apos;re in.</h1>
+            <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.sub, marginTop: 10, textAlign: "center" }}>Your profile&apos;s set and your feed&apos;s ready. Time to put your first session on the board.</p>
+
+            <div style={{ border: `1px solid ${C.border}`, borderRadius: 16, background: C.card, padding: "6px 16px", marginTop: 24 }}>
+              {[
+                { ok: !!(avatarPreview || bannerPreview || displayName.trim()), t: "Profile", sk: (avatarPreview || bannerPreview || displayName.trim()) ? "Set up" : "Skipped" },
+                { ok: healthConnected, t: "Activity sync", sk: healthConnected ? "Apple Health" : "Skipped" },
+                { ok: follows.size > 0, t: "Following", sk: follows.size > 0 ? `${follows.size} athlete${follows.size === 1 ? "" : "s"}` : "Skipped" },
+                { ok: joins.size > 0, t: "Groups", sk: joins.size > 0 ? `Joined ${joins.size}` : "Skipped" },
+              ].map((r, idx) => (
+                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 0", borderBottom: idx < 3 ? `1px solid ${C.border}` : "none", fontSize: 14, color: C.text }}>
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: r.ok ? "rgba(34,197,94,0.16)" : "#23202c", color: r.ok ? C.green : C.dim, fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>{r.ok ? "✓" : "–"}</div>
+                  {r.t}
+                  <span style={{ color: C.dim, marginLeft: "auto", fontSize: 12.5 }}>{r.sk}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: C.dim, marginTop: 14, textAlign: "center", lineHeight: 1.5 }}>You can change any of this anytime from your profile.</div>
+          </div>
+        )}
+      </div>
+
+      {/* bottom CTA */}
+      <div style={{ padding: "12px 22px 24px", background: C.bg }}>
+        <button onClick={goNext} disabled={saving} style={{ width: "100%", border: "none", borderRadius: 16, padding: 16, fontSize: 16, fontWeight: 800, letterSpacing: "0.2px", color: "#fff", background: `linear-gradient(135deg, ${C.purple}, ${C.purpleDark})`, boxShadow: "0 10px 26px rgba(124,58,237,0.42)", cursor: saving ? "default" : "pointer", opacity: saving ? 0.75 : 1 }}>{cfg.primary}</button>
+        {cfg.ghost && (
+          <button onClick={handleFinish} disabled={saving} style={{ width: "100%", border: "none", background: "transparent", color: C.sub, fontWeight: 700, padding: 12, marginTop: 2, cursor: "pointer" }}>Skip for now</button>
         )}
       </div>
     </div>
