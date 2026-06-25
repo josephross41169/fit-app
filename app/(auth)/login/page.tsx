@@ -23,11 +23,17 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    // Hard 8s timeout — never hang forever
+    // Safety timeout so we never spin forever. Set generously (20s): inside the
+    // iOS app a first sign-in does a TLS handshake to the auth server plus a
+    // native write to persist the session, which can legitimately take ~8-10s on
+    // a cold start. An 8s cutoff fired this message a beat BEFORE the sign-in
+    // actually completed — a false alarm that also reads as an error to an App
+    // Review tester. 20s only trips on a genuinely stuck sign-in (e.g. no
+    // network), where "check your connection" is the right message.
     const timeoutId = setTimeout(() => {
       setLoading(false);
       setError("Sign in is taking too long. Check your connection and try again.");
-    }, 8000);
+    }, 20000);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
