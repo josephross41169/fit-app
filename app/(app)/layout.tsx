@@ -47,6 +47,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, user, loading, router]);
 
+  // Force brand-new athletes through onboarding before they can use the rest
+  // of the app. Personal accounts only (businesses have their own flow at
+  // /onboarding/business), only while not yet onboarded, and never when already
+  // on an onboarding route — otherwise this loops, since /onboarding lives
+  // under this same layout. `onboarded` is a real users column even though it's
+  // not in the AuthUser.profile type (the profile query selects *), hence the cast.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (isBusinessAccount(user.profile)) return;
+    if ((user.profile as any)?.onboarded === true) return;
+    if (pathname?.startsWith("/onboarding")) return;
+    router.replace("/onboarding");
+  }, [pathname, user, loading, router]);
+
   useEffect(() => {
     function handleToggle(e: Event) {
       const ce = e as CustomEvent<{ collapsed: boolean }>;
