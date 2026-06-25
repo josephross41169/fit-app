@@ -71,9 +71,23 @@ type AnyStorage = {
   removeItem: (key: string) => void | Promise<void>;
 };
 
-// Native: async adapter backed by @capacitor/preferences (Keychain on iOS).
+// Native: async adapter backed by @capacitor/preferences (Keychain on iOS),
+// with a synchronous in-memory mirror in front of it.
+//
+// WHY THE MIRROR (the post-login slow-load fix): supabase-js re-reads storage on
+// EVERY getSession(), and every DB query calls getSession() to attach the access
+// token. A screen that fires dozens of queries on open (the profile page does)
+// therefore triggers dozens of reads. On web that's instant localStorage; on iOS
+// each read is a Capacitor bridge round-trip to the native store, and — because
+// the auth lock serializes them — they stack up into a long blank load (~30s).
+// The mirror serves reads from memory: the FIRST read of a key still hits the
+// bridge (so the persisted session is correctly restored on a cold launch), and
+// every read after is instant. supabase-js is the only writer of these keys, so
+// the mirror can't go stale; writes are still flushed to the native store so the
+// session survives app restarts.
 function buildNativeStorage(): AnyStorage {
   let prefs: any = null;
+  const mirror = new Map<string, string | null>();
   // Lazy-load the plugin so the bundle still works on web (where this file is
   // also imported but isNativeShell is false and these methods never run).
   const loadPlugin = async () => {
@@ -83,7 +97,10 @@ function buildNativeStorage(): AnyStorage {
     return prefs;
   };
   return {
-    getItem(key: string): Promise<string | null> {
+    getItem(key: string): string | null | Promise<string | null> {
+      // Cache hit → return synchronously, no bridge round-trip. This is what
+      // collapses the dozens-of-reads-per-screen cost to a single first read.
+      if (mirror.has(key)) return mirror.get(key) ?? null;
       return withTimeout((async () => {
         try {
           const p = await loadPlugin();
@@ -92,9 +109,13 @@ function buildNativeStorage(): AnyStorage {
         } catch {
           return null;
         }
-      })(), 4000, null);
+      })(), 4000, null).then((v) => {
+        mirror.set(key, v);
+        return v;
+      });
     },
     setItem(key: string, value: string): Promise<void> {
+      mirror.set(key, value); // keep the mirror current immediately
       return withTimeout((async () => {
         try {
           const p = await loadPlugin();
@@ -103,6 +124,7 @@ function buildNativeStorage(): AnyStorage {
       })(), 4000, undefined);
     },
     removeItem(key: string): Promise<void> {
+      mirror.set(key, null);
       return withTimeout((async () => {
         try {
           const p = await loadPlugin();
