@@ -8,49 +8,74 @@ import type { Database } from './database.types'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key-for-build'
 
-// ── Native-aware auth storage ────────────────────────────────────────────────
-// Why: on iOS Capacitor WebView, localStorage is NOT durable across app
-// suspends/restarts — iOS purges WebView storage to reclaim memory, which kicks
-// the user back to the login screen every time they reopen the app. We bridge
-// supabase-js's session persistence to @capacitor/preferences, which is backed
-// by the iOS Keychain (and SharedPreferences on Android) and survives restarts.
-//
-// supabase-js v2 fully supports an ASYNC storage adapter (it `await`s every
-// getItem/setItem/removeItem). That matters a lot here:
-//   • READ: getSession() awaits getItem, so it blocks until the persisted
-//     session has actually been read back from the Keychain. The previous
-//     implementation read from an in-memory cache that filled asynchronously,
-//     so the very first getSession() on launch saw an empty cache and reported
-//     "no session" → instant logout. Awaiting the real read fixes that race.
-//   • WRITE: setItem awaits the Keychain write, so when supabase rotates the
-//     refresh token it's flushed to disk before the app can be backgrounded.
-//     Fire-and-forget writes could be dropped mid-flight, leaving a stale
-//     (already-rotated) refresh token that fails on next launch → logout.
-//
-// On web (claude.ai, vercel preview, liveleeapp.com) we keep plain localStorage
-// so nothing changes there.
+// ── Are we inside the native Capacitor shell? ────────────────────────────────
+// Detected from the document's URL scheme, NOT from window.Capacitor. The native
+// runtime serves the bundle from `capacitor://localhost` (iOS), and that origin
+// is fixed before any JS runs — whereas window.Capacitor is injected by a plugin
+// script that can land AFTER this module is imported (so reading it here was
+// unreliable and could mis-report native as web on a cold launch). The scheme
+// check is always correct.
+const isNativeShell = (() => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.()) return true;
+    const proto = window.location.protocol;
+    return proto === 'capacitor:' || proto === 'ionic:' || proto === 'file:';
+  } catch {
+    return false;
+  }
+})();
 
+// ── THE LOGIN-HANG FIX ───────────────────────────────────────────────────────
+// supabase-js v2 serializes every auth/token operation behind a lock. In a real
+// browser it uses the Web Locks API (navigator.locks). Inside the iOS WKWebView
+// (capacitor:// origin) navigator.locks.request() can never be granted, the
+// callback never runs, and signInWithPassword() hangs forever — the login screen
+// then shows "Sign in is taking too long." We replace it (native only) with a
+// tiny in-memory lock that serializes calls within the page and ALWAYS resolves,
+// so sign-in can't hang. The web app keeps the default navigator lock (it works
+// there and coordinates across browser tabs).
+//
+// Signature matches supabase-js's LockFunc: (name, acquireTimeout, fn) => Promise.
+let lockChain: Promise<unknown> = Promise.resolve();
+const inMemoryLock = <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
+  const result: Promise<R> = lockChain.then(() => fn(), () => fn());
+  // Keep the queue moving; never let one rejection break future acquisitions.
+  lockChain = result.then(() => undefined, () => undefined);
+  return result;
+};
+
+// Bound any async storage call so a slow/hung Keychain op can never block the
+// auth flow — resolves to a fallback after `ms` (well under the login screen's
+// 8s timeout). Normal Keychain reads/writes are <100ms so this never fires in
+// practice; it only defuses a true hang.
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const finish = (v: T) => { if (!settled) { settled = true; resolve(v); } };
+    const timer = setTimeout(() => finish(fallback), ms);
+    p.then(
+      (v) => { clearTimeout(timer); finish(v); },
+      () => { clearTimeout(timer); finish(fallback); },
+    );
+  });
+}
+
+// ── Native-aware auth storage ────────────────────────────────────────────────
+// Persist the session in the iOS Keychain via @capacitor/preferences so it
+// survives app restarts; plain localStorage on web.
 type AnyStorage = {
   getItem: (key: string) => string | null | Promise<string | null>;
   setItem: (key: string, value: string) => void | Promise<void>;
   removeItem: (key: string) => void | Promise<void>;
 };
 
-// Read at module load to know if we're in a Capacitor shell. The Capacitor
-// global is injected by the native runtime before any JS executes.
-const isNative = (() => {
-  if (typeof window === 'undefined') return false;
-  const cap = (window as any).Capacitor;
-  // Capacitor 4+ exposes isNativePlatform; older versions only have platform.
-  if (cap?.isNativePlatform) return cap.isNativePlatform();
-  return cap?.platform === 'ios' || cap?.platform === 'android';
-})();
-
 // Native: async adapter backed by @capacitor/preferences (Keychain on iOS).
 function buildNativeStorage(): AnyStorage {
   let prefs: any = null;
   // Lazy-load the plugin so the bundle still works on web (where this file is
-  // also imported but isNative is false and these methods never run).
+  // also imported but isNativeShell is false and these methods never run).
   const loadPlugin = async () => {
     if (prefs) return prefs;
     const mod = await import('@capacitor/preferences');
@@ -58,26 +83,32 @@ function buildNativeStorage(): AnyStorage {
     return prefs;
   };
   return {
-    async getItem(key: string): Promise<string | null> {
-      try {
-        const p = await loadPlugin();
-        const { value } = await p.get({ key });
-        return value ?? null;
-      } catch {
-        return null;
-      }
+    getItem(key: string): Promise<string | null> {
+      return withTimeout((async () => {
+        try {
+          const p = await loadPlugin();
+          const { value } = await p.get({ key });
+          return value ?? null;
+        } catch {
+          return null;
+        }
+      })(), 4000, null);
     },
-    async setItem(key: string, value: string): Promise<void> {
-      try {
-        const p = await loadPlugin();
-        await p.set({ key, value });
-      } catch {}
+    setItem(key: string, value: string): Promise<void> {
+      return withTimeout((async () => {
+        try {
+          const p = await loadPlugin();
+          await p.set({ key, value });
+        } catch {}
+      })(), 4000, undefined);
     },
-    async removeItem(key: string): Promise<void> {
-      try {
-        const p = await loadPlugin();
-        await p.remove({ key });
-      } catch {}
+    removeItem(key: string): Promise<void> {
+      return withTimeout((async () => {
+        try {
+          const p = await loadPlugin();
+          await p.remove({ key });
+        } catch {}
+      })(), 4000, undefined);
     },
   };
 }
@@ -98,12 +129,12 @@ function buildWebStorage(): AnyStorage {
   };
 }
 
-// Pick the right storage. On SSR (typeof window === 'undefined'), pass
-// undefined so supabase-js falls back to its own no-op storage — there's no
-// session to persist server-side anyway.
+// Pick the right storage. On SSR (typeof window === 'undefined'), pass undefined
+// so supabase-js falls back to its own no-op storage — there's no session to
+// persist server-side anyway.
 const authStorage: AnyStorage | undefined = (() => {
   if (typeof window === 'undefined') return undefined;
-  return isNative ? buildNativeStorage() : buildWebStorage();
+  return isNativeShell ? buildNativeStorage() : buildWebStorage();
 })();
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -112,12 +143,15 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storage: authStorage as any,
+    // Native only: avoid navigator.locks, which hangs inside the iOS WebView.
+    // (Conditional spread so nothing changes for the web build.)
+    ...(isNativeShell ? { lock: inMemoryLock } : {}),
   },
 })
 
-// Back-compat: previously this gated callers until a prewarm finished. The
-// async storage adapter makes that unnecessary (getSession awaits the real
-// read), but keep the export resolved so any older caller keeps working.
+// Back-compat: previously this gated callers until a prewarm finished. The async
+// storage adapter makes that unnecessary (getSession awaits the real read), but
+// keep the export resolved so any older caller keeps working.
 export const nativeStorageReady: Promise<void> = Promise.resolve();
 
 export type { Database }
