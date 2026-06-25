@@ -75,7 +75,7 @@ function stepConfig(step: number, saving: boolean) {
 }
 
 export default function OnboardingPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshProfile } = useAuth();
   const router = useRouter();
 
   const [step, setStep] = useState(0);
@@ -215,28 +215,40 @@ export default function OnboardingPage() {
   async function handleFinish() {
     if (!user || saving) return;
     setSaving(true);
+
+    // Photo uploads are best-effort — a failed image must NEVER block the
+    // onboarded write below, or the user gets trapped in the flow.
+    let avatarUrl: string | null = null;
+    let bannerUrl: string | null = null;
     try {
-      let avatarUrl: string | null = null;
-      let bannerUrl: string | null = null;
       if (avatarPreview) avatarUrl = await uploadPhoto(avatarPreview, "avatars", `${user.id}/avatar.jpg`);
       if (bannerPreview) bannerUrl = await uploadPhoto(bannerPreview, "avatars", `${user.id}/banner.jpg`);
+    } catch {
+      /* keep going — profile photos can be added later */
+    }
 
+    // The critical write: mark onboarded so the layout guard releases the user.
+    try {
       const update: Record<string, any> = { onboarded: true };
       if (displayName.trim()) update.full_name = displayName.trim();
       if (bio.trim()) update.bio = bio.trim();
       if (avatarUrl) update.avatar_url = avatarUrl;
       if (bannerUrl) update.banner_url = bannerUrl;
       await (supabase.from("users") as any).update(update).eq("id", user.id);
+    } catch {
+      /* don't trap the user even if this write fails */
+    }
 
+    // Social selections — also best-effort, isolated so one failure can't
+    // abort the rest or the navigation.
+    try {
       const followIds = Array.from(follows);
       if (followIds.length) {
         await supabase
           .from("follows")
           .insert(followIds.map((fid) => ({ follower_id: user.id, following_id: fid })) as any);
       }
-
-      const groupIds = Array.from(joins);
-      for (const gid of groupIds) {
+      for (const gid of Array.from(joins)) {
         try {
           await fetch("/api/db", {
             method: "POST",
@@ -248,8 +260,18 @@ export default function OnboardingPage() {
         }
       }
     } catch {
-      /* never trap the user in onboarding — fall through to the app */
+      /* social is optional — never let it strand the user */
     }
+
+    // Refresh the cached auth profile so the app layout sees onboarded = true
+    // immediately. Without this the in-memory profile stays stale, the layout's
+    // onboarding guard re-fires, and the user is bounced straight back here.
+    try {
+      await refreshProfile();
+    } catch {
+      /* navigation still proceeds; worst case a reload settles it */
+    }
+
     setSaving(false);
     router.push("/feed");
   }
