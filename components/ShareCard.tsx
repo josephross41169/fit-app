@@ -1,10 +1,10 @@
 "use client";
 import { useRef, useEffect, useState } from "react";
 
-const PURPLE = "#7C3AED";
+const PURPLE = "#5BBE93";
 const PURPLE_DARK = "#4C1D95";
 const GOLD = "#F5A623";
-const BG = "#0D0D0D";
+const BG = "#0E1311";
 const CARD_BG = "#111118";
 
 export type ShareCardData = {
@@ -33,7 +33,7 @@ export type ShareCardData = {
 
 const TIER_COLORS: Record<string, { label: string; color: string; emoji: string }> = {
   default:     { label: "Default",     color: "#9CA3AF", emoji: "🩶" },
-  active:      { label: "Active",      color: "#7C3AED", emoji: "🟣" },
+  active:      { label: "Active",      color: "#5BBE93", emoji: "🟣" },
   grinder:     { label: "Grinder",     color: "#F5A623", emoji: "🔥" },
   elite:       { label: "Elite",       color: "#06B6D4", emoji: "⚡" },
   untouchable: { label: "Untouchable", color: "#EC4899", emoji: "💀" },
@@ -156,10 +156,10 @@ function renderCanvas(canvas: HTMLCanvasElement, data: ShareCardData) {
       const chipW = (innerW - (stats.length - 1) * 20) / Math.max(stats.length, 1);
       stats.forEach((stat, i) => {
         const cx = padX + i * (chipW + 20);
-        ctx.fillStyle = "#1A1228";
+        ctx.fillStyle = "#161D19";
         drawRoundRect(ctx, cx, y, chipW, 110, 16);
         ctx.fill();
-        ctx.strokeStyle = "#2D1F52";
+        ctx.strokeStyle = "#1B231E";
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
@@ -219,14 +219,14 @@ function renderCanvas(canvas: HTMLCanvasElement, data: ShareCardData) {
 
     const macros = [
       { label: "Calories", value: `${data.totalCalories || 0}`, unit: "kcal", color: "#F5A623" },
-      { label: "Protein",  value: `${data.protein || 0}g`,  unit: "",       color: "#7C3AED" },
+      { label: "Protein",  value: `${data.protein || 0}g`,  unit: "",       color: "#5BBE93" },
       { label: "Carbs",    value: `${data.carbs || 0}g`,    unit: "",       color: "#06B6D4" },
       { label: "Fat",      value: `${data.fat || 0}g`,      unit: "",       color: "#F87171" },
     ];
     const chipW2 = (innerW - 3 * 20) / 4;
     macros.forEach((m, i) => {
       const cx = padX + i * (chipW2 + 20);
-      ctx.fillStyle = "#1A1228";
+      ctx.fillStyle = "#161D19";
       drawRoundRect(ctx, cx, y, chipW2, 120, 16);
       ctx.fill();
       ctx.strokeStyle = m.color + "55";
@@ -247,7 +247,7 @@ function renderCanvas(canvas: HTMLCanvasElement, data: ShareCardData) {
 
   // ── Bottom watermark ───────────────────────────────────────────────────────
   const bmY = H - 80;
-  ctx.fillStyle = "#1A1228";
+  ctx.fillStyle = "#161D19";
   ctx.fillRect(0, bmY - 20, W, 100);
 
   ctx.font = "bold 28px system-ui, -apple-system, sans-serif";
@@ -322,7 +322,7 @@ export default function ShareCard({ data, onClose }: { data: ShareCardData; onCl
       <div style={{
         background: "#111118",
         borderRadius: 24,
-        border: "1px solid #2D1F52",
+        border: "1px solid #1B231E",
         padding: 24,
         maxWidth: 540,
         width: "100%",
@@ -339,8 +339,8 @@ export default function ShareCard({ data, onClose }: { data: ShareCardData; onCl
         {/* Canvas preview — scaled to fit */}
         <div style={{
           width: "100%", aspectRatio: "1", borderRadius: 16, overflow: "hidden",
-          border: "1px solid #2D1F52", marginBottom: 20,
-          background: "#0D0D0D",
+          border: "1px solid #1B231E", marginBottom: 20,
+          background: "#0E1311",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           <canvas
@@ -357,8 +357,8 @@ export default function ShareCard({ data, onClose }: { data: ShareCardData; onCl
           <button
             onClick={copyToClipboard}
             style={{
-              flex: 1, padding: "14px 0", borderRadius: 14, border: "1.5px solid #2D1F52",
-              background: "#1A1228", color: "#F0F0F0", fontSize: 15, fontWeight: 600,
+              flex: 1, padding: "14px 0", borderRadius: 14, border: "1.5px solid #1B231E",
+              background: "#161D19", color: "#F0F0F0", fontSize: 15, fontWeight: 600,
               cursor: "pointer",
             }}
           >
@@ -368,7 +368,7 @@ export default function ShareCard({ data, onClose }: { data: ShareCardData; onCl
             onClick={download}
             style={{
               flex: 1, padding: "14px 0", borderRadius: 14, border: "none",
-              background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+              background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
               color: "#ffffff", fontSize: 15, fontWeight: 700,
               cursor: "pointer",
               opacity: downloading ? 0.7 : 1,
