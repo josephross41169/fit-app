@@ -52,11 +52,11 @@ const SOURCE_EMOJI: Record<GroupPhoto["source"], string> = {
 const C = {
   card: "#181028",
   cardElev: "#241636",
-  border: "#2D1F52",
+  border: "#1B231E",
   borderHi: "#4C3A7A",
   text: "#F0F0F0",
   sub: "#8E8AA1",
-  purple: "#7C3AED",
+  purple: "#5BBE93",
   purpleDim: "rgba(124,58,237,0.18)",
   gold: "#F5A623",
   red: "#EF4444",
@@ -542,7 +542,7 @@ export default function GroupHighlights({
                   disabled={saving}
                   style={{
                     fontSize: 13, fontWeight: 800, padding: "9px 22px", borderRadius: 10,
-                    border: "none", background: `linear-gradient(135deg, ${C.purple}, #A78BFA)`,
+                    border: "none", background: `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
                     color: "#fff", cursor: saving ? "not-allowed" : "pointer",
                   }}
                 >
