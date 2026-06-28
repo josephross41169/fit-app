@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
-const PURPLE = "#7C3AED";
+const PURPLE = "#5BBE93";
 const PURPLE_BG = "rgba(124,58,237,0.15)";
 
 // ── Nav tab definitions ───────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ const tabs: Tab[] = [
     href: "/post", label: "Post", slot: "primary",
     icon: (_active) => (
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg -mt-3"
-        style={{ background: `linear-gradient(135deg, ${PURPLE}, #A78BFA)` }}>
+        style={{ background: `linear-gradient(135deg, ${PURPLE}, #86CFAE)` }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-6 h-6">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
@@ -147,7 +147,7 @@ function Badge({ count }: { count: number }) {
       alignItems: "center",
       justifyContent: "center",
       padding: "0 3px",
-      border: "2px solid #0D0D0D",
+      border: "2px solid #0E1311",
       lineHeight: 1,
       zIndex: 10,
     }}>
@@ -251,7 +251,7 @@ export default function BottomNav() {
     <>
       {/* ── Mobile bottom nav ─────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t"
-        style={{ background: "#0D0D0D", borderColor: "#1A1228" }}>
+        style={{ background: "#0E1311", borderColor: "#161D19" }}>
 
         {/* More drawer — slides up when open */}
         {moreOpen && (
@@ -260,7 +260,7 @@ export default function BottomNav() {
               style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:40 }}/>
             <div style={{
               position:"fixed", bottom:60, left:0, right:0, zIndex:41,
-              background:"#111118", borderTop:"1px solid #2D1F52",
+              background:"#111118", borderTop:"1px solid #1B231E",
               borderRadius:"20px 20px 0 0", padding:"16px 12px 12px",
               maxHeight: "70vh", overflowY: "auto",
             }}>
@@ -326,7 +326,7 @@ export default function BottomNav() {
               minWidth:44, position:"relative" }}>
             {moreHasBadge && (
               <div style={{ position:"absolute",top:6,right:8,width:8,height:8,
-                borderRadius:"50%",background:"#EF4444",border:"2px solid #0D0D0D" }}/>
+                borderRadius:"50%",background:"#EF4444",border:"2px solid #0E1311" }}/>
             )}
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <circle cx="5"  cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
@@ -343,7 +343,7 @@ export default function BottomNav() {
       <nav
         className="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r py-6 px-3"
         style={{
-          background: "#0D0D0D", borderColor: "#1A1228",
+          background: "#0E1311", borderColor: "#161D19",
           width: collapsed ? 64 : 224,
           transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
           overflow: "hidden",
