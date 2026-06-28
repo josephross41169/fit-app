@@ -4,14 +4,14 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { supabase } from "@/lib/supabase";
 
 const C = {
-  purple: "#7C3AED",
-  purpleDark: "#6D28D9",
-  purpleLight: "#F3F0FF",
-  purpleMid: "#DDD6FE",
+  purple: "#5BBE93",
+  purpleDark: "#3E9E74",
+  purpleLight: "#EFF7F2",
+  purpleMid: "#C9E8D8",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  bg: "#1A1D2E",
+  bg: "#161D19",
   card: "#0F1117",
   border: "#2D2B3A",
 };
@@ -161,7 +161,7 @@ export default function WeightTracker({ userId }: Props) {
   const yMax = maxW !== null ? Math.ceil(maxW + 3) : 250;
 
   const inputStyle: React.CSSProperties = {
-    background: "#1A1D2E",
+    background: "#161D19",
     border: `1.5px solid ${C.border}`,
     borderRadius: 10,
     padding: "9px 12px",
@@ -199,7 +199,7 @@ export default function WeightTracker({ userId }: Props) {
       {/* Log input */}
       {showInput && (
         <div style={{
-          background: "#111827", borderRadius: 16, padding: 16,
+          background: "#0E1311", borderRadius: 16, padding: 16,
           border: `1.5px solid ${C.purpleMid}`, marginBottom: 16,
           display: "flex", flexDirection: "column", gap: 10,
         }}>
@@ -237,7 +237,7 @@ export default function WeightTracker({ userId }: Props) {
             disabled={saving || !weightInput}
             style={{
               padding: "11px 0", borderRadius: 12, border: "none",
-              background: weightInput ? `linear-gradient(135deg,${C.purple},#A78BFA)` : "#374151",
+              background: weightInput ? `linear-gradient(135deg,${C.purple},#86CFAE)` : "#374151",
               color: "#fff", fontWeight: 900, cursor: weightInput ? "pointer" : "not-allowed",
               fontSize: 14,
             }}
@@ -255,7 +255,7 @@ export default function WeightTracker({ userId }: Props) {
       ) : logs.length === 0 ? (
         <div style={{
           textAlign: "center", padding: "32px 16px",
-          background: "#111827", borderRadius: 16, border: `1.5px dashed ${C.border}`,
+          background: "#0E1311", borderRadius: 16, border: `1.5px dashed ${C.border}`,
         }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>⚖️</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.sub, marginBottom: 4 }}>No weigh-ins yet</div>
@@ -265,14 +265,14 @@ export default function WeightTracker({ userId }: Props) {
         <>
           {/* Stats pills */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-            <div style={{ background: "#111827", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
+            <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
               <div style={{ fontSize: 22, fontWeight: 900, color: C.purple }}>{latest ?? "—"}</div>
               <div style={{ fontSize: 10, color: C.sub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Current (lbs)</div>
             </div>
-            <div style={{ background: "#111827", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
+            <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
               <div style={{
                 fontSize: 22, fontWeight: 900,
-                color: change === null ? C.sub : change < 0 ? "#7C3AED" : change > 0 ? "#EF4444" : C.sub,
+                color: change === null ? C.sub : change < 0 ? "#5BBE93" : change > 0 ? "#EF4444" : C.sub,
               }}>
                 {change === null ? "—" : `${change > 0 ? "+" : ""}${change}`}
               </div>
@@ -281,14 +281,14 @@ export default function WeightTracker({ userId }: Props) {
               </div>
             </div>
             {avg7 !== null && (
-              <div style={{ background: "#111827", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
+              <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
                 <div style={{ fontSize: 20, fontWeight: 900, color: C.gold }}>{avg7}</div>
                 <div style={{ fontSize: 10, color: C.sub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>7-Day Avg</div>
               </div>
             )}
             {minW !== null && (
-              <div style={{ background: "#111827", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#7C3AED" }}>{minW}</div>
+              <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#5BBE93" }}>{minW}</div>
                 <div style={{ fontSize: 10, color: C.sub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Lowest</div>
               </div>
             )}
@@ -302,7 +302,7 @@ export default function WeightTracker({ userId }: Props) {
                 onClick={() => setRange(opt.days)}
                 style={{
                   flex: 1, padding: "6px 0", borderRadius: 10, border: "none",
-                  background: range === opt.days ? C.purple : "#111827",
+                  background: range === opt.days ? C.purple : "#0E1311",
                   color: range === opt.days ? "#fff" : C.sub,
                   fontSize: 11, fontWeight: 800, cursor: "pointer",
                   transition: "all 0.15s",
@@ -352,7 +352,7 @@ export default function WeightTracker({ userId }: Props) {
                         <Dot
                           {...props}
                           r={isLatest ? 6 : 3}
-                          fill={isLatest ? C.purple : "#A78BFA"}
+                          fill={isLatest ? C.purple : "#86CFAE"}
                           strokeWidth={isLatest ? 2 : 0}
                           stroke={isLatest ? "#fff" : "none"}
                         />
@@ -386,7 +386,7 @@ export default function WeightTracker({ userId }: Props) {
               const prevToLatest = logs.length > 1 ? logs[logs.length - 2] : null;
               const latestDelta = latest && prevToLatest ? +(latest.weight_lbs - prevToLatest.weight_lbs).toFixed(1) : null;
               return (
-            <div style={{ background: "#111827", borderRadius: 12, border: `1px solid ${listOpen ? C.purpleMid : C.border}`, overflow: "hidden" }}>
+            <div style={{ background: "#0E1311", borderRadius: 12, border: `1px solid ${listOpen ? C.purpleMid : C.border}`, overflow: "hidden" }}>
               {/* Header / summary row */}
               <div
                 onClick={() => setListOpen(o => !o)}
