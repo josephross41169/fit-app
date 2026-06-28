@@ -10,10 +10,10 @@ import { ImagePresets } from "@/lib/imageUrls";
 import { geocode, distanceMiles, type Coords } from "@/lib/geocode";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#160F28", greenMid:"#2A1F45",
+  blue:"#5BBE93", greenLight:"#160F28", greenMid:"#2A1F45",
   gold:"#F5A623", goldLight:"#FFFBEE",
-  text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
-  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
+  dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
 
 // -----------------------------------------------------------------------------
@@ -62,7 +62,7 @@ const WORLD_POSTS = [
 ];
 
 const TRENDING_BRANDS = [
-  { id: 1, name: "Gymshark", handle: "@gymshark", emoji: "💪", category: "Apparel", posts: "2.4M", color: "#1A1A1A", followers: "7.2M" },
+  { id: 1, name: "Gymshark", handle: "@gymshark", emoji: "💪", category: "Apparel", posts: "2.4M", color: "#161D19", followers: "7.2M" },
   { id: 2, name: "Nike Training", handle: "@niketraining", emoji: "👟", category: "Footwear & Apparel", posts: "8.1M", color: "#E5000F", followers: "31.5M" },
   { id: 3, name: "Dior Fitness", handle: "@dior", emoji: "👗", category: "Luxury Activewear", posts: "890K", color: "#C9A96E", followers: "4.1M" },
   { id: 4, name: "Lululemon", handle: "@lululemon", emoji: "🧘", category: "Activewear", posts: "3.2M", color: "#BE3A34", followers: "5.8M" },
@@ -346,7 +346,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             router.push onClick which navigates fine but skips the
             prefetch step. */}
         <Link href={`/profile/${displayHandle}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
-          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
+          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
             {avatarVideoUrl
               ? <video src={avatarVideoUrl} poster={avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
               : avatarUrl
@@ -557,7 +557,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
                 const cini  = (cname || "U").split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
                 return (
                   <div key={c.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                    <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#A78BFA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                    <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#86CFAE)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                       {cu.avatar_video_url
                         ? <video src={cu.avatar_video_url} poster={cu.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
                         : cu.avatar_url
@@ -585,7 +585,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             <button
               onClick={submitComment}
               disabled={!commentText.trim() || commentSubmitting}
-              style={{ background:`linear-gradient(135deg,${C.blue},#A78BFA)`, color:"#fff", border:"none", borderRadius:999, padding:"6px 14px", fontWeight:800, fontSize:12, cursor:"pointer", opacity:(!commentText.trim() || commentSubmitting) ? 0.5 : 1 }}>
+              style={{ background:`linear-gradient(135deg,${C.blue},#86CFAE)`, color:"#fff", border:"none", borderRadius:999, padding:"6px 14px", fontWeight:800, fontSize:12, cursor:"pointer", opacity:(!commentText.trim() || commentSubmitting) ? 0.5 : 1 }}>
               {commentSubmitting ? "..." : "Post"}
             </button>
           </div>
@@ -628,11 +628,11 @@ function EventCard({ event }: { event: DiscoverEvent }) {
     <Link href={`/events/${event.id}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div
         style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"border-color 0.15s" }}
-        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#7C3AED"}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#5BBE93"}
         onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
       >
         {/* Date badge */}
-        <div style={{ width:48,height:48,borderRadius:13,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+        <div style={{ width:48,height:48,borderRadius:13,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
           <div style={{ fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.85)",textTransform:"uppercase",letterSpacing:0.5 }}>{day}</div>
           <div style={{ fontSize:20,fontWeight:900,color:"#fff",lineHeight:1 }}>{dateNum}</div>
         </div>
@@ -646,12 +646,12 @@ function EventCard({ event }: { event: DiscoverEvent }) {
             <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>
               📍 {event.location_name}
               {event._distanceMi != null && (
-                <span style={{ color:"#A78BFA",fontWeight:700 }}> · {event._distanceMi < 1 ? "<1" : Math.round(event._distanceMi)} mi away</span>
+                <span style={{ color:"#86CFAE",fontWeight:700 }}> · {event._distanceMi < 1 ? "<1" : Math.round(event._distanceMi)} mi away</span>
               )}
             </div>
           )}
           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-            <span style={{ background:"rgba(124,58,237,0.2)",color:"#A78BFA",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
+            <span style={{ background:"rgba(124,58,237,0.2)",color:"#86CFAE",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
             <span style={{ color:event.price === "Free" ? "#22C55E" : C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
             <span style={{ color:C.darkSub,fontSize:10 }}>· {timeStr}</span>
           </div>
@@ -694,16 +694,16 @@ function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0
     <Link href={`/profile/${person.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
         <div style={{ width:14,fontSize:11,fontWeight:900,color:C.darkSub,flexShrink:0,textAlign:"center" }}>#{rank}</div>
-        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
           {person.avatar.slice(0,2)}
         </div>
         <div style={{ flex:1,minWidth:0 }}>
           <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.name}</div>
           <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.specialty}</div>
-          <div style={{ fontSize:10,color:"#7C3AED",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
+          <div style={{ fontSize:10,color:"#5BBE93",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
         </div>
         {/* preventDefault stops the Link navigation when the follow button is tapped */}
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#A78BFA)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#232C27":`linear-gradient(135deg,${C.blue},#86CFAE)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
           {following ? "Following" : "+ Follow"}
         </button>
       </div>
@@ -717,7 +717,7 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
   return (
     <Link href={`/profile/${account.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
-        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
           {account.avatar}
         </div>
         <div style={{ flex:1,minWidth:0 }}>
@@ -725,10 +725,10 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
           <div style={{ fontSize:10,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.specialty}</div>
           <div style={{ fontSize:10,color:C.darkSub,marginTop:2 }}>
             <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers ·
-            <span style={{ color:"#7C3AED",fontWeight:700 }}> {account.mutual} mutual</span>
+            <span style={{ color:"#5BBE93",fontWeight:700 }}> {account.mutual} mutual</span>
           </div>
         </div>
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#2A2D3E":`linear-gradient(135deg,${C.blue},#A78BFA)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#232C27":`linear-gradient(135deg,${C.blue},#86CFAE)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
           {following ? "Following" : "+ Follow"}
         </button>
       </div>
@@ -759,7 +759,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
       <div style={{ flex:1, minWidth:0 }}>
         {/* City banner — copy changes based on whether we have local content
             or are showing trending nationwide content as a fallback. */}
-        <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
+        <div style={{ background:"linear-gradient(135deg,#5BBE93,#86CFAE)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
           <div style={{ fontSize:36 }}>{showingTrending ? "🔥" : "📍"}</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>
@@ -790,14 +790,14 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>📅 Local Events This Week</div>
               <div style={{ fontSize:11,color:C.darkSub }}>Las Vegas · Mar 27·30</div>
             </div>
-            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#A78BFA",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
+            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#86CFAE",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
           </div>
         </div>
 
         {eventsToShow.map((event: any) => <EventCard key={event.id} event={event} />)}
         {allEvents.length > 6 && (
           <button onClick={() => setShowAllEvents(!showAllEvents)}
-            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#A78BFA",marginBottom:8,textAlign:"center" }}>
+            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#86CFAE",marginBottom:8,textAlign:"center" }}>
             {showAllEvents ? "Show less ↑" : `See all ${allEvents.length} events →`}
           </button>
         )}
@@ -805,7 +805,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         {/* Submit event CTA — links to the new dedicated /events/new page.
             Old inline modal removed in favor of the full create-event flow. */}
         <Link href="/events/new" style={{ textDecoration: "none", display: "block" }}>
-          <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #7C3AED`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
+          <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #5BBE93`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#160F28"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background=C.darkCard; }}
           >
@@ -816,7 +816,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         </Link>
 
         {/* Browse all events link */}
-        <Link href="/events" style={{ display: "block", textDecoration: "none", textAlign: "center", marginTop: 12, padding: "10px", color: "#A78BFA", fontSize: 12, fontWeight: 700 }}>
+        <Link href="/events" style={{ display: "block", textDecoration: "none", textAlign: "center", marginTop: 12, padding: "10px", color: "#86CFAE", fontSize: 12, fontWeight: 700 }}>
           Browse all events →
         </Link>
       </div>
@@ -834,7 +834,7 @@ function WorldTab() {
       {/* LEFT: World posts feed */}
       <div style={{ flex:1, minWidth:0 }}>
         {/* Trending banner */}
-        <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
+        <div style={{ background:`linear-gradient(135deg,#5BBE93,#86CFAE)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ fontSize:36 }}>🌍</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Trending Worldwide</div>
@@ -897,7 +897,7 @@ function DiscoverTab() {
 
       {/* LEFT: People to discover */}
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
+        <div style={{ background:`linear-gradient(135deg,#5BBE93,#86CFAE)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ fontSize:36 }}>🧭</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Discover People</div>
@@ -1197,7 +1197,7 @@ export default function DiscoverPage() {
                         style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`,transition:"background 0.1s" }}
                         onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
                         onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
-                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#A78BFA)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
+                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#86CFAE)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
                           {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                         </div>
                         <div style={{ flex:1,minWidth:0 }}>
@@ -1258,7 +1258,7 @@ export default function DiscoverPage() {
             />
             <div style={{ display:"flex",gap:12 }}>
               <button onClick={() => setShowChangeCityOverlay(false)} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"1.5px solid #2A4A30",background:"transparent",color:"#9CA3AF",fontWeight:700,fontSize:14,cursor:"pointer" }}>Cancel</button>
-              <button onClick={() => { if (newCityInput.trim()) { setUserCity(newCityInput.trim()); setLocalPosts([]); setShowChangeCityOverlay(false); } }} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"none",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>Update</button>
+              <button onClick={() => { if (newCityInput.trim()) { setUserCity(newCityInput.trim()); setLocalPosts([]); setShowChangeCityOverlay(false); } }} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"none",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>Update</button>
             </div>
           </div>
         </div>
