@@ -21,12 +21,12 @@ import { getCached, setCached } from "@/lib/queryCache";
 import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#1A1228", greenMid:"#2D1F52",
+  blue:"#5BBE93", greenLight:"#161D19", greenMid:"#1B231E",
   gold:"#F5A623", goldLight:"#FFFBEE",
-  text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
-  green:"#7C3AED",
+  text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
+  green:"#5BBE93",
   // Dark sidebar palette
-  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -141,7 +141,7 @@ function ReactionBar({
             style={{
               display: "flex", alignItems: "center", gap: 4,
               padding: "4px 10px", borderRadius: 99,
-              border: userHas ? "1.5px solid #7C3AED" : "1.5px solid #2D1F52",
+              border: userHas ? "1.5px solid #5BBE93" : "1.5px solid #1B231E",
               background: userHas ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.04)",
               cursor: loading ? "default" : "pointer",
               transition: "all 0.15s",
@@ -150,7 +150,7 @@ function ReactionBar({
           >
             <span style={{ fontSize: 14, lineHeight: 1 }}>{r.emoji}</span>
             {count > 0 && (
-              <span style={{ fontSize: 12, fontWeight: 700, color: userHas ? "#A78BFA" : "#9CA3AF" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: userHas ? "#86CFAE" : "#9CA3AF" }}>
                 {count}
               </span>
             )}
@@ -554,19 +554,19 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "infrared sauna":       { emoji: "🌅", accent: "#FB923C" },
   "steam room":           { emoji: "♨️", accent: "#FBBF24" },
   "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
-  "meditation":           { emoji: "🧘", accent: "#A78BFA" },
+  "meditation":           { emoji: "🧘", accent: "#86CFAE" },
   "breathwork":           { emoji: "💨", accent: "#818CF8" },
-  "yoga nidra":           { emoji: "🌙", accent: "#A78BFA" },
-  "journaling":           { emoji: "📓", accent: "#C4B5FD" },
-  "therapy":              { emoji: "💬", accent: "#A78BFA" },
-  "sound bath":           { emoji: "🎵", accent: "#C084FC" },
+  "yoga nidra":           { emoji: "🌙", accent: "#86CFAE" },
+  "journaling":           { emoji: "📓", accent: "#A7DCC4" },
+  "therapy":              { emoji: "💬", accent: "#86CFAE" },
+  "sound bath":           { emoji: "🎵", accent: "#9BD9BC" },
   "stretching":           { emoji: "🤸", accent: "#34D399" },
   "foam rolling":         { emoji: "🌀", accent: "#10B981" },
   "mobility work":        { emoji: "🦵", accent: "#34D399" },
   "massage":              { emoji: "💆", accent: "#6EE7B7" },
   "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
   "acupuncture":          { emoji: "📍", accent: "#34D399" },
-  "cupping":              { emoji: "🟣", accent: "#A78BFA" },
+  "cupping":              { emoji: "🟣", accent: "#86CFAE" },
   "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
   "grounding":            { emoji: "🌱", accent: "#84CC16" },
   "nature walk":          { emoji: "🌲", accent: "#34D399" },
@@ -574,10 +574,10 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "compression therapy":  { emoji: "🦿", accent: "#0EA5E9" },
   "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
   "sleep":                { emoji: "😴", accent: "#6366F1" },
-  "fasting":              { emoji: "⏳", accent: "#A78BFA" },
+  "fasting":              { emoji: "⏳", accent: "#86CFAE" },
 };
 function getWellnessStyle(activity: string): { emoji: string; accent: string } {
-  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#A78BFA" };
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#86CFAE" };
 }
 
 // ── StreakCard ────────────────────────────────────────────────────────────
@@ -655,7 +655,7 @@ function StreakCard({ days, onDismiss, onLog }: { days: number; onDismiss: () =>
 function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: () => void }) {
   return (
     <div style={{
-      background: "linear-gradient(135deg, #7C3AED 0%, #DB2777 100%)",
+      background: "linear-gradient(135deg, #5BBE93 0%, #DB2777 100%)",
       borderRadius: 16,
       padding: "14px 16px 14px 18px",
       marginBottom: 14,
@@ -679,7 +679,7 @@ function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: (
       <Link href={`/recap/${weekKey}`}
         style={{
           background: "rgba(255,255,255,0.95)",
-          color: "#7C3AED",
+          color: "#5BBE93",
           border: "none",
           borderRadius: 99,
           padding: "8px 16px",
@@ -785,7 +785,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const isPR = (workout as any).isPR;
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#5BBE93,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10, flex:1, minWidth:0 }}>
           <span style={{ fontSize:18, flexShrink:0 }}>💪</span>
           <div style={{ flex:1, minWidth:0 }}>
@@ -805,7 +805,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
         </div>
       </button>
       {workout.photoUrls && workout.photoUrls.length > 0 && (
-        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
+        <div style={{ background:"#0E1311", borderBottom:`1px solid ${C.darkBorder}` }}>
           {/* Clickable so users can see the full uncropped photo. The
               card itself shows a `cover`-cropped version capped at 260px
               tall (it's a thumbnail, not the focus); tap opens the
@@ -826,7 +826,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
           so the collapsed card actually communicates what was done. Mobile users
           rarely tap to expand, so this is the primary information surface. */}
       {!open && (exercises.length > 0 || cardio.length > 0) && (
-        <div style={{ background:"#1E2235", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}` }}>
+        <div style={{ background:"#141A17", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}` }}>
           {exercises.length > 0 && (
             <div style={{ fontSize:11, color:C.darkSub, marginBottom: cardio.length > 0 ? 6 : 0 }}>
               <span style={{ fontWeight:800, color:"#E2E8F0" }}>Exercises:</span>{" "}
@@ -854,9 +854,9 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
         </div>
       )}
       {open && (
-        <div style={{ background:"#1E2235",padding:"10px 14px" }}>
+        <div style={{ background:"#141A17",padding:"10px 14px" }}>
           {exercises.length > 0 && (<>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 30px 58px 88px",gap:5,paddingBottom:6,marginBottom:4,borderBottom:"1px solid #2A2D3E" }}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 30px 58px 88px",gap:5,paddingBottom:6,marginBottom:4,borderBottom:"1px solid #232C27" }}>
               {["Exercise","Sets","Reps","Weight"].map(h => <span key={h} style={{ fontSize:9,fontWeight:800,color:C.darkSub,textTransform:"uppercase",letterSpacing:0.5 }}>{h}</span>)}
             </div>
             {exercises.map((ex,i) => {
@@ -880,7 +880,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
             })}
             {/* Volume footer */}
             {totalVol > 0 && (
-              <div style={{ display:"flex", justifyContent:"flex-end", gap:12, paddingTop:8, marginTop:4, borderTop:"1px solid #2A2D3E", fontSize:11 }}>
+              <div style={{ display:"flex", justifyContent:"flex-end", gap:12, paddingTop:8, marginTop:4, borderTop:"1px solid #232C27", fontSize:11 }}>
                 <span style={{ color:C.darkSub }}>{totalSets} sets total</span>
                 <span style={{ color:C.gold, fontWeight:800 }}>📊 {totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}k` : totalVol.toFixed(0)} lbs volume</span>
               </div>
@@ -910,7 +910,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
   const [lightbox, setLightbox] = useState<string | null>(null);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#5BBE93,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:18 }}>🥗</span>
           <div>
@@ -923,7 +923,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
         </div>
       </button>
       {nutrition.photoUrls && nutrition.photoUrls.length > 0 && (
-        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
+        <div style={{ background:"#0E1311", borderBottom:`1px solid ${C.darkBorder}` }}>
           {/* Tap to open full-size — see SideWorkout for rationale. */}
           <img
             src={ImagePresets.feed(nutrition.photoUrls[0])}
@@ -937,18 +937,18 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
       )}
       <PhotoLightbox url={lightbox} onClose={() => setLightbox(null)} />
       {/* Macro pills always visible */}
-      <div style={{ background:"#1E2235",padding:"12px 14px" }}>
+      <div style={{ background:"#141A17",padding:"12px 14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:open?12:0 }}>
           {[
             { label:"Cal",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000 },
             { label:"Protein",val:nutrition.protein,unit:"g",color:"#60A5FA",max:250 },
             { label:"Carbs",val:nutrition.carbs,unit:"g",color:C.blue,max:300 },
-            { label:"Fat",val:nutrition.fat,unit:"g",color:"#C084FC",max:100 },
+            { label:"Fat",val:nutrition.fat,unit:"g",color:"#9BD9BC",max:100 },
           ].map(m => (
-            <div key={m.label} style={{ background:"#252A3D",borderRadius:10,padding:"10px 4px",textAlign:"center",border:"1px solid #2A2D3E" }}>
+            <div key={m.label} style={{ background:"#1B231E",borderRadius:10,padding:"10px 4px",textAlign:"center",border:"1px solid #232C27" }}>
               <div style={{ fontSize:16,fontWeight:900,color:m.color }}>{m.val}</div>
               <div style={{ fontSize:9,color:C.darkSub }}>{m.unit}</div>
-              <div style={{ height:3,borderRadius:2,background:"#2A2D3E",margin:"5px 0 3px",overflow:"hidden" }}>
+              <div style={{ height:3,borderRadius:2,background:"#232C27",margin:"5px 0 3px",overflow:"hidden" }}>
                 <div style={{ height:"100%",borderRadius:2,background:m.color,width:`${Math.min((m.val/m.max)*100,100)}%` }}/>
               </div>
               <div style={{ fontSize:9,fontWeight:700,color:C.darkSub }}>{m.label}</div>
@@ -958,8 +958,8 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
         {open && (
           <div style={{ display:"flex",flexDirection:"column",gap:7 }}>
             {nutrition.meals.map(meal => (
-              <div key={meal.key} style={{ background:"#252A3D",borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",gap:10,border:"1px solid #2A2D3E" }}>
-                <div style={{ width:34,height:34,borderRadius:9,background:"#1E2235",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0 }}>{meal.emoji}</div>
+              <div key={meal.key} style={{ background:"#1B231E",borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",gap:10,border:"1px solid #232C27" }}>
+                <div style={{ width:34,height:34,borderRadius:9,background:"#141A17",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0 }}>{meal.emoji}</div>
                 <div style={{ flex:1,minWidth:0 }}>
                   <div style={{ display:"flex",justifyContent:"space-between" }}>
                     <span style={{ fontWeight:800,fontSize:12,color:"#E2E8F0" }}>{meal.key}</span>
@@ -994,7 +994,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
   const [lightbox, setLightbox] = useState<string | null>(null);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#7C3AED,#9333EA)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#5BBE93,#3E9E74)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:18 }}>🌿</span>
           <div>
@@ -1007,7 +1007,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
         </div>
       </button>
       {wellness.photoUrls && wellness.photoUrls.length > 0 && (
-        <div style={{ background:"#111827", borderBottom:`1px solid ${C.darkBorder}` }}>
+        <div style={{ background:"#0E1311", borderBottom:`1px solid ${C.darkBorder}` }}>
           {/* Tap to open full-size — see SideWorkout for rationale. */}
           <img
             src={ImagePresets.feed(wellness.photoUrls[0])}
@@ -1024,7 +1024,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
           sees a colored chip per activity. Matches the modern profile card
           aesthetic where each activity has its own emoji + accent color. */}
       {!open && (
-        <div style={{ background:"#1E2235", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}`, display:"flex", flexWrap:"wrap", gap:6 }}>
+        <div style={{ background:"#141A17", padding:"10px 14px", borderBottom:`1px solid ${C.darkBorder}`, display:"flex", flexWrap:"wrap", gap:6 }}>
           {wellness.entries.slice(0, 4).map((e, i) => {
             const s = getWellnessStyle(e.activity || "");
             return (
@@ -1041,7 +1041,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
         </div>
       )}
       {open && (
-        <div style={{ background:"#1E2235",padding:"10px 14px",display:"flex",flexDirection:"column",gap:7 }}>
+        <div style={{ background:"#141A17",padding:"10px 14px",display:"flex",flexDirection:"column",gap:7 }}>
           {wellness.entries.map((e, i) => {
             const s = getWellnessStyle(e.activity || "");
             // Lookup wins. The feed loader hardcodes e.emoji='🌿' for every row,
@@ -1057,7 +1057,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
             })() : "";
             const dur = e.duration ? `${e.duration} min` : null;
             return (
-              <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
+              <div key={i} style={{ background:"#1B231E", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
                 <div style={{ width:38, height:38, borderRadius:11, background:`${accent}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, border:`1.5px solid ${accent}55` }}>{emoji}</div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0" }}>{e.activity}</div>
@@ -1065,7 +1065,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end", flexShrink:0 }}>
                   {dur && <span style={{ fontSize:10, fontWeight:800, color:accent, background:`${accent}22`, padding:"2px 7px", borderRadius:99 }}>{dur}</span>}
-                  {timeStr && <span style={{ fontSize:10, fontWeight:600, color:C.darkSub, background:"#1A1D2E", padding:"2px 7px", borderRadius:99 }}>{timeStr}</span>}
+                  {timeStr && <span style={{ fontSize:10, fontWeight:600, color:C.darkSub, background:"#161D19", padding:"2px 7px", borderRadius:99 }}>{timeStr}</span>}
                 </div>
               </div>
             );
@@ -1124,7 +1124,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           role="link"
         >
           <TierFrame tier={(post as any).tier || "default"} size={44}>
-            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#5BBE93,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
               {(post as any).avatarUrl
                 ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
                 : post.avatar}
@@ -1207,7 +1207,7 @@ function renderMentions(text: string): React.ReactNode {
       <a
         key={`${matchStart}-${uname}`}
         href={`/profile/${uname}`}
-        style={{ color: '#A78BFA', fontWeight: 700, textDecoration: 'none' }}
+        style={{ color: '#86CFAE', fontWeight: 700, textDecoration: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
         @{uname}
@@ -1466,7 +1466,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
           : C.white,
         border: post.post_type === 'achievement'
           ? "2px solid #F59E0B"
-          : `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : "#2D1F52"}`,
+          : `2px solid ${post.tier && post.tier !== "default" ? TIER_COLORS[post.tier as Tier]?.border : "#1B231E"}`,
         boxShadow: post.post_type === 'achievement'
           ? "0 4px 28px rgba(245,158,11,0.30)"
           : (post.tier && post.tier !== "default" ? `0 4px 24px ${TIER_COLORS[post.tier as Tier]?.glow}` : "0 4px 24px rgba(124,58,237,0.10)"),
@@ -1500,7 +1500,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             <TierTitle tier={post.tier || "default"} />
             <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
           </div>
-          <div style={{ width:50,height:50,borderRadius:13,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,0.3)" }}>
+          <div style={{ width:50,height:50,borderRadius:13,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,0.3)" }}>
             <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
             <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
           </div>
@@ -1510,7 +1510,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             <div style={{ position:"relative" }}>
               <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:C.sub,fontSize:20,lineHeight:1 }}>···</button>
               {showMenu && (
-                <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:"#111118",border:"1.5px solid #2D1F52",borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.4)",minWidth:160,overflow:"hidden" }}>
+                <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:"#111118",border:"1.5px solid #1B231E",borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.4)",minWidth:160,overflow:"hidden" }}>
                   {isOwner && onDelete && !confirmDelete && (
                     <button onClick={() => setConfirmDelete(true)} style={{ width:"100%",padding:"12px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,fontWeight:700,color:"#EF4444",display:"flex",alignItems:"center",gap:8 }}>
                       🗑️ Delete Post
@@ -1521,7 +1521,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                       <div style={{ fontSize:13,fontWeight:700,color:C.text,marginBottom:10 }}>Delete this post?</div>
                       <div style={{ display:"flex",gap:8 }}>
                         <button onClick={() => { setShowMenu(false); setConfirmDelete(false); onDelete(); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer" }}>Yes, delete</button>
-                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"1.5px solid #2D1F52",background:"#1A1228",color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
+                        <button onClick={() => { setShowMenu(false); setConfirmDelete(false); }} style={{ flex:1,padding:"8px 0",borderRadius:10,border:"1.5px solid #1B231E",background:"#161D19",color:C.sub,fontWeight:800,fontSize:13,cursor:"pointer" }}>Cancel</button>
                       </div>
                     </div>
                   )}
@@ -1547,7 +1547,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
           <div
-            style={{ position:"relative",width:"100%",aspectRatio: postAspect ?? 1,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
+            style={{ position:"relative",width:"100%",aspectRatio: postAspect ?? 1,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
             // Swipe support — uses Pointer Events instead of Touch Events for
             // iOS reliability. iOS Safari has a quirk where touch-action: pan-y
             // can absorb touch sequences if iOS detects any vertical component,
@@ -1860,7 +1860,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             );
           })()
         ) : (
-          <label style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,margin:"0 18px 12px",height:340,borderRadius:16,border:"2px dashed #2D1F52",background:"#1A1228",cursor:isOwner?"pointer":"default" }}>
+          <label style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,margin:"0 18px 12px",height:340,borderRadius:16,border:"2px dashed #1B231E",background:"#161D19",cursor:isOwner?"pointer":"default" }}>
             {isOwner ? (<>
               <span style={{ fontSize:36 }}>📷</span>
               <div>
@@ -1878,7 +1878,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         )}
         {post.photos.length > 0 && isOwner && (
           <div style={{ padding:"6px 18px 0",display:"flex",alignItems:"center",gap:8 }}>
-            <label style={{ fontSize:12,fontWeight:700,color:C.blue,cursor:"pointer",padding:"5px 14px",borderRadius:20,background:"#1A1228",border:"1px solid #2D1F52" }}>
+            <label style={{ fontSize:12,fontWeight:700,color:C.blue,cursor:"pointer",padding:"5px 14px",borderRadius:20,background:"#161D19",border:"1px solid #1B231E" }}>
               + Add Photo
               <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
             </label>
@@ -1890,7 +1890,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
         )}
 
         {/* Actions */}
-        <div style={{ padding:"12px 18px 8px",borderTop:"1px solid #2D1F52",marginTop:12 }}>
+        <div style={{ padding:"12px 18px 8px",borderTop:"1px solid #1B231E",marginTop:12 }}>
           {/* Reaction bar */}
           <ReactionBar
             postId={post.id}
@@ -1932,7 +1932,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
                     ? <img src={c.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                     : c.avatar}
                 </div>
-                <div style={{ flex:1,background:"#1A1228",borderRadius:14,padding:"9px 13px",border:"1px solid #2D1F52" }}>
+                <div style={{ flex:1,background:"#161D19",borderRadius:14,padding:"9px 13px",border:"1px solid #1B231E" }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3 }}>
                     <span style={{ fontWeight:800,fontSize:12,color:C.text }}>{c.user}</span>
                     <span style={{ fontSize:10,color:C.sub }}>{c.time}</span>
@@ -1994,7 +1994,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
               ? <img src={currentUser.profile.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
               : ((currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "?").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase())}
           </div>
-          <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#1A1228",borderRadius:24,padding:"8px 16px",border:"1.5px solid #2D1F52" }}>
+          <div style={{ flex:1,display:"flex",gap:8,alignItems:"center",background:"#161D19",borderRadius:24,padding:"8px 16px",border:"1.5px solid #1B231E" }}>
             <div style={{ flex:1 }}>
               <MentionInput
                 inputRef={commentInputRef as any}
@@ -2074,7 +2074,7 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #7C3AED" : "2px solid #2A2D3E" }}>
+              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #5BBE93" : "2px solid #232C27" }}>
                 {member.avatar_url
                   ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   : ini}
@@ -2082,10 +2082,10 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
-                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#7C3AED", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
+                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#5BBE93", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
                 </div>
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
-                <div style={{ fontSize:10, color:"#7C3AED", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
+                <div style={{ fontSize:10, color:"#5BBE93", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
               </div>
               <FollowButton targetUserId={member.id} size="sm" />
             </div>
@@ -2122,7 +2122,7 @@ function ActivityFilterChips({ value, onChange }: { value: ActivityFilter; onCha
         <button key={c.key} onClick={() => onChange(c.key)} style={{
           padding:"5px 11px", borderRadius:99, border:"none", cursor:"pointer",
           fontWeight:700, fontSize:11,
-          background: value === c.key ? "#7C3AED" : "rgba(124,58,237,0.10)",
+          background: value === c.key ? "#5BBE93" : "rgba(124,58,237,0.10)",
           color: value === c.key ? "#fff" : "#9CA3AF",
           transition:"all 0.15s",
         }}>
@@ -3193,7 +3193,7 @@ export default function FeedPage() {
       `}</style>
 
       {/* ── Sticky Header ── */}
-      <div style={{ position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid #2D1F52`, paddingTop:"env(safe-area-inset-top)" }}>
+      <div style={{ position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid #1B231E`, paddingTop:"env(safe-area-inset-top)" }}>
         <div className="feed-header-inner" style={{ padding:"14px 20px 12px",display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
             <span style={{ fontSize:20 }}>⚡</span>
@@ -3202,19 +3202,19 @@ export default function FeedPage() {
           {/* Search bar — sits right next to the FIT logo. Fixed width so it
               doesn't stretch out wide and feel disconnected from the logo. */}
           <div style={{ width:320,maxWidth:"100%",position:"relative",flex:"1 1 auto",minWidth:0 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:8,background:"#1A1228",borderRadius:24,padding:"7px 14px",border:`1.5px solid ${searchQuery?C.blue:"#2D1F52"}` }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8,background:"#161D19",borderRadius:24,padding:"7px 14px",border:`1.5px solid ${searchQuery?C.blue:"#1B231E"}` }}>
               <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{width:15,height:15,flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search people..." style={{background:"none",border:"none",outline:"none",fontSize:13,color:C.text,flex:1,minWidth:0}}/>
               {searchQuery && <button onClick={()=>{setSearchQuery("");setSearchResults([]);}} style={{background:"none",border:"none",cursor:"pointer",color:C.sub,fontSize:16,padding:0,lineHeight:1}}>×</button>}
             </div>
             {searchQuery.trim() && (
-              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:"#111118",borderRadius:16,border:"1.5px solid #2D1F52",boxShadow:"0 8px 24px rgba(0,0,0,0.4)",zIndex:200,overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
+              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:"#111118",borderRadius:16,border:"1.5px solid #1B231E",boxShadow:"0 8px 24px rgba(0,0,0,0.4)",zIndex:200,overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
                 {searchLoading ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>Searching...</div>
                 : searchResults.length===0 ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>No results</div>
                 : searchResults.map(u=>(
                   <div key={u.id} onClick={()=>{setSearchQuery("");setSearchResults([]);window.location.href=`/profile/${u.username}`;}}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #2D1F52"}}
-                    onMouseEnter={e=>(e.currentTarget.style.background="#2D1F52")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1B231E"}}
+                    onMouseEnter={e=>(e.currentTarget.style.background="#1B231E")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
                     <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
                       {u.avatar_url?<img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
@@ -3240,15 +3240,15 @@ export default function FeedPage() {
             style={{
               position:"relative", flexShrink:0,
               width:42, height:42, borderRadius:14,
-              background: feedTab === "notifications" ? "#7C3AED" : "rgba(124,58,237,0.12)",
-              border: feedTab === "notifications" ? "1.5px solid #A78BFA" : "1.5px solid rgba(124,58,237,0.35)",
+              background: feedTab === "notifications" ? "#5BBE93" : "rgba(124,58,237,0.12)",
+              border: feedTab === "notifications" ? "1.5px solid #86CFAE" : "1.5px solid rgba(124,58,237,0.35)",
               display:"flex", alignItems:"center", justifyContent:"center",
               cursor:"pointer", padding:0,
               transition:"all 0.15s",
             }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke={feedTab === "notifications" ? "#fff" : "#A78BFA"}
+              stroke={feedTab === "notifications" ? "#fff" : "#86CFAE"}
               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -3261,7 +3261,7 @@ export default function FeedPage() {
                 fontSize:10, fontWeight:900, color:"#fff",
                 display:"flex", alignItems:"center", justifyContent:"center",
                 padding:"0 4px",
-                border:"2px solid #0D0D0D",
+                border:"2px solid #0E1311",
                 lineHeight:1,
               }}>
                 {unreadCount > 9 ? "9+" : unreadCount}
@@ -3278,7 +3278,7 @@ export default function FeedPage() {
             <button key={t.key} onClick={() => setFeedTab(t.key as any)} style={{
               padding:"8px 20px",borderRadius:99,border:"none",cursor:"pointer",
               fontWeight:800,fontSize:13,
-              background:feedTab===t.key?"#7C3AED":"transparent",
+              background:feedTab===t.key?"#5BBE93":"transparent",
               color:feedTab===t.key?"#fff":"#6B7280",
               transition:"all 0.15s",
             }}>
@@ -3319,7 +3319,7 @@ export default function FeedPage() {
       />
 
       {/* ── Stories Row (visible on all views) ── */}
-      <div style={{ padding:"12px 0 0", borderBottom:"1px solid #2D1F52", overflowX:"auto" }}>
+      <div style={{ padding:"12px 0 0", borderBottom:"1px solid #1B231E", overflowX:"auto" }}>
         <div style={{ display:"flex", gap:16, padding:"4px 24px 14px", minWidth:"max-content" }}>
           {/* "Your story" tile — always first. Tap to upload (or view if posted). */}
           {(() => {
@@ -3359,7 +3359,7 @@ export default function FeedPage() {
                           <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)` }} />
                         )}
                         {/* ＋ badge — corner overlay so the avatar stays visible */}
-                        <div style={{ position:"absolute", bottom:-2, right:-2, width:22, height:22, borderRadius:"50%", background:C.blue, border:"2px solid #0D0D0D", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, lineHeight:1, color:"#fff" }}>＋</div>
+                        <div style={{ position:"absolute", bottom:-2, right:-2, width:22, height:22, borderRadius:"50%", background:C.blue, border:"2px solid #0E1311", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, lineHeight:1, color:"#fff" }}>＋</div>
                       </div>
                     );
                   })()}
@@ -3406,7 +3406,7 @@ export default function FeedPage() {
 
         {/* LEFT: Social feed (desktop only) */}
         <div className="feed-main feed-desktop-only">
-          <div style={{ height:1,background:"#2D1F52",marginBottom:20 }}/>
+          <div style={{ height:1,background:"#1B231E",marginBottom:20 }}/>
           {feedTab === "notifications" ? (
             <div style={{ padding:"16px 20px", maxWidth:600 }}>
               <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
@@ -3417,22 +3417,22 @@ export default function FeedPage() {
                   <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
                 </div>
               ) : notifications.map(n => (
-                <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}` }}>
+                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                     {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
                     <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
                   </div>
-                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#7C3AED",flexShrink:0}}/>}
+                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#5BBE93",flexShrink:0}}/>}
                 </div>
               ))}
             </div>
           ) : feedTab === "following" ? (
             loadingFollowing ? (
               <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #1B231E",borderTopColor:"#5BBE93",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <p style={{ fontWeight:600 }}>Loading following feed…</p>
               </div>
@@ -3517,7 +3517,7 @@ export default function FeedPage() {
                       posts AND no activity. Previously this said "no posts"
                       even when the user had logged plenty of activity. */}
                   {displayPosts.length === 0 && (
-                    <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
+                    <div style={{ background:"#161D19",border:"1.5px solid #1B231E",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#5BBE93",fontWeight:600 }}>
                       👋 No posts yet. Share something to the feed to see it here!
                     </div>
                   )}
@@ -3544,7 +3544,7 @@ export default function FeedPage() {
                       <button
                         onClick={loadMorePosts}
                         disabled={loadingMorePosts}
-                        style={{ padding:"12px 32px", borderRadius:99, background:"#7C3AED", color:"#fff", border:"none", cursor:loadingMorePosts?"default":"pointer", fontWeight:800, fontSize:14, opacity:loadingMorePosts?0.6:1, transition:"opacity 0.15s" }}
+                        style={{ padding:"12px 32px", borderRadius:99, background:"#5BBE93", color:"#fff", border:"none", cursor:loadingMorePosts?"default":"pointer", fontWeight:800, fontSize:14, opacity:loadingMorePosts?0.6:1, transition:"opacity 0.15s" }}
                       >
                         {loadingMorePosts ? "Loading…" : "Load More Posts"}
                       </button>
@@ -3578,7 +3578,7 @@ export default function FeedPage() {
                 <button
                   onClick={() => fetchActivityLogs(activityLogsPage + 1, true, activityFilter)}
                   disabled={loadingMoreActivity}
-                  style={{ padding:"9px 24px", borderRadius:99, background:"rgba(124,58,237,0.15)", color:"#7C3AED", border:"1px solid rgba(124,58,237,0.3)", cursor:loadingMoreActivity?"default":"pointer", fontWeight:700, fontSize:12, opacity:loadingMoreActivity?0.6:1 }}
+                  style={{ padding:"9px 24px", borderRadius:99, background:"rgba(124,58,237,0.15)", color:"#5BBE93", border:"1px solid rgba(124,58,237,0.3)", cursor:loadingMoreActivity?"default":"pointer", fontWeight:700, fontSize:12, opacity:loadingMoreActivity?0.6:1 }}
                 >
                   {loadingMoreActivity ? "Loading…" : "Load More ↓"}
                 </button>
@@ -3594,11 +3594,11 @@ export default function FeedPage() {
             {SUGGESTED_USERS.map(u => (
               <div key={u.id} style={{ background:C.darkCard,borderRadius:18,border:`1px solid ${C.darkBorder}`,overflow:"hidden",marginBottom:16 }}>
                 <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
+                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
                     <div style={{ fontSize:11,color:C.darkSub }}>@{u.username}</div>
-                    <div style={{ fontSize:10,color:"#7C3AED",marginTop:1,fontWeight:600 }}>{u.specialty}</div>
+                    <div style={{ fontSize:10,color:"#5BBE93",marginTop:1,fontWeight:600 }}>{u.specialty}</div>
                   </div>
                   <div style={{ textAlign:"right",flexShrink:0 }}>
                     <div style={{ fontSize:13,fontWeight:900,color:"#E2E8F0" }}>{u.followers}</div>
@@ -3664,12 +3664,12 @@ export default function FeedPage() {
             position:"absolute", top:0, left:0, right:0,
             display:"flex", alignItems:"center", justifyContent:"center",
             height: ptrRefreshing ? 60 : ptrPullPx,
-            color: "#A78BFA", fontSize: 13, fontWeight: 700,
+            color: "#86CFAE", fontSize: 13, fontWeight: 700,
             transition: ptrRefreshing ? "height 0.18s" : undefined,
             pointerEvents:"none",
           }}>
             {ptrRefreshing
-              ? <div style={{ width:22, height:22, borderRadius:"50%", border:"3px solid #2D1F52", borderTopColor:"#7C3AED", animation:"spin 0.8s linear infinite" }}/>
+              ? <div style={{ width:22, height:22, borderRadius:"50%", border:"3px solid #1B231E", borderTopColor:"#5BBE93", animation:"spin 0.8s linear infinite" }}/>
               : (ptrPullPx >= 65 ? "↑ Release to refresh" : "↓ Pull to refresh")}
           </div>
         )}
@@ -3677,7 +3677,7 @@ export default function FeedPage() {
           transform: `translateY(${ptrRefreshing ? 60 : ptrPullPx}px)`,
           transition: ptrPullPx === 0 ? "transform 0.2s ease-out" : undefined,
         }}>
-        <div style={{ height:1,background:"#2D1F52",margin:"12px 0 16px" }}/>
+        <div style={{ height:1,background:"#1B231E",margin:"12px 0 16px" }}/>
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
             <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
@@ -3688,22 +3688,22 @@ export default function FeedPage() {
                 <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
               </div>
             ) : notifications.map(n => (
-              <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#1A1A1A" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#2A2A2A" : "#2A3A2A"}` }}>
-                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#7C3AED,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+              <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}` }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                   {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
                   <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
                 </div>
-                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#7C3AED",flexShrink:0}}/>}
+                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#5BBE93",flexShrink:0}}/>}
               </div>
             ))}
           </div>
         ) : feedTab === "following" ? (
           loadingFollowing ? (
             <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #2D1F52",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #1B231E",borderTopColor:"#5BBE93",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
               <p style={{ fontWeight:600 }}>Loading following feed…</p>
             </div>
           ) : followingPosts.length === 0 ? (
@@ -3774,7 +3774,7 @@ export default function FeedPage() {
           <NewMembersPanel members={newMembers} currentUser={user as any} />
         )}
         {mobileItems.length === 0 && !loadingFeed && (
-          <div style={{ background:"#1A1228",border:"1.5px solid #2D1F52",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#7C3AED",fontWeight:600 }}>
+          <div style={{ background:"#161D19",border:"1.5px solid #1B231E",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#5BBE93",fontWeight:600 }}>
             👋 No posts yet. Log a workout or share to feed to see content here!
           </div>
         )}
@@ -3787,7 +3787,7 @@ export default function FeedPage() {
               <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
                 <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
+                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
                     <div>
                       <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
                       <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
@@ -3811,7 +3811,7 @@ export default function FeedPage() {
                   <span style={{ fontSize:11,fontWeight:800,color:C.darkSub,letterSpacing:1,textTransform:"uppercase" }}>Suggested</span>
                 </div>
                 <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
+                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
                     <div style={{ fontSize:11,color:C.darkSub }}>@{u.username} · {u.specialty}</div>
