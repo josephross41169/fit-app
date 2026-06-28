@@ -4,11 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 const C = {
-  blue:"#7C3AED", greenLight:"#160F28", greenMid:"#2A1F45",
+  blue:"#5BBE93", greenLight:"#160F28", greenMid:"#2A1F45",
   gold:"#F5A623", goldLight:"#FFFBEE",
-  text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
+  text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
   green:"#52C97A",
-  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,15 +170,15 @@ const ONLINE_GROUPS_MOCK = [
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "Running":      "#7C3AED",
-  "Strength":     "#7C3AED",
+  "Running":      "#5BBE93",
+  "Strength":     "#5BBE93",
   "Yoga":         "#52C97A",
   "HIIT":         "#EF4444",
   "Bodybuilding": "#F5A623",
-  "Nutrition":    "#7C3AED",
+  "Nutrition":    "#5BBE93",
   "Wellness":     "#4ADE80",
-  "Calisthenics": "#7C3AED",
-  "General":      "#7C3AED",
+  "Calisthenics": "#5BBE93",
+  "General":      "#5BBE93",
 };
 
 // Type definitions
@@ -348,7 +348,7 @@ function GroupCard({ group, onJoin }: { group: DisplayGroup; onJoin?: (id: strin
 
         <button
           onClick={handleJoin}
-          style={{ width:"100%", padding:"11px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#7C3AED,#A78BFA)", color:joined?"#7C3AED":"#fff", fontWeight:800, fontSize:14, cursor:"pointer", transition:"all 0.15s", boxShadow:joined?"none":"0 4px 14px rgba(124,58,237,0.35)", opacity:joining?0.7:1 }}
+          style={{ width:"100%", padding:"11px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#5BBE93,#86CFAE)", color:joined?"#5BBE93":"#fff", fontWeight:800, fontSize:14, cursor:"pointer", transition:"all 0.15s", boxShadow:joined?"none":"0 4px 14px rgba(124,58,237,0.35)", opacity:joining?0.7:1 }}
         >
           {joining ? "Joining..." : joined ? "✓ Joined — View Group" : "Join Group"}
         </button>
@@ -396,7 +396,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
-      <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", padding:"28px 24px" }} onClick={e => e.stopPropagation()}>
+      <div style={{ background:"#161D19", borderRadius:24, border:"1px solid #232C27", width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", padding:"28px 24px" }} onClick={e => e.stopPropagation()}>
         <div style={{ fontWeight:900, fontSize:18, color:"#E2E8F0", marginBottom:6 }}>Create a Group</div>
         <div style={{ fontSize:13, color:"#8892A4", marginBottom:20 }}>Build your fitness community</div>
 
@@ -407,7 +407,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {EMOJI_OPTIONS.map(em => (
                 <button key={em} type="button" onClick={() => setForm(f=>({...f,emoji:em}))}
-                  style={{ width:40, height:40, borderRadius:10, border:`2px solid ${form.emoji===em?"#7C3AED":"#2A2D3E"}`, background:form.emoji===em?"rgba(124,58,237,0.2)":"transparent", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  style={{ width:40, height:40, borderRadius:10, border:`2px solid ${form.emoji===em?"#5BBE93":"#232C27"}`, background:form.emoji===em?"rgba(124,58,237,0.2)":"transparent", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                   {em}
                 </button>
               ))}
@@ -419,7 +419,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <label style={{ fontSize:12, color:"#8892A4", fontWeight:700, display:"block", marginBottom:6 }}>Group Name *</label>
             <input value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))}
               placeholder="e.g. Vegas Morning Runners" required
-              style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+              style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
           </div>
 
           {/* Description */}
@@ -427,14 +427,14 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <label style={{ fontSize:12, color:"#8892A4", fontWeight:700, display:"block", marginBottom:6 }}>Description</label>
             <textarea value={form.description} onChange={e => setForm(f=>({...f,description:e.target.value}))}
               placeholder="What's this group about?" rows={3}
-              style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", resize:"vertical", boxSizing:"border-box" }} />
+              style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", resize:"vertical", boxSizing:"border-box" }} />
           </div>
 
           {/* Category */}
           <div style={{ marginBottom:14 }}>
             <label style={{ fontSize:12, color:"#8892A4", fontWeight:700, display:"block", marginBottom:6 }}>Category</label>
             <select value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}
-              style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
+              style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
               {Object.keys(CATEGORY_COLORS).map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
           </div>
@@ -445,24 +445,24 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
               <label style={{ fontSize:12, color:"#8892A4", fontWeight:700, display:"block", marginBottom:6 }}>Location</label>
               <input value={form.location} onChange={e => setForm(f=>({...f,location:e.target.value}))}
                 placeholder="Las Vegas, NV"
-                style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
             </div>
             <div>
               <label style={{ fontSize:12, color:"#8892A4", fontWeight:700, display:"block", marginBottom:6 }}>Meet Frequency</label>
               <input value={form.meet_frequency} onChange={e => setForm(f=>({...f,meet_frequency:e.target.value}))}
                 placeholder="Every Saturday 6AM"
-                style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
             </div>
           </div>
 
           {/* Online toggle */}
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20, padding:"12px 14px", background:"#252A3D", borderRadius:10, border:"1px solid #2A2D3E" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20, padding:"12px 14px", background:"#1B231E", borderRadius:10, border:"1px solid #232C27" }}>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:700, fontSize:13, color:"#E2E8F0" }}>Online Group</div>
               <div style={{ fontSize:11, color:"#8892A4" }}>Members join from anywhere worldwide</div>
             </div>
             <button type="button" onClick={() => setForm(f=>({...f,is_online:!f.is_online}))}
-              style={{ width:44, height:24, borderRadius:12, background:form.is_online?"#7C3AED":"#2A2D3E", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+              style={{ width:44, height:24, borderRadius:12, background:form.is_online?"#5BBE93":"#232C27", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
               <div style={{ position:"absolute", top:2, left:form.is_online?22:2, width:20, height:20, borderRadius:10, background:"#fff", transition:"left 0.2s" }} />
             </button>
           </div>
@@ -471,11 +471,11 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
           <div style={{ display:"flex", gap:10 }}>
             <button type="button" onClick={onClose}
-              style={{ flex:1, padding:"11px", borderRadius:12, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+              style={{ flex:1, padding:"11px", borderRadius:12, border:"1px solid #232C27", background:"transparent", color:"#8892A4", fontWeight:700, fontSize:13, cursor:"pointer" }}>
               Cancel
             </button>
             <button type="submit" disabled={submitting}
-              style={{ flex:2, padding:"11px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", opacity:submitting?0.7:1 }}>
+              style={{ flex:2, padding:"11px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#5BBE93,#86CFAE)", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", opacity:submitting?0.7:1 }}>
               {submitting ? "Creating..." : "Create Group 🚀"}
             </button>
           </div>
@@ -523,9 +523,9 @@ function NearbyPlaces() {
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
         <input value={zip} onChange={e => setZip(e.target.value.replace(/\D/g,"").slice(0,5))} onKeyDown={e => e.key==="Enter" && zip.length===5 && setSubmitted(true)}
           placeholder="Enter zip code..." maxLength={5}
-          style={{ flex:1, background:"#252A3D", border:`1px solid ${C.darkBorder}`, borderRadius:10, padding:"8px 12px", fontSize:12, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }} />
+          style={{ flex:1, background:"#1B231E", border:`1px solid ${C.darkBorder}`, borderRadius:10, padding:"8px 12px", fontSize:12, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }} />
         <button onClick={() => zip.length===5 && setSubmitted(true)}
-          style={{ padding:"8px 14px", borderRadius:10, background:"linear-gradient(135deg,#7C3AED,#A78BFA)", border:"none", color:"#fff", fontWeight:800, fontSize:12, cursor:"pointer", opacity:zip.length===5?1:0.5 }}>
+          style={{ padding:"8px 14px", borderRadius:10, background:"linear-gradient(135deg,#5BBE93,#86CFAE)", border:"none", color:"#fff", fontWeight:800, fontSize:12, cursor:"pointer", opacity:zip.length===5?1:0.5 }}>
           Search
         </button>
       </div>
@@ -534,7 +534,7 @@ function NearbyPlaces() {
         <>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
             {["All",...PLACE_CATEGORIES].map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${activeCategory===cat?"#7C3AED":C.darkBorder}`, background:activeCategory===cat?"rgba(124,58,237,0.2)":"transparent", color:activeCategory===cat?"#A78BFA":C.darkSub, fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
+              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${activeCategory===cat?"#5BBE93":C.darkBorder}`, background:activeCategory===cat?"rgba(124,58,237,0.2)":"transparent", color:activeCategory===cat?"#86CFAE":C.darkSub, fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
                 {cat}
               </button>
             ))}
@@ -543,15 +543,15 @@ function NearbyPlaces() {
             {filtered.length === 0 ? (
               <div style={{ textAlign:"center", padding:"16px 0", color:C.darkSub, fontSize:12 }}>No {activeCategory} spots found near {zip}</div>
             ) : filtered.map((place, i) => (
-              <div key={i} style={{ background:"#252A3D", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, cursor:"pointer", border:`1px solid transparent`, transition:"border-color 0.15s" }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#7C3AED"}
+              <div key={i} style={{ background:"#1B231E", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, cursor:"pointer", border:`1px solid transparent`, transition:"border-color 0.15s" }}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#5BBE93"}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "transparent"}>
-                <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#7C3AED,#A78BFA)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{place.emoji}</div>
+                <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#5BBE93,#86CFAE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{place.emoji}</div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, fontSize:12, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{place.name}</div>
                   <div style={{ fontSize:10, color:C.darkSub, marginTop:1 }}>{place.address}</div>
                   <div style={{ display:"flex", gap:8, marginTop:3, alignItems:"center" }}>
-                    <span style={{ background:"rgba(124,58,237,0.2)", color:"#A78BFA", fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99 }}>{place.category}</span>
+                    <span style={{ background:"rgba(124,58,237,0.2)", color:"#86CFAE", fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99 }}>{place.category}</span>
                     <span style={{ fontSize:10, color:C.gold }}>★ {place.rating}</span>
                     <span style={{ fontSize:10, color:C.darkSub }}>{place.distance}</span>
                   </div>
@@ -595,7 +595,7 @@ function ConnectSidebar({
   return (
     <div className="connect-sidebar" style={{ width:320, flexShrink:0, paddingTop:20, paddingBottom:20 }}>
       {/* Create a group CTA */}
-      <div style={{ background:`linear-gradient(135deg,#7C3AED,#A78BFA)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
+      <div style={{ background:`linear-gradient(135deg,#5BBE93,#86CFAE)`, borderRadius:18, padding:"20px", marginBottom:20, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
         <div style={{ fontSize:32, marginBottom:8 }}>{effectiveTab==="local"?"📍":"🌍"}</div>
         <div style={{ fontWeight:900, fontSize:16, color:"#fff", marginBottom:6 }}>
           {effectiveTab==="local" ? "Start a Local Group" : "Create an Online Group"}
@@ -623,7 +623,7 @@ function ConnectSidebar({
             { val: String(stats.active), label: effectiveTab==="local" ? "Active Groups" : "Total Groups" },
             { val: stats.members > 0 ? stats.members.toLocaleString() : "—", label: "Total Members" },
           ].map((s,i) => (
-            <div key={i} style={{ background:"#252A3D", borderRadius:10, padding:"12px 10px", textAlign:"center" }}>
+            <div key={i} style={{ background:"#1B231E", borderRadius:10, padding:"12px 10px", textAlign:"center" }}>
               <div style={{ fontSize:18, fontWeight:900, color:C.blue }}>{s.val}</div>
               <div style={{ fontSize:10, color:C.darkSub, marginTop:2 }}>{s.label}</div>
             </div>
@@ -642,9 +642,9 @@ function ConnectSidebar({
             onClick={() => setCategoryFilter("all")}
             style={{
               padding:"6px 14px", borderRadius:99,
-              border: categoryFilter === "all" ? "1.5px solid #A78BFA" : "1.5px solid #2D1B6944",
-              background: categoryFilter === "all" ? "#7C3AED" : "#1A0D3E18",
-              color: categoryFilter === "all" ? "#fff" : "#A78BFA",
+              border: categoryFilter === "all" ? "1.5px solid #86CFAE" : "1.5px solid #1E3D3444",
+              background: categoryFilter === "all" ? "#5BBE93" : "#1A0D3E18",
+              color: categoryFilter === "all" ? "#fff" : "#86CFAE",
               fontSize:11, fontWeight:800, cursor:"pointer",
             }}
           >All</button>
@@ -861,7 +861,7 @@ function ConnectPageInner() {
               style={{ background:"none", border:"none", outline:"none", fontSize:13, color:C.text, flex:1 }} />
           </div>
           <button onClick={() => setShowCreateModal(true)}
-            style={{ padding:"9px 18px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", flexShrink:0 }}>
+            style={{ padding:"9px 18px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#5BBE93,#86CFAE)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", flexShrink:0 }}>
             + Create Group
           </button>
         </div>
@@ -890,7 +890,7 @@ function ConnectPageInner() {
         <div style={{ flex:1, minWidth:0 }}>
           {/* Banner */}
           {tab !== "joined" && (
-            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#5BBE93,#86CFAE)", borderRadius:18, padding:"18px 22px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
               <div style={{ fontSize:40 }}>{tab==="local"?"📍":"🌍"}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>
@@ -911,7 +911,7 @@ function ConnectPageInner() {
           )}
 
           {tab === "joined" && (
-            <div style={{ background:"linear-gradient(135deg,#7C3AED,#A78BFA)", borderRadius:18, padding:"18px 22px", marginBottom:16, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#5BBE93,#86CFAE)", borderRadius:18, padding:"18px 22px", marginBottom:16, display:"flex", alignItems:"center", gap:16, boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
               <div style={{ fontSize:40 }}>✅</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:900, fontSize:18, color:"#fff" }}>My Groups</div>
@@ -934,7 +934,7 @@ function ConnectPageInner() {
                   style={{
                     padding:"8px 16px", borderRadius:999, border:"none", cursor:"pointer",
                     fontWeight:800, fontSize:12,
-                    background: joinedCategory === "all" ? "linear-gradient(135deg,#7C3AED,#A78BFA)" : C.darkCard,
+                    background: joinedCategory === "all" ? "linear-gradient(135deg,#5BBE93,#86CFAE)" : C.darkCard,
                     color: joinedCategory === "all" ? "#fff" : C.sub,
                     border: joinedCategory === "all" ? "none" : `1.5px solid ${C.darkBorder}`,
                   }}>
@@ -970,7 +970,7 @@ function ConnectPageInner() {
                   height: 130,
                   borderRadius: 18,
                   marginBottom: 12,
-                  background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                  background: "linear-gradient(90deg, #1A1230 0%, #1B231E 50%, #1A1230 100%)",
                   backgroundSize: "200% 100%",
                   animation: "connectSkeletonShimmer 1.4s ease-in-out infinite",
                 }} />
@@ -986,7 +986,7 @@ function ConnectPageInner() {
                       height: 130,
                       borderRadius: 18,
                       marginBottom: 12,
-                      background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                      background: "linear-gradient(90deg, #1A1230 0%, #1B231E 50%, #1A1230 100%)",
                       backgroundSize: "200% 100%",
                       animation: "connectSkeletonShimmer 1.4s ease-in-out infinite",
                     }} />
