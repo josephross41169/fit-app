@@ -117,7 +117,7 @@ type ExerciseStats = {
 };
 
 const C = {
-  purple: "#7C3AED", purpleDark: "#1E1530", purpleMid: "#2D1F52",
+  purple: "#5BBE93", purpleDark: "#1E1530", purpleMid: "#1B231E",
   purpleBorder: "#4C3A7A", gold: "#F5A623", cyan: "#06B6D4",
   text: "#F0F0F0", sub: "#9CA3AF", green: "#4ADE80",
 };
