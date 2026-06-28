@@ -22,11 +22,11 @@ import {
 } from "@/lib/groupBadges";
 
 const C = {
-  card: "#111827",
+  card: "#0E1311",
   border: "#1F2937",
   text: "#F9FAFB",
   sub: "#9CA3AF",
-  purple: "#7C3AED",
+  purple: "#5BBE93",
 };
 
 export default function GroupBadges({
