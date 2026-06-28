@@ -16,14 +16,14 @@ import { useAuth } from "@/lib/auth";
 import { GOAL_TEMPLATES, type Goal, type GoalMetric } from "@/lib/goals";
 
 const C = {
-  purple: "#7C3AED", purpleDim: "#2D1F52", purpleBorder: "#3D2A6E",
+  purple: "#5BBE93", purpleDim: "#1B231E", purpleBorder: "#3D2A6E",
   gold: "#F5A623", green: "#4ADE80",
   text: "#F0F0F0", sub: "#9CA3AF",
-  card: "#1A1228", bg: "#0D0820",
+  card: "#161D19", bg: "#0D0820",
 };
 
 const iStyle: React.CSSProperties = {
-  background: "#0D0D0D",
+  background: "#0E1311",
   border: "1.5px solid #3D2A6E",
   borderRadius: 10,
   padding: "10px 14px",
@@ -77,7 +77,7 @@ export default function GoalsTab() {
           onClick={() => setShowCreate(true)}
           style={{
             padding: "8px 14px", borderRadius: 12, border: "none",
-            background: `linear-gradient(135deg, ${C.purple}, #A78BFA)`,
+            background: `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
             color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer",
           }}
         >+ New Goal</button>
@@ -188,7 +188,7 @@ function GoalCard({ goal, onChange }: { goal: Goal; onChange: () => void }) {
             {Math.round(goal.current * 10) / 10} / {goal.target} {goal.unit}
           </span>
         </div>
-        <div style={{ height: 8, background: "#0D0D0D", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: 8, background: "#0E1311", borderRadius: 99, overflow: "hidden" }}>
           <div style={{
             height: "100%",
             width: `${pct}%`,
@@ -424,7 +424,7 @@ export function CreateGoalModal({
                 disabled={submitting}
                 style={{
                   flex: 2, padding: "12px 0", borderRadius: 12, border: "none",
-                  background: `linear-gradient(135deg, ${C.purple}, #A78BFA)`,
+                  background: `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
                   color: "#fff", fontWeight: 900, fontSize: 14,
                   cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1,
                 }}
