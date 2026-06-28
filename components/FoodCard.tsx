@@ -24,9 +24,9 @@ function getInitials(name: string) {
 }
 
 const macroBadges = [
-  { key: "calories" as const, label: "Cal", color: "#7C3AED", bg: "#F3F0FF" },
+  { key: "calories" as const, label: "Cal", color: "#5BBE93", bg: "#EFF7F2" },
   { key: "protein" as const, label: "Protein", color: "#4F8EF7", bg: "#EEF4FF" },
-  { key: "carbs" as const, label: "Carbs", color: "#A78BFA", bg: "#FFF8ED" },
+  { key: "carbs" as const, label: "Carbs", color: "#86CFAE", bg: "#FFF8ED" },
   { key: "fat" as const, label: "Fat", color: "#4ADE80", bg: "#F5F0FF" },
 ];
 
@@ -43,16 +43,16 @@ export default function FoodCard({
 
   return (
     <div className="bg-white rounded-3xl overflow-hidden shadow-sm border"
-      style={{ borderColor: "#DDD6FE" }}>
+      style={{ borderColor: "#C9E8D8" }}>
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #A78BFA, #FF8C42)" }}>
+          style={{ background: "linear-gradient(135deg, #86CFAE, #FF8C42)" }}>
           {getInitials(user.full_name)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm" style={{ color: "#1A1A1A" }}>{user.full_name}</p>
+          <p className="font-bold text-sm" style={{ color: "#161D19" }}>{user.full_name}</p>
           <p className="text-xs" style={{ color: "#6B7280" }}>@{user.username} � {created_at}</p>
         </div>
         <button className="text-gray-300 hover:text-gray-400 transition-colors">
@@ -64,7 +64,7 @@ export default function FoodCard({
 
       {/* Meal banner */}
       <div className="mx-4 mb-3 rounded-2xl px-4 py-3"
-        style={{ background: "linear-gradient(135deg, #A78BFA, #FF8C42)" }}>
+        style={{ background: "linear-gradient(135deg, #86CFAE, #FF8C42)" }}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-white font-bold text-base">{content.meal_name}</p>
@@ -93,7 +93,7 @@ export default function FoodCard({
         <div className="flex flex-wrap gap-2">
           {content.items.map((item, i) => (
             <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium"
-              style={{ background: "#FFF8ED", color: "#A78BFA" }}>
+              style={{ background: "#FFF8ED", color: "#86CFAE" }}>
               {item}
             </span>
           ))}
@@ -101,19 +101,19 @@ export default function FoodCard({
       </div>
 
       {/* Caption */}
-      <p className="px-4 pb-3 text-sm" style={{ color: "#1A1A1A" }}>{caption}</p>
+      <p className="px-4 pb-3 text-sm" style={{ color: "#161D19" }}>{caption}</p>
 
       {/* Actions */}
-      <div className="flex items-center gap-4 px-4 py-3 border-t" style={{ borderColor: "#DDD6FE" }}>
+      <div className="flex items-center gap-4 px-4 py-3 border-t" style={{ borderColor: "#C9E8D8" }}>
         <button onClick={toggleLike}
           className="flex items-center gap-1.5 transition-all duration-150 active:scale-90">
           <svg viewBox="0 0 24 24"
-            fill={liked ? "#7C3AED" : "none"}
-            stroke={liked ? "#7C3AED" : "#6B7280"}
+            fill={liked ? "#5BBE93" : "none"}
+            stroke={liked ? "#5BBE93" : "#6B7280"}
             strokeWidth="2" className="w-5 h-5">
             <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
           </svg>
-          <span className="text-sm font-semibold" style={{ color: liked ? "#7C3AED" : "#6B7280" }}>
+          <span className="text-sm font-semibold" style={{ color: liked ? "#5BBE93" : "#6B7280" }}>
             {likes}
           </span>
         </button>
