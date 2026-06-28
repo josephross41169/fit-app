@@ -97,15 +97,15 @@ export default function TaggedPostsModal({ userId, displayName, isOwnProfile, on
       }}>
       <div onClick={e => e.stopPropagation()}
         style={{
-          background: "#0D0D0D",
+          background: "#0E1311",
           borderRadius: 18,
-          border: "1.5px solid #2D1F52",
+          border: "1.5px solid #1B231E",
           width: "100%", maxWidth: 540, maxHeight: "85vh",
           display: "flex", flexDirection: "column",
           overflow: "hidden",
         }}>
         {/* Header */}
-        <div style={{ padding: "16px 18px", borderBottom: "1px solid #2D1F52", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "16px 18px", borderBottom: "1px solid #1B231E", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: "#E2E8F0" }}>
               {isOwnProfile ? "Posts you're tagged in" : `${displayName} is tagged in`}
@@ -122,7 +122,7 @@ export default function TaggedPostsModal({ userId, displayName, isOwnProfile, on
         <div style={{ overflowY: "auto", padding: 14, flex: 1 }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#9CA3AF" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #2D1F52", borderTopColor: "#7C3AED", animation: "ptm-spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+              <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #1B231E", borderTopColor: "#5BBE93", animation: "ptm-spin 0.8s linear infinite", margin: "0 auto 12px" }} />
               <style>{`@keyframes ptm-spin { to { transform: rotate(360deg); } }`}</style>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Loading tagged posts…</div>
             </div>
@@ -152,7 +152,7 @@ export default function TaggedPostsModal({ userId, displayName, isOwnProfile, on
                     style={{
                       position: "relative",
                       aspectRatio: "1/1",
-                      background: "#1A1A1A",
+                      background: "#161D19",
                       borderRadius: 8,
                       overflow: "hidden",
                       textDecoration: "none",
@@ -177,9 +177,9 @@ export default function TaggedPostsModal({ userId, displayName, isOwnProfile, on
                       // Text-only post — show the caption preview instead
                       <div style={{
                         width: "100%", height: "100%",
-                        background: "linear-gradient(135deg,#1A1228,#2D1F52)",
+                        background: "linear-gradient(135deg,#161D19,#1B231E)",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        padding: 8, fontSize: 11, fontWeight: 600, color: "#A78BFA",
+                        padding: 8, fontSize: 11, fontWeight: 600, color: "#86CFAE",
                         textAlign: "center", lineHeight: 1.3,
                         overflow: "hidden", textOverflow: "ellipsis",
                       }}>
