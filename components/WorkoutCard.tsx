@@ -43,16 +43,16 @@ export default function WorkoutCard({
 
   return (
     <div className="bg-white rounded-3xl overflow-hidden shadow-sm border"
-      style={{ borderColor: "#DDD6FE" }}>
+      style={{ borderColor: "#C9E8D8" }}>
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #7C3AED, #A78BFA)" }}>
+          style={{ background: "linear-gradient(135deg, #5BBE93, #86CFAE)" }}>
           {getInitials(user.full_name)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm" style={{ color: "#1A1A1A" }}>{user.full_name}</p>
+          <p className="font-bold text-sm" style={{ color: "#161D19" }}>{user.full_name}</p>
           <p className="text-xs" style={{ color: "#6B7280" }}>@{user.username} � {created_at}</p>
         </div>
         <button className="text-gray-300 hover:text-gray-400 transition-colors">
@@ -64,7 +64,7 @@ export default function WorkoutCard({
 
       {/* Workout banner */}
       <div className="mx-4 mb-3 rounded-2xl px-4 py-3"
-        style={{ background: "linear-gradient(135deg, #7C3AED, #A78BFA)" }}>
+        style={{ background: "linear-gradient(135deg, #5BBE93, #86CFAE)" }}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-white font-bold text-base">{content.workout_type}</p>
@@ -89,11 +89,11 @@ export default function WorkoutCard({
       <div className="px-4 mb-3 space-y-2">
         {content.exercises.map((ex, i) => (
           <div key={i} className="flex items-center justify-between py-2 border-b last:border-0"
-            style={{ borderColor: "#DDD6FE" }}>
-            <span className="text-sm font-semibold" style={{ color: "#1A1A1A" }}>{ex.name}</span>
+            style={{ borderColor: "#C9E8D8" }}>
+            <span className="text-sm font-semibold" style={{ color: "#161D19" }}>{ex.name}</span>
             <div className="flex items-center gap-2">
               <span className="text-xs px-2 py-1 rounded-lg font-medium"
-                style={{ background: "#F3F0FF", color: "#7C3AED" }}>
+                style={{ background: "#EFF7F2", color: "#5BBE93" }}>
                 {ex.sets}�{ex.reps}
               </span>
               <span className="text-xs font-medium" style={{ color: "#6B7280" }}>{ex.weight}</span>
@@ -103,19 +103,19 @@ export default function WorkoutCard({
       </div>
 
       {/* Caption */}
-      <p className="px-4 pb-3 text-sm" style={{ color: "#1A1A1A" }}>{caption}</p>
+      <p className="px-4 pb-3 text-sm" style={{ color: "#161D19" }}>{caption}</p>
 
       {/* Actions */}
-      <div className="flex items-center gap-4 px-4 py-3 border-t" style={{ borderColor: "#DDD6FE" }}>
+      <div className="flex items-center gap-4 px-4 py-3 border-t" style={{ borderColor: "#C9E8D8" }}>
         <button onClick={toggleLike}
           className="flex items-center gap-1.5 transition-all duration-150 active:scale-90">
           <svg viewBox="0 0 24 24"
-            fill={liked ? "#7C3AED" : "none"}
-            stroke={liked ? "#7C3AED" : "#6B7280"}
+            fill={liked ? "#5BBE93" : "none"}
+            stroke={liked ? "#5BBE93" : "#6B7280"}
             strokeWidth="2" className="w-5 h-5">
             <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
           </svg>
-          <span className="text-sm font-semibold" style={{ color: liked ? "#7C3AED" : "#6B7280" }}>
+          <span className="text-sm font-semibold" style={{ color: liked ? "#5BBE93" : "#6B7280" }}>
             {likes}
           </span>
         </button>
