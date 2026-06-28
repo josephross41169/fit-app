@@ -92,15 +92,15 @@ function UserAvatar({
 }
 
 const C = {
-  blue:"#7C3AED", blueLight:"#160F28", blueMid:"#2A1F45",
-  gold:"#F5A623", text:"#F0F0F0", sub:"#9CA3AF", white:"#1A1A1A", bg:"#0D0D0D",
-  dark:"#0D0D0D", darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  blue:"#5BBE93", blueLight:"#160F28", blueMid:"#2A1F45",
+  gold:"#F5A623", text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
+  dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
 
 const CATEGORY_COLORS: Record<string,string> = {
-  "Running":"#7C3AED","Strength":"#7C3AED","Yoga":"#7C3AED","HIIT":"#EF4444",
-  "Bodybuilding":"#F5A623","Nutrition":"#7C3AED","Wellness":"#7C3AED","Calisthenics":"#7C3AED",
-  "General":"#7C3AED",
+  "Running":"#5BBE93","Strength":"#5BBE93","Yoga":"#5BBE93","HIIT":"#EF4444",
+  "Bodybuilding":"#F5A623","Nutrition":"#5BBE93","Wellness":"#5BBE93","Calisthenics":"#5BBE93",
+  "General":"#5BBE93",
 };
 
 // ── Full group data (mock fallback) ────────────────────────────────────────────
@@ -271,7 +271,7 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
 }) {
   const [showComments, setShowComments] = useState(false);
   const comments = eventComments[event.id] || [];
-  const darkCard = "#1A1D2E", darkBorder = "#2A2D3E", darkSub = "#8892A4", gold = "#F5A623";
+  const darkCard = "#161D19", darkBorder = "#232C27", darkSub = "#8892A4", gold = "#F5A623";
 
   // Format event date
   const dateDisplay = event.event_date
@@ -303,8 +303,8 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
                     padding: "2px 7px",
                     borderRadius: 99,
                     background: event.is_public ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.08)",
-                    color: event.is_public ? "#A78BFA" : darkSub,
-                    border: `1px solid ${event.is_public ? "#7C3AED55" : darkBorder}`,
+                    color: event.is_public ? "#86CFAE" : darkSub,
+                    border: `1px solid ${event.is_public ? "#5BBE9355" : darkBorder}`,
                     whiteSpace: "nowrap" as const,
                     flexShrink: 0,
                   }}
@@ -336,7 +336,7 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
         </div>
         {event.description && <p style={{ fontSize:11, color:darkSub, lineHeight:1.5, marginTop:8, marginBottom:0 }}>{event.description}</p>}
         {event._isNewEvent && (
-          <Link href={`/events/${event.id}`} onClick={e => e.stopPropagation()} style={{ display:"inline-block", marginTop:8, fontSize:11, color:"#A78BFA", textDecoration:"none", fontWeight:700 }}>
+          <Link href={`/events/${event.id}`} onClick={e => e.stopPropagation()} style={{ display:"inline-block", marginTop:8, fontSize:11, color:"#86CFAE", textDecoration:"none", fontWeight:700 }}>
             View full event page →
           </Link>
         )}
@@ -348,7 +348,7 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
               {comments.map((c,i) => (
                 <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
                   <div style={{ width:26, height:26, borderRadius:"50%", background:catColor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:900, color:"#fff", flexShrink:0 }}>{c.avatar || 'U'}</div>
-                  <div style={{ flex:1, background:"#252A3D", borderRadius:10, padding:"7px 10px" }}>
+                  <div style={{ flex:1, background:"#1B231E", borderRadius:10, padding:"7px 10px" }}>
                     <span style={{ fontSize:11, fontWeight:700, color:"#E2E8F0" }}>{c.user} </span>
                     <span style={{ fontSize:11, color:darkSub }}>{c.text}</span>
                   </div>
@@ -357,7 +357,7 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
             </div>
           )}
           <div style={{ display:"flex", gap:6 }}>
-            <input value={commentInputs[event.id]||""} onChange={e=>setCommentInputs(p=>({...p,[event.id]:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addEventComment(event.id)} placeholder="Add a comment..." style={{ flex:1, background:"#252A3D", border:`1px solid ${darkBorder}`, borderRadius:20, padding:"7px 12px", fontSize:11, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }} />
+            <input value={commentInputs[event.id]||""} onChange={e=>setCommentInputs(p=>({...p,[event.id]:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addEventComment(event.id)} placeholder="Add a comment..." style={{ flex:1, background:"#1B231E", border:`1px solid ${darkBorder}`, borderRadius:20, padding:"7px 12px", fontSize:11, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }} />
             <button onClick={()=>addEventComment(event.id)} style={{ padding:"7px 12px", borderRadius:20, background:catColor, border:"none", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>Post</button>
           </div>
         </div>
@@ -367,10 +367,10 @@ function EventCard({ event, catColor, commentInputs, setCommentInputs, eventComm
 }
 
 const DIFFICULTY_COLORS: Record<string,string> = {
-  "Beginner":"#7C3AED", "Medium":"#A78BFA", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#7C3AED",
+  "Beginner":"#5BBE93", "Medium":"#86CFAE", "Hard":"#F5A623", "Elite":"#EF4444", "Legendary":"#5BBE93",
 };
 const NOTE_CATEGORY_COLORS: Record<string,string> = {
-  "Workout":"#7C3AED", "Recipe":"#7C3AED", "Mindset":"#A78BFA", "General":"#F5A623", "Tip":"#7C3AED",
+  "Workout":"#5BBE93", "Recipe":"#5BBE93", "Mindset":"#86CFAE", "General":"#F5A623", "Tip":"#5BBE93",
 };
 const EMOJI_OPTIONS = ["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","📅","🎯"];
 
@@ -401,9 +401,9 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
 
   const pulse = `
     @keyframes weeklyGlow {
-      0%   { box-shadow: 0 0 14px 2px #7C3AED44; }
-      50%  { box-shadow: 0 0 28px 8px #7C3AED77; }
-      100% { box-shadow: 0 0 14px 2px #7C3AED44; }
+      0%   { box-shadow: 0 0 14px 2px #5BBE9344; }
+      50%  { box-shadow: 0 0 28px 8px #5BBE9377; }
+      100% { box-shadow: 0 0 14px 2px #5BBE9344; }
     }
     @keyframes progressFill {
       0%   { opacity: 0.7; }
@@ -425,9 +425,9 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
         <div style={{ fontWeight: 900, fontSize: 16, color: "#F0F0F0", display: "flex", alignItems: "center", gap: 8 }}>
           ⚔️ Weekly Challenge
           <span style={{
-            background: "#7C3AED22", color: "#7C3AED",
+            background: "#5BBE9322", color: "#5BBE93",
             fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 99,
-            border: "1px solid #7C3AED44",
+            border: "1px solid #5BBE9344",
           }}>
             {daysRemaining}d left
           </span>
@@ -446,14 +446,14 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
       {showChallenge && (
         <div style={{
           background: "linear-gradient(135deg, #1A1230, #120A28)",
-          borderRadius: 20, border: "2px solid #7C3AED44",
+          borderRadius: 20, border: "2px solid #5BBE9344",
           overflow: "hidden",
           animation: "weeklyGlow 3s ease-in-out infinite",
         }}>
 
           {/* Top card: team score + days remaining */}
           <div style={{
-            background: "linear-gradient(135deg, #2D1B69, #1A0D3E)",
+            background: "linear-gradient(135deg, #1E3D34, #1A0D3E)",
             padding: "18px 20px",
             display: "flex", alignItems: "center", gap: 16,
           }}>
@@ -471,7 +471,7 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", fontWeight: 700 }}>
                   Weekly Goal: {WEEKLY_CHALLENGE_GOAL} workouts
                 </span>
-                <span style={{ fontSize: 12, color: "#7C3AED", fontWeight: 800 }}>
+                <span style={{ fontSize: 12, color: "#5BBE93", fontWeight: 800 }}>
                   {progressPct}%
                 </span>
               </div>
@@ -481,9 +481,9 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                   height: "100%",
                   width: `${progressPct}%`,
                   background: progressPct >= 100
-                    ? "linear-gradient(90deg, #7C3AED, #A78BFA)"
+                    ? "linear-gradient(90deg, #5BBE93, #86CFAE)"
                     : progressPct >= 60
-                    ? "linear-gradient(90deg, #7C3AED, #9D5CF0)"
+                    ? "linear-gradient(90deg, #5BBE93, #9D5CF0)"
                     : "linear-gradient(90deg, #EF4444, #F87171)",
                   borderRadius: 99,
                   transition: "width 0.8s ease",
@@ -526,7 +526,7 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                 <div key={member.avatar} style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "10px 0",
-                  borderBottom: idx < MOCK_WEEKLY_MEMBERS.length - 1 ? "1px solid #2D1B6933" : "none",
+                  borderBottom: idx < MOCK_WEEKLY_MEMBERS.length - 1 ? "1px solid #1E3D3433" : "none",
                 }}>
                   {/* Rank */}
                   <div style={{ width: 28, textAlign: "center", flexShrink: 0 }}>
@@ -539,10 +539,10 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                   {/* Avatar */}
                   <div style={{
                     width: 36, height: 36, borderRadius: "50%",
-                    background: `linear-gradient(135deg, #7C3AED, #9D5CF0)`,
+                    background: `linear-gradient(135deg, #5BBE93, #9D5CF0)`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0,
-                    border: member.today ? "2px solid #7C3AED" : "2px solid transparent",
+                    border: member.today ? "2px solid #5BBE93" : "2px solid transparent",
                     position: "relative",
                   }}>
                     {member.avatar}
@@ -550,8 +550,8 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                       <div style={{
                         position: "absolute", bottom: -2, right: -2,
                         width: 12, height: 12, borderRadius: "50%",
-                        background: "#7C3AED", border: "2px solid #1A1230",
-                        boxShadow: "0 0 6px #7C3AED",
+                        background: "#5BBE93", border: "2px solid #1A1230",
+                        boxShadow: "0 0 6px #5BBE93",
                       }} />
                     )}
                   </div>
@@ -564,15 +564,15 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                         {member.workouts} workouts
                       </span>
                     </div>
-                    <div style={{ height: 5, background: "#2D1B6955", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: 5, background: "#1E3D3455", borderRadius: 99, overflow: "hidden" }}>
                       <div style={{
                         height: "100%",
                         width: `${memberPct}%`,
                         background: idx === 0
                           ? "linear-gradient(90deg, #FFD700, #FBB040)"
                           : idx < 3
-                          ? "linear-gradient(90deg, #7C3AED, #9D5CF0)"
-                          : "#7C3AED88",
+                          ? "linear-gradient(90deg, #5BBE93, #9D5CF0)"
+                          : "#5BBE9388",
                         borderRadius: 99,
                         transition: "width 0.6s ease",
                       }} />
@@ -593,11 +593,11 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
                 borderRadius: 13, border: "none",
                 background: challengeSent
                   ? "rgba(124,58,237,0.15)"
-                  : "linear-gradient(135deg, #7C3AED, #9D5CF0)",
-                color: challengeSent ? "#7C3AED" : "#fff",
+                  : "linear-gradient(135deg, #5BBE93, #9D5CF0)",
+                color: challengeSent ? "#5BBE93" : "#fff",
                 fontWeight: 800, fontSize: 14, cursor: "pointer",
                 transition: "all 0.2s",
-                boxShadow: challengeSent ? "none" : "0 4px 18px #7C3AED55",
+                boxShadow: challengeSent ? "none" : "0 4px 18px #5BBE9355",
               }}
             >
               {challengeSent ? "⚔️ Challenge Sent — Waiting for Response..." : "⚔️ Challenge Another Group"}
@@ -618,12 +618,12 @@ function WeeklyChallengeSection({ groupName, catColor }: { groupName: string; ca
 // visible instantly so it FEELS like the page loaded fast.
 function GroupSkeleton() {
   const shimmer: React.CSSProperties = {
-    background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+    background: "linear-gradient(90deg, #1A1230 0%, #1B231E 50%, #1A1230 100%)",
     backgroundSize: "200% 100%",
     animation: "skeletonShimmer 1.4s ease-in-out infinite",
   };
   return (
-    <div style={{ background: "#0D0D0D", minHeight: "100vh", paddingBottom: 80 }}>
+    <div style={{ background: "#0E1311", minHeight: "100vh", paddingBottom: 80 }}>
       <style jsx global>{`
         @keyframes skeletonShimmer {
           0%   { background-position: 200% 0; }
@@ -2228,7 +2228,7 @@ export default function GroupPage() {
             <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase" as const}}>Goal Title</label>
             <input value={goalForm.title} onChange={e=>setGoalForm(f=>({...f,title:e.target.value}))}
               placeholder="e.g. Run 100 miles this month"
-              style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+              style={{width:"100%",background:"#0A0A0F",border:"1px solid #1B231E",borderRadius:10,
                 padding:"10px 12px",fontSize:14,color:"#F0F0F0",outline:"none",
                 boxSizing:"border-box" as const,marginBottom:14}}/>
 
@@ -2249,7 +2249,7 @@ export default function GroupPage() {
                   target: 0,
                 }))} style={{
                   padding:"12px 8px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:800,
-                  border:`1.5px solid ${goalForm.category===c.key?"#7C3AED":"#2D1F52"}`,
+                  border:`1.5px solid ${goalForm.category===c.key?"#5BBE93":"#1B231E"}`,
                   background:goalForm.category===c.key?"rgba(124,58,237,0.2)":"transparent",
                   color:goalForm.category===c.key?"#fff":"#6B7280",
                 }}><span style={{fontSize:16,marginRight:6}}>{c.icon}</span>{c.label}</button>
@@ -2282,7 +2282,7 @@ export default function GroupPage() {
               ]).map(m=>(
                 <button key={m.key} onClick={()=>setGoalForm(f=>({...f,metric:m.key,target:0}))} style={{
                   padding:"10px 6px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
-                  border:`1.5px solid ${goalForm.metric===m.key?"#7C3AED":"#2D1F52"}`,
+                  border:`1.5px solid ${goalForm.metric===m.key?"#5BBE93":"#1B231E"}`,
                   background:goalForm.metric===m.key?"rgba(124,58,237,0.2)":"transparent",
                   color:goalForm.metric===m.key?"#fff":"#6B7280",
                 }}><div style={{fontSize:20,marginBottom:3}}>{m.icon}</div>{m.label}</button>
@@ -2304,7 +2304,7 @@ export default function GroupPage() {
             <input type="number" min="1" value={goalForm.target||""}
               onChange={e=>setGoalForm(f=>({...f,target:parseFloat(e.target.value)||0}))}
               placeholder="e.g. 100"
-              style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+              style={{width:"100%",background:"#0A0A0F",border:"1px solid #1B231E",borderRadius:10,
                 padding:"10px 12px",fontSize:14,color:"#F0F0F0",outline:"none",
                 boxSizing:"border-box" as const,marginBottom:14}}/>
 
@@ -2313,8 +2313,8 @@ export default function GroupPage() {
               {[7,14,30,60].map(d=>(
                 <button key={d} onClick={()=>setGoalForm(f=>({...f,duration_days:d}))} style={{
                   padding:"8px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",
-                  border:`1px solid ${goalForm.duration_days===d?"#7C3AED":"#2D1F52"}`,
-                  background:goalForm.duration_days===d?"#2D1F52":"transparent",
+                  border:`1px solid ${goalForm.duration_days===d?"#5BBE93":"#1B231E"}`,
+                  background:goalForm.duration_days===d?"#1B231E":"transparent",
                   color:goalForm.duration_days===d?"#fff":"#6B7280",
                 }}>{d} days</button>
               ))}
@@ -2322,12 +2322,12 @@ export default function GroupPage() {
 
             <button onClick={createGroupGoal} disabled={goalSaving} style={{
               width:"100%",padding:"13px 0",borderRadius:14,border:"none",
-              background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+              background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
               color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",
             }}>{goalSaving?"Setting Goal...":"🎯 Set Group Goal"}</button>
             <button onClick={()=>setShowGoalModal(false)} style={{
               width:"100%",marginTop:10,padding:"11px 0",borderRadius:14,
-              border:"1px solid #2D1F52",background:"transparent",
+              border:"1px solid #1B231E",background:"transparent",
               color:"#6B7280",fontWeight:700,fontSize:14,cursor:"pointer",
             }}>Cancel</button>
           </div>
@@ -2337,7 +2337,7 @@ export default function GroupPage() {
       {/* ── Create Challenge Modal ── */}
       {showChallengeModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setShowChallengeModal(false)}>
-          <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:460, padding:"24px", maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background:"#161D19", borderRadius:24, border:"1px solid #232C27", width:"100%", maxWidth:460, padding:"24px", maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0", marginBottom:16 }}>⚡ Create Challenge</div>
             <form onSubmit={submitChallenge}>
               {/* Emoji */}
@@ -2346,7 +2346,7 @@ export default function GroupPage() {
                 <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
                   {["🏆","🔥","⚡","🌱","💪","🏅","🤸","🎯","🌅","💀","🥇","🚀"].map(em => (
                     <button key={em} type="button" onClick={() => setChallengeForm(p=>({...p,emoji:em}))}
-                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${challengeForm.emoji===em?"#7C3AED":"#2A2D3E"}`, background:challengeForm.emoji===em?"rgba(124,58,237,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
+                      style={{ width:36, height:36, borderRadius:8, border:`2px solid ${challengeForm.emoji===em?"#5BBE93":"#232C27"}`, background:challengeForm.emoji===em?"rgba(124,58,237,0.2)":"transparent", fontSize:18, cursor:"pointer" }}>
                       {em}
                     </button>
                   ))}
@@ -2360,7 +2360,7 @@ export default function GroupPage() {
                 <div key={f.key} style={{ marginBottom:12 }}>
                   <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>{f.label}</label>
                   <input value={(challengeForm as any)[f.key]} onChange={e => setChallengeForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
-                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                    style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
                 </div>
               ))}
 
@@ -2387,7 +2387,7 @@ export default function GroupPage() {
                       }));
                     }
                   }}
-                  style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
+                  style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
                   <option value="">📝 Custom (manual logging)</option>
                   {Object.entries(metricsByCategory()).map(([cat, metrics]) => (
                     <optgroup key={cat} label={`⚡ ${cat.charAt(0).toUpperCase() + cat.slice(1)}`}>
@@ -2410,12 +2410,12 @@ export default function GroupPage() {
                   <div style={{ marginBottom:12 }}>
                     <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Metric Label *</label>
                     <input value={challengeForm.metric_label} onChange={e => setChallengeForm(p=>({...p,metric_label:e.target.value}))} placeholder="e.g. Acts of Service, Journal Entries"
-                      style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                      style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
                   </div>
                   <div style={{ marginBottom:12 }}>
                     <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Unit (optional)</label>
                     <input value={challengeForm.metric_unit} onChange={e => setChallengeForm(p=>({...p,metric_unit:e.target.value}))} placeholder="e.g. entries, acts, hours"
-                      style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                      style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
                   </div>
                 </>
               )}
@@ -2423,19 +2423,19 @@ export default function GroupPage() {
                 <div>
                   <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Difficulty</label>
                   <select value={challengeForm.difficulty} onChange={e => setChallengeForm(p=>({...p,difficulty:e.target.value}))}
-                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
+                    style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit" }}>
                     {["Beginner","Medium","Hard","Elite"].map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Deadline</label>
                   <input type="date" value={challengeForm.deadline} onChange={e => setChallengeForm(p=>({...p,deadline:e.target.value}))}
-                    style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                    style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
                 </div>
               </div>
               <div style={{ display:"flex", gap:10 }}>
-                <button type="button" onClick={() => setShowChallengeModal(false)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
-                <button type="submit" disabled={challengeSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:challengeSubmitting?0.7:1 }}>
+                <button type="button" onClick={() => setShowChallengeModal(false)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #232C27", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
+                <button type="submit" disabled={challengeSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#5BBE93,#86CFAE)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:challengeSubmitting?0.7:1 }}>
                   {challengeSubmitting ? "Creating..." : "Create Challenge"}
                 </button>
               </div>
@@ -2447,18 +2447,18 @@ export default function GroupPage() {
       {/* ── Log Progress Modal ── */}
       {logProgressChallenge && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setLogProgressChallenge(null)}>
-          <div style={{ background:"#1A1D2E", borderRadius:24, border:"1px solid #2A2D3E", width:"100%", maxWidth:360, padding:"24px" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background:"#161D19", borderRadius:24, border:"1px solid #232C27", width:"100%", maxWidth:360, padding:"24px" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight:900, fontSize:16, color:"#E2E8F0", marginBottom:4 }}>📊 Log Progress</div>
             <div style={{ fontSize:12, color:"#8892A4", marginBottom:16 }}>Challenge: {logProgressChallenge.name}</div>
             <div style={{ marginBottom:12 }}>
               <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Add {logProgressChallenge.metric_label || logProgressChallenge.metric_label || 'Progress'} {logProgressChallenge.metric_unit ? `(${logProgressChallenge.metric_unit})` : ''}</label>
               <input type="number" min="0" step="any" value={logValue} onChange={e => setLogValue(e.target.value)} placeholder="0"
-                style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"10px 12px", fontSize:18, color:"#E2E8F0", outline:"none", fontFamily:"inherit", fontWeight:800, textAlign:"center", boxSizing:"border-box" }} />
+                style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"10px 12px", fontSize:18, color:"#E2E8F0", outline:"none", fontFamily:"inherit", fontWeight:800, textAlign:"center", boxSizing:"border-box" }} />
             </div>
             <div style={{ marginBottom:16 }}>
               <label style={{ fontSize:11, color:"#8892A4", fontWeight:700, display:"block", marginBottom:5 }}>Note (optional)</label>
               <input value={logNote} onChange={e => setLogNote(e.target.value)} placeholder="e.g. Morning workout, felt great!"
-                style={{ width:"100%", background:"#252A3D", border:"1px solid #2A2D3E", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                style={{ width:"100%", background:"#1B231E", border:"1px solid #232C27", borderRadius:10, padding:"9px 12px", fontSize:13, color:"#E2E8F0", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
             </div>
             {challengeScores[logProgressChallenge.id] !== undefined && (
               <div style={{ textAlign:"center", fontSize:12, color:"#8892A4", marginBottom:12 }}>
@@ -2466,8 +2466,8 @@ export default function GroupPage() {
               </div>
             )}
             <div style={{ display:"flex", gap:10 }}>
-              <button onClick={() => setLogProgressChallenge(null)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #2A2D3E", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
-              <button onClick={submitLogProgress} disabled={!logValue || logSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#7C3AED,#A78BFA)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!logValue||logSubmitting)?0.5:1 }}>
+              <button onClick={() => setLogProgressChallenge(null)} style={{ flex:1, padding:"10px", borderRadius:10, border:"1px solid #232C27", background:"transparent", color:"#8892A4", fontWeight:700, cursor:"pointer" }}>Cancel</button>
+              <button onClick={submitLogProgress} disabled={!logValue || logSubmitting} style={{ flex:2, padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#5BBE93,#86CFAE)", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(!logValue||logSubmitting)?0.5:1 }}>
                 {logSubmitting ? "Saving..." : "Log Progress 💪"}
               </button>
             </div>
@@ -2478,7 +2478,7 @@ export default function GroupPage() {
       {/* ── Delete Confirm Modal ── */}
       {deleteConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1001, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1A1A1A", borderRadius:20, padding:"28px 24px", maxWidth:380, width:"100%", textAlign:"center", border:"1px solid #2A2A2A" }}>
+          <div style={{ background:"#161D19", borderRadius:20, padding:"28px 24px", maxWidth:380, width:"100%", textAlign:"center", border:"1px solid #232C27" }}>
             <div style={{ fontSize:36, marginBottom:12 }}>🗑️</div>
             <div style={{ fontWeight:900, fontSize:18, color:"#F0F0F0", marginBottom:8 }}>Delete this group?</div>
             <div style={{ fontSize:13, color:"#9CA3AF", marginBottom:20 }}>This will permanently delete the group and all its posts, events, and challenges. This cannot be undone.</div>
@@ -2543,10 +2543,10 @@ export default function GroupPage() {
 
           {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
-            <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#7C3AED,#A78BFA)", color:joined?"#A78BFA":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(124,58,237,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
+            <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#5BBE93,#86CFAE)", color:joined?"#86CFAE":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(124,58,237,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
               {joining ? "Working..." : joined ? (isOwnerDB ? "✓ Owner" : "✓ Joined") : "Join Group"}
             </button>
-            <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(124,58,237,0.1)` : C.white, border:`2px solid ${shareCopied ? "#7C3AED" : C.blueMid}`, color:shareCopied ? "#A78BFA" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
+            <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(124,58,237,0.1)` : C.white, border:`2px solid ${shareCopied ? "#5BBE93" : C.blueMid}`, color:shareCopied ? "#86CFAE" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
             </button>
             <div style={{ position:"relative" }}>
@@ -3027,7 +3027,7 @@ export default function GroupPage() {
             <div>
               {/* Active / Completed sub-tabs + action buttons */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10}}>
-                <div style={{display:"flex",background:"#1A1228",borderRadius:12,padding:4,flex:1}}>
+                <div style={{display:"flex",background:"#161D19",borderRadius:12,padding:4,flex:1}}>
                   {([
                     {key:"active",    label:"⚡ Active"},
                     {key:"completed", label:"🏅 Completed"},
@@ -3052,7 +3052,7 @@ export default function GroupPage() {
                 {group._dbId && isMemberDB && challengeViewTab==="active" && (
                   <button onClick={()=>setShowChallengeModal(true)} style={{
                     padding:"8px 14px",borderRadius:12,border:"none",flexShrink:0,
-                    background:"#1A1228",border:"1px solid #2D1F52",
+                    background:"#161D19",border:"1px solid #1B231E",
                     color:"#9CA3AF",fontWeight:700,fontSize:13,cursor:"pointer",
                   }}>+ Challenge</button>
                 )}
@@ -3435,8 +3435,8 @@ export default function GroupPage() {
                             <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{e.description.slice(0, 180)}{e.description.length > 180 ? "..." : ""}</div>
                           )}
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✓ Approve</button>
-                            <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1.5px solid #2D1F52", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✗ Reject</button>
+                            <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✓ Approve</button>
+                            <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1.5px solid #1B231E", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✗ Reject</button>
                           </div>
                         </div>
                       );
@@ -3493,14 +3493,14 @@ export default function GroupPage() {
                   {isOwnerOrMod && (
                     <button onClick={() => setShowGoalModal(true)} style={{
                       padding:"8px 14px",borderRadius:12,border:"none",
-                      background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                      background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                       color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
                     }}>+ Set Goal</button>
                   )}
                 </div>
 
                 {/* Active/Past toggle */}
-                <div style={{display:"flex",gap:6,marginBottom:14,background:"#1A1228",borderRadius:10,padding:3}}>
+                <div style={{display:"flex",gap:6,marginBottom:14,background:"#161D19",borderRadius:10,padding:3}}>
                   {([
                     {key:"active",label:`⚡ Active (${activeGoals.length})`},
                     {key:"past",  label:`🏁 Past (${pastGoals.length})`},
@@ -3508,7 +3508,7 @@ export default function GroupPage() {
                     <button key={t.key} onClick={()=>setGoalsHistoryTab(t.key)} style={{
                       flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
                       fontWeight:700,fontSize:11,
-                      background:goalsHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                      background:goalsHistoryTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
                       color:goalsHistoryTab===t.key?"#fff":"#6B7280",
                     }}>{t.label}</button>
                   ))}
@@ -3546,7 +3546,7 @@ export default function GroupPage() {
                       <div key={goal.id} style={{
                         background: isComplete ? "rgba(124,58,237,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
                         borderRadius:16, padding:"14px 16px",
-                        border:`1px solid ${isComplete ? "#A78BFA" : "#7C3AED"}`,
+                        border:`1px solid ${isComplete ? "#86CFAE" : "#5BBE93"}`,
                         marginBottom:10,
                       }}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
@@ -3559,17 +3559,17 @@ export default function GroupPage() {
                               )}
                             </div>
                           </div>
-                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#A78BFA":"#A78BFA",flexShrink:0,textAlign:"right" as const}}>
+                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#86CFAE":"#86CFAE",flexShrink:0,textAlign:"right" as const}}>
                             <div>{Math.round(current * 100) / 100}/{target} {meta.unit}</div>
                             {target > 0 && (
                               <div style={{fontSize:10,color:"#6B7280",fontWeight:600,marginTop:1}}>{Math.round(pct)}%</div>
                             )}
                           </div>
                         </div>
-                        <div style={{height:6,background:"#0D0D0D",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{height:6,background:"#0E1311",borderRadius:99,overflow:"hidden"}}>
                           <div style={{
                             height:"100%", width:`${pct}%`,
-                            background: isComplete ? "#A78BFA" : "linear-gradient(90deg,#7C3AED,#A78BFA)",
+                            background: isComplete ? "#86CFAE" : "linear-gradient(90deg,#5BBE93,#86CFAE)",
                             borderRadius:99,
                           }}/>
                         </div>
@@ -3593,7 +3593,7 @@ export default function GroupPage() {
                                     {i===0?"🥇":i===1?"🥈":"🥉"}
                                   </span>
                                   <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
-                                    background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                    background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                                     display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
                                     {u?.avatar_url
                                       ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
@@ -3605,10 +3605,10 @@ export default function GroupPage() {
                                     </div>
                                     <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:2,overflow:"hidden"}}>
                                       <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
-                                        background:i===0?"#F5A623":"#7C3AED",borderRadius:99}}/>
+                                        background:i===0?"#F5A623":"#5BBE93",borderRadius:99}}/>
                                     </div>
                                   </div>
-                                  <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#A78BFA",flexShrink:0}}>
+                                  <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#86CFAE",flexShrink:0}}>
                                     {Math.round(contrib * 100) / 100} {meta.unit}
                                   </span>
                                 </div>
@@ -3674,7 +3674,7 @@ export default function GroupPage() {
                     {menuOpen && (
                       <>
                         <div onClick={() => setMemberActionsFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
-                        <div style={{ position:"absolute", right:8, top:60, zIndex:41, background:"#1A1D2E", border:`1px solid #2A2D3E`, borderRadius:12, padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
+                        <div style={{ position:"absolute", right:8, top:60, zIndex:41, background:"#161D19", border:`1px solid #232C27`, borderRadius:12, padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
                           {m.roleRaw === 'member' && (
                             <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'moderator'); }}
                               style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
@@ -3723,14 +3723,14 @@ export default function GroupPage() {
                   {isOwnerOrMod && (
                     <button onClick={()=>setShowCreateWar(true)} style={{
                       padding:"8px 14px",borderRadius:12,border:"none",
-                      background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                      background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                       color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
                     }}>+ Create War</button>
                   )}
                 </div>
 
                 {/* Sub-tabs: Our Wars vs Find Opponents */}
-                <div style={{display:"flex",gap:6,marginBottom:16,background:"#1A1228",borderRadius:12,padding:4}}>
+                <div style={{display:"flex",gap:6,marginBottom:16,background:"#161D19",borderRadius:12,padding:4}}>
                   {([
                     {key:"ours",label:`⚔️ Our Wars (${warChallenges.length})`},
                     {key:"discover",label:`🔍 Find Opponents (${openBoardChallenges.length})`},
@@ -3738,7 +3738,7 @@ export default function GroupPage() {
                     <button key={t.key} onClick={()=>setOpenBoardTab(t.key)} style={{
                       flex:1,padding:"8px 6px",borderRadius:9,border:"none",cursor:"pointer",
                       fontWeight:700,fontSize:12,transition:"all 0.15s",
-                      background:openBoardTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                      background:openBoardTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
                       color:openBoardTab===t.key?"#fff":"#6B7280",
                     }}>{t.label}</button>
                   ))}
@@ -3747,13 +3747,13 @@ export default function GroupPage() {
                 {/* Success banner */}
                 {warPosted && (
                   <div style={{
-                    background:"rgba(124,58,237,0.12)",border:"1px solid #A78BFA",
+                    background:"rgba(124,58,237,0.12)",border:"1px solid #86CFAE",
                     borderRadius:12,padding:"12px 16px",marginBottom:16,
                     display:"flex",alignItems:"center",gap:10,
                   }}>
                     <span style={{fontSize:20}}>🔍</span>
                     <div>
-                      <div style={{fontWeight:700,fontSize:14,color:"#A78BFA"}}>War posted! Searching for an opponent...</div>
+                      <div style={{fontWeight:700,fontSize:14,color:"#86CFAE"}}>War posted! Searching for an opponent...</div>
                       <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Your challenge is now visible under "Find Opponents" for other groups to accept.</div>
                     </div>
                   </div>
@@ -3775,12 +3775,12 @@ export default function GroupPage() {
                       const LIFT_LABELS: Record<string,string> = {bench_press:"Bench Press",squat:"Squat",deadlift:"Deadlift",dumbbell_curl:"Dumbbell Curl"};
                       return (
                         <div key={chal.id} style={{background:"#111118",borderRadius:16,
-                          border:"1px solid #2D1F52",marginBottom:12,overflow:"hidden"}}>
+                          border:"1px solid #1B231E",marginBottom:12,overflow:"hidden"}}>
                           {/* Header */}
                           <div style={{padding:"14px 16px 10px"}}>
                             {/* Challenger group */}
                             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                              <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                              <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
                                 {chal.creator_group?.emoji||"💪"}
                               </div>
@@ -3795,7 +3795,7 @@ export default function GroupPage() {
                             {chal.description && (
                               <div style={{fontSize:13,color:"#9CA3AF",marginBottom:10,lineHeight:1.5,
                                 fontStyle:"italic",padding:"8px 10px",background:"rgba(255,255,255,0.03)",
-                                borderRadius:8,borderLeft:"2px solid #7C3AED"}}>
+                                borderRadius:8,borderLeft:"2px solid #5BBE93"}}>
                                 "{chal.description}"
                               </div>
                             )}
@@ -3807,7 +3807,7 @@ export default function GroupPage() {
                                 {meta.icon} {meta.label}{chal.lift_type?` · ${LIFT_LABELS[chal.lift_type]||""}` :""}
                               </span>
                               <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
-                                background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
+                                background:"rgba(124,58,237,0.12)",color:"#86CFAE"}}>
                                 ⚔️ {chal.member_count}v{chal.member_count}
                               </span>
                               <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
@@ -3816,7 +3816,7 @@ export default function GroupPage() {
                               </span>
                               {chal.goal>0 && (
                                 <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
-                                  background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
+                                  background:"rgba(124,58,237,0.12)",color:"#86CFAE"}}>
                                   🎯 Goal: {chal.goal}{meta.unit}
                                 </span>
                               )}
@@ -3834,7 +3834,7 @@ export default function GroupPage() {
                             {isOwnerOrMod ? (
                               <button onClick={()=>acceptWarChallenge(chal)} style={{
                                 width:"100%",padding:"11px 0",borderRadius:10,border:"none",
-                                background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                                 color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",
                               }}>⚔️ Accept This Challenge</button>
                             ) : (
@@ -3851,7 +3851,7 @@ export default function GroupPage() {
                   <div>
                     {/* Active/Past toggle — wars filter. Active = ongoing
                         + open invitations; Past = completed/cancelled. */}
-                    <div style={{display:"flex",gap:6,marginBottom:14,background:"#1A1228",borderRadius:10,padding:3}}>
+                    <div style={{display:"flex",gap:6,marginBottom:14,background:"#161D19",borderRadius:10,padding:3}}>
                       {([
                         {key:"active",label:`⚡ Active (${active.length + open.length})`},
                         {key:"past",  label:`🏁 Past (${done.length})`},
@@ -3859,7 +3859,7 @@ export default function GroupPage() {
                         <button key={t.key} onClick={()=>setWarHistoryTab(t.key)} style={{
                           flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
                           fontWeight:700,fontSize:11,
-                          background:warHistoryTab===t.key?"linear-gradient(135deg,#7C3AED,#A78BFA)":"transparent",
+                          background:warHistoryTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
                           color:warHistoryTab===t.key?"#fff":"#6B7280",
                         }}>{t.label}</button>
                       ))}
@@ -3884,10 +3884,10 @@ export default function GroupPage() {
 
                       return (
                         <div key={chal.id} style={{marginBottom:14,borderRadius:18,overflow:"hidden",
-                          border:"2px solid #7C3AED",background:"#0D0820"}}>
+                          border:"2px solid #5BBE93",background:"#0D0820"}}>
                           {/* Challenge header */}
                           <button onClick={()=>setExpandedChallenge(isExpanded?null:chal.id)}
-                            style={{width:"100%",background:"linear-gradient(135deg,#2D1F52,#1A0F30)",
+                            style={{width:"100%",background:"linear-gradient(135deg,#1B231E,#1A0F30)",
                               padding:"14px 16px",border:"none",cursor:"pointer",textAlign:"left"}}>
                             {/* Group-vs-group banner — emojis bracket the
                                 title so it reads "🟣 Group A vs Group B 🔵"
@@ -3896,7 +3896,7 @@ export default function GroupPage() {
                                 who you're up against without expanding. */}
                             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,fontSize:11,color:"#9CA3AF",fontWeight:700}}>
                               <span style={{fontSize:14}}>{(isCreator?chal.creator_group:chal.opponent_group)?.emoji||"💪"}</span>
-                              <span style={{color:"#7C3AED",fontWeight:800}}>{myGroupName||"Us"}</span>
+                              <span style={{color:"#5BBE93",fontWeight:800}}>{myGroupName||"Us"}</span>
                               <span style={{color:"#6B7280"}}>vs</span>
                               <span style={{color:"#06B6D4",fontWeight:800}}>{theirGroupName||"Them"}</span>
                               <span style={{fontSize:14}}>{(isCreator?chal.opponent_group:chal.creator_group)?.emoji||"💪"}</span>
@@ -3908,7 +3908,7 @@ export default function GroupPage() {
                                   <span style={{fontSize:18}}>{meta.icon}</span>
                                   <span style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{chal.title}</span>
                                   <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,
-                                    background:"rgba(124,58,237,0.15)",color:"#A78BFA"}}>LIVE</span>
+                                    background:"rgba(124,58,237,0.15)",color:"#86CFAE"}}>LIVE</span>
                                 </div>
                                 {/* Detail line — metric + lift type + days
                                     left + (when set) goal target + member
@@ -3941,11 +3941,11 @@ export default function GroupPage() {
                             {/* Score bar */}
                             <div style={{marginTop:12}}>
                               <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,fontSize:12,fontWeight:700}}>
-                                <span style={{color:"#7C3AED"}}>{myGroupName||"Us"} — {myScore||0}{meta.unit}</span>
+                                <span style={{color:"#5BBE93"}}>{myGroupName||"Us"} — {myScore||0}{meta.unit}</span>
                                 <span style={{color:"#06B6D4"}}>{theirGroupName||"Them"} — {theirScore||0}{meta.unit}</span>
                               </div>
                               <div style={{height:10,borderRadius:99,background:"#1E1E2E",overflow:"hidden",display:"flex"}}>
-                                <div style={{width:`${myPct}%`,background:"#7C3AED",borderRadius:"99px 0 0 99px",transition:"width 0.5s"}}/>
+                                <div style={{width:`${myPct}%`,background:"#5BBE93",borderRadius:"99px 0 0 99px",transition:"width 0.5s"}}/>
                                 <div style={{flex:1,background:"#06B6D4",borderRadius:"0 99px 99px 0"}}/>
                               </div>
                               <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:10,color:"#6B7280"}}>
@@ -3958,7 +3958,7 @@ export default function GroupPage() {
                                   if (myScore === 0 && theirScore === 0) return null;
                                   if (diff === 0) return <span style={{color:"#9CA3AF",fontWeight:700}}>tied</span>;
                                   return (
-                                    <span style={{color:diff>0?"#7C3AED":"#06B6D4",fontWeight:800}}>
+                                    <span style={{color:diff>0?"#5BBE93":"#06B6D4",fontWeight:800}}>
                                       {diff>0?myGroupName||"Us":theirGroupName||"Them"} +{Math.abs(diff)}{meta.unit}
                                     </span>
                                   );
@@ -4009,7 +4009,7 @@ export default function GroupPage() {
                             };
 
                             return (
-                              <div style={{borderTop:"1px solid #2D1F52"}}>
+                              <div style={{borderTop:"1px solid #1B231E"}}>
                                 {/* War stats strip — prominent at-a-glance
                                     info inside the expanded card. Was just
                                     a scoreboard + photos before; users had
@@ -4027,7 +4027,7 @@ export default function GroupPage() {
                                   const topMember = [...allMembers].sort((a:any,b:any) => (b.contribution||0) - (a.contribution||0))[0];
                                   const topUser = topMember?.users;
                                   const topVal = topMember?.contribution || 0;
-                                  const topGroupColor = topMember?.group_id === dbId ? "#7C3AED" : "#06B6D4";
+                                  const topGroupColor = topMember?.group_id === dbId ? "#5BBE93" : "#06B6D4";
                                   const goalRemaining = chal.goal > 0 ? Math.max(0, chal.goal - totalCombined) : null;
 
                                   return (
@@ -4035,7 +4035,7 @@ export default function GroupPage() {
                                       display: "grid",
                                       gridTemplateColumns: "repeat(4, 1fr)",
                                       gap: 1,
-                                      background: "#2D1F52",
+                                      background: "#1B231E",
                                       padding: 1,
                                     }}>
                                       {/* Started X days ago */}
@@ -4086,15 +4086,15 @@ export default function GroupPage() {
                                 {/* Two-column scoreboard */}
                                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
                                   {/* My team */}
-                                  <div style={{padding:"14px 12px",borderRight:"1px solid #2D1F52"}}>
-                                    <div style={{fontSize:10,fontWeight:800,color:"#7C3AED",
+                                  <div style={{padding:"14px 12px",borderRight:"1px solid #1B231E"}}>
+                                    <div style={{fontSize:10,fontWeight:800,color:"#5BBE93",
                                       textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
                                       🟣 {myGroupName||"Your Group"}
                                     </div>
                                     {myTeam.length===0
                                       ? <div style={{fontSize:11,color:"#6B7280",padding:"8px 0"}}>No members yet</div>
                                       : myTeam.map((m:any,i:number)=>(
-                                          <MemberRow key={m.user_id} m={m} rank={i+1} color="#7C3AED"/>
+                                          <MemberRow key={m.user_id} m={m} rank={i+1} color="#5BBE93"/>
                                         ))}
                                   </div>
                                   {/* Their team */}
@@ -4113,7 +4113,7 @@ export default function GroupPage() {
 
                                 {/* Details row */}
                                 {(chal.description||chal.stakes) && (
-                                  <div style={{padding:"10px 14px",borderTop:"1px solid #2D1F52",
+                                  <div style={{padding:"10px 14px",borderTop:"1px solid #1B231E",
                                     display:"flex",flexDirection:"column" as const,gap:6}}>
                                     {chal.description && (
                                       <div style={{fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>
@@ -4129,14 +4129,14 @@ export default function GroupPage() {
                                 )}
 
                                 {/* Photo wall + upload */}
-                                <div style={{padding:"10px 14px",borderTop:"1px solid #2D1F52"}}>
+                                <div style={{padding:"10px 14px",borderTop:"1px solid #1B231E"}}>
                                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                                     <div style={{fontSize:10,fontWeight:700,color:"#6B7280",
                                       textTransform:"uppercase" as const,letterSpacing:1}}>
                                       📸 War Photos ({media.length})
                                     </div>
                                     {isMember && (
-                                      <label style={{fontSize:11,fontWeight:700,color:"#7C3AED",cursor:"pointer",
+                                      <label style={{fontSize:11,fontWeight:700,color:"#5BBE93",cursor:"pointer",
                                         padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",
                                         border:"1px solid rgba(124,58,237,0.3)"}}>
                                         {uploadingMedia?"Uploading...":"+ Photo"}
@@ -4148,7 +4148,7 @@ export default function GroupPage() {
                                   </div>
                                   {media.length===0 ? (
                                     <div style={{textAlign:"center" as const,padding:"16px",background:"#111118",
-                                      borderRadius:10,border:"1px dashed #2D1F52",color:"#6B7280",fontSize:12}}>
+                                      borderRadius:10,border:"1px dashed #1B231E",color:"#6B7280",fontSize:12}}>
                                       No photos yet — post your progress!
                                     </div>
                                   ) : (
@@ -4179,7 +4179,7 @@ export default function GroupPage() {
                           const LIFT_LABELS: Record<string,string> = {bench_press:"Bench Press",squat:"Squat",deadlift:"Deadlift",dumbbell_curl:"Dumbbell Curl"};
                           return (
                             <div key={chal.id} style={{background:"#111118",borderRadius:16,
-                              border:`1px solid ${isCreator?"#7C3AED":"#2D1F52"}`,marginBottom:10,overflow:"hidden"}}>
+                              border:`1px solid ${isCreator?"#5BBE93":"#1B231E"}`,marginBottom:10,overflow:"hidden"}}>
                               {/* Card header */}
                               <div style={{background:isCreator?"rgba(124,58,237,0.1)":"transparent",padding:"14px 16px 10px"}}>
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -4191,7 +4191,7 @@ export default function GroupPage() {
                                   </div>
                                   {isCreator && (
                                     <span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:99,
-                                      background:"rgba(124,58,237,0.2)",color:"#A78BFA",flexShrink:0,marginLeft:8}}>YOUR WAR</span>
+                                      background:"rgba(124,58,237,0.2)",color:"#86CFAE",flexShrink:0,marginLeft:8}}>YOUR WAR</span>
                                   )}
                                 </div>
                                 {/* Stat pills */}
@@ -4201,7 +4201,7 @@ export default function GroupPage() {
                                     {meta.icon} {meta.label}{chal.lift_type?` · ${LIFT_LABELS[chal.lift_type]||""}` :""}
                                   </span>
                                   <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
-                                    background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
+                                    background:"rgba(124,58,237,0.12)",color:"#86CFAE"}}>
                                     ⚔️ {chal.member_count}v{chal.member_count}
                                   </span>
                                   <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
@@ -4210,7 +4210,7 @@ export default function GroupPage() {
                                   </span>
                                   {chal.goal>0 && (
                                     <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
-                                      background:"rgba(124,58,237,0.12)",color:"#A78BFA"}}>
+                                      background:"rgba(124,58,237,0.12)",color:"#86CFAE"}}>
                                       🎯 Goal: {chal.goal}{meta.unit}
                                     </span>
                                   )}
@@ -4262,7 +4262,7 @@ export default function GroupPage() {
                           const weWon=chal.winner_group_id===dbId;
                           return (
                             <div key={chal.id} style={{background:"#111118",borderRadius:14,
-                              padding:"12px 16px",border:`1px solid ${weWon?"#F5A623":"#2D1F52"}`,
+                              padding:"12px 16px",border:`1px solid ${weWon?"#F5A623":"#1B231E"}`,
                               marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                               <div>
                                 <div style={{fontWeight:800,fontSize:13,color:"#F0F0F0"}}>{chal.title}</div>
@@ -4309,7 +4309,7 @@ export default function GroupPage() {
                       <label style={{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.8}}>War Title *</label>
                       <input value={warForm.title} onChange={e=>setWarForm(f=>({...f,title:e.target.value}))}
                         placeholder="e.g. Spring Running Domination" style={{width:"100%",background:"#0A0A0F",
-                          border:"1px solid #2D1F52",borderRadius:10,padding:"10px 12px",fontSize:14,
+                          border:"1px solid #1B231E",borderRadius:10,padding:"10px 12px",fontSize:14,
                           color:"#F0F0F0",outline:"none",boxSizing:"border-box" as const,marginBottom:12}}/>
 
                       {/* Description */}
@@ -4317,7 +4317,7 @@ export default function GroupPage() {
                       <textarea value={warForm.description} onChange={e=>setWarForm(f=>({...f,description:e.target.value}))}
                         placeholder="Tell the opponent what this war is about. What are you proving? Who's going to lose?" 
                         rows={3}
-                        style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+                        style={{width:"100%",background:"#0A0A0F",border:"1px solid #1B231E",borderRadius:10,
                           padding:"10px 12px",fontSize:13,color:"#F0F0F0",outline:"none",
                           boxSizing:"border-box" as const,marginBottom:12,resize:"none" as const,fontFamily:"inherit"}}/>
 
@@ -4326,7 +4326,7 @@ export default function GroupPage() {
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
                         {Object.entries(METRICS).map(([key,m])=>(
                           <button key={key} onClick={()=>setWarForm(f=>({...f,metric:key,goal:0}))} style={{
-                            padding:"10px 6px",borderRadius:10,border:`1.5px solid ${warForm.metric===key?"#7C3AED":"#2D1F52"}`,
+                            padding:"10px 6px",borderRadius:10,border:`1.5px solid ${warForm.metric===key?"#5BBE93":"#1B231E"}`,
                             background:warForm.metric===key?"rgba(124,58,237,0.2)":"transparent",
                             color:warForm.metric===key?"#fff":"#6B7280",cursor:"pointer",fontSize:11,fontWeight:700,
                             transition:"all 0.15s",
@@ -4341,7 +4341,7 @@ export default function GroupPage() {
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
                             {LIFT_TYPES.map(l=>(
                               <button key={l.key} onClick={()=>setWarForm(f=>({...f,lift_type:l.key}))} style={{
-                                padding:"10px",borderRadius:10,border:`1.5px solid ${warForm.lift_type===l.key?"#F5A623":"#2D1F52"}`,
+                                padding:"10px",borderRadius:10,border:`1.5px solid ${warForm.lift_type===l.key?"#F5A623":"#1B231E"}`,
                                 background:warForm.lift_type===l.key?"rgba(245,166,35,0.12)":"transparent",
                                 color:warForm.lift_type===l.key?"#F5A623":"#6B7280",cursor:"pointer",fontSize:13,fontWeight:700,
                               }}>{l.label}</button>
@@ -4364,7 +4364,7 @@ export default function GroupPage() {
                             <input type="number" min="0"
                               value={warForm.goal||""} onChange={e=>setWarForm(f=>({...f,goal:parseFloat(e.target.value)||0}))}
                               placeholder={placeholder}
-                              style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+                              style={{width:"100%",background:"#0A0A0F",border:"1px solid #1B231E",borderRadius:10,
                                 padding:"10px 12px",fontSize:14,color:"#F0F0F0",outline:"none",
                                 boxSizing:"border-box" as const}}/>
                             <div style={{fontSize:11,color:"#6B7280",marginTop:4}}>
@@ -4380,7 +4380,7 @@ export default function GroupPage() {
                       </label>
                       <input value={warForm.stakes} onChange={e=>setWarForm(f=>({...f,stakes:e.target.value}))}
                         placeholder="e.g. Loser posts a congratulations to winner's page"
-                        style={{width:"100%",background:"#0A0A0F",border:"1px solid #2D1F52",borderRadius:10,
+                        style={{width:"100%",background:"#0A0A0F",border:"1px solid #1B231E",borderRadius:10,
                           padding:"10px 12px",fontSize:13,color:"#F0F0F0",outline:"none",
                           boxSizing:"border-box" as const,marginBottom:12}}/>
 
@@ -4389,8 +4389,8 @@ export default function GroupPage() {
                       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" as const}}>
                         {[3,7,14,30].map(d=>(
                           <button key={d} onClick={()=>setWarForm(f=>({...f,duration_days:d}))} style={{
-                            padding:"8px 16px",borderRadius:20,border:`1px solid ${warForm.duration_days===d?"#7C3AED":"#2D1F52"}`,
-                            background:warForm.duration_days===d?"#2D1F52":"transparent",
+                            padding:"8px 16px",borderRadius:20,border:`1px solid ${warForm.duration_days===d?"#5BBE93":"#1B231E"}`,
+                            background:warForm.duration_days===d?"#1B231E":"transparent",
                             color:warForm.duration_days===d?"#fff":"#6B7280",cursor:"pointer",fontSize:13,fontWeight:700,
                           }}>{d} days</button>
                         ))}
@@ -4409,11 +4409,11 @@ export default function GroupPage() {
                           return (
                             <button key={uid} onClick={()=>setWarSelectedMembers(s=>sel?s.filter(id=>id!==uid):[...s,uid])}
                               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
-                                borderRadius:10,border:`1px solid ${sel?"#7C3AED":"#2D1F52"}`,
-                                background:sel?"#2D1F52":"transparent",cursor:"pointer",textAlign:"left" as const}}>
-                              <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                                borderRadius:10,border:`1px solid ${sel?"#5BBE93":"#1B231E"}`,
+                                background:sel?"#1B231E":"transparent",cursor:"pointer",textAlign:"left" as const}}>
+                              <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",
-                                flexShrink:0,overflow:"hidden",border:`2px solid ${sel?"#7C3AED":"transparent"}`}}>
+                                flexShrink:0,overflow:"hidden",border:`2px solid ${sel?"#5BBE93":"transparent"}`}}>
                                 {m.avatarUrl
                                   ? <img src={m.avatarUrl} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt={name}/>
                                   : name[0]?.toUpperCase()}
@@ -4422,7 +4422,7 @@ export default function GroupPage() {
                                 <div style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>{name}</div>
                                 {m.username && <div style={{fontSize:11,color:"#6B7280"}}>@{m.username} · {m.role}</div>}
                               </div>
-                              {sel && <div style={{color:"#7C3AED",fontWeight:800}}>✓</div>}
+                              {sel && <div style={{color:"#5BBE93",fontWeight:800}}>✓</div>}
                             </button>
                           );
                         })}
@@ -4430,12 +4430,12 @@ export default function GroupPage() {
 
                       <button onClick={createWarChallenge} disabled={warSaving} style={{
                         width:"100%",padding:"13px 0",borderRadius:14,border:"none",
-                        background:"linear-gradient(135deg,#7C3AED,#A78BFA)",
+                        background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
                         color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",
                       }}>{warSaving?"Creating...":"⚔️ Post Challenge"}</button>
                       <button onClick={()=>setShowCreateWar(false)} style={{
                         width:"100%",marginTop:10,padding:"11px 0",borderRadius:14,
-                        border:"1px solid #2D1F52",background:"transparent",
+                        border:"1px solid #1B231E",background:"transparent",
                         color:"#6B7280",fontWeight:700,fontSize:14,cursor:"pointer",
                       }}>Cancel</button>
                     </div>
@@ -4473,12 +4473,12 @@ export default function GroupPage() {
                     const userObj = (e as any).users;
                     const creatorName = userObj?.full_name || userObj?.username || "Member";
                     return (
-                      <div key={e.id} style={{ background: "#1A1228", border: `1px solid ${C.darkBorder}`, borderRadius: 10, padding: 9 }}>
+                      <div key={e.id} style={{ background: "#161D19", border: `1px solid ${C.darkBorder}`, borderRadius: 10, padding: 9 }}>
                         <div style={{ fontWeight: 700, fontSize: 12, color: "#E2E8F0", marginBottom: 2 }}>{e.title}</div>
                         <div style={{ fontSize: 10, color: C.darkSub, marginBottom: 7 }}>by {creatorName}</div>
                         <div style={{ display: "flex", gap: 5 }}>
-                          <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Approve</button>
-                          <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "1px solid #2D1F52", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
+                          <button onClick={() => approvePendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓ Approve</button>
+                          <button onClick={() => rejectPendingEvent(e.id)} style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: "1px solid #1B231E", background: "transparent", color: "#EF4444", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✗</button>
                         </div>
                       </div>
                     );
@@ -4534,7 +4534,7 @@ export default function GroupPage() {
                   {menuOpen && (
                     <>
                       <div onClick={() => setMemberActionsFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
-                      <div style={{ position:"absolute", right:8, top:50, zIndex:41, background:"#1A1D2E", border:`1px solid #2A2D3E`, borderRadius:12, padding:6, minWidth:200, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
+                      <div style={{ position:"absolute", right:8, top:50, zIndex:41, background:"#161D19", border:`1px solid #232C27`, borderRadius:12, padding:6, minWidth:200, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
                         {m.roleRaw === 'member' && (
                           <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'moderator'); }}
                             style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
