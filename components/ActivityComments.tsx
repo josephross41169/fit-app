@@ -4,11 +4,11 @@ import { useAuth } from "@/lib/auth";
 import MentionInput, { parseMentions } from "@/components/MentionInput";
 
 const C = {
-  dark: "#0D0D0D",
-  darkCard: "#1A1D2E",
-  darkBorder: "#2A2D3E",
+  dark: "#0E1311",
+  darkCard: "#161D19",
+  darkBorder: "#232C27",
   darkSub: "#8892A4",
-  blue: "#7C3AED",
+  blue: "#5BBE93",
   text: "#E2E8F0",
   sub: "#9CA3AF",
 };
@@ -139,7 +139,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
                   <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <div style={{
                       width: 30, height: 30, borderRadius: "50%",
-                      background: "linear-gradient(135deg,#7C3AED,#4ADE80)",
+                      background: "linear-gradient(135deg,#5BBE93,#4ADE80)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden",
                     }}>
@@ -149,7 +149,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
                         : ini}
                     </div>
                     <div style={{
-                      flex: 1, background: "#252A3D", borderRadius: 12,
+                      flex: 1, background: "#1B231E", borderRadius: 12,
                       padding: "8px 12px", border: `1px solid ${C.darkBorder}`,
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
@@ -169,7 +169,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <div style={{
                 width: 28, height: 28, borderRadius: "50%",
-                background: "linear-gradient(135deg,#7C3AED,#4ADE80)",
+                background: "linear-gradient(135deg,#5BBE93,#4ADE80)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden",
               }}>
@@ -180,7 +180,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
               </div>
               <div style={{
                 flex: 1, display: "flex", alignItems: "center", gap: 8,
-                background: "#1A1D2E", borderRadius: 20,
+                background: "#161D19", borderRadius: 20,
                 padding: "7px 14px", border: `1.5px solid ${C.darkBorder}`,
               }}>
                 {/* MentionInput swaps in @username autocomplete + the
