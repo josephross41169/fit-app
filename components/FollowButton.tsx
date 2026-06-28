@@ -83,9 +83,9 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
         fontWeight: 800,
         fontSize,
         transition: "all 0.15s",
-        background: following ? "#F3F0FF" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
-        color: following ? "#7C3AED" : "#fff",
-        border: following ? "2px solid #DDD6FE" : "2px solid transparent",
+        background: following ? "#EFF7F2" : "linear-gradient(135deg, #5BBE93, #86CFAE)",
+        color: following ? "#5BBE93" : "#fff",
+        border: following ? "2px solid #C9E8D8" : "2px solid transparent",
         opacity: loading ? 0.7 : 1,
       }}
     >
