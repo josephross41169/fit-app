@@ -14,15 +14,15 @@ export interface Rival {
 }
 
 const TIER_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
-  grinder:  { label: "Grinder",   color: "#7C3AED", emoji: "⚙️" },
+  grinder:  { label: "Grinder",   color: "#5BBE93", emoji: "⚙️" },
   beast:    { label: "Beast",     color: "#EF4444", emoji: "🔥" },
   warrior:  { label: "Warrior",   color: "#F5A623", emoji: "⚔️" },
   legend:   { label: "Legend",    color: "#FFD700", emoji: "👑" },
-  rookie:   { label: "Rookie",    color: "#7C3AED", emoji: "🌱" },
+  rookie:   { label: "Rookie",    color: "#5BBE93", emoji: "🌱" },
 };
 
 function getTier(tier: string) {
-  return TIER_CONFIG[tier.toLowerCase()] ?? { label: tier, color: "#7C3AED", emoji: "⚔️" };
+  return TIER_CONFIG[tier.toLowerCase()] ?? { label: tier, color: "#5BBE93", emoji: "⚔️" };
 }
 
 function getInitials(name: string) {
@@ -57,9 +57,9 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
       {/* Keyframe injection */}
       <style>{`
         @keyframes rivalGlowWinning {
-          0%   { box-shadow: 0 0 16px 3px #7C3AED66, 0 0 32px 6px #7C3AED33; }
-          50%  { box-shadow: 0 0 28px 8px #7C3AED99, 0 0 56px 16px #7C3AED44; }
-          100% { box-shadow: 0 0 16px 3px #7C3AED66, 0 0 32px 6px #7C3AED33; }
+          0%   { box-shadow: 0 0 16px 3px #5BBE9366, 0 0 32px 6px #5BBE9333; }
+          50%  { box-shadow: 0 0 28px 8px #5BBE9399, 0 0 56px 16px #5BBE9344; }
+          100% { box-shadow: 0 0 16px 3px #5BBE9366, 0 0 32px 6px #5BBE9333; }
         }
         @keyframes rivalGlowLosing {
           0%   { box-shadow: 0 0 16px 3px #EF444466, 0 0 32px 6px #EF444433; }
@@ -67,9 +67,9 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           100% { box-shadow: 0 0 16px 3px #EF444466, 0 0 32px 6px #EF444433; }
         }
         @keyframes rivalGlowTied {
-          0%   { box-shadow: 0 0 16px 3px #7C3AED66, 0 0 32px 6px #7C3AED33; }
-          50%  { box-shadow: 0 0 28px 8px #7C3AED99, 0 0 56px 16px #7C3AED44; }
-          100% { box-shadow: 0 0 16px 3px #7C3AED66, 0 0 32px 6px #7C3AED33; }
+          0%   { box-shadow: 0 0 16px 3px #5BBE9366, 0 0 32px 6px #5BBE9333; }
+          50%  { box-shadow: 0 0 28px 8px #5BBE9399, 0 0 56px 16px #5BBE9344; }
+          100% { box-shadow: 0 0 16px 3px #5BBE9366, 0 0 32px 6px #5BBE9333; }
         }
         @keyframes rivalPulse {
           0%   { transform: scale(1); }
@@ -85,9 +85,9 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
       <div
         className={className}
         style={{
-          background: "#1A1A1A",
+          background: "#161D19",
           borderRadius: 20,
-          border: `2px solid ${imWinning ? "#7C3AED" : tied ? "#7C3AED" : "#EF4444"}`,
+          border: `2px solid ${imWinning ? "#5BBE93" : tied ? "#5BBE93" : "#EF4444"}`,
           padding: "20px",
           position: "relative",
           overflow: "hidden",
@@ -102,7 +102,7 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
         <div style={{
           position: "absolute", top: -40, right: -40,
           width: 160, height: 160, borderRadius: "50%",
-          background: imWinning ? "#7C3AED08" : tied ? "#7C3AED08" : "#EF444408",
+          background: imWinning ? "#5BBE9308" : tied ? "#5BBE9308" : "#EF444408",
           pointerEvents: "none",
         }} />
 
@@ -137,11 +137,11 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           {/* Streak badge */}
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            background: "#2D1B69", borderRadius: 12, padding: "8px 12px",
-            border: "1px solid #7C3AED44",
+            background: "#1E3D34", borderRadius: 12, padding: "8px 12px",
+            border: "1px solid #5BBE9344",
           }}>
             <span style={{ fontSize: 16 }}>🔥</span>
-            <span style={{ fontSize: 13, fontWeight: 900, color: "#7C3AED" }}>{rival.streak}</span>
+            <span style={{ fontSize: 13, fontWeight: 900, color: "#5BBE93" }}>{rival.streak}</span>
             <span style={{ fontSize: 9, color: "#9CA3AF", fontWeight: 700 }}>STREAK</span>
           </div>
         </div>
@@ -169,15 +169,15 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
 
         {imWinning && !theyTaunt && (
           <div style={{
-            background: "linear-gradient(135deg, #2D1B69, #3D2B7A)",
-            border: "1px solid #7C3AED55",
+            background: "linear-gradient(135deg, #1E3D34, #3D2B7A)",
+            border: "1px solid #5BBE9355",
             borderRadius: 12, padding: "10px 14px", marginBottom: 14,
             animation: "tauntSlideIn 0.35s ease-out",
             display: "flex", alignItems: "center", gap: 10,
           }}>
             <span style={{ fontSize: 20, animation: "rivalPulse 1.8s ease-in-out infinite" }}>💪</span>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 13, color: "#7C3AED" }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: "#5BBE93" }}>
                 You're ahead this week 💪
               </div>
               <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
@@ -190,14 +190,14 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
         {tied && !theyTaunt && (
           <div style={{
             background: "linear-gradient(135deg, #1A1230, #0D0D1A)",
-            border: "1px solid #7C3AED55",
+            border: "1px solid #5BBE9355",
             borderRadius: 12, padding: "10px 14px", marginBottom: 14,
             animation: "tauntSlideIn 0.35s ease-out",
             display: "flex", alignItems: "center", gap: 10,
           }}>
             <span style={{ fontSize: 20 }}>⚖️</span>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 13, color: "#7C3AED" }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: "#5BBE93" }}>
                 Dead even — someone has to blink first
               </div>
               <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
@@ -215,20 +215,20 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
 
           {/* Me row */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#7C3AED,#9D5CF0)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#5BBE93,#9D5CF0)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
               ME
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#F0F0F0" }}>You</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: imWinning ? "#7C3AED" : "#F0F0F0" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: imWinning ? "#5BBE93" : "#F0F0F0" }}>
                   {rival.myWorkoutsThisWeek} workouts
                 </span>
               </div>
-              <div style={{ height: 7, background: "#2D1B69", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{ height: 7, background: "#1E3D34", borderRadius: 99, overflow: "hidden" }}>
                 <div style={{
                   height: "100%", width: `${myPct}%`,
-                  background: imWinning ? "#7C3AED" : "#7C3AED",
+                  background: imWinning ? "#5BBE93" : "#5BBE93",
                   borderRadius: 99, transition: "width 0.5s ease",
                 }} />
               </div>
@@ -268,14 +268,14 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           display: "flex", gap: 10, marginBottom: 16,
         }}>
           <div style={{
-            flex: 1, background: "#0A1F14", border: "1px solid #7C3AED33",
+            flex: 1, background: "#0A1F14", border: "1px solid #5BBE9333",
             borderRadius: 12, padding: "10px", textAlign: "center",
           }}>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#7C3AED" }}>{rival.record.wins}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#5BBE93" }}>{rival.record.wins}</div>
             <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700 }}>WINS</div>
           </div>
           <div style={{
-            flex: 1, background: "#0D0D0D", border: "1px solid #2D1B69",
+            flex: 1, background: "#0E1311", border: "1px solid #1E3D34",
             borderRadius: 12, padding: "10px", textAlign: "center",
           }}>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#F0F0F0" }}>{winRate}%</div>
@@ -293,17 +293,17 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
         {/* ── Today status dots ── */}
         <div style={{
           display: "flex", gap: 8, marginBottom: 16,
-          background: "#0D0D0D", borderRadius: 12, padding: "10px 14px",
-          border: "1px solid #2D1B69",
+          background: "#0E1311", borderRadius: 12, padding: "10px 14px",
+          border: "1px solid #1E3D34",
         }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 7 }}>
             <div style={{
               width: 10, height: 10, borderRadius: "50%",
-              background: rival.myLoggedToday ? "#7C3AED" : "#EF4444",
-              boxShadow: rival.myLoggedToday ? "0 0 8px #7C3AED" : "0 0 8px #EF4444",
+              background: rival.myLoggedToday ? "#5BBE93" : "#EF4444",
+              boxShadow: rival.myLoggedToday ? "0 0 8px #5BBE93" : "0 0 8px #EF4444",
             }} />
             <span style={{ fontSize: 12, color: "#9CA3AF" }}>
-              You — <strong style={{ color: rival.myLoggedToday ? "#7C3AED" : "#EF4444" }}>
+              You — <strong style={{ color: rival.myLoggedToday ? "#5BBE93" : "#EF4444" }}>
                 {rival.myLoggedToday ? "Logged today ✓" : "Not yet"}
               </strong>
             </span>
@@ -311,11 +311,11 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 7 }}>
             <div style={{
               width: 10, height: 10, borderRadius: "50%",
-              background: rival.loggedToday ? "#EF4444" : "#7C3AED",
-              boxShadow: rival.loggedToday ? "0 0 8px #EF4444" : "0 0 8px #7C3AED",
+              background: rival.loggedToday ? "#EF4444" : "#5BBE93",
+              boxShadow: rival.loggedToday ? "0 0 8px #EF4444" : "0 0 8px #5BBE93",
             }} />
             <span style={{ fontSize: 12, color: "#9CA3AF" }}>
-              Them — <strong style={{ color: rival.loggedToday ? "#EF4444" : "#7C3AED" }}>
+              Them — <strong style={{ color: rival.loggedToday ? "#EF4444" : "#5BBE93" }}>
                 {rival.loggedToday ? "Logged today" : "Not yet"}
               </strong>
             </span>
@@ -330,11 +330,11 @@ export default function RivalCard({ rival, className }: RivalCardProps) {
             borderRadius: 13, border: "none",
             background: challenged
               ? "rgba(124,58,237,0.15)"
-              : "linear-gradient(135deg, #7C3AED, #9D5CF0)",
-            color: challenged ? "#7C3AED" : "#fff",
+              : "linear-gradient(135deg, #5BBE93, #9D5CF0)",
+            color: challenged ? "#5BBE93" : "#fff",
             fontWeight: 800, fontSize: 14, cursor: "pointer",
             transition: "all 0.2s",
-            boxShadow: challenged ? "none" : "0 4px 18px #7C3AED55",
+            boxShadow: challenged ? "none" : "0 4px 18px #5BBE9355",
           }}
         >
           {challenged ? "⚔️ Challenge Sent — Game On!" : "⚔️ Send a Challenge"}
