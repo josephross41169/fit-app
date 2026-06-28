@@ -62,9 +62,9 @@ const TIERS: {
   glow: string;
 }[] = [
   { id: "beginner",     emoji: "🌱", name: "Beginner",     desc: "Just getting started — building the habit",
-    color: "#7C3AED", bg: "linear-gradient(135deg, #064E3B, #065F46)", border: "#7C3AED55", glow: "#7C3AED33" },
+    color: "#5BBE93", bg: "linear-gradient(135deg, #064E3B, #065F46)", border: "#5BBE9355", glow: "#5BBE9333" },
   { id: "intermediate", emoji: "⚡", name: "Intermediate", desc: "Consistent and climbing — real competition",
-    color: "#7C3AED", bg: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "#7C3AED88", glow: "#7C3AED44" },
+    color: "#5BBE93", bg: "linear-gradient(135deg, #1A0D3E, #1E3D34)", border: "#5BBE9388", glow: "#5BBE9344" },
   { id: "mayhem",       emoji: "💀", name: "Mayhem",       desc: "No days off. Absolute grind. Not for everyone.",
     color: "#EF4444", bg: "linear-gradient(135deg, #1A0000, #3B0A0A, #1A0000)", border: "#EF444488", glow: "#EF444455" },
 ];
@@ -88,7 +88,7 @@ const RIVALRY_BADGE_CATALOG: { key: string; emoji: string; name: string; desc: s
   { key: "quick_strike",  emoji: "⚡", name: "Quick Strike",  desc: "Logged within 1 hour of your rival's log",
     gradient: "linear-gradient(135deg,#FCD34D,#F59E0B)", border: "#F59E0B", glow: "#F59E0B44", label: "BOLT" },
   { key: "comeback",      emoji: "🔄", name: "Comeback",      desc: "Flipped a deficit to a lead",
-    gradient: "linear-gradient(135deg,#7C3AED,#A855F7)", border: "#7C3AED", glow: "#7C3AED44", label: "ELECTRIC" },
+    gradient: "linear-gradient(135deg,#5BBE93,#A855F7)", border: "#5BBE93", glow: "#5BBE9344", label: "ELECTRIC" },
   { key: "untouchable",   emoji: "💀", name: "Untouchable",   desc: "Won without ever being behind",
     gradient: "linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)", border: "#4338CA", glow: "#4338CA44", label: "COSMIC" },
 ];
@@ -139,8 +139,8 @@ function CategorySelect({ onSelect }: { onSelect: (c: RivalCategory) => void }) 
         @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes scanLine { 0% { transform: translateY(-100%); } 100% { transform: translateY(600%); } }
       `}</style>
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 32, border: "1px solid #7C3AED55", position: "relative", overflow: "hidden", boxShadow: "0 8px 40px rgba(124,58,237,0.2)" }}>
-        <div style={{ position: "absolute", left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, transparent, #7C3AED66, transparent)", animation: "scanLine 3s ease-in-out infinite", pointerEvents: "none" }} />
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1E3D34, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 32, border: "1px solid #5BBE9355", position: "relative", overflow: "hidden", boxShadow: "0 8px 40px rgba(124,58,237,0.2)" }}>
+        <div style={{ position: "absolute", left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, transparent, #5BBE9366, transparent)", animation: "scanLine 3s ease-in-out infinite", pointerEvents: "none" }} />
         <div style={{ textAlign: "center", position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 52, marginBottom: 12 }}>⚔️</div>
           <div style={{ fontWeight: 900, fontSize: 26, color: "#fff", marginBottom: 8, letterSpacing: -0.5 }}>Choose Your Battleground</div>
@@ -153,7 +153,7 @@ function CategorySelect({ onSelect }: { onSelect: (c: RivalCategory) => void }) 
           return (
             <button key={cat.id} onClick={() => onSelect(cat.id)}
               onMouseEnter={() => setHovered(cat.id)} onMouseLeave={() => setHovered(null)}
-              style={{ background: isHov ? "linear-gradient(135deg, #1A0D3E, #2D1B69)" : "#1A1A1A", border: `2px solid ${isHov ? "#7C3AED" : "#2D1B69"}`, borderRadius: 20, padding: "22px 16px", cursor: "pointer", textAlign: "center", animation: `fadeUp 0.4s ease ${i * 0.06}s both`, transition: "all 0.2s", boxShadow: isHov ? "0 0 24px rgba(124,58,237,0.35)" : "none", outline: "none" }}>
+              style={{ background: isHov ? "linear-gradient(135deg, #1A0D3E, #1E3D34)" : "#161D19", border: `2px solid ${isHov ? "#5BBE93" : "#1E3D34"}`, borderRadius: 20, padding: "22px 16px", cursor: "pointer", textAlign: "center", animation: `fadeUp 0.4s ease ${i * 0.06}s both`, transition: "all 0.2s", boxShadow: isHov ? "0 0 24px rgba(124,58,237,0.35)" : "none", outline: "none" }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>{cat.emoji}</div>
               <div style={{ fontWeight: 900, fontSize: 15, color: "#F0F0F0", marginBottom: 4 }}>{cat.name}</div>
               <div style={{ fontSize: 11, color: "#9CA3AF", lineHeight: 1.4 }}>{cat.desc}</div>
@@ -178,7 +178,7 @@ function CompetitionSelect({ category, onBack, onSelect }: {
     <div>
       <style>{`@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }`}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={onBack} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 12, width: 40, height: 40, color: "#9CA3AF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
+        <button onClick={onBack} style={{ background: "#161D19", border: "1px solid #1E3D34", borderRadius: 12, width: 40, height: 40, color: "#9CA3AF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
         <div>
           <div style={{ fontWeight: 900, fontSize: 20, color: "#F0F0F0" }}>{cat.emoji} {cat.name}</div>
           <div style={{ fontSize: 12, color: "#9CA3AF" }}>Pick your competition</div>
@@ -187,11 +187,11 @@ function CompetitionSelect({ category, onBack, onSelect }: {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {options.map((opt, i) => (
           <button key={opt.id} onClick={() => onSelect(opt.id)}
-            style={{ background: "#1A1A1A", border: "2px solid #2D1B69", borderRadius: 16, padding: "18px 20px", cursor: "pointer", textAlign: "left", animation: `fadeUp 0.35s ease ${i * 0.06}s both`, transition: "border-color 0.2s, box-shadow 0.2s", outline: "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#7C3AED"; e.currentTarget.style.boxShadow = "0 0 20px rgba(124,58,237,0.2)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2D1B69"; e.currentTarget.style.boxShadow = "none"; }}>
+            style={{ background: "#161D19", border: "2px solid #1E3D34", borderRadius: 16, padding: "18px 20px", cursor: "pointer", textAlign: "left", animation: `fadeUp 0.35s ease ${i * 0.06}s both`, transition: "border-color 0.2s, box-shadow 0.2s", outline: "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#5BBE93"; e.currentTarget.style.boxShadow = "0 0 20px rgba(124,58,237,0.2)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1E3D34"; e.currentTarget.style.boxShadow = "none"; }}>
             <div style={{ fontWeight: 900, fontSize: 16, color: "#F0F0F0" }}>{opt.label}</div>
-            <div style={{ color: "#7C3AED", fontSize: 18, fontWeight: 900 }}>→</div>
+            <div style={{ color: "#5BBE93", fontSize: 18, fontWeight: 900 }}>→</div>
           </button>
         ))}
       </div>
@@ -215,7 +215,7 @@ function TierSelect({ category, competition, onBack, onSelect }: {
         @keyframes mayhemFlicker { 0%,100% { opacity: 1; } 92% { opacity: 1; } 93% { opacity: 0.7; } 94% { opacity: 1; } 96% { opacity: 0.85; } 97% { opacity: 1; } }
       `}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={onBack} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 12, width: 40, height: 40, color: "#9CA3AF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
+        <button onClick={onBack} style={{ background: "#161D19", border: "1px solid #1E3D34", borderRadius: 12, width: 40, height: 40, color: "#9CA3AF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
         <div>
           <div style={{ fontWeight: 900, fontSize: 20, color: "#F0F0F0" }}>{cat.emoji} {cat.name} · {getCompetitionLabel(category, competition)}</div>
           <div style={{ fontSize: 12, color: "#9CA3AF" }}>Choose your tier</div>
@@ -227,7 +227,7 @@ function TierSelect({ category, competition, onBack, onSelect }: {
           const isMayhem = tier.id === "mayhem";
           return (
             <button key={tier.id} onClick={() => onSelect(tier.id)} onMouseEnter={() => setHovered(tier.id)} onMouseLeave={() => setHovered(null)}
-              style={{ background: isHov || isMayhem ? tier.bg : "#1A1A1A", border: `2px solid ${isHov ? tier.color : tier.border}`, borderRadius: 20, padding: "24px 22px", cursor: "pointer", textAlign: "left", animation: `fadeUp 0.35s ease ${i * 0.1}s both${isMayhem ? ", mayhemFlicker 6s ease-in-out infinite" : ""}`, transition: "border-color 0.2s, box-shadow 0.2s", boxShadow: isHov ? `0 0 28px ${tier.glow}` : isMayhem ? `0 4px 24px ${tier.glow}` : "none", outline: "none", position: "relative", overflow: "hidden" }}>
+              style={{ background: isHov || isMayhem ? tier.bg : "#161D19", border: `2px solid ${isHov ? tier.color : tier.border}`, borderRadius: 20, padding: "24px 22px", cursor: "pointer", textAlign: "left", animation: `fadeUp 0.35s ease ${i * 0.1}s both${isMayhem ? ", mayhemFlicker 6s ease-in-out infinite" : ""}`, transition: "border-color 0.2s, box-shadow 0.2s", boxShadow: isHov ? `0 0 28px ${tier.glow}` : isMayhem ? `0 4px 24px ${tier.glow}` : "none", outline: "none", position: "relative", overflow: "hidden" }}>
               {isMayhem && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(239,68,68,0.03) 2px, rgba(239,68,68,0.03) 4px)" }} />}
               <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
                 <div style={{ width: 56, height: 56, borderRadius: 16, flexShrink: 0, background: `${tier.color}18`, border: `2px solid ${tier.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, boxShadow: isMayhem ? `0 0 16px ${tier.glow}` : "none" }}>{tier.emoji}</div>
@@ -323,7 +323,7 @@ function MatchingScreen({ category, tier, onMatched, onCancel }: {
           <div key={delay} style={{ width: 10, height: 10, borderRadius: "50%", background: t.color, animation: `dotBounce 1.2s ease-in-out ${delay}s infinite` }} />
         ))}
       </div>
-      <button onClick={handleCancel} style={{ background: "transparent", border: "1px solid #2D1B69", borderRadius: 12, padding: "10px 24px", color: "#9CA3AF", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+      <button onClick={handleCancel} style={{ background: "transparent", border: "1px solid #1E3D34", borderRadius: 12, padding: "10px 24px", color: "#9CA3AF", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
         Cancel search
       </button>
     </div>
@@ -411,7 +411,7 @@ function RivalProfileCard({
       {/* City + record pills — wrap on narrow screens */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 10 }}>
         {city && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "#0D0D0D", border: `1px solid ${accent}33`, borderRadius: 99, padding: "3px 9px", fontSize: 10, color: "#D1D5DB", fontWeight: 700 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "#0E1311", border: `1px solid ${accent}33`, borderRadius: 99, padding: "3px 9px", fontSize: 10, color: "#D1D5DB", fontWeight: 700 }}>
             📍 {city.split(",")[0].trim()}
           </span>
         )}
@@ -433,7 +433,7 @@ function RivalProfileCard({
       )}
 
       {/* Live score for this side */}
-      <div style={{ background: "#0D0D0D", borderRadius: 12, padding: "10px 8px", border: `1px solid ${accent}33` }}>
+      <div style={{ background: "#0E1311", borderRadius: 12, padding: "10px 8px", border: `1px solid ${accent}33` }}>
         <div style={{ fontSize: 9, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{scoreLabel}</div>
         <div style={{ fontWeight: 900, fontSize: 22, color: accent }}>{score}</div>
       </div>
@@ -457,7 +457,7 @@ function RivalStatsCompare({ myStats, theirStats, opponentName }: {
   if (maxLen === 0) return null;
 
   return (
-    <div style={{ background: "#1A0D3E33", borderRadius: 18, border: "1px solid #2D1B69", padding: "16px 18px", marginBottom: 20 }}>
+    <div style={{ background: "#1A0D3E33", borderRadius: 18, border: "1px solid #1E3D34", padding: "16px 18px", marginBottom: 20 }}>
       <div style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 14, textAlign: "center" }}>
         📊 Last 4 weeks at a glance
       </div>
@@ -468,7 +468,7 @@ function RivalStatsCompare({ myStats, theirStats, opponentName }: {
           const label = mine.label || theirs.label;
           return (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 800, fontSize: 16, color: "#7C3AED", textAlign: "right" }}>{mine.value}</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: "#5BBE93", textAlign: "right" }}>{mine.value}</div>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5, minWidth: 100 }}>{label}</div>
               <div style={{ fontWeight: 800, fontSize: 16, color: "#EF4444", textAlign: "left" }}>{theirs.value}</div>
             </div>
@@ -476,8 +476,8 @@ function RivalStatsCompare({ myStats, theirStats, opponentName }: {
         })}
       </div>
       {/* Footer hint so users know whose number is whose */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", marginTop: 12, paddingTop: 10, borderTop: "1px solid #2D1B69", fontSize: 10, fontWeight: 700, color: "#6B7280" }}>
-        <div style={{ textAlign: "right", color: "#7C3AED" }}>YOU</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", marginTop: 12, paddingTop: 10, borderTop: "1px solid #1E3D34", fontSize: 10, fontWeight: 700, color: "#6B7280" }}>
+        <div style={{ textAlign: "right", color: "#5BBE93" }}>YOU</div>
         <div style={{ minWidth: 100 }}></div>
         <div style={{ textAlign: "left", color: "#EF4444" }}>{opponentName.toUpperCase()}</div>
       </div>
@@ -557,16 +557,16 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
   return (
     <div>
       <style>{`
-        @keyframes h2hGlow { 0% { box-shadow: 0 0 20px 4px #EF444433, 0 0 40px 10px #7C3AED22; } 50% { box-shadow: 0 0 30px 8px #EF444455, 0 0 60px 18px #7C3AED33; } 100% { box-shadow: 0 0 20px 4px #EF444433, 0 0 40px 10px #7C3AED22; } }
+        @keyframes h2hGlow { 0% { box-shadow: 0 0 20px 4px #EF444433, 0 0 40px 10px #5BBE9322; } 50% { box-shadow: 0 0 30px 8px #EF444455, 0 0 60px 18px #5BBE9333; } 100% { box-shadow: 0 0 20px 4px #EF444433, 0 0 40px 10px #5BBE9322; } }
         @keyframes vsFloat { 0% { transform: scale(1) rotate(-3deg); } 50% { transform: scale(1.08) rotate(3deg); } 100% { transform: scale(1) rotate(-3deg); } }
       `}</style>
 
       {/* Category + competition + tier + countdown badges */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#161D19", border: "1px solid #1E3D34", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
           {cat.emoji} {cat.name}
         </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#161D19", border: "1px solid #1E3D34", borderRadius: 99, padding: "6px 14px", fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>
           🎯 {getCompetitionLabel(rivalry.category, rivalry.competition_type)}
         </div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${t.color}18`, border: `1px solid ${t.color}44`, borderRadius: 99, padding: "6px 14px", fontSize: 13, color: t.color, fontWeight: 800, boxShadow: `0 0 10px ${t.glow}` }}>
@@ -585,8 +585,8 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
       {/* ── Profile face-off card ────────────────────────────────────────── */}
       {/* Two-column flex with VS divider in the middle. The columns auto-collapse
           on narrow screens (mobile flex behavior keeps things readable). */}
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1A1A1A, #1A0A0A)", borderRadius: 24, border: "2px solid #EF444455", padding: "24px 16px", marginBottom: 20, animation: "h2hGlow 3s ease-in-out infinite", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at 30% 50%, #7C3AED14 0%, transparent 60%), radial-gradient(ellipse at 70% 50%, #EF444414 0%, transparent 60%)" }} />
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #161D19, #1A0A0A)", borderRadius: 24, border: "2px solid #EF444455", padding: "24px 16px", marginBottom: 20, animation: "h2hGlow 3s ease-in-out infinite", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at 30% 50%, #5BBE9314 0%, transparent 60%), radial-gradient(ellipse at 70% 50%, #EF444414 0%, transparent 60%)" }} />
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, position: "relative", zIndex: 1 }}>
           <RivalProfileCard
@@ -597,7 +597,7 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
             city={myCity}
             bio={myBio}
             record={{ wins: myRecord.wins, losses: myRecord.losses }}
-            accent="#7C3AED"
+            accent="#5BBE93"
             glow={iAhead}
             scoreLabel="You"
             score={formatScore(rivalry.category, rivalry.competition_type, liveScores.my_score)}
@@ -606,7 +606,7 @@ function HeadToHeadPanel({ rivalry, myRecord, theirRecord }: {
           {/* VS divider — sits at the top so it stays even with the avatars
               regardless of how tall each side's bio/city block grows */}
           <div style={{ flexShrink: 0, paddingTop: 28 }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #1A1A1A, #2D1B69)", border: "2px solid #7C3AED66", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#7C3AED", animation: "vsFloat 3s ease-in-out infinite", boxShadow: "0 0 20px #7C3AED33" }}>VS</div>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #161D19, #1E3D34)", border: "2px solid #5BBE9366", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#5BBE93", animation: "vsFloat 3s ease-in-out infinite", boxShadow: "0 0 20px #5BBE9333" }}>VS</div>
           </div>
 
           <RivalProfileCard
@@ -668,7 +668,7 @@ function BadgesPanel({ rivalryId, myId, opponentFirstName }: {
           return (
             <div key={badge.key} style={{
               borderRadius: 18, padding: "18px 14px",
-              background: earnedBy ? badge.gradient : "#1A1A1A",
+              background: earnedBy ? badge.gradient : "#161D19",
               border: `2px solid ${earnedBy ? badge.border : "#2D2D2D"}`,
               textAlign: "center", position: "relative", overflow: "hidden",
               boxShadow: earnedBy ? `0 4px 20px ${badge.glow}` : "none",
@@ -821,7 +821,7 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
     <div>
       <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6 }}>💬 Rival Chat</div>
       <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Talk your trash. Back it up.</div>
-      <div style={{ background: "#1A1A1A", borderRadius: 20, border: "1px solid #2D1B69", overflow: "hidden" }}>
+      <div style={{ background: "#161D19", borderRadius: 20, border: "1px solid #1E3D34", overflow: "hidden" }}>
         <div ref={chatScrollRef} style={{ padding: "16px", height: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {messages.length === 0 && (
             <div style={{ margin: "auto", color: "#6B7280", fontSize: 13, textAlign: "center" }}>
@@ -840,7 +840,7 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
                 )}
                 <div style={{ maxWidth: "72%" }}>
                   {msg.photo_url ? (
-                    <div onClick={isBlurredForMe ? () => handleUnblur(msg.id) : undefined} style={{ borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", overflow: "hidden", position: "relative", cursor: isBlurredForMe ? "pointer" : "default", border: isMe ? "2px solid #7C3AED66" : "2px solid #2D2D2D", minWidth: 180 }}>
+                    <div onClick={isBlurredForMe ? () => handleUnblur(msg.id) : undefined} style={{ borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", overflow: "hidden", position: "relative", cursor: isBlurredForMe ? "pointer" : "default", border: isMe ? "2px solid #5BBE9366" : "2px solid #2D2D2D", minWidth: 180 }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={msg.photo_url} alt="" style={{ display: "block", width: "100%", maxWidth: 240, filter: isBlurredForMe ? "blur(30px)" : "none", transition: "filter 0.3s" }} />
                       {isBlurredForMe && (
@@ -851,7 +851,7 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
                       )}
                     </div>
                   ) : (
-                    <div style={{ padding: "10px 14px", borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isMe ? "linear-gradient(135deg,#7C3AED,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 13, lineHeight: 1.5, boxShadow: isMe ? "0 4px 12px #7C3AED44" : "none" }}>
+                    <div style={{ padding: "10px 14px", borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isMe ? "linear-gradient(135deg,#5BBE93,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 13, lineHeight: 1.5, boxShadow: isMe ? "0 4px 12px #5BBE9344" : "none" }}>
                       {msg.content}
                     </div>
                   )}
@@ -864,15 +864,15 @@ function ChatPanel({ rivalryId, myId, rivalFirstName }: {
           })}
           <div ref={bottomRef} />
         </div>
-        <div style={{ padding: "12px 16px", borderTop: "1px solid #2D1B69", display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ padding: "12px 16px", borderTop: "1px solid #1E3D34", display: "flex", gap: 10, alignItems: "center" }}>
           <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handlePhotoPick} />
-          <button onClick={() => fileInputRef.current?.click()} disabled={sending} style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid #2D1B69", background: "#0D0D0D", color: "#9CA3AF", fontSize: 18, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <button onClick={() => fileInputRef.current?.click()} disabled={sending} style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid #1E3D34", background: "#0E1311", color: "#9CA3AF", fontSize: 18, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             📷
           </button>
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendText()}
             placeholder="Say something... 😤" disabled={sending}
-            style={{ flex: 1, background: "#0D0D0D", border: "1px solid #2D1B69", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
-          <button onClick={handleSendText} disabled={sending || !input.trim()} style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: input.trim() ? "linear-gradient(135deg,#7C3AED,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 16, cursor: sending || !input.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 4px 12px #7C3AED55" : "none" }}>
+            style={{ flex: 1, background: "#0E1311", border: "1px solid #1E3D34", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
+          <button onClick={handleSendText} disabled={sending || !input.trim()} style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: input.trim() ? "linear-gradient(135deg,#5BBE93,#9D5CF0)" : "#2D2D2D", color: "#fff", fontSize: 16, cursor: sending || !input.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 4px 12px #5BBE9355" : "none" }}>
             ↑
           </button>
         </div>
@@ -996,7 +996,7 @@ function BuddyChat({ matchId, myId, buddyFirstName }: {
     <div>
       <div style={{ fontWeight: 900, fontSize: 18, color: "#F0F0F0", marginBottom: 6 }}>💬 Buddy Chat</div>
       <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Cheer each other on. Share the wins.</div>
-      <div style={{ background: "#1A1A1A", borderRadius: 20, border: "1px solid #1E40AF44", overflow: "hidden" }}>
+      <div style={{ background: "#161D19", borderRadius: 20, border: "1px solid #1E40AF44", overflow: "hidden" }}>
         <div ref={chatScrollRef} style={{ padding: "16px", height: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {messages.length === 0 && (
             <div style={{ margin: "auto", color: "#6B7280", fontSize: 13, textAlign: "center" }}>
@@ -1040,12 +1040,12 @@ function BuddyChat({ matchId, myId, buddyFirstName }: {
         </div>
         <div style={{ padding: "12px 16px", borderTop: "1px solid #1E40AF44", display: "flex", gap: 10, alignItems: "center" }}>
           <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handlePhotoPick} />
-          <button onClick={() => fileInputRef.current?.click()} disabled={sending} style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid #1E40AF44", background: "#0D0D0D", color: "#9CA3AF", fontSize: 18, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <button onClick={() => fileInputRef.current?.click()} disabled={sending} style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid #1E40AF44", background: "#0E1311", color: "#9CA3AF", fontSize: 18, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             📷
           </button>
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendText()}
             placeholder="Send your buddy a message... 💪" disabled={sending}
-            style={{ flex: 1, background: "#0D0D0D", border: "1px solid #1E40AF44", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
+            style={{ flex: 1, background: "#0E1311", border: "1px solid #1E40AF44", borderRadius: 24, padding: "10px 16px", fontSize: 13, color: "#F0F0F0", outline: "none", fontFamily: "inherit" }} />
           <button onClick={handleSendText} disabled={sending || !input.trim()} style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: input.trim() ? "linear-gradient(135deg,#3B82F6,#4ADE80)" : "#2D2D2D", color: "#fff", fontSize: 16, cursor: sending || !input.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 4px 12px #3B82F655" : "none" }}>
             ↑
           </button>
@@ -1169,8 +1169,8 @@ function BuddyIntakeForm({
   // Reused styling for each text input — labelled, dark, full width.
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    background: "#0D0D0D",
-    border: "1px solid #2D1B69",
+    background: "#0E1311",
+    border: "1px solid #1E3D34",
     borderRadius: 12,
     padding: "12px 14px",
     color: "#F0F0F0",
@@ -1183,7 +1183,7 @@ function BuddyIntakeForm({
     display: "block",
     fontSize: 11,
     fontWeight: 800,
-    color: "#A78BFA",
+    color: "#86CFAE",
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: 6,
@@ -1204,11 +1204,11 @@ function BuddyIntakeForm({
 
       {/* Hero — explains why we're asking before the user can queue */}
       <div style={{
-        background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)",
+        background: "linear-gradient(135deg, #1A0D3E, #1E3D34, #1A0D3E)",
         borderRadius: 24,
         padding: "28px 24px",
         marginBottom: 18,
-        border: "1px solid #7C3AED55",
+        border: "1px solid #5BBE9355",
         textAlign: "center",
       }}>
         <div style={{ fontSize: 44, marginBottom: 8 }}>👋</div>
@@ -1216,7 +1216,7 @@ function BuddyIntakeForm({
           Tell your future buddy about you
         </div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.5, maxWidth: 360, margin: "0 auto" }}>
-          Three quick prompts — your buddy sees these on their <em>Meet your buddy</em> card. <strong style={{ color: "#A78BFA" }}>Required before matching.</strong>
+          Three quick prompts — your buddy sees these on their <em>Meet your buddy</em> card. <strong style={{ color: "#86CFAE" }}>Required before matching.</strong>
         </div>
       </div>
 
@@ -1284,7 +1284,7 @@ function BuddyIntakeForm({
           style={{
             background: !allFilled || submitting
               ? "rgba(124,58,237,0.25)"
-              : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+              : "linear-gradient(135deg, #5BBE93, #86CFAE)",
             border: "none",
             borderRadius: 14,
             padding: "14px 20px",
@@ -1539,7 +1539,7 @@ function BuddyPanel({ userId }: { userId: string }) {
   // whichever real view applies based on `step`.
   if (!loaded) {
     return (
-      <div style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 22, padding: "40px 24px", textAlign: "center" }}>
+      <div style={{ background: "#161D19", border: "1px solid #1E3D34", borderRadius: 22, padding: "40px 24px", textAlign: "center" }}>
         <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.5 }}>🤝</div>
         <div style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 700 }}>Loading your buddy status…</div>
       </div>
@@ -1582,7 +1582,7 @@ function BuddyPanel({ userId }: { userId: string }) {
         >← All buddies</button>
 
         {/* Hero card — category + buddy name + days left + target */}
-        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "24px 22px", textAlign: "center" }}>
+        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1E3D34)", border: "1px solid #5BBE9355", borderRadius: 22, padding: "24px 22px", textAlign: "center" }}>
           <div style={{ fontSize: 36, marginBottom: 6 }}>{catEmoji}</div>
           <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 4 }}>
             {catName} buddy
@@ -1628,11 +1628,11 @@ function BuddyPanel({ userId }: { userId: string }) {
           // a jarring empty space.
           if (buddyProfileLoading && !buddyProfile) {
             return (
-              <div style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "20px 18px", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#2D1B6955" }} />
+              <div style={{ background: "#161D19", border: "1px solid #1E3D34", borderRadius: 18, padding: "20px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#1E3D3455" }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ width: 120, height: 12, background: "#2D1B6955", borderRadius: 4, marginBottom: 6 }} />
-                  <div style={{ width: 80, height: 9, background: "#2D1B6944", borderRadius: 4 }} />
+                  <div style={{ width: 120, height: 12, background: "#1E3D3455", borderRadius: 4, marginBottom: 6 }} />
+                  <div style={{ width: 80, height: 9, background: "#1E3D3444", borderRadius: 4 }} />
                 </div>
               </div>
             );
@@ -1653,8 +1653,8 @@ function BuddyPanel({ userId }: { userId: string }) {
 
           return (
             <div style={{
-              background: "linear-gradient(135deg, #1A1A1A, #1A0D3E22)",
-              border: "1px solid #7C3AED44",
+              background: "linear-gradient(135deg, #161D19, #1A0D3E22)",
+              border: "1px solid #5BBE9344",
               borderRadius: 20,
               padding: 0,
               overflow: "hidden",
@@ -1663,11 +1663,11 @@ function BuddyPanel({ userId }: { userId: string }) {
               <div style={{
                 background: "rgba(124,58,237,0.12)",
                 padding: "10px 16px",
-                borderBottom: "1px solid #7C3AED22",
+                borderBottom: "1px solid #5BBE9322",
                 display: "flex", alignItems: "center", gap: 8,
               }}>
                 <span style={{ fontSize: 14 }}>👋</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#A78BFA", letterSpacing: 1, textTransform: "uppercase" as const }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: "#86CFAE", letterSpacing: 1, textTransform: "uppercase" as const }}>
                   Meet your buddy
                 </span>
               </div>
@@ -1681,15 +1681,15 @@ function BuddyPanel({ userId }: { userId: string }) {
                   <img
                     src={u.avatar_url}
                     alt=""
-                    style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid #7C3AED55", flexShrink: 0 }}
+                    style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid #5BBE9355", flexShrink: 0 }}
                   />
                 ) : (
                   <div style={{
                     width: 64, height: 64, borderRadius: "50%",
-                    background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                    background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: "#fff", fontWeight: 900, fontSize: 24, flexShrink: 0,
-                    border: "2px solid #7C3AED55",
+                    border: "2px solid #5BBE9355",
                   }}>{initials}</div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1711,7 +1711,7 @@ function BuddyPanel({ userId }: { userId: string }) {
                       {u.city && (
                         <span style={{
                           fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99,
-                          background: "#0D0D0D", border: "1px solid #2D1B69",
+                          background: "#0E1311", border: "1px solid #1E3D34",
                           color: "#9CA3AF",
                         }}>📍 {u.city}</span>
                       )}
@@ -1726,7 +1726,7 @@ function BuddyPanel({ userId }: { userId: string }) {
                 <div style={{ padding: "0 18px 12px" }}>
                   <div style={{
                     fontSize: 13, color: "#D1D5DB", fontStyle: "italic" as const,
-                    lineHeight: 1.5, paddingLeft: 10, borderLeft: "2px solid #7C3AED55",
+                    lineHeight: 1.5, paddingLeft: 10, borderLeft: "2px solid #5BBE9355",
                   }}>"{u.bio}"</div>
                 </div>
               )}
@@ -1747,7 +1747,7 @@ function BuddyPanel({ userId }: { userId: string }) {
                 }}>
                   <div style={{ fontSize: 18, lineHeight: 1.2, flexShrink: 0 }}>🎯</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: "#A78BFA", textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: "#86CFAE", textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
                       Training for
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#F0F0F0", lineHeight: 1.4 }}>
@@ -1765,8 +1765,8 @@ function BuddyPanel({ userId }: { userId: string }) {
                 <div style={{
                   margin: "0 14px 10px",
                   padding: "10px 12px",
-                  background: "#0D0D0D",
-                  border: "1px solid #2D1B69",
+                  background: "#0E1311",
+                  border: "1px solid #1E3D34",
                   borderRadius: 12,
                   display: "flex", alignItems: "flex-start", gap: 10,
                 }}>
@@ -1790,8 +1790,8 @@ function BuddyPanel({ userId }: { userId: string }) {
                 <div style={{
                   margin: "0 14px 12px",
                   padding: "10px 12px",
-                  background: "#0D0D0D",
-                  border: "1px solid #2D1B69",
+                  background: "#0E1311",
+                  border: "1px solid #1E3D34",
                   borderRadius: 12,
                   display: "flex", alignItems: "center", gap: 10,
                 }}>
@@ -1805,10 +1805,10 @@ function BuddyPanel({ userId }: { userId: string }) {
                     </div>
                     {goal.target > 0 && (
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                        <div style={{ flex: 1, height: 4, background: "#2D1B6955", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ flex: 1, height: 4, background: "#1E3D3455", borderRadius: 99, overflow: "hidden" }}>
                           <div style={{
                             width: `${Math.min(100, ((goal.current || 0) / goal.target) * 100)}%`,
-                            height: "100%", background: "#A78BFA", borderRadius: 99,
+                            height: "100%", background: "#86CFAE", borderRadius: 99,
                           }} />
                         </div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF" }}>
@@ -1834,7 +1834,7 @@ function BuddyPanel({ userId }: { userId: string }) {
                         {pinnedDisplay.map((p: any) => (
                           <div key={p.id} title={p.meta.label} style={{
                             flex: 1, padding: "8px 4px", textAlign: "center" as const,
-                            background: "#0D0D0D", border: "1px solid #2D1B69", borderRadius: 10,
+                            background: "#0E1311", border: "1px solid #1E3D34", borderRadius: 10,
                           }}>
                             <div style={{ fontSize: 22, lineHeight: 1, marginBottom: 4 }}>{p.meta.emoji}</div>
                             <div style={{
@@ -1878,8 +1878,8 @@ function BuddyPanel({ userId }: { userId: string }) {
                 <div style={{
                   margin: "0 14px 14px",
                   padding: "12px 14px",
-                  background: "#0D0D0D",
-                  border: "1px dashed #2D1B69",
+                  background: "#0E1311",
+                  border: "1px dashed #1E3D34",
                   borderRadius: 12,
                   textAlign: "center" as const,
                 }}>
@@ -1901,7 +1901,7 @@ function BuddyPanel({ userId }: { userId: string }) {
           { user: me, progress: myProgress || 0, pct: myPct, isMe: true },
           { user: buddy, progress: buddyProgress || 0, pct: buddyPct, isMe: false },
         ].map((row, i) => (
-          <div key={i} style={{ background: "#1A1A1A", border: "1px solid #2D1B69", borderRadius: 18, padding: "16px 18px" }}>
+          <div key={i} style={{ background: "#161D19", border: "1px solid #1E3D34", borderRadius: 18, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
               {row.user?.avatar_video_url ? (
                 <video src={row.user.avatar_video_url} poster={row.user.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata"
@@ -1910,7 +1910,7 @@ function BuddyPanel({ userId }: { userId: string }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={row.user.avatar_url} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
               ) : (
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900 }}>
                   {(row.user?.full_name || row.user?.username || "?")[0]?.toUpperCase()}
                 </div>
               )}
@@ -1922,15 +1922,15 @@ function BuddyPanel({ userId }: { userId: string }) {
                   {Math.round(row.progress * 10) / 10} / {target} {unit}
                 </div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#A78BFA" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#86CFAE" }}>
                 {row.pct >= 100 ? "✓" : `${Math.round(row.pct)}%`}
               </div>
             </div>
-            <div style={{ height: 8, background: "#0D0D0D", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: 8, background: "#0E1311", borderRadius: 99, overflow: "hidden" }}>
               <div style={{
                 height: "100%",
                 width: `${row.pct}%`,
-                background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #7C3AED, #A78BFA)",
+                background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #5BBE93, #86CFAE)",
                 borderRadius: 99,
                 transition: "width 0.4s",
               }} />
@@ -1975,7 +1975,7 @@ function BuddyPanel({ userId }: { userId: string }) {
         {/* Header strip — count + intro */}
         <div style={{ padding: "4px 4px 8px" }}>
           <div style={{ fontWeight: 800, fontSize: 16, color: "#F0F0F0", marginBottom: 2 }}>
-            Your buddies <span style={{ color: "#A78BFA" }}>·</span> {matches.length}
+            Your buddies <span style={{ color: "#86CFAE" }}>·</span> {matches.length}
           </div>
           <div style={{ fontSize: 12, color: "#9CA3AF" }}>
             Tap a card to see progress. You can pair up across categories — running buddy, lifting buddy, etc.
@@ -2002,8 +2002,8 @@ function BuddyPanel({ userId }: { userId: string }) {
               key={m.id}
               onClick={() => setSelectedMatchId(m.id)}
               style={{
-                background: bothDone ? "linear-gradient(135deg, #052e1a, #064e3b)" : "#1A1A1A",
-                border: bothDone ? "1px solid #4ADE8055" : "1px solid #2D1B69",
+                background: bothDone ? "linear-gradient(135deg, #052e1a, #064e3b)" : "#161D19",
+                border: bothDone ? "1px solid #4ADE8055" : "1px solid #1E3D34",
                 borderRadius: 18,
                 padding: "14px 16px",
                 cursor: "pointer",
@@ -2041,15 +2041,15 @@ function BuddyPanel({ userId }: { userId: string }) {
                 ].map((row, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", width: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</div>
-                    <div style={{ flex: 1, height: 6, background: "#0D0D0D", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ flex: 1, height: 6, background: "#0E1311", borderRadius: 99, overflow: "hidden" }}>
                       <div style={{
                         height: "100%",
                         width: `${row.pct}%`,
-                        background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #7C3AED, #A78BFA)",
+                        background: row.pct >= 100 ? "#4ADE80" : "linear-gradient(90deg, #5BBE93, #86CFAE)",
                         borderRadius: 99,
                       }} />
                     </div>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#A78BFA", width: 36, textAlign: "right" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: row.pct >= 100 ? "#4ADE80" : "#86CFAE", width: 36, textAlign: "right" }}>
                       {row.pct >= 100 ? "✓" : `${Math.round(row.pct)}%`}
                     </div>
                   </div>
@@ -2078,7 +2078,7 @@ function BuddyPanel({ userId }: { userId: string }) {
             border: "1.5px dashed rgba(124,58,237,0.5)",
             borderRadius: 18,
             padding: "16px 18px",
-            color: "#A78BFA",
+            color: "#86CFAE",
             fontWeight: 800,
             fontSize: 14,
             cursor: "pointer",
@@ -2094,14 +2094,14 @@ function BuddyPanel({ userId }: { userId: string }) {
   // ── QUEUED VIEW ────────────────────────────────────────────────────────
   if (step === "queued") {
     return (
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", border: "1px solid #7C3AED55", borderRadius: 22, padding: "32px 24px", textAlign: "center" }}>
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1E3D34)", border: "1px solid #5BBE9355", borderRadius: 22, padding: "32px 24px", textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 10 }}>🔍</div>
         <div style={{ fontWeight: 900, fontSize: 20, color: "#fff", marginBottom: 6 }}>Looking for a buddy…</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 24 }}>
           {(BUDDY_CATEGORIES.find(c => c.id === category)?.name) || category} · {(BUDDY_TIERS.find(t => t.id === tier)?.label || tier)?.replace(/^\S+\s/, "")}
         </div>
         <div style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 99, overflow: "hidden", marginBottom: 20 }}>
-          <div style={{ height: "100%", width: "40%", background: "#A78BFA", borderRadius: 99, animation: "buddyPulse 1.5s ease-in-out infinite" }} />
+          <div style={{ height: "100%", width: "40%", background: "#86CFAE", borderRadius: 99, animation: "buddyPulse 1.5s ease-in-out infinite" }} />
         </div>
         <style>{`@keyframes buddyPulse { 0%,100% { transform: translateX(-50%); } 50% { transform: translateX(150%); } }`}</style>
         <button onClick={cancelQueue} style={{
@@ -2179,13 +2179,13 @@ function BuddyPanel({ userId }: { userId: string }) {
 
         {/* Hero — big intro with a visible "you BOTH win" framing so
             users get the cooperative angle (vs Rivals which is 1v1). */}
-        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 16, border: "1px solid #7C3AED55", textAlign: "center" }}>
+        <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1E3D34, #1A0D3E)", borderRadius: 24, padding: "32px 28px", marginBottom: 16, border: "1px solid #5BBE9355", textAlign: "center" }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>🤝</div>
           <div style={{ fontWeight: 900, fontSize: 24, color: "#fff", marginBottom: 6, letterSpacing: -0.5 }}>
             {hasExistingBuddies ? "Find another buddy" : "Find a Workout Buddy"}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
-            Get matched with someone chasing the same goal. <strong style={{ color: "#A78BFA" }}>Both of you hit the target → both of you win.</strong>
+            Get matched with someone chasing the same goal. <strong style={{ color: "#86CFAE" }}>Both of you hit the target → both of you win.</strong>
           </div>
         </div>
 
@@ -2193,8 +2193,8 @@ function BuddyPanel({ userId }: { userId: string }) {
             since they already know — the strip is for first-timers. */}
         {!hasExistingBuddies && (
           <div style={{
-            background: "#1A1A1A",
-            border: "1px solid #2D1B69",
+            background: "#161D19",
+            border: "1px solid #1E3D34",
             borderRadius: 16,
             padding: "14px 16px",
             marginBottom: 20,
@@ -2207,9 +2207,9 @@ function BuddyPanel({ userId }: { userId: string }) {
               { n: "2", emoji: "🔍", title: "Get matched", desc: "Paired with someone at the same level usually within minutes." },
               { n: "3", emoji: "🏆", title: "Both hit target", desc: "14 days to reach the goal. You both win together." },
             ].map((s, i) => (
-              <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? "1px solid #2D1B6955" : "none", paddingRight: i < 2 ? 8 : 0 }}>
+              <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? "1px solid #1E3D3455" : "none", paddingRight: i < 2 ? 8 : 0 }}>
                 <div style={{ fontSize: 20, marginBottom: 4 }}>{s.emoji}</div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "#A78BFA", letterSpacing: 0.5, marginBottom: 2 }}>STEP {s.n}</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "#86CFAE", letterSpacing: 0.5, marginBottom: 2 }}>STEP {s.n}</div>
                 <div style={{ fontSize: 12, fontWeight: 800, color: "#F0F0F0", marginBottom: 3, lineHeight: 1.2 }}>{s.title}</div>
                 <div style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.4 }}>{s.desc}</div>
               </div>
@@ -2226,7 +2226,7 @@ function BuddyPanel({ userId }: { userId: string }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {BUDDY_CATEGORIES.map(cat => {
             const taken = takenCategories.has(cat.id);
-            const accent = CAT_COLORS[cat.id] || "#7C3AED";
+            const accent = CAT_COLORS[cat.id] || "#5BBE93";
             return (
               <button
                 key={cat.id}
@@ -2235,9 +2235,9 @@ function BuddyPanel({ userId }: { userId: string }) {
                 title={taken ? `You already have a ${cat.name} buddy` : undefined}
                 style={{
                   background: taken
-                    ? "#1A1A1A"
-                    : `linear-gradient(135deg, #1A1A1A, ${accent}11)`,
-                  border: taken ? "2px dashed #2D1B69" : `2px solid ${accent}55`,
+                    ? "#161D19"
+                    : `linear-gradient(135deg, #161D19, ${accent}11)`,
+                  border: taken ? "2px dashed #1E3D34" : `2px solid ${accent}55`,
                   borderRadius: 18, padding: "18px 14px",
                   cursor: taken ? "not-allowed" : "pointer",
                   textAlign: "center", color: "#F0F0F0",
@@ -2302,7 +2302,7 @@ function BuddyPanel({ userId }: { userId: string }) {
       }}>← Back</button>
 
       {/* Hero — restated category so the user remembers what they picked */}
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #2D1B69)", borderRadius: 22, padding: "24px 22px", marginBottom: 18, border: "1px solid #7C3AED55", textAlign: "center" }}>
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #1E3D34)", borderRadius: 22, padding: "24px 22px", marginBottom: 18, border: "1px solid #5BBE9355", textAlign: "center" }}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>{catData?.emoji}</div>
         <div style={{ fontWeight: 900, fontSize: 18, color: "#fff", marginBottom: 4 }}>{catData?.name} buddy</div>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>How hard do you want to push? You and your buddy will share a 14-day target.</div>
@@ -2315,14 +2315,14 @@ function BuddyPanel({ userId }: { userId: string }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {BUDDY_TIERS.map(t => {
           const tgt = targets?.[t.id];
-          const accent = tierAccent[t.id] || "#7C3AED";
+          const accent = tierAccent[t.id] || "#5BBE93";
           return (
             <button
               key={t.id}
               onClick={() => { setTier(t.id); findMatch(t.id); }}
               disabled={submitting}
               style={{
-                background: `linear-gradient(135deg, #1A1A1A, ${accent}11)`,
+                background: `linear-gradient(135deg, #161D19, ${accent}11)`,
                 border: `2px solid ${accent}55`,
                 borderRadius: 16,
                 padding: "16px 18px",
@@ -2555,12 +2555,12 @@ export default function RivalsPage() {
     // blank screen with a "Loading…" label. Same shimmer style as the
     // profile and groups skeletons so the app feels consistent.
     const shimmer: React.CSSProperties = {
-      background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+      background: "linear-gradient(90deg, #1A1230 0%, #1B231E 50%, #1A1230 100%)",
       backgroundSize: "200% 100%",
       animation: "skeletonShimmer 1.4s ease-in-out infinite",
     };
     return (
-      <div style={{ background: "#0D0D0D", minHeight: "100vh", paddingBottom: 80 }}>
+      <div style={{ background: "#0E1311", minHeight: "100vh", paddingBottom: 80 }}>
         <style jsx global>{`
           @keyframes skeletonShimmer {
             0%   { background-position: 200% 0; }
@@ -2568,7 +2568,7 @@ export default function RivalsPage() {
           }
         `}</style>
         {/* Sticky header bar */}
-        <div style={{ position: "sticky", top: 0, background: "#0D0D0D", padding: "16px 16px 0", zIndex: 10 }}>
+        <div style={{ position: "sticky", top: 0, background: "#0E1311", padding: "16px 16px 0", zIndex: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ ...shimmer, width: 160, height: 28, borderRadius: 8 }} />
             <div style={{ ...shimmer, width: 70, height: 22, borderRadius: 11 }} />
@@ -2603,15 +2603,15 @@ export default function RivalsPage() {
 
   if (!user) {
     return (
-      <div style={{ background: "#0D0D0D", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
+      <div style={{ background: "#0E1311", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
         <div style={{ color: "#F0F0F0", fontSize: 18, fontWeight: 800 }}>Sign in to find a rival</div>
-        <Link href="/login" style={{ background: "#7C3AED", color: "#fff", padding: "10px 24px", borderRadius: 12, fontWeight: 800, textDecoration: "none" }}>Log in</Link>
+        <Link href="/login" style={{ background: "#5BBE93", color: "#fff", padding: "10px 24px", borderRadius: 12, fontWeight: 800, textDecoration: "none" }}>Log in</Link>
       </div>
     );
   }
 
   return (
-    <div style={{ background: "#0D0D0D", minHeight: "100vh" }}>
+    <div style={{ background: "#0E1311", minHeight: "100vh" }}>
       <style>{`
         @keyframes headerPulse { 0% { box-shadow: 0 0 0 0 rgba(124,58,237,0.3); } 70% { box-shadow: 0 0 0 12px rgba(124,58,237,0); } 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0); } }
       `}</style>
@@ -2621,7 +2621,7 @@ export default function RivalsPage() {
           content area, which meant they disappeared as soon as the user
           scrolled into the active rivalry view. Pulling them up here keeps
           them reachable from anywhere on the page. */}
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #0D0D0D)", borderBottom: "1px solid #2D1B69", padding: "20px 24px 16px", position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #0E1311)", borderBottom: "1px solid #1E3D34", padding: "20px 24px 16px", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
             {/* Back button — uses real browser history so it returns to
@@ -2667,7 +2667,7 @@ export default function RivalsPage() {
               so users can switch between modes from anywhere on the page,
               including deep inside an active rivalry's chat. Mirrors the
               Connect page tab pattern. */}
-          <div style={{ display: "flex", gap: 6, padding: 4, background: "#1A1A1A", borderRadius: 12, border: "1px solid #2D1B69" }}>
+          <div style={{ display: "flex", gap: 6, padding: 4, background: "#161D19", borderRadius: 12, border: "1px solid #1E3D34" }}>
             {([
               { k: "rivals", label: "⚔️ Rivals", desc: "1v1 · 7 days" },
               { k: "buddy",  label: "🤝 Workout Buddy", desc: "Team · 14 days" },
@@ -2678,7 +2678,7 @@ export default function RivalsPage() {
                 onClick={() => setPageTab(t.k as any)}
                 style={{
                   flex: 1, padding: "9px 0", borderRadius: 9, border: "none",
-                  background: pageTab === t.k ? "linear-gradient(135deg, #1A0D3E, #2D1B69)" : "transparent",
+                  background: pageTab === t.k ? "linear-gradient(135deg, #1A0D3E, #1E3D34)" : "transparent",
                   color: pageTab === t.k ? "#fff" : "#9CA3AF",
                   fontWeight: 800, fontSize: 12, cursor: "pointer",
                   transition: "all 0.15s",
@@ -2708,16 +2708,16 @@ export default function RivalsPage() {
           <>
             {/* Accept a direct challenge by code */}
             <div style={{ background: "#160F28", border: "1px solid #2A1F45", borderRadius: 16, padding: 16, marginBottom: 20, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#A78BFA", marginBottom: 8 }}>🔗 Got a challenge code?</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#86CFAE", marginBottom: 8 }}>🔗 Got a challenge code?</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input
                   value={acceptCode}
                   onChange={e => setAcceptCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
                   placeholder="ENTER CODE"
-                  style={{ flex: 1, background: "#0D0D0D", border: "1px solid #2A1F45", borderRadius: 10, color: "#fff", padding: "11px 12px", fontSize: 16, fontWeight: 800, letterSpacing: 3, fontFamily: "monospace", outline: "none", textTransform: "uppercase" }}
+                  style={{ flex: 1, background: "#0E1311", border: "1px solid #2A1F45", borderRadius: 10, color: "#fff", padding: "11px 12px", fontSize: 16, fontWeight: 800, letterSpacing: 3, fontFamily: "monospace", outline: "none", textTransform: "uppercase" }}
                 />
                 <button onClick={handleAcceptCode} disabled={acceptCode.trim().length < 4 || acceptingChallenge}
-                  style={{ background: acceptCode.trim().length < 4 || acceptingChallenge ? "#3A2D5C" : "linear-gradient(135deg,#7C3AED,#A78BFA)", border: "none", borderRadius: 10, padding: "0 18px", color: "#fff", fontWeight: 800, cursor: acceptCode.trim().length < 4 ? "default" : "pointer" }}>
+                  style={{ background: acceptCode.trim().length < 4 || acceptingChallenge ? "#3A2D5C" : "linear-gradient(135deg,#5BBE93,#86CFAE)", border: "none", borderRadius: 10, padding: "0 18px", color: "#fff", fontWeight: 800, cursor: acceptCode.trim().length < 4 ? "default" : "pointer" }}>
                   {acceptingChallenge ? "…" : "Accept"}
                 </button>
               </div>
@@ -2772,13 +2772,13 @@ export default function RivalsPage() {
               How do you want to find your rival?
             </div>
             <button onClick={handleFindAnyRival}
-              style={{ background: "linear-gradient(135deg,#7C3AED,#A78BFA)", border: "none", borderRadius: 16, padding: "18px 20px", color: "#fff", cursor: "pointer", textAlign: "left" }}>
+              style={{ background: "linear-gradient(135deg,#5BBE93,#86CFAE)", border: "none", borderRadius: 16, padding: "18px 20px", color: "#fff", cursor: "pointer", textAlign: "left" }}>
               <div style={{ fontWeight: 900, fontSize: 16 }}>🎲 Find any rival</div>
               <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3 }}>Get matched with anyone who picked the same challenge.</div>
             </button>
             <button onClick={handleCreateChallenge} disabled={creatingChallenge}
-              style={{ background: "#160F28", border: "1.5px solid #7C3AED", borderRadius: 16, padding: "18px 20px", color: "#F0F0F0", cursor: "pointer", textAlign: "left" }}>
-              <div style={{ fontWeight: 900, fontSize: 16, color: "#A78BFA" }}>🔗 {creatingChallenge ? "Creating…" : "Challenge a friend"}</div>
+              style={{ background: "#160F28", border: "1.5px solid #5BBE93", borderRadius: 16, padding: "18px 20px", color: "#F0F0F0", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontWeight: 900, fontSize: 16, color: "#86CFAE" }}>🔗 {creatingChallenge ? "Creating…" : "Challenge a friend"}</div>
               <div style={{ fontSize: 13, color: "#9CA3AF", marginTop: 3 }}>Get a code to send someone — they go head-to-head with you directly.</div>
             </button>
             <button onClick={() => { setMatchStep("tier"); }}
@@ -2792,7 +2792,7 @@ export default function RivalsPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 460, margin: "0 auto", textAlign: "center" }}>
             <ChallengePoller onMatched={loadState} />
             <div style={{ fontSize: 15, color: "#9CA3AF" }}>Send this code to whoever you want to challenge. When they enter it, your rivalry starts.</div>
-            <div style={{ background: "#160F28", border: "2px solid #7C3AED", borderRadius: 18, padding: "24px 16px" }}>
+            <div style={{ background: "#160F28", border: "2px solid #5BBE93", borderRadius: 18, padding: "24px 16px" }}>
               <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 8 }}>Challenge code</div>
               <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: 8, color: "#fff", fontFamily: "monospace" }}>{challengeCode}</div>
             </div>
@@ -2805,7 +2805,7 @@ export default function RivalsPage() {
                 const msg = `I'm challenging you to a rivalry on Livelee! Enter code ${challengeCode} in the Rivals tab. https://liveleeapp.com`;
                 try { if (navigator.share) { await navigator.share({ title: "Livelee Rivalry Challenge", text: msg }); } else { await navigator.clipboard.writeText(msg); setCopiedChallenge(true); setTimeout(() => setCopiedChallenge(false), 1500); } } catch {}
               }}
-                style={{ flex: 1, background: "linear-gradient(135deg,#7C3AED,#A78BFA)", border: "none", borderRadius: 12, padding: "12px 0", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, background: "linear-gradient(135deg,#5BBE93,#86CFAE)", border: "none", borderRadius: 12, padding: "12px 0", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 📤 Share
               </button>
             </div>
@@ -2833,7 +2833,7 @@ export default function RivalsPage() {
             <ChatPanel rivalryId={activeRivalry.id} myId={user.id} rivalFirstName={activeRivalry.opponent.full_name.split(" ")[0]} />
 
             {/* No-cancel reminder */}
-            <div style={{ background: "#1A1A1A", borderRadius: 14, border: "1px solid #2D1B69", padding: "14px 18px", fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>
+            <div style={{ background: "#161D19", borderRadius: 14, border: "1px solid #1E3D34", padding: "14px 18px", fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>
               🔒 No cancels. Rivalry auto-resolves {formatTimeLeft(activeRivalry.ends_at).toLowerCase()}.
             </div>
           </div>
