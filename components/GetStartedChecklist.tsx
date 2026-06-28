@@ -14,7 +14,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
-const PURPLE = "#7C3AED";
+const PURPLE = "#5BBE93";
 const DISMISS_KEY = "ll_getstarted_dismissed";
 
 interface Item { key: string; label: string; sub: string; done: boolean; }
@@ -113,7 +113,7 @@ export default function GetStartedChecklist({
   return (
     <div style={{
       background: "linear-gradient(135deg,#1B1430,#140E26)",
-      border: "1px solid #2D1F52", borderRadius: 18, padding: 18,
+      border: "1px solid #1B231E", borderRadius: 18, padding: 18,
       marginBottom: 24, position: "relative",
     }}>
       <button onClick={dismiss} aria-label="Dismiss" title="Hide this" style={{
@@ -137,7 +137,7 @@ export default function GetStartedChecklist({
           {doneCount} of {items.length} done{!expanded && remaining > 0 ? ` — ${remaining} step${remaining === 1 ? "" : "s"} left, tap to see all` : " — finish setting up to get the most out of the app."}
         </div>
         <div style={{ height: 8, borderRadius: 99, background: "#2A2140", overflow: "hidden", marginBottom: 16 }}>
-          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${PURPLE},#A78BFA)`, transition: "width 0.4s" }} />
+          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${PURPLE},#86CFAE)`, transition: "width 0.4s" }} />
         </div>
       </button>
 
@@ -162,7 +162,7 @@ export default function GetStartedChecklist({
               border: it.done ? "none" : "2px solid #4B3F66",
             }}>
               {it.done && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0D0D0D" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E1311" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               )}
@@ -184,7 +184,7 @@ export default function GetStartedChecklist({
       {items.length > 1 && (
         <button onClick={() => setExpanded(v => !v)} style={{
           width: "100%", marginTop: 10, background: "none", border: "none",
-          color: "#A78BFA", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 6,
+          color: "#86CFAE", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 6,
         }}>
           {expanded ? "Show less" : `Show all ${items.length} steps`}
         </button>
