@@ -102,14 +102,14 @@ export default function ReportModal({
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: "#1A1D2E",
+          background: "#161D19",
           borderRadius: 16,
           padding: 24,
           maxWidth: 480,
           width: "100%",
           maxHeight: "85vh",
           overflowY: "auto",
-          border: "1px solid #2A2D3E",
+          border: "1px solid #232C27",
         }}
       >
         {submitted ? (
@@ -127,7 +127,7 @@ export default function ReportModal({
               onClick={handleClose}
               style={{
                 padding: "11px 20px",
-                background: "#7C3AED",
+                background: "#5BBE93",
                 border: "none",
                 borderRadius: 10,
                 color: "#fff",
@@ -158,8 +158,8 @@ export default function ReportModal({
                     gap: 12,
                     padding: "10px 12px",
                     marginBottom: 6,
-                    background: reason === r.key ? "#2A1F4A" : "#252A3D",
-                    border: `1px solid ${reason === r.key ? "#7C3AED" : "#2A2D3E"}`,
+                    background: reason === r.key ? "#2A1F4A" : "#1B231E",
+                    border: `1px solid ${reason === r.key ? "#5BBE93" : "#232C27"}`,
                     borderRadius: 10,
                     cursor: "pointer",
                   }}
@@ -170,7 +170,7 @@ export default function ReportModal({
                     value={r.key}
                     checked={reason === r.key}
                     onChange={() => setReason(r.key)}
-                    style={{ marginTop: 3, accentColor: "#7C3AED" }}
+                    style={{ marginTop: 3, accentColor: "#5BBE93" }}
                   />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0" }}>{r.label}</div>
@@ -192,8 +192,8 @@ export default function ReportModal({
               placeholder="Anything else we should know?"
               style={{
                 width: "100%",
-                background: "#252A3D",
-                border: "1px solid #2A2D3E",
+                background: "#1B231E",
+                border: "1px solid #232C27",
                 borderRadius: 8,
                 padding: "9px 12px",
                 fontSize: 13,
@@ -220,7 +220,7 @@ export default function ReportModal({
                   flex: 1,
                   padding: "11px 16px",
                   background: "transparent",
-                  border: "1px solid #2A2D3E",
+                  border: "1px solid #232C27",
                   borderRadius: 10,
                   color: "#E2E8F0",
                   fontSize: 14,
