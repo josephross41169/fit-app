@@ -17,7 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
-const PURPLE = "#7C3AED";
+const PURPLE = "#5BBE93";
 
 interface ConversationRow {
   id: string;
@@ -247,7 +247,7 @@ export default function MessagesFAB() {
             alignItems: "center",
             justifyContent: "center",
             padding: "0 5px",
-            border: "2px solid #0D0D0D",
+            border: "2px solid #0E1311",
             lineHeight: 1,
           }}>
             {unreadTotal > 99 ? "99+" : unreadTotal}
@@ -266,7 +266,7 @@ export default function MessagesFAB() {
           top: 0, left: 0, right: 0, bottom: 0,
           zIndex: 9999,
           // SOLID background — was getting bleed-through from the page below.
-          background: "#0D0D0D",
+          background: "#0E1311",
           display: "flex", flexDirection: "column",
         }}>
           {/* Header — pushed below the iOS notch / Dynamic Island via safe-area
@@ -275,8 +275,8 @@ export default function MessagesFAB() {
             display: "flex", alignItems: "center", gap: 12,
             padding: "12px 20px",
             paddingTop: "calc(var(--safe-top, 0px) + 14px)",
-            borderBottom: "1px solid #1A1228",
-            background: "#0D0D0D",
+            borderBottom: "1px solid #161D19",
+            background: "#0E1311",
             flexShrink: 0,
           }}>
             <div style={{ flex: 1, fontWeight: 900, fontSize: 22, color: "#F0F0F0" }}>
@@ -365,7 +365,7 @@ export default function MessagesFAB() {
                     padding: "14px 20px",
                     background: "transparent",
                     border: "none",
-                    borderBottom: "1px solid #1A1228",
+                    borderBottom: "1px solid #161D19",
                     cursor: "pointer",
                     textAlign: "left",
                   }}
