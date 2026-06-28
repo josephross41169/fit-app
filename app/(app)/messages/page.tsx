@@ -111,7 +111,7 @@ function AvatarCircle({ name, avatarUrl, avatarVideoUrl, size = 40 }: { name: st
   return (
     <div
       className="rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white text-sm"
-      style={{ width: size, height: size, background: "#7C3AED" }}
+      style={{ width: size, height: size, background: "#5BBE93" }}
     >
       {initials(name)}
     </div>
@@ -533,7 +533,7 @@ function MessagesPageInner() {
           <button
             onClick={() => setShowNewModal(true)}
             className="text-sm font-semibold px-3 py-1.5 rounded-xl transition-all"
-            style={{ background: "#7C3AED", color: "#fff" }}
+            style={{ background: "#5BBE93", color: "#fff" }}
           >
             + New
           </button>
@@ -559,8 +559,8 @@ function MessagesPageInner() {
                 onClick={() => selectConversation(conv)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all"
                 style={{
-                  background: activeConvId === conv.id ? "#1A1228" : "transparent",
-                  borderLeft: activeConvId === conv.id ? "3px solid #7C3AED" : "3px solid transparent",
+                  background: activeConvId === conv.id ? "#161D19" : "transparent",
+                  borderLeft: activeConvId === conv.id ? "3px solid #5BBE93" : "3px solid transparent",
                 }}
               >
                 <AvatarCircle
@@ -587,7 +587,7 @@ function MessagesPageInner() {
                     {conv.unread && (
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0 ml-1"
-                        style={{ background: "#7C3AED" }}
+                        style={{ background: "#5BBE93" }}
                       />
                     )}
                   </div>
@@ -621,7 +621,7 @@ function MessagesPageInner() {
               <button
                 className="md:hidden mr-1"
                 onClick={() => setMobileShowThread(false)}
-                style={{ color: "#7C3AED" }}
+                style={{ color: "#5BBE93" }}
               >
                 ←
               </button>
@@ -647,8 +647,8 @@ function MessagesPageInner() {
                 <label
                   htmlFor={`group-photo-${activeConv.group.id}`}
                   style={{
-                    fontSize: 11, fontWeight: 700, color: "#A78BFA",
-                    background: "#1A1228", border: "1px solid #3D2A6E",
+                    fontSize: 11, fontWeight: 700, color: "#86CFAE",
+                    background: "#161D19", border: "1px solid #3D2A6E",
                     padding: "6px 10px", borderRadius: 99, cursor: "pointer",
                     whiteSpace: "nowrap",
                   }}
@@ -746,7 +746,7 @@ function MessagesPageInner() {
                         ) : (
                           <div style={{
                             width: 18, height: 18, borderRadius: "50%",
-                            background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                            background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             fontSize: 9, fontWeight: 800, color: "#fff",
                           }}>
@@ -759,13 +759,13 @@ function MessagesPageInner() {
 
                     {/* Story-reply / story-reaction header tag */}
                     {(storyReplyUrl || storyReactUrl) && !isMine && (
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#86CFAE", fontWeight:700 }}>
                         <span>↩️</span>
                         <span>{storyReactUrl ? "Reacted to your story" : "Replied to your story"}</span>
                       </div>
                     )}
                     {(storyReplyUrl || storyReactUrl) && isMine && (
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#A78BFA", fontWeight:700 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, fontSize:11, color:"#86CFAE", fontWeight:700 }}>
                         <span>↩️</span>
                         <span>You {storyReactUrl ? "reacted to" : "replied to"} their story</span>
                       </div>
@@ -777,13 +777,13 @@ function MessagesPageInner() {
                         <a href={storyReactUrl} target="_blank" rel="noopener noreferrer">
                           <img src={storyReactUrl} alt=""
                             style={{ width:42, height:56, borderRadius:8, objectFit:"cover",
-                              border:"1.5px solid #2D1F52" }}/>
+                              border:"1.5px solid #1B231E" }}/>
                         </a>
                         <div style={{
                           fontSize:36, lineHeight:1,
                           padding:"6px 12px", borderRadius:99,
-                          background: isMine ? "rgba(124,58,237,0.18)" : "#1A1228",
-                          border: `1.5px solid ${isMine ? "#7C3AED" : "#2D1F52"}`,
+                          background: isMine ? "rgba(124,58,237,0.18)" : "#161D19",
+                          border: `1.5px solid ${isMine ? "#5BBE93" : "#1B231E"}`,
                         }}>
                           {textContent || "❤️"}
                         </div>
@@ -792,7 +792,7 @@ function MessagesPageInner() {
                       <div
                         className="max-w-xs lg:max-w-md rounded-2xl text-sm overflow-hidden"
                         style={{
-                          background: isMine ? "#7C3AED" : "#1A1228",
+                          background: isMine ? "#5BBE93" : "#161D19",
                           color: isMine ? "#fff" : "#E2E8F0",
                           borderBottomRightRadius: isMine ? 4 : undefined,
                           borderBottomLeftRadius: !isMine ? 4 : undefined,
@@ -878,9 +878,9 @@ function MessagesPageInner() {
                   onClick={() => fileInputRef.current?.click()}
                   className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    background: msgPhoto ? "#7C3AED22" : "#1A1D2E",
-                    color: msgPhoto ? "#7C3AED" : "#8892A4",
-                    border: "1px solid #2A2D3E",
+                    background: msgPhoto ? "#5BBE9322" : "#161D19",
+                    color: msgPhoto ? "#5BBE93" : "#8892A4",
+                    border: "1px solid #232C27",
                     fontSize: 16,
                     cursor: "pointer",
                   }}
@@ -901,9 +901,9 @@ function MessagesPageInner() {
                   placeholder={msgPhoto ? "Add a caption… (optional)" : "Type a message…"}
                   className="flex-1 rounded-2xl px-4 py-2.5 text-sm outline-none"
                   style={{
-                    background: "#1A1D2E",
+                    background: "#161D19",
                     color: "#E2E8F0",
-                    border: "1px solid #2A2D3E",
+                    border: "1px solid #232C27",
                   }}
                 />
                 <button
@@ -911,7 +911,7 @@ function MessagesPageInner() {
                   disabled={(!inputText.trim() && !msgPhoto) || msgUploading}
                   className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    background: (inputText.trim() || msgPhoto) && !msgUploading ? "#7C3AED" : "#1A1D2E",
+                    background: (inputText.trim() || msgPhoto) && !msgUploading ? "#5BBE93" : "#161D19",
                     color: (inputText.trim() || msgPhoto) && !msgUploading ? "#fff" : "#8892A4",
                   }}
                 >
@@ -954,9 +954,9 @@ function MessagesPageInner() {
         >
           <div
             className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
-            style={{ background: "#1A1D2E", border: "1px solid #2A2D3E" }}
+            style={{ background: "#161D19", border: "1px solid #232C27" }}
           >
-            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#2A2D3E" }}>
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#232C27" }}>
               <span className="font-bold text-base" style={{ color: "#E2E8F0" }}>
                 New Message
               </span>
@@ -984,7 +984,7 @@ function MessagesPageInner() {
                 style={{
                   background: "#0F1117",
                   color: "#E2E8F0",
-                  border: "1px solid #2A2D3E",
+                  border: "1px solid #232C27",
                 }}
               />
             </div>
@@ -1006,7 +1006,7 @@ function MessagesPageInner() {
                   onClick={() => openOrCreateConversation(u.id, u)}
                   className="w-full flex items-center gap-3 px-5 py-3 transition-all"
                   style={{ background: "transparent" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#7C3AED22")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#5BBE9322")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <AvatarCircle name={u.full_name || u.username} avatarUrl={u.avatar_url} avatarVideoUrl={(u as any).avatar_video_url} size={40} />
