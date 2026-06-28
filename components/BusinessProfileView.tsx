@@ -438,7 +438,7 @@ export default function BusinessProfileView({
           height: 300,
           background: (editing ? bannerUrl : profile.banner_url)
             ? `url(${editing ? bannerUrl : profile.banner_url}) center/cover`
-            : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+            : "linear-gradient(135deg, #5BBE93, #86CFAE)",
           cursor: editing ? "pointer" : "default",
         }}
       >
@@ -610,7 +610,7 @@ export default function BusinessProfileView({
           <div style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.16), rgba(167,139,250,0.10))", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 14, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 12, alignItems: "flex-start" }}>
             <span style={{ fontSize: 20, flexShrink: 0 }}>📣</span>
             <div>
-              <div style={{ fontSize: 14, color: "#EDE9FE", lineHeight: 1.5, fontWeight: 600 }}>{profile.business_announcement}</div>
+              <div style={{ fontSize: 14, color: "#E3F2EB", lineHeight: 1.5, fontWeight: 600 }}>{profile.business_announcement}</div>
               {profile.business_announcement_at && (
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{timeAgoShort(profile.business_announcement_at)}</div>
               )}
@@ -691,7 +691,7 @@ export default function BusinessProfileView({
               padding: "11px 18px",
               background: "transparent",
               border: "none",
-              borderBottom: activeTab === t.key ? "2px solid #A78BFA" : "2px solid transparent",
+              borderBottom: activeTab === t.key ? "2px solid #86CFAE" : "2px solid transparent",
               color: activeTab === t.key ? C.text : C.sub,
               fontWeight: activeTab === t.key ? 700 : 500,
               fontSize: 14,
@@ -821,7 +821,7 @@ export default function BusinessProfileView({
                     <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>{d.label}</div>
                     {rows.map((r, i) => (
                       <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 6, display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#A78BFA", minWidth: 72 }}>{r.time || "—"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "#86CFAE", minWidth: 72 }}>{r.time || "—"}</div>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{r.name}</div>
                           {r.instructor && <div style={{ fontSize: 12, color: C.sub }}>with {r.instructor}</div>}
@@ -861,7 +861,7 @@ export default function BusinessProfileView({
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{s.name}</div>
                     {s.description && <div style={{ fontSize: 13, color: C.sub, marginTop: 3, lineHeight: 1.5 }}>{s.description}</div>}
                   </div>
-                  {s.price && <div style={{ fontSize: 15, fontWeight: 800, color: "#A78BFA", whiteSpace: "nowrap" }}>{s.price}</div>}
+                  {s.price && <div style={{ fontSize: 15, fontWeight: 800, color: "#86CFAE", whiteSpace: "nowrap" }}>{s.price}</div>}
                 </div>
               ))
             )}
@@ -909,7 +909,7 @@ export default function BusinessProfileView({
                       <div style={{ padding: "10px 12px" }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                          {p.price && <span style={{ fontSize: 14, fontWeight: 800, color: "#A78BFA" }}>{p.price}</span>}
+                          {p.price && <span style={{ fontSize: 14, fontWeight: 800, color: "#86CFAE" }}>{p.price}</span>}
                           {href && <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Shop →</span>}
                         </div>
                       </div>
@@ -1008,7 +1008,7 @@ export default function BusinessProfileView({
                           {(it.calories || it.protein || it.carbs || it.fat) && (
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                               {it.calories ? <span style={{ fontSize: 11, fontWeight: 700, color: "#F5A623", background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 99, padding: "3px 10px" }}>{it.calories} cal</span> : null}
-                              {it.protein ? <span style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 99, padding: "3px 10px" }}>{it.protein}g protein</span> : null}
+                              {it.protein ? <span style={{ fontSize: 11, fontWeight: 700, color: "#86CFAE", background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 99, padding: "3px 10px" }}>{it.protein}g protein</span> : null}
                               {it.carbs ? <span style={{ fontSize: 11, fontWeight: 700, color: C.sub, background: C.input, border: `1px solid ${C.border}`, borderRadius: 99, padding: "3px 10px" }}>{it.carbs}g carbs</span> : null}
                               {it.fat ? <span style={{ fontSize: 11, fontWeight: 700, color: C.sub, background: C.input, border: `1px solid ${C.border}`, borderRadius: 99, padding: "3px 10px" }}>{it.fat}g fat</span> : null}
                             </div>
@@ -1282,7 +1282,7 @@ function ContactField({ icon, label, editing, value, onChange, view, link, place
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{label}</div>
         <div style={{ color: C.text, fontSize: 14, wordBreak: "break-word" }}>
-          {link ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ color: "#A78BFA", textDecoration: "none" }}>{display}</a> : display}
+          {link ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ color: "#86CFAE", textDecoration: "none" }}>{display}</a> : display}
         </div>
       </div>
     </div>
@@ -1305,7 +1305,7 @@ function HoursTable({ hours, editing, onToggle, onChange }: {
             <div key={d.key} style={{ display: "grid", gridTemplateColumns: "90px 80px 1fr 1fr", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.label}</div>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.sub, cursor: "pointer" }}>
-                <input type="checkbox" checked={!!isOpen} onChange={() => onToggle(d.key)} style={{ accentColor: "#7C3AED" }} />Open
+                <input type="checkbox" checked={!!isOpen} onChange={() => onToggle(d.key)} style={{ accentColor: "#5BBE93" }} />Open
               </label>
               {isOpen ? (
                 <>
@@ -1383,7 +1383,7 @@ function formatTodayHours(hours: any): { label: string; isOpen: boolean } | null
 }
 
 const C = {
-  bg: "#0D0D0D",
+  bg: "#0E1311",
   card: "#161A26",
   input: "#1F2333",
   border: "#2A2F42",
@@ -1393,7 +1393,7 @@ const C = {
 };
 
 const pillStyle: React.CSSProperties = {
-  background: "#2A1F4A", border: "1px solid #7C3AED", color: "#E9D5FF",
+  background: "#2A1F4A", border: "1px solid #5BBE93", color: "#D6EFE2",
   fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 99,
 };
 
@@ -1404,7 +1404,7 @@ const inlineInput: React.CSSProperties = {
 
 const primaryBtn: React.CSSProperties = {
   padding: "11px 20px", borderRadius: 12, border: "none",
-  background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+  background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
   color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", flex: 1,
 };
 
