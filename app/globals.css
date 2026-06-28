@@ -3,14 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0D0D0D;
-  --card: #1A1A1A;
-  --primary: #7C3AED;
-  --secondary: #A78BFA;
-  --success: #7C3AED;
-  --text: #F0F0F0;
-  --text-secondary: #9CA3AF;
-  --border: #2A2A2A;
+  /* ── Theme: dark ink-green (migrating from purple) ── */
+  --bg: #0E1311;
+  --card: #161D19;
+  --card-2: #1B231E;
+  --raised: #141A17;
+  --primary: #5BBE93;
+  --primary-deep: #3E9E74;
+  --secondary: #86CFAE;
+  --success: #5BBE93;
+  --honey: #E8B24E;
+  --sky: #6FB7CA;
+  --coral: #E08A6A;
+  --text: #ECF1EE;
+  --text-secondary: #94A39B;
+  --border: #232C27;
+  --border-2: #2D3830;
 
   /* Expose iOS safe-area insets as CSS variables so components can use them.
      Fallback to 0 on devices/browsers that don't provide env() values. */
@@ -33,8 +41,8 @@ html, body {
 }
 
 body {
-  background-color: #0D0D0D;
-  color: #F0F0F0;
+  background-color: var(--bg);
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
   max-width: 100vw;
