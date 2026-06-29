@@ -93,7 +93,7 @@ export default function HealthKitSettingsPage() {
   return (
     <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 20px 100px" }}>
       {/* Back link */}
-      <Link href="/settings" style={{ color: "#7C3AED", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+      <Link href="/settings" style={{ color: "#5BBE93", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
         ← Settings
       </Link>
 
@@ -131,7 +131,7 @@ export default function HealthKitSettingsPage() {
           <div style={{
             padding: 20,
             background: "#15151E",
-            border: "1px solid #2A2D3E",
+            border: "1px solid #232C27",
             borderRadius: 14,
             marginBottom: 20,
           }}>
@@ -152,7 +152,7 @@ export default function HealthKitSettingsPage() {
             style={{
               width: "100%",
               padding: "14px 16px",
-              background: "linear-gradient(135deg,#7C3AED,#A855F7)",
+              background: "linear-gradient(135deg,#5BBE93,#A855F7)",
               border: "none",
               borderRadius: 12,
               color: "#fff",
@@ -181,7 +181,7 @@ export default function HealthKitSettingsPage() {
           <div style={{
             padding: 20,
             background: "#15151E",
-            border: "1px solid #2A2D3E",
+            border: "1px solid #232C27",
             borderRadius: 14,
             marginBottom: 20,
           }}>
@@ -241,7 +241,7 @@ export default function HealthKitSettingsPage() {
             style={{
               width: "100%",
               padding: "14px 16px",
-              background: syncing ? "#1F1F2E" : "linear-gradient(135deg,#7C3AED,#A855F7)",
+              background: syncing ? "#1F1F2E" : "linear-gradient(135deg,#5BBE93,#A855F7)",
               border: "none",
               borderRadius: 12,
               color: "#fff",
