@@ -15,13 +15,13 @@ import { supabase } from "@/lib/supabase";
 import { ImagePresets } from "@/lib/imageUrls";
 
 const C = {
-  bg: "#0D0D0D",
-  card: "#1A1228",
-  border: "#2D1F52",
+  bg: "#0E1311",
+  card: "#161D19",
+  border: "#1B231E",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  purple: "#7C3AED",
-  purpleMid: "#A78BFA",
+  purple: "#5BBE93",
+  purpleMid: "#86CFAE",
   red: "#EF4444",
 };
 
@@ -254,7 +254,7 @@ export default function PostDetailPage() {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, paddingBottom: 100 }}>
       {/* Header */}
-      <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#0D0D0D", borderBottom: `1px solid ${C.border}`, padding: "calc(var(--safe-top) + 14px) 18px 14px", display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#0E1311", borderBottom: `1px solid ${C.border}`, padding: "calc(var(--safe-top) + 14px) 18px 14px", display: "flex", alignItems: "center", gap: 14 }}>
         <button onClick={() => router.back()} style={{ background: "none", border: "none", color: C.text, fontSize: 18, cursor: "pointer", padding: 0 }}>&larr;</button>
         <div style={{ fontWeight: 800, fontSize: 16, color: C.text }}>Post</div>
       </div>
