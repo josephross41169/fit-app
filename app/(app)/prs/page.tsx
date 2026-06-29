@@ -6,13 +6,13 @@ import { useAuth } from "@/lib/auth";
 import ShareCard, { type ShareCardData } from "@/components/ShareCard";
 
 const C = {
-  purple: "#7C3AED",
+  purple: "#5BBE93",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  bg: "#0D0D0D",
+  bg: "#0E1311",
   card: "#111111",
-  border: "#1A1228",
+  border: "#161D19",
 };
 
 type PR = {
@@ -67,7 +67,7 @@ const MUSCLE_COLORS: Record<string, string> = {
   Chest: "#EF4444",
   Legs: "#3B82F6",
   Back: "#10B981",
-  Shoulders: "#8B5CF6",
+  Shoulders: "#5BBE93",
   Arms: "#F59E0B",
   Core: "#EC4899",
   Cardio: "#06B6D4",
@@ -81,10 +81,10 @@ function formatDate(iso: string) {
 function VolumeBar({ volume, max }: { volume: number; max: number }) {
   const pct = max > 0 ? Math.round((volume / max) * 100) : 0;
   return (
-    <div style={{ background: "#1A1228", borderRadius: 4, height: 6, overflow: "hidden", marginTop: 6 }}>
+    <div style={{ background: "#161D19", borderRadius: 4, height: 6, overflow: "hidden", marginTop: 6 }}>
       <div style={{
         width: `${pct}%`, height: "100%", borderRadius: 4,
-        background: "linear-gradient(90deg, #7C3AED, #A78BFA)",
+        background: "linear-gradient(90deg, #5BBE93, #86CFAE)",
         transition: "width 0.5s ease",
       }} />
     </div>
@@ -191,9 +191,9 @@ export default function PRsPage() {
               onClick={() => setSortBy(s)}
               style={{
                 padding: "6px 14px", borderRadius: 20,
-                border: `1.5px solid ${sortBy === s ? C.purple : "#2A2A2A"}`,
+                border: `1.5px solid ${sortBy === s ? C.purple : "#232C27"}`,
                 background: sortBy === s ? "rgba(124,58,237,0.15)" : "transparent",
-                color: sortBy === s ? "#A78BFA" : C.sub,
+                color: sortBy === s ? "#86CFAE" : C.sub,
                 fontWeight: 700, fontSize: 12, cursor: "pointer",
               }}
             >
@@ -214,7 +214,7 @@ export default function PRsPage() {
                 style={{
                   flexShrink: 0,
                   padding: "6px 14px", borderRadius: 20,
-                  border: `1.5px solid ${active ? color : "#2A2A2A"}`,
+                  border: `1.5px solid ${active ? color : "#232C27"}`,
                   background: active ? `${color}22` : "transparent",
                   color: active ? color : C.sub,
                   fontWeight: 700, fontSize: 12, cursor: "pointer",
@@ -243,7 +243,7 @@ export default function PRsPage() {
             {recentPR && (
               <div style={{ background: C.card, borderRadius: 16, padding: "14px 16px", border: `1.5px solid ${C.border}` }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Latest PR</div>
-                <div style={{ fontWeight: 900, fontSize: 18, color: "#A78BFA" }}>{recentPR.exercise}</div>
+                <div style={{ fontWeight: 900, fontSize: 18, color: "#86CFAE" }}>{recentPR.exercise}</div>
                 <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{formatDate(recentPR.best.logged_at)}</div>
               </div>
             )}
@@ -275,7 +275,7 @@ export default function PRsPage() {
                 style={{
                   padding: "12px 24px", borderRadius: 14,
                   border: "none",
-                  background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                  background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
                   color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
                 }}
               >
@@ -369,7 +369,7 @@ export default function PRsPage() {
                       style={{
                         background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)",
                         borderRadius: 8, padding: "3px 7px", cursor: "pointer",
-                        fontSize: 12, color: "#A78BFA", fontWeight: 700,
+                        fontSize: 12, color: "#86CFAE", fontWeight: 700,
                       }}
                     >
                       📤
