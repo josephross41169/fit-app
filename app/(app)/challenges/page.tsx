@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
 const C = {
-  purple:"#7C3AED", purpleDim:"#2D1F52", purpleBorder:"#3D2A6E",
+  purple:"#5BBE93", purpleDim:"#1B231E", purpleBorder:"#3D2A6E",
   gold:"#F5A623", cyan:"#06B6D4", green:"#4ADE80", red:"#F87171",
   text:"#F0F0F0", sub:"#6B7280", subLight:"#9CA3AF",
   bg:"#0A0A0F", card:"#111118", border:"#1E1E2E",
