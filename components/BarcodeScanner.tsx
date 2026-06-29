@@ -192,7 +192,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
                 <div
                   className="absolute left-0 right-0 h-0.5 opacity-80"
                   style={{
-                    background: "linear-gradient(90deg, transparent, #7C3AED, #A78BFA, #7C3AED, transparent)",
+                    background: "linear-gradient(90deg, transparent, #5BBE93, #86CFAE, #5BBE93, transparent)",
                     animation: "scanLine 2s ease-in-out infinite",
                     top: "0%",
                   }}
@@ -236,7 +236,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
               <button
                 onClick={retry}
                 className="w-full py-3 rounded-2xl font-semibold text-white"
-                style={{ background: "#7C3AED" }}
+                style={{ background: "#5BBE93" }}
               >
                 Scan Again
               </button>
@@ -254,7 +254,7 @@ export default function BarcodeScanner({ onResult, onClose }: BarcodeScannerProp
               <button
                 onClick={() => { stopCamera(); onClose(); }}
                 className="w-full py-3 rounded-2xl font-semibold text-white"
-                style={{ background: "#7C3AED" }}
+                style={{ background: "#5BBE93" }}
               >
                 Go Back
               </button>
