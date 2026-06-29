@@ -2129,7 +2129,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
       const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
       const yesterdayStr = yesterday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-      const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${month}/${day}`;
+      const friendlyLabel = dateKey === todayStr ? 'Today' : dateKey === yesterdayStr ? 'Yesterday' : `${dayName} ${date.getMonth() + 1}/${date.getDate()}`;
 
       const workoutLogs   = logs.filter((l: any) => l.log_type === 'workout');
       const nutritionLogs = logs.filter((l: any) => l.log_type === 'nutrition');
