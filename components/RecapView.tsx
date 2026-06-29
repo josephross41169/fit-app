@@ -31,13 +31,13 @@ type Props = {
 };
 
 const COLORS = {
-  bg: "#0D0D0D",
+  bg: "#0E1311",
   card: "#15131D",
-  border: "#2D1F52",
+  border: "#1B231E",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  purple: "#7C3AED",
-  purpleLight: "#A78BFA",
+  purple: "#5BBE93",
+  purpleLight: "#86CFAE",
   // Activity type colors — used by chart, donut, and stat cards
   lifting: "#F97316",   // orange
   cardio: "#3B82F6",    // blue
@@ -749,7 +749,7 @@ async function generateShareImage(recap: Recap, dims: { width: number; height: n
 
     // ─── HEADER ──────────────────────────────────────────────────────────
     // Brand label
-    ctx.fillStyle = "#A78BFA";
+    ctx.fillStyle = "#86CFAE";
     ctx.font = `900 ${Math.round(dims.width * 0.026)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "left";
     ctx.fillText("LIVELEE · WEEKLY RECAP", pad, y + Math.round(dims.width * 0.03));
@@ -811,7 +811,7 @@ async function generateShareImage(recap: Recap, dims: { width: number; height: n
     y += breakdownsH + interGap;
 
     // ─── FOOTER ──────────────────────────────────────────────────────────
-    ctx.fillStyle = "#A78BFA";
+    ctx.fillStyle = "#86CFAE";
     ctx.font = `800 ${Math.round(dims.width * 0.026)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.fillText("liveleeapp.com", dims.width / 2, dims.height - pad * 0.8);
@@ -987,7 +987,7 @@ function drawBreakdowns(
       .join(", ");
     sections.push({
       label: "🏆 BADGES EARNED",
-      accent: "#A78BFA",
+      accent: "#86CFAE",
       lines: [badgeNames],
     });
   }
