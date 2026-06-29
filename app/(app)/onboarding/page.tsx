@@ -34,9 +34,9 @@ import { getFitbitAuthURL } from "@/lib/fitbit";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const C = {
-  purple: "#7C3AED",
-  purpleDark: "#6D28D9",
-  purpleSoft: "#A78BFA",
+  purple: "#5BBE93",
+  purpleDark: "#3E9E74",
+  purpleSoft: "#86CFAE",
   purpleGhost: "rgba(124,58,237,0.14)",
   gold: "#F5A623",
   green: "#22C55E",
@@ -44,7 +44,7 @@ const C = {
   text: "#F2F2F4",
   sub: "#9CA3AF",
   dim: "#6B7280",
-  bg: "#0D0D0D",
+  bg: "#0E1311",
   card: "#121212",
   card2: "#17171F",
   raised: "#1C1B26",
@@ -279,7 +279,7 @@ export default function OnboardingPage() {
   if (loading || !user) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 38, height: 38, borderRadius: "50%", border: "4px solid #2D1B69", borderTopColor: C.purple, animation: "ob-spin 0.8s linear infinite" }} />
+        <div style={{ width: 38, height: 38, borderRadius: "50%", border: "4px solid #1E3D34", borderTopColor: C.purple, animation: "ob-spin 0.8s linear infinite" }} />
         <style>{`@keyframes ob-spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     );
