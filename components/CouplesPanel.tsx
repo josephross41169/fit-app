@@ -21,8 +21,8 @@ import PromptsCard from "@/components/PromptsCard";
 import { COUPLE_PROMPTS } from "@/lib/rivalPrompts";
 
 const C = {
-  text: "#F0F0F0", sub: "#9CA3AF", pink: "#EC4899", purple: "#7C3AED", purpleLt: "#A78BFA",
-  card: "#160F28", border: "#2A1F45", input: "#0D0D0D",
+  text: "#F0F0F0", sub: "#9CA3AF", pink: "#EC4899", purple: "#5BBE93", purpleLt: "#86CFAE",
+  card: "#160F28", border: "#2A1F45", input: "#0E1311",
 };
 
 const iStyle: React.CSSProperties = {
