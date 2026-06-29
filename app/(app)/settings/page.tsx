@@ -201,7 +201,7 @@ export default function SettingsPage() {
           <Row>
             <button onClick={handleEnablePush} disabled={pushBusy}
               style={{
-                background: pushBusy ? "#2A2D3E" : "linear-gradient(135deg,#7C3AED,#A78BFA)",
+                background: pushBusy ? "#232C27" : "linear-gradient(135deg,#5BBE93,#86CFAE)",
                 color: "#fff", border: "none", padding: "10px 18px",
                 borderRadius: 12, fontWeight: 800, fontSize: 13,
                 cursor: pushBusy ? "default" : "pointer",
@@ -282,7 +282,7 @@ export default function SettingsPage() {
             width: "100%",
             padding: "12px 16px",
             background: "transparent",
-            border: "1.5px solid #2A2D3E",
+            border: "1.5px solid #232C27",
             borderRadius: 10,
             color: "#E2E8F0",
             fontSize: 14,
@@ -338,7 +338,7 @@ export default function SettingsPage() {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: "#1A1D2E",
+              background: "#161D19",
               borderRadius: 16,
               padding: 24,
               maxWidth: 480,
@@ -366,8 +366,8 @@ export default function SettingsPage() {
               placeholder="Help us improve..."
               style={{
                 width: "100%",
-                background: "#252A3D",
-                border: "1px solid #2A2D3E",
+                background: "#1B231E",
+                border: "1px solid #232C27",
                 borderRadius: 8,
                 padding: "9px 12px",
                 fontSize: 13,
@@ -382,7 +382,7 @@ export default function SettingsPage() {
 
             {/* Type-to-confirm — friction gate */}
             <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 5 }}>
-              Type <code style={{ background: "#0D0D0D", padding: "2px 6px", borderRadius: 4, color: "#FCA5A5" }}>DELETE</code> to confirm
+              Type <code style={{ background: "#0E1311", padding: "2px 6px", borderRadius: 4, color: "#FCA5A5" }}>DELETE</code> to confirm
             </label>
             <input
               value={deleteConfirmText}
@@ -390,8 +390,8 @@ export default function SettingsPage() {
               placeholder="DELETE"
               style={{
                 width: "100%",
-                background: "#252A3D",
-                border: "1px solid #2A2D3E",
+                background: "#1B231E",
+                border: "1px solid #232C27",
                 borderRadius: 8,
                 padding: "9px 12px",
                 fontSize: 13,
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                   flex: 1,
                   padding: "11px 16px",
                   background: "transparent",
-                  border: "1px solid #2A2D3E",
+                  border: "1px solid #232C27",
                   borderRadius: 10,
                   color: "#E2E8F0",
                   fontSize: 14,
@@ -458,8 +458,8 @@ function Section({ title, children, danger }: { title: string; children: React.R
   return (
     <div
       style={{
-        background: danger ? "#1A0F0F" : "#1A1D2E",
-        border: `1px solid ${danger ? "#4B1717" : "#2A2D3E"}`,
+        background: danger ? "#1A0F0F" : "#161D19",
+        border: `1px solid ${danger ? "#4B1717" : "#232C27"}`,
         borderRadius: 14,
         padding: 18,
         marginBottom: 16,
@@ -516,7 +516,7 @@ function BusinessInsights({ profile }: { profile: any }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {cards.map(c => (
-          <div key={c.label} style={{ background: "#11141F", border: "1px solid #2A2D3E", borderRadius: 12, padding: "14px 14px" }}>
+          <div key={c.label} style={{ background: "#11141F", border: "1px solid #232C27", borderRadius: 12, padding: "14px 14px" }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>{c.emoji}</div>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#F0F0F0" }}>{c.value}</div>
             <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{c.label}</div>
@@ -531,7 +531,7 @@ function BusinessInsights({ profile }: { profile: any }) {
 }
 
 const linkStyle = {
-  color: "#A78BFA",
+  color: "#86CFAE",
   textDecoration: "none",
   fontSize: 14,
   fontWeight: 600,
