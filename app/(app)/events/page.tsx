@@ -105,7 +105,7 @@ export default function EventsListPage() {
             </div>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, cursor: "pointer" }}>
-            <input type="checkbox" checked={showPastEvents} onChange={e => setShowPastEvents(e.target.checked)} style={{ accentColor: "#7C3AED" }} />
+            <input type="checkbox" checked={showPastEvents} onChange={e => setShowPastEvents(e.target.checked)} style={{ accentColor: "#5BBE93" }} />
             Show past events
           </label>
         </div>
@@ -164,7 +164,7 @@ function EventCard({ event }: { event: EventRow }) {
           height: 140,
           background: event.image_url
             ? `url(${event.image_url}) center/cover`
-            : `linear-gradient(135deg, #7C3AED, #A78BFA)`,
+            : `linear-gradient(135deg, #5BBE93, #86CFAE)`,
           position: "relative",
         }}>
           <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.7)", color: "#fff", padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
@@ -200,9 +200,9 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button onClick={onClick} style={{
       padding: "7px 14px",
       borderRadius: 99,
-      border: `1.5px solid ${active ? "#7C3AED" : C.border}`,
+      border: `1.5px solid ${active ? "#5BBE93" : C.border}`,
       background: active ? "#2A1F4A" : C.card,
-      color: active ? "#E9D5FF" : C.text,
+      color: active ? "#D6EFE2" : C.text,
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer",
@@ -211,7 +211,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 const C = {
-  bg: "#0D0D0D",
+  bg: "#0E1311",
   card: "#161A26",
   input: "#1F2333",
   border: "#2A2F42",
@@ -233,7 +233,7 @@ const inputStyle: React.CSSProperties = {
 
 const primaryBtn: React.CSSProperties = {
   padding: "10px 18px", borderRadius: 12, border: "none",
-  background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+  background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
   color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
   textDecoration: "none", display: "inline-block",
 };
