@@ -33,7 +33,7 @@ const TIER_CONFIG: Record<Tier, {
   default: {
     label: "Default",
     title: "",
-    cardBg: "#1A1A1A",
+    cardBg: "#161D19",
     borderColor: "#2D2D2D",
     glowColor: "transparent",
     nameBadgeBg: "#2D2D2D",
@@ -47,12 +47,12 @@ const TIER_CONFIG: Record<Tier, {
   active: {
     label: "Active",
     title: "Active",
-    cardBg: "#1A1228",
-    borderColor: "#7C3AED",
+    cardBg: "#161D19",
+    borderColor: "#5BBE93",
     glowColor: "rgba(124,58,237,0.3)",
-    nameBadgeBg: "#2D1B69",
-    nameBadgeText: "#A78BFA",
-    accentColor: "#7C3AED",
+    nameBadgeBg: "#1E3D34",
+    nameBadgeText: "#86CFAE",
+    accentColor: "#5BBE93",
     statsBg: "#110D1E",
     icon: "🟣",
     animated: false,
@@ -169,7 +169,7 @@ export function TierActivityCard({ card }: { card: ActivityCardData }) {
         }
         @keyframes galaxy-glow {
           0% { border-color: #E879F9; box-shadow: 0 0 20px rgba(232,121,249,0.5), 0 0 60px rgba(139,92,246,0.2); }
-          33% { border-color: #C084FC; box-shadow: 0 0 30px rgba(192,132,252,0.6), 0 0 80px rgba(232,121,249,0.3); }
+          33% { border-color: #9BD9BC; box-shadow: 0 0 30px rgba(192,132,252,0.6), 0 0 80px rgba(232,121,249,0.3); }
           66% { border-color: #F472B6; box-shadow: 0 0 25px rgba(244,114,182,0.5), 0 0 70px rgba(232,121,249,0.25); }
           100% { border-color: #E879F9; box-shadow: 0 0 20px rgba(232,121,249,0.5), 0 0 60px rgba(139,92,246,0.2); }
         }
@@ -289,7 +289,7 @@ export function TierActivityCard({ card }: { card: ActivityCardData }) {
         )}
         {/* Untouchable galaxy line */}
         {card.tier === "untouchable" && (
-          <div style={{ height: 3, background: "linear-gradient(90deg, #E879F9, #C084FC, #F472B6, #E879F9)", backgroundSize: "200% 100%", animation: "stat-shine 1.2s linear infinite" }} />
+          <div style={{ height: 3, background: "linear-gradient(90deg, #E879F9, #9BD9BC, #F472B6, #E879F9)", backgroundSize: "200% 100%", animation: "stat-shine 1.2s linear infinite" }} />
         )}
       </div>
     </>
@@ -332,7 +332,7 @@ const DEMO_CARDS: ActivityCardData[] = [
 
 export default function TierCardPreview() {
   return (
-    <div style={{ background: "#0D0D0D", minHeight: "100vh", padding: "32px 20px" }}>
+    <div style={{ background: "#0E1311", minHeight: "100vh", padding: "32px 20px" }}>
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
         <div style={{ fontWeight: 900, fontSize: 22, color: "#F0F0F0", marginBottom: 6, textAlign: "center" }}>
           Activity Card Tiers
