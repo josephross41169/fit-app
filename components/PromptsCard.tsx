@@ -19,8 +19,8 @@ import {
 } from "@/lib/rivalPrompts";
 
 const C = {
-  text: "#F0F0F0", sub: "#9CA3AF", accent: "#A78BFA",
-  card: "#160F28", border: "#2A1F45", input: "#0D0D0D",
+  text: "#F0F0F0", sub: "#9CA3AF", accent: "#86CFAE",
+  card: "#160F28", border: "#2A1F45", input: "#0E1311",
 };
 
 interface Props {
@@ -85,7 +85,7 @@ export default function PromptsCard({ title, pool, answers, onSave, askCount = 3
             </div>
           ))}
           <button onClick={handleSave} disabled={saving || Object.values(drafts).every(v => !v || !v.trim())}
-            style={{ background: `linear-gradient(135deg, #7C3AED, ${accent})`, border: "none", borderRadius: 10, padding: "10px 0", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+            style={{ background: `linear-gradient(135deg, #5BBE93, ${accent})`, border: "none", borderRadius: 10, padding: "10px 0", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
             {saving ? "Saving…" : "Save answers"}
           </button>
         </div>
