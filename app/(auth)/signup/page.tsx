@@ -5,13 +5,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/components/PostHogProvider";
 
-const G = "#7C3AED";
-const GL = "#F3F0FF";
-const GM = "#DDD6FE";
-const DARK_BG = "#0D0D0D";
-const DARK_CARD = "#1A1A1A";
-const DARK_BORDER = "#2A2A2A";
-const DARK_INPUT = "#1A1A1A";
+const G = "#5BBE93";
+const GL = "#EFF7F2";
+const GM = "#C9E8D8";
+const DARK_BG = "#0E1311";
+const DARK_CARD = "#161D19";
+const DARK_BORDER = "#232C27";
+const DARK_INPUT = "#161D19";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -336,7 +336,7 @@ export default function SignupPage() {
 
           <button type="submit" disabled={loading} style={{
             width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #A78BFA)`,
+            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
             color: "#fff", fontWeight: 900, fontSize: 16,
             cursor: loading ? "not-allowed" : "pointer",
             transition: "all 0.2s",
