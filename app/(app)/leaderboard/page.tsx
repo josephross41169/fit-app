@@ -8,15 +8,15 @@ import type { Tier } from "@/lib/tiers";
 import { TierFrame } from "@/components/TierFrame";
 
 const C = {
-  purple: "#7C3AED",
+  purple: "#5BBE93",
   purpleDark: "#1E1530",
-  purpleMid: "#2D1F52",
+  purpleMid: "#1B231E",
   purpleBorder: "#4C3A7A",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  white: "#1A1A1A",
-  bg: "#0D0D0D",
+  white: "#161D19",
+  bg: "#0E1311",
   green: "#4ADE80",
   red: "#F87171",
 };
@@ -113,7 +113,7 @@ function UserRow({ entry, onClick }: { entry: LeaderEntry; onClick: () => void }
           : isTop3
             ? `linear-gradient(135deg, ${tc.badge}60, ${C.white})`
             : C.white,
-        border: `1.5px solid ${entry.isCurrentUser ? C.purple : isTop3 ? tc.border : "#2A2A2A"}`,
+        border: `1.5px solid ${entry.isCurrentUser ? C.purple : isTop3 ? tc.border : "#232C27"}`,
         boxShadow: isTop3 ? `0 0 16px ${tc.glow}` : entry.isCurrentUser ? `0 0 12px rgba(124,58,237,0.2)` : "none",
         cursor: "pointer",
         transition: "transform 0.15s, box-shadow 0.15s",
@@ -182,7 +182,7 @@ function GroupRow({ entry, rank }: { entry: GroupEntry; rank: number }) {
         padding: "14px 18px",
         borderRadius: 16,
         background: isTop3 ? `rgba(245,166,35,0.06)` : C.white,
-        border: `1.5px solid ${isTop3 ? accent + "50" : "#2A2A2A"}`,
+        border: `1.5px solid ${isTop3 ? accent + "50" : "#232C27"}`,
         cursor: "pointer",
         transition: "transform 0.15s",
         marginBottom: 8,
