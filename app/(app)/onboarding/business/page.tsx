@@ -30,16 +30,16 @@ import { BUSINESS_TYPES, getBusinessType, isBusinessAccount } from "@/lib/busine
 // ─────────────────────────────────────────────────────────────────────────────
 
 const C = {
-  purple: "#7C3AED",
-  purpleDark: "#6D28D9",
-  purpleLight: "#F3F0FF",
-  purpleMid: "#DDD6FE",
+  purple: "#5BBE93",
+  purpleDark: "#3E9E74",
+  purpleLight: "#EFF7F2",
+  purpleMid: "#C9E8D8",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  bg: "#0D0D0D",
+  bg: "#0E1311",
   card: "#111111",
-  border: "#1A1228",
+  border: "#161D19",
 };
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -51,7 +51,7 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
       {Array.from({ length: total }).map((_, i) => (
         <div key={i} style={{
           flex: 1, height: 4, borderRadius: 2,
-          background: i < step ? C.purple : "#2A2A2A",
+          background: i < step ? C.purple : "#232C27",
           transition: "background 0.3s",
         }} />
       ))}
@@ -186,7 +186,7 @@ export default function BusinessOnboardingPage() {
 
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "13px 16px", borderRadius: 14,
-    border: "1.5px solid #2A2A2A", background: C.card, fontSize: 15,
+    border: "1.5px solid #232C27", background: C.card, fontSize: 15,
     color: C.text, outline: "none", boxSizing: "border-box",
   };
   const labelStyle: React.CSSProperties = {
@@ -240,7 +240,7 @@ export default function BusinessOnboardingPage() {
                       style={{
                         display: "flex", alignItems: "center", gap: 8, padding: "12px 12px",
                         borderRadius: 12, cursor: "pointer", textAlign: "left",
-                        border: `1.5px solid ${sel ? C.purple : "#2A2A2A"}`,
+                        border: `1.5px solid ${sel ? C.purple : "#232C27"}`,
                         background: sel ? "rgba(124,58,237,0.12)" : C.card,
                         color: C.text, fontSize: 13, fontWeight: 700,
                       }}>
@@ -266,7 +266,7 @@ export default function BusinessOnboardingPage() {
               <input type="file" accept="image/*" onChange={e => loadImage(e, setBannerPreview)} style={{ display: "none" }} />
               <div style={{
                 width: "100%", height: 120, borderRadius: 16, overflow: "hidden",
-                border: `1.5px dashed ${bannerPreview ? C.purple : "#2A2A2A"}`,
+                border: `1.5px dashed ${bannerPreview ? C.purple : "#232C27"}`,
                 background: bannerPreview ? "transparent" : C.card,
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
@@ -282,7 +282,7 @@ export default function BusinessOnboardingPage() {
               <input type="file" accept="image/*" onChange={e => loadImage(e, setAvatarPreview)} style={{ display: "none" }} />
               <div style={{
                 width: 90, height: 90, borderRadius: 18, overflow: "hidden", flexShrink: 0,
-                border: `1.5px dashed ${avatarPreview ? C.purple : "#2A2A2A"}`,
+                border: `1.5px dashed ${avatarPreview ? C.purple : "#232C27"}`,
                 background: avatarPreview ? "transparent" : C.card,
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
@@ -399,14 +399,14 @@ export default function BusinessOnboardingPage() {
         <div style={{ display: "flex", gap: 10, marginTop: 28, alignItems: "center" }}>
           {step > 1 && (
             <button type="button" onClick={back} disabled={saving}
-              style={{ padding: "14px 20px", borderRadius: 14, border: "1.5px solid #2A2A2A", background: "transparent", color: C.sub, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+              style={{ padding: "14px 20px", borderRadius: 14, border: "1.5px solid #232C27", background: "transparent", color: C.sub, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
               Back
             </button>
           )}
           <button type="button" onClick={next} disabled={saving || !canProceed[step]}
             style={{
               flex: 1, padding: "14px 20px", borderRadius: 14, border: "none",
-              background: canProceed[step] && !saving ? `linear-gradient(135deg,${C.purple},#A78BFA)` : "#374151",
+              background: canProceed[step] && !saving ? `linear-gradient(135deg,${C.purple},#86CFAE)` : "#374151",
               color: "#fff", fontWeight: 900, fontSize: 15,
               cursor: canProceed[step] && !saving ? "pointer" : "not-allowed",
             }}>
