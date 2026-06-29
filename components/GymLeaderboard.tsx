@@ -158,7 +158,7 @@ export default function GymLeaderboard({
             onClick={() => setShowManage(true)}
             style={{
               padding: "8px 14px", borderRadius: 12, border: "1.5px solid #3D2A6E",
-              background: "#1A1228", color: "#A78BFA",
+              background: "#161D19", color: "#86CFAE",
               fontWeight: 800, fontSize: 12, cursor: "pointer",
             }}
           >🔧 Manage</button>
@@ -181,7 +181,7 @@ export default function GymLeaderboard({
               onClick={() => setActiveCat(cat.key)}
               style={{
                 padding: "8px 14px", borderRadius: 99, border: "none",
-                background: isActive ? "#7C3AED" : "#1A1228",
+                background: isActive ? "#5BBE93" : "#161D19",
                 color: isActive ? "#fff" : "#9CA3AF",
                 fontWeight: 800, fontSize: 12, cursor: "pointer",
                 whiteSpace: "nowrap", flexShrink: 0,
@@ -240,7 +240,7 @@ function LeaderboardRow({ rank, entry }: { rank: number; entry: Entry }) {
     <div style={{
       display: "flex", alignItems: "center", gap: 12,
       padding: "12px 14px",
-      background: rank === 1 ? "linear-gradient(90deg, #2A1F00 0%, #1A1228 100%)" : "#1A1228",
+      background: rank === 1 ? "linear-gradient(90deg, #2A1F00 0%, #161D19 100%)" : "#161D19",
       borderRadius: 12,
       border: `1px solid ${medalColor}`,
     }}>
@@ -270,7 +270,7 @@ function LeaderboardRow({ rank, entry }: { rank: number; entry: Entry }) {
         </div>
       </div>
       <div style={{
-        fontSize: 16, fontWeight: 900, color: "#A78BFA",
+        fontSize: 16, fontWeight: 900, color: "#86CFAE",
         flexShrink: 0, textAlign: "right",
       }}>{formatValue(entry)}</div>
     </div>
@@ -367,7 +367,7 @@ function ManageList({
         onClick={onNew}
         style={{
           padding: "12px 16px", borderRadius: 12, border: "none",
-          background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+          background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
           color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer",
         }}
       >+ New Entry</button>
@@ -383,7 +383,7 @@ function ManageList({
             <div key={entry.id} style={{
               display: "flex", alignItems: "center", gap: 10,
               padding: "10px 12px", borderRadius: 10,
-              background: "#1A1228", border: "1px solid #2D1F52",
+              background: "#161D19", border: "1px solid #1B231E",
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0", display: "flex", alignItems: "center", gap: 6 }}>
@@ -396,7 +396,7 @@ function ManageList({
               </div>
               <button onClick={() => onEdit(entry)} style={{
                 background: "transparent", border: "1px solid #3D2A6E",
-                color: "#A78BFA", fontWeight: 700, fontSize: 11,
+                color: "#86CFAE", fontWeight: 700, fontSize: 11,
                 padding: "5px 10px", borderRadius: 8, cursor: "pointer",
               }}>Edit</button>
               <button onClick={() => deleteEntry(entry)} style={{
@@ -444,7 +444,7 @@ function EditForm({
     width: "100%",
     padding: "10px 14px",
     borderRadius: 10,
-    background: "#0D0D0D",
+    background: "#0E1311",
     border: "1.5px solid #3D2A6E",
     color: "#F0F0F0",
     fontSize: 14,
@@ -551,8 +551,8 @@ function EditForm({
           TAG A FOLLOWER (optional)
         </label>
         {taggedUserId ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: "#1A1228", borderRadius: 10, border: "1px solid #3D2A6E" }}>
-            <span style={{ fontSize: 13, color: "#A78BFA", fontWeight: 700 }}>📌 {displayName}</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: "#161D19", borderRadius: 10, border: "1px solid #3D2A6E" }}>
+            <span style={{ fontSize: 13, color: "#86CFAE", fontWeight: 700 }}>📌 {displayName}</span>
             <button onClick={() => { setTaggedUserId(null); setDisplayName(""); }} style={{
               marginLeft: "auto", background: "transparent", border: "none", color: "#9CA3AF",
               fontWeight: 700, fontSize: 12, cursor: "pointer",
@@ -581,7 +581,7 @@ function EditForm({
                   }}>
                     <div style={{
                       width: 28, height: 28, borderRadius: "50%",
-                      background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                      background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       color: "#fff", fontWeight: 800, fontSize: 11,
                       overflow: "hidden",
@@ -665,7 +665,7 @@ function EditForm({
           disabled={submitting}
           style={{
             flex: 2, padding: "12px 0", borderRadius: 12, border: "none",
-            background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+            background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
             color: "#fff", fontWeight: 900, fontSize: 14,
             cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1,
           }}
