@@ -248,7 +248,7 @@ export default function RepositionableImage({
               disabled={saving}
               onClick={e => { e.preventDefault(); e.stopPropagation(); commitSave(); }}
               style={{
-                background: saving ? "rgba(124,58,237,0.5)" : "#7C3AED",
+                background: saving ? "rgba(124,58,237,0.5)" : "#5BBE93",
                 border: "1px solid rgba(255,255,255,0.25)",
                 borderRadius: 99,
                 padding: "5px 13px",
