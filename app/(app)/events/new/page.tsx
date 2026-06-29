@@ -212,7 +212,7 @@ export default function CreateEventPage() {
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, paddingBottom: 80 }}>
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
-        <Link href="/events" style={{ color: "#A78BFA", textDecoration: "none", fontSize: 13, fontWeight: 600, display: "inline-block", marginBottom: 16 }}>
+        <Link href="/events" style={{ color: "#86CFAE", textDecoration: "none", fontSize: 13, fontWeight: 600, display: "inline-block", marginBottom: 16 }}>
           ← Back to Events
         </Link>
 
@@ -237,7 +237,7 @@ export default function CreateEventPage() {
             <label style={{ cursor: "pointer", display: "block" }}>
               <div style={{
                 width: "100%", aspectRatio: "16/9",
-                background: imagePreview ? `url(${imagePreview}) center/cover` : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                background: imagePreview ? `url(${imagePreview}) center/cover` : "linear-gradient(135deg, #5BBE93, #86CFAE)",
                 border: `2px dashed ${C.border}`, borderRadius: 12,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 600,
@@ -280,7 +280,7 @@ export default function CreateEventPage() {
           {/* Date & Time */}
           <Card title="Date & Time">
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 12 }}>
-              <input type="checkbox" checked={dateTbd} onChange={e => setDateTbd(e.target.checked)} style={{ accentColor: "#7C3AED" }} />
+              <input type="checkbox" checked={dateTbd} onChange={e => setDateTbd(e.target.checked)} style={{ accentColor: "#5BBE93" }} />
               Date TBD (announce later)
             </label>
             {!dateTbd && (
@@ -338,7 +338,7 @@ export default function CreateEventPage() {
 
           <button type="submit" disabled={saving} style={{
             padding: "14px", borderRadius: 14, border: "none",
-            background: saving ? "#4B1D8A" : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+            background: saving ? "#4B1D8A" : "linear-gradient(135deg, #5BBE93, #86CFAE)",
             color: "#fff", fontWeight: 900, fontSize: 16,
             cursor: saving ? "not-allowed" : "pointer",
             marginTop: 8,
@@ -372,7 +372,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 const C = {
-  bg: "#0D0D0D", card: "#161A26", input: "#1F2333", border: "#2A2F42",
+  bg: "#0E1311", card: "#161A26", input: "#1F2333", border: "#2A2F42",
   text: "#F0F0F0", sub: "#9CA3AF",
 };
 const inputStyle: React.CSSProperties = {
