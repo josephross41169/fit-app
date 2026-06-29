@@ -246,7 +246,7 @@ export default function EventDetailPage() {
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, paddingBottom: 80 }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "20px 16px" }}>
-        <Link href="/events" style={{ color: "#A78BFA", textDecoration: "none", fontSize: 13, fontWeight: 600, display: "inline-block", marginBottom: 14 }}>
+        <Link href="/events" style={{ color: "#86CFAE", textDecoration: "none", fontSize: 13, fontWeight: 600, display: "inline-block", marginBottom: 14 }}>
           ← Back
         </Link>
 
@@ -255,7 +255,7 @@ export default function EventDetailPage() {
           width: "100%", aspectRatio: "16/9",
           background: event.image_url
             ? `url(${event.image_url}) center/cover`
-            : "linear-gradient(135deg, #7C3AED, #A78BFA)",
+            : "linear-gradient(135deg, #5BBE93, #86CFAE)",
           borderRadius: 18, marginBottom: 20, position: "relative", overflow: "hidden",
         }}>
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.7) 100%)" }} />
@@ -283,7 +283,7 @@ export default function EventDetailPage() {
           {event.location_name && <div>📍 {event.location_name}</div>}
           {event.address && (
             <div>
-              <a href={`https://maps.google.com/?q=${encodeURIComponent(event.address)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#A78BFA", textDecoration: "none", fontSize: 13 }}>
+              <a href={`https://maps.google.com/?q=${encodeURIComponent(event.address)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#86CFAE", textDecoration: "none", fontSize: 13 }}>
                 🗺 {event.address}
               </a>
             </div>
@@ -311,7 +311,7 @@ export default function EventDetailPage() {
               onClick={() => setRsvp(myRsvp === "interested" ? null : "interested")}
               style={{
                 ...rsvpBtn,
-                background: myRsvp === "interested" ? "linear-gradient(135deg, #7C3AED, #A78BFA)" : C.card,
+                background: myRsvp === "interested" ? "linear-gradient(135deg, #5BBE93, #86CFAE)" : C.card,
                 color: myRsvp === "interested" ? "#fff" : C.text,
                 border: myRsvp === "interested" ? "none" : `1.5px solid ${C.border}`,
               }}
@@ -356,7 +356,7 @@ export default function EventDetailPage() {
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
                   {creatorProfile.full_name}
-                  {creatorProfile.account_type === "business" && <span style={{ marginLeft: 6, fontSize: 11, padding: "2px 8px", background: "#2A1F4A", color: "#E9D5FF", borderRadius: 99 }}>🏢 Business</span>}
+                  {creatorProfile.account_type === "business" && <span style={{ marginLeft: 6, fontSize: 11, padding: "2px 8px", background: "#2A1F4A", color: "#D6EFE2", borderRadius: 99 }}>🏢 Business</span>}
                 </div>
                 <div style={{ fontSize: 12, color: C.sub }}>@{creatorProfile.username}</div>
               </div>
@@ -367,7 +367,7 @@ export default function EventDetailPage() {
         {/* Source attribution for imported events */}
         {event.source !== "user" && event.external_url && (
           <Card title="Source">
-            <a href={event.external_url} target="_blank" rel="noopener noreferrer" style={{ color: "#A78BFA", fontSize: 13 }}>
+            <a href={event.external_url} target="_blank" rel="noopener noreferrer" style={{ color: "#86CFAE", fontSize: 13 }}>
               View original on {event.source} →
             </a>
           </Card>
@@ -391,7 +391,7 @@ export default function EventDetailPage() {
                   disabled={posting || !newComment.trim()}
                   style={{
                     padding: "8px 16px", borderRadius: 10, border: "none",
-                    background: newComment.trim() ? "linear-gradient(135deg, #7C3AED, #A78BFA)" : C.input,
+                    background: newComment.trim() ? "linear-gradient(135deg, #5BBE93, #86CFAE)" : C.input,
                     color: newComment.trim() ? "#fff" : C.muted,
                     fontWeight: 700, fontSize: 13, cursor: newComment.trim() ? "pointer" : "not-allowed",
                   }}
@@ -451,7 +451,7 @@ export default function EventDetailPage() {
                       <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{a.users.full_name}</div>
                       <div style={{ fontSize: 12, color: C.sub }}>@{a.users.username}</div>
                     </div>
-                    <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: a.status === "going" ? "#16A34A" : "#7C3AED", color: "#fff", fontWeight: 700 }}>
+                    <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: a.status === "going" ? "#16A34A" : "#5BBE93", color: "#fff", fontWeight: 700 }}>
                       {a.status === "going" ? "Going" : "Interested"}
                     </span>
                   </Link>
@@ -499,7 +499,7 @@ function CommentBlock({
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
             <button onClick={() => setReplyTo(null)} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontSize: 12, cursor: "pointer" }}>Cancel</button>
             <button onClick={() => onPostReply(comment.id, replyText)} disabled={posting || !replyText.trim()}
-              style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: replyText.trim() ? "#7C3AED" : C.input, color: replyText.trim() ? "#fff" : C.muted, fontSize: 12, fontWeight: 700, cursor: replyText.trim() ? "pointer" : "not-allowed" }}>
+              style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: replyText.trim() ? "#5BBE93" : C.input, color: replyText.trim() ? "#fff" : C.muted, fontSize: 12, fontWeight: 700, cursor: replyText.trim() ? "pointer" : "not-allowed" }}>
               Reply
             </button>
           </div>
@@ -573,7 +573,7 @@ function timeAgo(iso: string): string {
 }
 
 const C = {
-  bg: "#0D0D0D", card: "#161A26", input: "#1F2333", border: "#2A2F42",
+  bg: "#0E1311", card: "#161A26", input: "#1F2333", border: "#2A2F42",
   text: "#F0F0F0", sub: "#9CA3AF", muted: "#6B7280",
 };
 
