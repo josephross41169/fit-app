@@ -3,13 +3,13 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 
 const C = {
-  blue:"#7C3AED", blueLight:"#F3F0FF", blueMid:"#DDD6FE",
+  blue:"#5BBE93", blueLight:"#EFF7F2", blueMid:"#C9E8D8",
   gold:"#F5A623", text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F8F5FF",
-  darkCard:"#1A1D2E", darkBorder:"#2A2D3E", darkSub:"#8892A4",
+  darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
 
 const BRANDS: Record<string, { name:string; emoji:string; category:string; followers:string; color:string; desc:string }> = {
-  "gymshark":    { name:"Gymshark",      emoji:"🦈", category:"Activewear", followers:"7.2M", color:"#1A1A1A", desc:"The world's fastest growing fitness apparel brand. Built by athletes, for athletes." },
+  "gymshark":    { name:"Gymshark",      emoji:"🦈", category:"Activewear", followers:"7.2M", color:"#161D19", desc:"The world's fastest growing fitness apparel brand. Built by athletes, for athletes." },
   "niketraining":{ name:"Nike Training", emoji:"✔️", category:"Footwear & Apparel", followers:"31.5M", color:"#E5000F", desc:"Just Do It. Nike Training content, gear drops, and athlete stories." },
   "dior":        { name:"Dior Fitness",  emoji:"👑", category:"Luxury Activewear", followers:"4.1M", color:"#C9A96E", desc:"Where luxury meets performance. Dior's activewear collections." },
   "lululemon":   { name:"Lululemon",     emoji:"🧘", category:"Activewear", followers:"5.8M", color:"#BE3A34", desc:"Yoga-inspired technical apparel for yoga, running, training, and most other sweaty pursuits." },
@@ -39,7 +39,7 @@ export default function BrandPage() {
         <p style={{ fontSize:14, color:C.sub, lineHeight:1.7, marginBottom:28 }}>
           This page will show <strong style={{ color:C.text }}>tagged posts, sponsored content, brand challenges, and product links</strong> once connected to the live database.
         </p>
-        <button style={{ width:"100%", padding:"12px", borderRadius:14, background:`linear-gradient(135deg,${C.blue},#6D28D9)`, border:"none", color:"#fff", fontWeight:800, fontSize:15, cursor:"pointer", marginBottom:12 }}>
+        <button style={{ width:"100%", padding:"12px", borderRadius:14, background:`linear-gradient(135deg,${C.blue},#3E9E74)`, border:"none", color:"#fff", fontWeight:800, fontSize:15, cursor:"pointer", marginBottom:12 }}>
           + Follow Brand
         </button>
         <Link href="/discover" style={{ display:"block", fontSize:13, color:C.sub, textDecoration:"none" }}>← Back to Discovery</Link>
