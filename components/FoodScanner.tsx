@@ -78,7 +78,7 @@ export function FoodScanner({ onFoodScanned }: FoodScannerProps) {
         <label style={{ 
           display: 'inline-block',
           padding: '8px 16px',
-          background: '#7C3AED',
+          background: '#5BBE93',
           color: '#fff',
           borderRadius: 8,
           cursor: 'pointer',
@@ -159,7 +159,7 @@ export function FoodScanner({ onFoodScanned }: FoodScannerProps) {
             style={{
               marginTop: 12,
               padding: '8px 12px',
-              background: '#7C3AED',
+              background: '#5BBE93',
               color: '#fff',
               border: 'none',
               borderRadius: 6,
