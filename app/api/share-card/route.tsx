@@ -60,11 +60,11 @@ const C = {
   sub: "#9CA3AF",
   gold: "#F5A623",
   green: "#4ADE80",
-  purple: "#7C3AED",
-  purpleLt: "#A78BFA",
+  purple: "#5BBE93",
+  purpleLt: "#86CFAE",
   card: "#160F28",
   cardBg2: "#1E1438",
-  border: "#2D1F52",
+  border: "#1B231E",
 };
 
 const ALLOWED_PHOTO_HOST = "biqsvrrnnoyulrrhgitc.supabase.co";
@@ -142,7 +142,7 @@ function Macro({ value, label, unit, color, last }: { value: number; label: stri
         flexDirection: "column",
         alignItems: "center",
         flex: 1,
-        background: "#0D0D0D",
+        background: "#0E1311",
         borderRadius: 14,
         padding: "14px 8px",
         border: `1px solid ${C.border}`,
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
           flexDirection: "column",
           width: "100%",
           // NO height set → root sizes to content (auto-height).
-          background: "linear-gradient(135deg, #0D0D0D 0%, #1A1230 100%)",
+          background: "linear-gradient(135deg, #0E1311 0%, #1A1230 100%)",
           padding: 40,
           fontFamily: "sans-serif",
           color: C.text,
