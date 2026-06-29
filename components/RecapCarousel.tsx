@@ -273,9 +273,9 @@ export default function RecapCarousel({ weekStart: weekStartProp }: Props) {
   }
   if (loading || !recap || !theme) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ minHeight: "100vh", background: "#0E1311", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center", color: "#9CA3AF" }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", border: "4px solid #2D1F52", borderTopColor: "#7C3AED", animation: "rspin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ width: 36, height: 36, borderRadius: "50%", border: "4px solid #1B231E", borderTopColor: "#5BBE93", animation: "rspin 0.8s linear infinite", margin: "0 auto 16px" }} />
           <style>{`@keyframes rspin { to { transform: rotate(360deg); } }`}</style>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Loading your recap…</div>
         </div>
@@ -593,11 +593,11 @@ async function renderElementToPng(element: HTMLElement, width: number, height: n
 function FullScreenMessage({ message }: { message: string }) {
   const router = useRouter();
   return (
-    <div style={{ minHeight: "100vh", background: "#0D0D0D", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+    <div style={{ minHeight: "100vh", background: "#0E1311", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
       <div style={{ textAlign: "center", color: "#E2E8F0", maxWidth: 320 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>{message}</div>
         <button onClick={() => router.push("/feed")} style={{
-          background: "#7C3AED", color: "#fff", border: "none",
+          background: "#5BBE93", color: "#fff", border: "none",
           borderRadius: 99, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer",
         }}>
           ← Back to feed
