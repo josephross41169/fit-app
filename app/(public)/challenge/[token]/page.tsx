@@ -25,11 +25,11 @@ import { useAuth } from "@/lib/auth";
 const C = {
   bg: "#0A0A0F",
   card: "#15131D",
-  border: "#2D1F52",
+  border: "#1B231E",
   text: "#F5F1E8",
   sub: "#9CA3AF",
-  accent: "#7C3AED",
-  accent2: "#A78BFA",
+  accent: "#5BBE93",
+  accent2: "#86CFAE",
   green: "#4ADE80",
   red: "#F87171",
 };
