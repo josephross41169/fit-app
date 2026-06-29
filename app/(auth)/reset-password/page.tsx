@@ -9,11 +9,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const G = "#7C3AED";
-const DARK_BG = "#0D0D0D";
-const DARK_CARD = "#1A1A1A";
-const DARK_BORDER = "#2A2A2A";
-const DARK_INPUT = "#1A1A1A";
+const G = "#5BBE93";
+const DARK_BG = "#0E1311";
+const DARK_CARD = "#161D19";
+const DARK_BORDER = "#232C27";
+const DARK_INPUT = "#161D19";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
           <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>
             Password reset links expire after 1 hour. Request a new one.
           </p>
-          <Link href="/forgot-password" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #A78BFA)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
+          <Link href="/forgot-password" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #86CFAE)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
             Request New Link
           </Link>
         </div>
@@ -130,7 +130,7 @@ export default function ResetPasswordPage() {
 
             <button type="submit" disabled={loading || !password || !confirmPassword} style={{
               width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-              background: loading || !password || !confirmPassword ? DARK_BORDER : `linear-gradient(135deg, ${G}, #A78BFA)`,
+              background: loading || !password || !confirmPassword ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
               color: "#fff", fontWeight: 900, fontSize: 16,
               cursor: loading || !password || !confirmPassword ? "not-allowed" : "pointer",
             }}>
