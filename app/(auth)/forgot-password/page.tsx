@@ -10,11 +10,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const G = "#7C3AED";
-const DARK_BG = "#0D0D0D";
-const DARK_CARD = "#1A1A1A";
-const DARK_BORDER = "#2A2A2A";
-const DARK_INPUT = "#1A1A1A";
+const G = "#5BBE93";
+const DARK_BG = "#0E1311";
+const DARK_CARD = "#161D19";
+const DARK_BORDER = "#232C27";
+const DARK_INPUT = "#161D19";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
             <div style={{ fontSize: 13, color: "#9CA3AF", lineHeight: 1.6, marginBottom: 20 }}>
               Don&apos;t see it? Check your spam folder. The link expires in 1 hour.
             </div>
-            <Link href="/login" style={{ display: "block", padding: "13px 0", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #A78BFA)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
+            <Link href="/login" style={{ display: "block", padding: "13px 0", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #86CFAE)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
               Back to Sign In
             </Link>
           </div>
@@ -97,7 +97,7 @@ export default function ForgotPasswordPage() {
 
             <button type="submit" disabled={loading || !email} style={{
               width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-              background: loading || !email ? DARK_BORDER : `linear-gradient(135deg, ${G}, #A78BFA)`,
+              background: loading || !email ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
               color: "#fff", fontWeight: 900, fontSize: 16,
               cursor: loading || !email ? "not-allowed" : "pointer",
               transition: "all 0.2s",
