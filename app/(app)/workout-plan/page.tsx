@@ -6,16 +6,16 @@ import { getExerciseImage } from "@/lib/exerciseImages";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C = {
-  purple:     "#7C3AED",
-  purpleDark: "#6D28D9",
+  purple:     "#5BBE93",
+  purpleDark: "#3E9E74",
   purpleBg:   "rgba(124,58,237,0.12)",
-  purpleMid:  "#2D1B69",
+  purpleMid:  "#1E3D34",
   gold:       "#F5A623",
   green:      "#10B981",
   red:        "#EF4444",
-  bg:         "#0D0D0D",
+  bg:         "#0E1311",
   card:       "#111111",
-  border:     "#1A1228",
+  border:     "#161D19",
   text:       "#F0F0F0",
   sub:        "#9CA3AF",
 };
@@ -77,10 +77,10 @@ const EQUIPMENT_GROUPS = [
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const CATEGORY_COLORS: Record<string, string> = {
-  Chest: "#EC4899", Back: "#3B82F6", Shoulders: "#8B5CF6",
+  Chest: "#EC4899", Back: "#3B82F6", Shoulders: "#5BBE93",
   Biceps: "#F59E0B", Triceps: "#EF4444", Legs: "#10B981",
-  Glutes: "#F97316", Core: "#6366F1", "Full Body": "#7C3AED",
-  Olympic: "#C4B5FD", Cardio: "#34D399", Forearms: "#D97706",
+  Glutes: "#F97316", Core: "#6366F1", "Full Body": "#5BBE93",
+  Olympic: "#A7DCC4", Cardio: "#34D399", Forearms: "#D97706",
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ function ExerciseRow({ ex, idx, onRecycle }: { ex: PlannedExercise; idx: number;
           {imgState === "loading" && (
             <div style={{
               marginTop: 10, height: 140, borderRadius: 8,
-              background: "linear-gradient(90deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%)",
+              background: "linear-gradient(90deg, #161D19 0%, #222 50%, #161D19 100%)",
               backgroundSize: "200% 100%",
               animation: "shimmer 1.4s ease-in-out infinite",
             }} />
@@ -539,7 +539,7 @@ export default function WorkoutPlanPage() {
             {EQUIPMENT_GROUPS.map(g => (
               <button key={g.label} onClick={() => handleEquipGroup(g.label, g.items)} style={{
                 padding: "6px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: activeEquipGroup === g.label ? C.purple : "#1A1A1A",
+                background: activeEquipGroup === g.label ? C.purple : "#161D19",
                 color: activeEquipGroup === g.label ? "#fff" : C.sub,
                 border: `1px solid ${activeEquipGroup === g.label ? C.purple : C.border}`,
                 transition: "all 0.15s",
@@ -551,8 +551,8 @@ export default function WorkoutPlanPage() {
             {EQUIPMENT_TYPES.map(eq => (
               <button key={eq} onClick={() => toggleEquipment(eq)} style={{
                 padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                background: equipment.includes(eq) ? "#2D1B69" : "#161616",
-                color: equipment.includes(eq) ? "#C4B5FD" : C.sub,
+                background: equipment.includes(eq) ? "#1E3D34" : "#161616",
+                color: equipment.includes(eq) ? "#A7DCC4" : C.sub,
                 border: `1px solid ${equipment.includes(eq) ? C.purple : C.border}`,
                 transition: "all 0.15s",
               }}>{eq}</button>
@@ -570,8 +570,8 @@ export default function WorkoutPlanPage() {
               return (
                 <button key={inj.value} onClick={() => setInjuries(prev => on ? prev.filter(x => x !== inj.value) : [...prev, inj.value])} style={{
                   padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  background: on ? "#2D1B69" : "#161616",
-                  color: on ? "#C4B5FD" : C.sub,
+                  background: on ? "#1E3D34" : "#161616",
+                  color: on ? "#A7DCC4" : C.sub,
                   border: `1px solid ${on ? C.purple : C.border}`,
                   transition: "all 0.15s",
                 }}>{on ? "✓ " : ""}{inj.label}</button>
@@ -583,7 +583,7 @@ export default function WorkoutPlanPage() {
         {/* Generate Button */}
         <button onClick={generate} disabled={generating} style={{
           width: "100%", padding: "16px", borderRadius: 14, cursor: generating ? "not-allowed" : "pointer",
-          background: generating ? C.purpleMid : `linear-gradient(135deg, ${C.purple}, #A78BFA)`,
+          background: generating ? C.purpleMid : `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
           border: "none", color: "#fff", fontSize: 16, fontWeight: 900, letterSpacing: "0.01em",
           boxShadow: generating ? "none" : `0 4px 24px ${C.purple}44`,
           transition: "all 0.2s",
@@ -678,7 +678,7 @@ export default function WorkoutPlanPage() {
             cursor: generating ? "not-allowed" : "pointer",
             background: generating
               ? "rgba(124,58,237,0.15)"
-              : `linear-gradient(135deg,${C.purple},#A78BFA)`,
+              : `linear-gradient(135deg,${C.purple},#86CFAE)`,
             border: `1px solid ${generating ? C.purple : "transparent"}`,
             color: "#fff", fontSize: 14, fontWeight: 800,
             opacity: generating ? 0.7 : 1,
