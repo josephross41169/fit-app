@@ -10,7 +10,7 @@ import {
 } from "recharts";
 
 const C = {
-  purple:"#7C3AED", purpleDim:"#2D1F52", purpleBorder:"#3D2A6E",
+  purple:"#5BBE93", purpleDim:"#1B231E", purpleBorder:"#3D2A6E",
   gold:"#F5A623",   goldDim:"#2A1F08",
   cyan:"#06B6D4",   cyanDim:"#062030",
   green:"#4ADE80",  greenDim:"#062010",
@@ -36,7 +36,7 @@ const MUSCLE_MAP: Record<string,string[]> = {
 };
 const MUSCLE_COLORS: Record<string,string> = {
   Chest:"#F87171",Back:"#60A5FA",Legs:"#4ADE80",
-  Shoulders:"#FBBF24",Arms:"#A78BFA",Core:"#F472B6",Other:"#6B7280",
+  Shoulders:"#FBBF24",Arms:"#86CFAE",Core:"#F472B6",Other:"#6B7280",
 };
 function getMuscle(name:string):string {
   const n = name.toLowerCase();
@@ -177,7 +177,7 @@ function MetricField({label,k,metrics,setMetrics,placeholder,type="decimal"}:{
         placeholder={placeholder}
         value={metrics[k]||""}
         onChange={e=>setMetrics(m=>({...m,[k]:type==="date"?e.target.value:e.target.value.replace(/[^0-9.]/g,"")}))}
-        style={{width:"100%",background:"#0D0D0D",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box"}}
+        style={{width:"100%",background:"#0E1311",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box"}}
       />
     </div>
   );
@@ -204,7 +204,7 @@ function ChartWrap({children}:{children:React.ReactNode}){
 function Tip({active,payload,label}:any){
   if(!active||!payload?.length) return null;
   return(
-    <div style={{background:"#1A1228",border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"8px 12px",fontSize:12}}>
+    <div style={{background:"#161D19",border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"8px 12px",fontSize:12}}>
       <div style={{color:C.subLight,fontWeight:700,marginBottom:3}}>{label}</div>
       {payload.map((p:any,i:number)=><div key={i} style={{color:p.color||C.purple}}>{p.name}: <b>{typeof p.value==="number"?p.value.toLocaleString():p.value}</b>{p.unit||""}</div>)}
     </div>
@@ -252,7 +252,7 @@ function Heatmap({dates}:{dates:string[]}){
   });
   const weeks:typeof cells[]=[];
   for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
-  const col=(n:number)=>n===0?C.border:n===1?"#4C1D95":n===2?"#6D28D9":C.purple;
+  const col=(n:number)=>n===0?C.border:n===1?"#4C1D95":n===2?"#3E9E74":C.purple;
   const todayStr=today.toISOString().slice(0,10);
   // Month labels: show month name above the first week that starts a new month
   const monthLabels:Record<number,string>={};
@@ -344,7 +344,7 @@ Hitting calorie goal: ${caloriePct}% of days`;
         </div>
         <button onClick={analyze} disabled={loading} style={{
           padding:"7px 14px",borderRadius:10,border:"none",cursor:"pointer",
-          background:`linear-gradient(135deg,${C.purple},#A78BFA)`,
+          background:`linear-gradient(135deg,${C.purple},#86CFAE)`,
           color:"#fff",fontWeight:700,fontSize:12,flexShrink:0,
         }}>{loading?"Analyzing…":ran?"Refresh":"Analyze"}</button>
       </div>
@@ -1342,7 +1342,7 @@ export default function StatsPage(){
               height: 180,
               borderRadius: 18,
               marginBottom: 16,
-              background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+              background: "linear-gradient(90deg, #1A1230 0%, #1B231E 50%, #1A1230 100%)",
               backgroundSize: "200% 100%",
               animation: "statsSkeletonShimmer 1.4s ease-in-out infinite",
             }} />
@@ -1352,7 +1352,7 @@ export default function StatsPage(){
                 height: 110,
                 borderRadius: 16,
                 marginBottom: 14,
-                background: "linear-gradient(90deg, #1A1230 0%, #2D1F52 50%, #1A1230 100%)",
+                background: "linear-gradient(90deg, #1A1230 0%, #1B231E 50%, #1A1230 100%)",
                 backgroundSize: "200% 100%",
                 animation: "statsSkeletonShimmer 1.4s ease-in-out infinite",
               }} />
@@ -1546,7 +1546,7 @@ export default function StatsPage(){
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
                 <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:6}}>No daily goals set yet</div>
                 <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Set your daily calorie and macro targets to track progress.</div>
-                <button onClick={()=>{setTab("nutrition");setTimeout(()=>setShowGoalEditor(true),100);}} style={{padding:"8px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚙️ Set Goals</button>
+                <button onClick={()=>{setTab("nutrition");setTimeout(()=>setShowGoalEditor(true),100);}} style={{padding:"8px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚙️ Set Goals</button>
               </div>
             ):(
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
@@ -1561,7 +1561,7 @@ export default function StatsPage(){
                     <div style={{fontSize:24,marginBottom:8}}>🥗</div>
                     <div style={{fontSize:14,color:C.subLight,fontWeight:700,marginBottom:4}}>Nothing logged yet today</div>
                     <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Daily goal: {goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat</div>
-                    <button onClick={()=>router.push("/post")} style={{padding:"7px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Log Nutrition</button>
+                    <button onClick={()=>router.push("/post")} style={{padding:"7px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Log Nutrition</button>
                   </div>
                 )}
               </div>
@@ -2168,7 +2168,7 @@ export default function StatsPage(){
                     </div>
                   ))}
                 </div>
-                <button onClick={saveGoals} disabled={savingGoals} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#A78BFA)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer"}}>{savingGoals?"Saving…":"💾 Save Goals"}</button>
+                <button onClick={saveGoals} disabled={savingGoals} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer"}}>{savingGoals?"Saving…":"💾 Save Goals"}</button>
               </>)}
             </div>
 
@@ -2541,7 +2541,7 @@ export default function StatsPage(){
                     <MetricField label="Date of birth" k="date_of_birth" metrics={metrics} setMetrics={setMetrics} type="date" />
                     <div>
                       <label style={{fontSize:10,fontWeight:700,color:C.sub,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:0.8}}>Biological sex</label>
-                      <select value={metrics.biological_sex||""} onChange={e=>setMetrics(m=>({...m,biological_sex:e.target.value}))} style={{width:"100%",background:"#0D0D0D",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box"}}>
+                      <select value={metrics.biological_sex||""} onChange={e=>setMetrics(m=>({...m,biological_sex:e.target.value}))} style={{width:"100%",background:"#0E1311",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box"}}>
                         <option value="">—</option>
                         <option value="male">Male</option>
                         <option value="female">Female</option>
@@ -2563,7 +2563,7 @@ export default function StatsPage(){
                     <MetricField label="Metabolic age" k="metabolic_age" metrics={metrics} setMetrics={setMetrics} placeholder="30" />
                   </div>
 
-                  <button onClick={saveMetrics} disabled={metricsSaving} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:metricsSaving?"#2D1F52":metricsSaved?C.green:"linear-gradient(135deg,#7C3AED,#A78BFA)",color:"#fff",fontWeight:900,fontSize:14,cursor:metricsSaving?"not-allowed":"pointer"}}>
+                  <button onClick={saveMetrics} disabled={metricsSaving} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:metricsSaving?"#1B231E":metricsSaved?C.green:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:900,fontSize:14,cursor:metricsSaving?"not-allowed":"pointer"}}>
                     {metricsSaving?"Saving…":metricsSaved?"✓ Saved":"Save Metrics"}
                   </button>
                   {metricsUpdatedAt && (
@@ -2927,8 +2927,8 @@ export default function StatsPage(){
             <input
               type="number" step="0.1" placeholder="e.g. 185.5"
               value={weightInput} onChange={e=>setWeightInput(e.target.value)}
-              style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid #2D1F52",
-                background:"#1A1228",color:"#F0F0F0",fontSize:18,fontWeight:800,boxSizing:"border-box"}}
+              style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid #1B231E",
+                background:"#161D19",color:"#F0F0F0",fontSize:18,fontWeight:800,boxSizing:"border-box"}}
               autoFocus
             />
           </div>
@@ -2941,14 +2941,14 @@ export default function StatsPage(){
             <input
               type="text" placeholder="e.g. Morning, before breakfast"
               value={weightNotes} onChange={e=>setWeightNotes(e.target.value)}
-              style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid #2D1F52",
-                background:"#1A1228",color:"#F0F0F0",fontSize:13,boxSizing:"border-box"}}
+              style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid #1B231E",
+                background:"#161D19",color:"#F0F0F0",fontSize:13,boxSizing:"border-box"}}
             />
           </div>
 
           {/* Privacy toggle */}
-          <div style={{marginBottom:24,padding:"12px 14px",background:"#1A1228",
-            borderRadius:12,border:"1px solid #2D1F52",
+          <div style={{marginBottom:24,padding:"12px 14px",background:"#161D19",
+            borderRadius:12,border:"1px solid #1B231E",
             display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <div style={{fontSize:13,fontWeight:700,color:"#F0F0F0"}}>
@@ -2960,7 +2960,7 @@ export default function StatsPage(){
             </div>
             <button onClick={()=>setWeightPublic(p=>!p)} style={{
               width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",
-              background:weightPublic?"#7C3AED":"#2D1F52",
+              background:weightPublic?"#5BBE93":"#1B231E",
               position:"relative",transition:"background 0.2s",flexShrink:0,
             }}>
               <div style={{
@@ -2974,7 +2974,7 @@ export default function StatsPage(){
 
           <button onClick={saveWeight} disabled={!weightInput||weightSaving} style={{
             width:"100%",padding:"14px",borderRadius:14,border:"none",
-            background:!weightInput||weightSaving?"#2D1F52":"linear-gradient(135deg,#7C3AED,#A78BFA)",
+            background:!weightInput||weightSaving?"#1B231E":"linear-gradient(135deg,#5BBE93,#86CFAE)",
             color:"#fff",fontWeight:900,fontSize:15,cursor:!weightInput||weightSaving?"not-allowed":"pointer",
           }}>
             {weightSaving ? "Saving..." : "Save Weight"}
