@@ -5,14 +5,14 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 const C = {
-  purple: "#7C3AED",
-  purpleDark: "#6D28D9",
-  purpleLight: "#F3F0FF",
-  purpleMid: "#DDD6FE",
+  purple: "#5BBE93",
+  purpleDark: "#3E9E74",
+  purpleLight: "#EFF7F2",
+  purpleMid: "#C9E8D8",
   gold: "#F5A623",
   bg: "#0F1117",
-  card: "#1A1D2E",
-  border: "#2A2D3E",
+  card: "#161D19",
+  border: "#232C27",
   text: "#E2E8F0",
   sub: "#8892A4",
   red: "#EF4444",
@@ -71,7 +71,7 @@ function NotifIcon({ type }: { type: NotifType }) {
   return (
     <div style={{
       width: 28, height: 28, borderRadius: "50%",
-      background: type === "follow" ? C.purple : type === "badge" ? C.gold : "#2A2D3E",
+      background: type === "follow" ? C.purple : type === "badge" ? C.gold : "#232C27",
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: 14, flexShrink: 0, marginLeft: -10, marginTop: 22,
       border: `2px solid ${C.bg}`,
