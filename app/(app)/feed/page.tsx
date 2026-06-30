@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, memo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
@@ -1104,6 +1105,7 @@ const BADGE_DEFS: Record<string, { emoji: string; label: string }> = {
 // Badges section in that case to avoid cluttering the feed with stale
 // achievements that already showed up on prior cards.
 function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: string[] }) {
+  const router = useRouter();
   const hasActivity = post.workout || post.nutrition || post.wellness;
   if (!hasActivity) return null;
   // De-dupe in case a badge somehow ended up in the list twice (defensive).
@@ -1118,7 +1120,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           dependency injected here). */}
       <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
         <div
-          onClick={() => window.location.href = `/profile/${post.username}`}
+          onClick={() => router.push(`/profile/${post.username}`)}
           style={{ cursor:"pointer", flexShrink:0 }}
           aria-label={`Open ${post.user}'s profile`}
           role="link"
@@ -1132,7 +1134,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           </TierFrame>
         </div>
         <div
-          onClick={() => window.location.href = `/profile/${post.username}`}
+          onClick={() => router.push(`/profile/${post.username}`)}
           style={{ flex:1, minWidth:0, cursor:"pointer" }}
           role="link"
         >
@@ -1263,6 +1265,7 @@ async function fireMentionNotifications(
 }
 
 const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
+  const router = useRouter();
   // Determine ownership. Prefer comparing user IDs (reliable) over username
   // (which can be stale or fall back to "User" if profile data didn't load).
   const isOwner = !!currentUser && (
@@ -1478,7 +1481,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
             a PR, so the extra corner badge was redundant.) */}
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
-          <div onClick={() => window.location.href=`/profile/${post.username}`} style={{ cursor:"pointer",flexShrink:0 }}>
+          <div onClick={() => router.push(`/profile/${post.username}`)} style={{ cursor:"pointer",flexShrink:0 }}>
             <TierFrame tier={post.tier || "default"} size={46}>
               <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
                 {post.avatar && (post.avatar.startsWith('http') || post.avatar.startsWith('/'))
@@ -1492,7 +1495,7 @@ const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, cu
               </div>
             </TierFrame>
           </div>
-          <div style={{ flex:1,cursor:"pointer" }} onClick={() => window.location.href=`/profile/${post.username}`}>
+          <div style={{ flex:1,cursor:"pointer" }} onClick={() => router.push(`/profile/${post.username}`)}>
             <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
               <span style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</span>
               <TierBadgeChip tier={post.tier || "default"} small />
@@ -2040,6 +2043,7 @@ interface Member {
 }
 
 function NewMembersPanel({ members, currentUser }: { members: Member[]; currentUser: { profile?: { city?: string }; id: string } }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? members : members.slice(0, 3);
   const userCity = currentUser?.profile?.city?.split(",")[0]?.trim()?.toLowerCase() || "";
@@ -2068,7 +2072,7 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
           })();
           return (
             <div key={member.id}
-              onClick={() => window.location.href = `/profile/${member.username}`}
+              onClick={() => router.push(`/profile/${member.username}`)}
               style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 8px", borderRadius:14, cursor:"pointer", transition:"background 0.15s", marginBottom:2 }}
               onMouseEnter={e => (e.currentTarget.style.background = "#1E2A1E")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
@@ -2135,6 +2139,7 @@ function ActivityFilterChips({ value, onChange }: { value: ActivityFilter; onCha
 
 // ── Main Feed Page ────────────────────────────────────────────────────────────
 export default function FeedPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [posts, setPosts] = useState(INITIAL_POSTS);
   const [dbPosts, setDbPosts] = useState<any[]>([]);
@@ -3212,7 +3217,7 @@ export default function FeedPage() {
                 {searchLoading ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>Searching...</div>
                 : searchResults.length===0 ? <div style={{padding:"14px",textAlign:"center",color:C.sub,fontSize:13}}>No results</div>
                 : searchResults.map(u=>(
-                  <div key={u.id} onClick={()=>{setSearchQuery("");setSearchResults([]);window.location.href=`/profile/${u.username}`;}}
+                  <div key={u.id} onClick={()=>{setSearchQuery("");setSearchResults([]);router.push(`/profile/${u.username}`);}}
                     style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1B231E"}}
                     onMouseEnter={e=>(e.currentTarget.style.background="#1B231E")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
                     <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,overflow:"hidden"}}>
