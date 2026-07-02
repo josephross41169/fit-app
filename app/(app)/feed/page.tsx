@@ -3292,7 +3292,7 @@ export default function FeedPage() {
           ))}
           {/* Local — city posts + nearby events with distance sorting. Lives on
               the discover route (full-featured), surfaced here as a sibling tab. */}
-          <a href="/discover" style={{
+          <Link href="/discover" style={{
             padding:"8px 20px",borderRadius:99,border:"none",cursor:"pointer",
             fontWeight:800,fontSize:13,textDecoration:"none",
             background:"transparent",color:"#6B7280",
@@ -3300,7 +3300,7 @@ export default function FeedPage() {
             transition:"all 0.15s",
           }}>
             📍 Local
-          </a>
+          </Link>
         </div>
       </div>
 
