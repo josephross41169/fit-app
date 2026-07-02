@@ -15,10 +15,15 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { enablePush, disablePush, getPushStatus, type PushStatus } from "@/lib/pushClient";
+import { useIsNativeShell } from "@/lib/native";
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  // Web-push doesn't exist inside the native WebView (no Notification API),
+  // and the section's copy is written for Safari users ("add to Home
+  // Screen…"). Showing it in the iOS app reads as broken, so hide it there.
+  const nativeShell = useIsNativeShell();
 
   // ── Account-deletion flow state ────────────────────────────────────────
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -169,7 +174,7 @@ export default function SettingsPage() {
           their Home Screen first — Safari refuses the permission prompt
           otherwise. We detect that and tell them how to fix it instead
           of failing silently. */}
-      <Section title="🔔 Notifications">
+      {!nativeShell && (<Section title="🔔 Notifications">
         {pushStatus === null && (
           <div style={{ fontSize: 13, color: "#9CA3AF" }}>Checking…</div>
         )}
@@ -238,7 +243,7 @@ export default function SettingsPage() {
           post, sends you a message, or your rivalry / workout buddy
           activity needs attention. You can turn this off at any time.
         </div>
-      </Section>
+      </Section>)}
 
       {/* ── SECTION: Integrations ──────────────────────────────────── */}
       {/* Hosts third-party data sources that can sync into Livelee. The
