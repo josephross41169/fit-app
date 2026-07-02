@@ -177,9 +177,9 @@ export default function SignupPage() {
         <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 20 }}>
           Don&apos;t see it? Check your spam folder. Link expires in 24 hours.
         </p>
-        <a href="/login" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: "transparent", color: G, fontWeight: 700, fontSize: 15, border: `1.5px solid ${G}`, textDecoration: "none" }}>
+        <Link href="/login" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: "transparent", color: G, fontWeight: 700, fontSize: 15, border: `1.5px solid ${G}`, textDecoration: "none" }}>
           Back to Sign In
-        </a>
+        </Link>
       </div>
     </div>
   );
