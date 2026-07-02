@@ -12,6 +12,7 @@ import {
   runHealthKitSync,
 } from "@/lib/healthkit";
 import { getFitbitAuthURL } from "@/lib/fitbit";
+import { useIsNativeShell, isNativeShell } from "@/lib/native";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // New-user onboarding.
@@ -93,7 +94,12 @@ export default function OnboardingPage() {
   const [healthAvailable, setHealthAvailable] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
   const [healthConnected, setHealthConnected] = useState(false);
-  const fitbitConfigured = !!process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
+  // Fitbit connects via a full-page OAuth redirect, which works on the web
+  // but strands the user on fitbit.com inside the native WebView (the OAuth
+  // redirect URI would be capacitor://localhost — invalid). On iOS/Android
+  // the native path is Apple Health, so we hide the Fitbit card there.
+  const nativeShell = useIsNativeShell();
+  const fitbitConfigured = !!process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID && !nativeShell;
 
   // social
   const [people, setPeople] = useState<SuggestedUser[]>([]);
@@ -179,6 +185,7 @@ export default function OnboardingPage() {
 
   function connectFitbit() {
     if (!user) return;
+    if (isNativeShell()) return; // belt-and-braces: never OAuth-redirect the native WebView
     const clientId = process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
     if (!clientId) return;
     const state = `${user.id}_${Date.now()}_${Math.random()}`;
