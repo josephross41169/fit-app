@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getFitbitAuthURL } from '@/lib/fitbit';
 import { supabase } from '@/lib/supabase';
+import { useIsNativeShell, isNativeShell } from '@/lib/native';
 
 type ConnectedDevice = {
   id: string;
@@ -16,6 +17,7 @@ export function FitbitConnect() {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const nativeShell = useIsNativeShell();
 
   // Only surface the Fitbit integration when it's actually configured. Without
   // a client ID the connect button can only show a "not yet configured" alert,
@@ -52,6 +54,7 @@ export function FitbitConnect() {
 
   function handleConnect() {
     if (!user) return;
+    if (isNativeShell()) return; // never OAuth-redirect the native WebView
     
     // Get OAuth URL
     const clientId = process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID;
@@ -89,6 +92,12 @@ export function FitbitConnect() {
   if (!fitbitConfigured) return null;
 
   if (loading) return <div style={{ color: '#9CA3AF' }}>Loading...</div>;
+
+  // In the native app, connecting Fitbit would strand the user on fitbit.com
+  // inside the WebView (see lib/native.ts). Apple Health covers sync on iOS,
+  // so hide the connect banner there. If a user already connected on the web,
+  // we still show the connected status (harmless — no redirect involved).
+  if (nativeShell && !connected) return null;
 
   if (connected) {
     return (
