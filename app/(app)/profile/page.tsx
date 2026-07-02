@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
@@ -4854,7 +4855,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
                 <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
                 <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #3D2A6E",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
-                {isOwn && (<a href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</a>)}
+                {isOwn && (<Link href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #3D2A6E",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</Link>)}
               </div>
               {/* Highlights strip — horizontal scroll. Same component used by
                   group highlights (HighlightsStrip from GroupHighlights.tsx).
@@ -5053,8 +5054,23 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   </div>
                 )}
                 {(()=>{
-                  const days = realDays.length > 0 ? realDays : DAYS;
-                  const isReal = realDays.length > 0;
+                  // No fake placeholder data: an account with no logs gets an
+                  // honest empty state instead of the demo DAYS array. Showing
+                  // pre-filled fake workouts on a brand-new account reads as a
+                  // bug (App Review Guideline 2.1) and confused real users.
+                  if (realDays.length === 0) {
+                    return (
+                      <div style={{background:C.white,border:`1px solid ${C.purpleMid}`,borderRadius:16,padding:"36px 20px",textAlign:"center"}}>
+                        <div style={{fontSize:34,marginBottom:10}}>💪</div>
+                        <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:6}}>No activity yet</div>
+                        <div style={{fontSize:13,color:C.sub,lineHeight:1.55,maxWidth:340,margin:"0 auto"}}>
+                          {isOwn ? "Log your first workout, meal, or wellness check-in and it will show up here." : "No workouts, meals, or check-ins logged yet."}
+                        </div>
+                      </div>
+                    );
+                  }
+                  const days = realDays;
+                  const isReal = true;
                   const now = new Date();
                   const cutoff7 = new Date(now); cutoff7.setDate(now.getDate() - 7);
                   const recent = days.filter((d:any) => new Date((d as any)._date || 0) >= cutoff7);
