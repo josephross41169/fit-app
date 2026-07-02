@@ -76,5 +76,7 @@
 	<string>Livelee uses your photo library so you can attach photos to workouts and posts.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Livelee uses the camera so you can capture photos of meals, workouts, and progress shots to share or log.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Livelee uses the microphone when you record a video of a workout or meal to share in your posts.</string>
 </dict>
 </plist>
