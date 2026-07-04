@@ -271,44 +271,14 @@ function mediaTypesFor(urls: string[], mediaTypesRaw: any, mediaTypeSingle: any)
   });
 }
 
-// ── Suggested Users (shown when following feed runs out) ─────────────────────
-const SUGGESTED_USERS = [
-  { id: 101, user: "Alexis Rivera", username: "alexis_fit", avatar: "AR", followers: "12.4K", specialty: "CrossFit · Olympic Lifting",
-    workout: { type: "CrossFit WOD", duration: "45 min", calories: 580, exercises: [
-      { name: "Clean & Jerk", sets: 5, reps: 3, weight: "135 lbs" },
-      { name: "Box Jumps", sets: 4, reps: 10, weight: "24in" },
-      { name: "Pull-Ups", sets: 4, reps: 12, weight: "BW" },
-      { name: "Kettlebell Swings", sets: 3, reps: 20, weight: "53 lbs" },
-    ], cardio: [] },
-    nutrition: { calories: 2640, protein: 210, carbs: 280, fat: 62, sugar: 28,
-      meals: [
-        { key: "Pre-Workout", emoji: "🍌", name: "Banana + Whey", cal: 380 },
-        { key: "Lunch", emoji: "🥩", name: "Steak & Sweet Potato", cal: 860 },
-        { key: "Dinner", emoji: "🍚", name: "Rice Bowl", cal: 1400 },
-      ] },
-    wellness: null },
-  { id: 102, user: "Jordan Kim", username: "jordan_gains", avatar: "JK", followers: "8.1K", specialty: "Powerlifting · Nutrition",
-    workout: { type: "Pull Day", duration: "72 min", calories: 530, exercises: [
-      { name: "Deadlift", sets: 5, reps: 5, weight: "315 lbs" },
-      { name: "Barbell Row", sets: 4, reps: 8, weight: "185 lbs" },
-      { name: "Lat Pulldown", sets: 4, reps: 12, weight: "150 lbs" },
-      { name: "Face Pulls", sets: 3, reps: 20, weight: "40 lbs" },
-    ], cardio: [] },
-    nutrition: null,
-    wellness: { entries: [{ emoji: "🛁", activity: "Ice Bath", notes: "12 min @ 50°F post-lift" }] } },
-  { id: 103, user: "Maya Torres", username: "maya_moves", avatar: "MT", followers: "31.2K", specialty: "Yoga · Mindfulness",
-    workout: null,
-    nutrition: { calories: 1780, protein: 88, carbs: 195, fat: 71, sugar: 42,
-      meals: [
-        { key: "Breakfast", emoji: "🥑", name: "Avocado Toast + Eggs", cal: 520 },
-        { key: "Lunch", emoji: "🥗", name: "Buddha Bowl", cal: 680 },
-        { key: "Dinner", emoji: "🍜", name: "Miso Ramen", cal: 580 },
-      ] },
-    wellness: { entries: [
-      { emoji: "🧘", activity: "Vinyasa Flow", notes: "60 min morning practice" },
-      { emoji: "🫁", activity: "Breathwork", notes: "Wim Hof · 3 rounds" },
-    ] } },
-];
+// ── Suggested Users ──────────────────────────────────────────────────────────
+// Real accounts, loaded in FeedPage (most-followed people you don't already
+// follow). Replaces the old hardcoded demo trio whose fake IDs broke the
+// Follow button and produced dead profile links.
+type SuggestedUser = { id: string; username: string; full_name: string | null; avatar_url: string | null; city: string | null; followers_count: number | null };
+function fmtCount(n?: number | null): string { const v = n ?? 0; return v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, "")}K` : String(v); }
+function initialsOf(name?: string | null, fallback?: string | null): string { const t = (name || fallback || "?").trim(); return t.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase(); }
+function fmtDistance(d?: string | null): string { const t = String(d ?? "").trim(); if (!t) return ""; return /^\d+(\.\d+)?$/.test(t) ? `${t} mi` : t; }
 
 const INITIAL_STORIES = [
   { id: 1, username: "You", isYou: true, photo: null as string | null, hasNew: false },
@@ -421,7 +391,11 @@ function timeAgoShort(iso: string): string {
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
-  return `${hr}h ago`;
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" as const } : {}) });
 }
 
 function StoryViewer({
@@ -844,7 +818,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
                   {c.meters != null ? (
                     <span style={{ color:C.gold, fontWeight:700 }}>· {Number(c.meters).toLocaleString()}m / {Number(c.miles).toLocaleString()}mi</span>
                   ) : c.distance ? (
-                    <span style={{ color:C.gold, fontWeight:700 }}>· {c.distance}</span>
+                    <span style={{ color:C.gold, fontWeight:700 }}>· {fmtDistance(c.distance)}</span>
                   ) : null}
                   {c.laps != null && <span style={{ color:"#93C5FD", fontWeight:700 }}>· {c.laps} laps</span>}
                   {c.est_calories != null && <span style={{ color:"#FB923C", fontWeight:700 }}>· 🔥{Number(c.est_calories).toLocaleString()}</span>}
@@ -894,7 +868,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
                 <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 70px 70px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                   <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{c.type}</span>
                   <span style={{ fontSize:12,fontWeight:700,color:C.blue,textAlign:"center" }}>{fmtDur(c.duration)}</span>
-                  <span style={{ fontSize:12,fontWeight:700,color:C.gold,textAlign:"center" }}>{c.distance}</span>
+                  <span style={{ fontSize:12,fontWeight:700,color:C.gold,textAlign:"center" }}>{fmtDistance(c.distance)}</span>
                 </div>
               ))}
             </div>
@@ -2340,7 +2314,7 @@ export default function FeedPage() {
                     const diff = Date.now() - d.getTime();
                     if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
                     if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-                    return d.toLocaleDateString();
+                    return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})});
                   })();
                   const display = {
                     id: c.id,
@@ -2906,6 +2880,35 @@ export default function FeedPage() {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Real suggested users — most-followed accounts this user doesn't follow yet.
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  useEffect(() => {
+    let alive = true;
+    async function loadSuggested() {
+      if (!user) return;
+      const [{ data: rows }, follows] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id, username, full_name, avatar_url, city, followers_count, deleted_at")
+          .neq("id", user.id)
+          .order("followers_count", { ascending: false })
+          .limit(20),
+        supabase.from("follows").select("following_id").eq("follower_id", user.id),
+      ]);
+      if (!alive) return;
+      const followed = new Set((follows.data || []).map((f: any) => f.following_id));
+      const clean = ((rows || []) as any[]).filter(u =>
+        !u.deleted_at && u.username &&
+        u.full_name !== "Deleted User" &&
+        !String(u.username).startsWith("deleted_") &&
+        !followed.has(u.id)
+      ).slice(0, 4);
+      setSuggestedUsers(clean as SuggestedUser[]);
+    }
+    loadSuggested();
+    return () => { alive = false; };
+  }, [user]);
+
   // Load new members — city-first ordering
   useEffect(() => {
     async function loadNewMembers() {
@@ -3003,7 +3006,7 @@ export default function FeedPage() {
         tier: (p.users?.tier as Tier) || computeTier(p.users?.logs_last_28_days || 0, 0),
         avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
         avatarVideoUrl: p.users?.avatar_video_url || null,
-        time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+        time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; if(diff<604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})}); })(),
         dateShort: `${new Date(p.created_at).getMonth()+1}.${new Date(p.created_at).getDate()}`,
         dayLabel: new Date(p.created_at).toLocaleDateString("en-US", { weekday: "long" }),
         photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
@@ -3032,7 +3035,7 @@ export default function FeedPage() {
             avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
             avatarVideoUrl: c.users?.avatar_video_url || null,
             text: c.content || "",
-            time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+            time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; if(diff<604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})}); })(),
           };
         }),
         workout: null,
@@ -3071,7 +3074,7 @@ export default function FeedPage() {
             const diff = Date.now() - d.getTime();
             if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
             if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-            return d.toLocaleDateString();
+            return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})});
           })(),
           _workoutLogs: [] as any[],
           _nutritionLogs: [] as any[],
@@ -3171,13 +3174,13 @@ export default function FeedPage() {
   // On mobile: interleave posts + activity blocks so both are visible
   // On desktop: keep two-column layout
   const mobileActivityItems = sidebarActivityPosts.length > 0 ? sidebarActivityPosts : activityPosts;
-  const mobileItems: Array<{ type: "post"; data: Post } | { type: "activity"; data: Post } | { type: "suggested"; data: typeof SUGGESTED_USERS[0] }> = [];
+  const mobileItems: Array<{ type: "post"; data: Post } | { type: "activity"; data: Post } | { type: "suggested"; data: SuggestedUser }> = [];
   const maxLen = Math.max(displayPosts.length, mobileActivityItems.length);
   for (let i = 0; i < maxLen; i++) {
     if (displayPosts[i]) mobileItems.push({ type: "post", data: displayPosts[i] as Post });
     if (mobileActivityItems[i]) mobileItems.push({ type: "activity", data: mobileActivityItems[i] as Post });
   }
-  SUGGESTED_USERS.forEach(u => mobileItems.push({ type: "suggested", data: u }));
+  suggestedUsers.slice(0, 3).forEach(u => mobileItems.push({ type: "suggested", data: u }));
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh", paddingBottom:80 }}>
@@ -3455,7 +3458,7 @@ export default function FeedPage() {
                   username: p.users?.username || "user",
                   avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
         avatarVideoUrl: p.users?.avatar_video_url || null,
-                  time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                  time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; if(diff<604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})}); })(),
                   dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                   dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                   photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
@@ -3479,7 +3482,7 @@ export default function FeedPage() {
                       avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
             avatarVideoUrl: c.users?.avatar_video_url || null,
                       text: c.content || "",
-                      time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                      time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; if(diff<604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})}); })(),
                     };
                   }),
                   workout: null,
@@ -3589,37 +3592,37 @@ export default function FeedPage() {
                 </button>
               </div>
             )}
+            {suggestedUsers.length > 0 && (<>
             <div style={{ marginTop:8,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
               <div>
                 <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>Suggested For You</div>
                 <div style={{ fontSize:11,color:C.darkSub }}>People you might like</div>
               </div>
-              <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
+              <button onClick={() => router.push("/connect")} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
             </div>
-            {SUGGESTED_USERS.map(u => (
+            {suggestedUsers.map(u => (
               <div key={u.id} style={{ background:C.darkCard,borderRadius:18,border:`1px solid ${C.darkBorder}`,overflow:"hidden",marginBottom:16 }}>
-                <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
+                <div onClick={() => router.push(`/profile/${u.username}`)} style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 16px 12px",borderBottom:`1px solid ${C.darkBorder}`,cursor:"pointer" }}>
+                  {u.avatar_url ? (
+                    <img src={u.avatar_url} alt="" style={{ width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0 }} />
+                  ) : (
+                    <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{initialsOf(u.full_name, u.username)}</div>
+                  )}
                   <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
-                    <div style={{ fontSize:11,color:C.darkSub }}>@{u.username}</div>
-                    <div style={{ fontSize:10,color:"#5BBE93",marginTop:1,fontWeight:600 }}>{u.specialty}</div>
+                    <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{u.full_name || u.username}</div>
+                    <div style={{ fontSize:11,color:C.darkSub }}>@{u.username}{u.city ? ` · ${u.city}` : ""}</div>
                   </div>
                   <div style={{ textAlign:"right",flexShrink:0 }}>
-                    <div style={{ fontSize:13,fontWeight:900,color:"#E2E8F0" }}>{u.followers}</div>
+                    <div style={{ fontSize:13,fontWeight:900,color:"#E2E8F0" }}>{fmtCount(u.followers_count)}</div>
                     <div style={{ fontSize:10,color:C.darkSub }}>followers</div>
                   </div>
                 </div>
-                <div style={{ padding:"10px 16px",borderBottom:`1px solid ${C.darkBorder}`,display:"flex",justifyContent:"center" }}>
-                  <FollowButton targetUserId={String(u.id)} size="sm" />
-                </div>
-                <div style={{ padding:"12px 14px 4px" }}>
-                  {u.workout && <SideWorkout workout={u.workout} />}
-                  {u.nutrition && <SideNutrition nutrition={u.nutrition} />}
-                  {u.wellness && <SideWellness wellness={u.wellness} />}
+                <div style={{ padding:"10px 16px",display:"flex",justifyContent:"center" }}>
+                  <FollowButton targetUserId={u.id} size="sm" />
                 </div>
               </div>
             ))}
+            </>)}
           </div>
         </div>
       </div>
@@ -3725,7 +3728,7 @@ export default function FeedPage() {
                 username: p.users?.username || "user",
                 avatar: p.users?.avatar_url && p.users.avatar_url.startsWith('http') ? p.users.avatar_url : (p.users?.full_name || p.users?.username || "U").split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase(),
         avatarVideoUrl: p.users?.avatar_video_url || null,
-                time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                time: (() => { const d = new Date(p.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; if(diff<604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})}); })(),
                 dateShort: new Date(p.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),
                 dayLabel: new Date(p.created_at).toLocaleDateString('en-US',{weekday:'long'}),
                 photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
@@ -3746,7 +3749,7 @@ export default function FeedPage() {
                     avatar: c.users?.avatar_url || (c.users?.full_name || c.users?.username || "U").slice(0,2).toUpperCase(),
             avatarVideoUrl: c.users?.avatar_video_url || null,
                     text: c.content || "",
-                    time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; return d.toLocaleDateString(); })(),
+                    time: (() => { const d = new Date(c.created_at); const diff = Date.now()-d.getTime(); if(diff<3600000) return `${Math.floor(diff/60000)}m ago`; if(diff<86400000) return `${Math.floor(diff/3600000)}h ago`; if(diff<604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",...(d.getFullYear()!==new Date().getFullYear()?{year:"numeric" as const}:{})}); })(),
                   };
                 }),
                 workout: null,
@@ -3815,18 +3818,17 @@ export default function FeedPage() {
                 <div style={{ padding:"10px 14px",borderBottom:`1px solid ${C.darkBorder}` }}>
                   <span style={{ fontSize:11,fontWeight:800,color:C.darkSub,letterSpacing:1,textTransform:"uppercase" }}>Suggested</span>
                 </div>
-                <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                  <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{u.avatar}</div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.user}</div>
-                    <div style={{ fontSize:11,color:C.darkSub }}>@{u.username} · {u.specialty}</div>
+                <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px" }}>
+                  {u.avatar_url ? (
+                    <img src={u.avatar_url} alt="" onClick={() => router.push(`/profile/${u.username}`)} style={{ width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0 }} />
+                  ) : (
+                    <div onClick={() => router.push(`/profile/${u.username}`)} style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{initialsOf(u.full_name, u.username)}</div>
+                  )}
+                  <div style={{ flex:1,minWidth:0 }} onClick={() => router.push(`/profile/${u.username}`)}>
+                    <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.full_name || u.username}</div>
+                    <div style={{ fontSize:11,color:C.darkSub }}>@{u.username} · {fmtCount(u.followers_count)} followers</div>
                   </div>
-                  <FollowButton targetUserId={String(u.id)} size="sm" />
-                </div>
-                <div style={{ padding:"10px 12px 4px" }}>
-                  {u.workout && <SideWorkout workout={u.workout} />}
-                  {u.nutrition && <SideNutrition nutrition={u.nutrition} />}
-                  {u.wellness && <SideWellness wellness={u.wellness} />}
+                  <FollowButton targetUserId={u.id} size="sm" />
                 </div>
               </div>
             );
