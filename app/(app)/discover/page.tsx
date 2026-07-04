@@ -20,70 +20,20 @@ const C = {
 // MOCK DATA
 // -----------------------------------------------------------------------------
 
-const LOCAL_POSTS = [
-  { id: 1, user: "Kayla Nguyen", username: "kayla_fit_lv", avatar: "KN", time: "1h ago",
-    caption: "Morning hike at Red Rock Canyon 🏔️ Nothing like Vegas in the early hours before the heat hits. 6 miles done!",
-    tags: ["#LasVegas","#RedRock","#HikingFit"], likes: 124,
-    photo: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&q=80" },
-  { id: 2, user: "Marcus Bell", username: "marcus_lvfit", avatar: "MB", time: "3h ago",
-    caption: "Orangetheory trial class this morning - absolute FIRE 🔥 First class free this week at the Summerlin location. Go get it!",
-    tags: ["#LasVegas","#Orangetheory","#Fitness"], likes: 89,
-    photo: "https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=800&q=80" },
-  { id: 3, user: "Priya Sharma", username: "priya_wellness_lv", avatar: "PS", time: "5h ago",
-    caption: "Farmers market haul 🥬 Downtown Summerlin had the most incredible produce today. Meal prepping all week with this!",
-    tags: ["#LasVegas","#FarmersMarket","#MealPrep"], likes: 203,
-    photo: "https://images.unsplash.com/photo-1506484381205-f7945653044d?w=800&q=80" },
-  { id: 4, user: "Diego Reyes", username: "diego_runs_lv", avatar: "DR", time: "7h ago",
-    caption: "5K run + brunch at Eggslut after 🏃 The Vegas Strip at 6am before the tourists wake up is genuinely beautiful.",
-    tags: ["#LasVegas","#5K","#RunClub"], likes: 156,
-    photo: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80" },
-];
 
 // LOCAL_EVENTS now comes from the database via the events_with_counts view.
 // Loaded inside the component, filtered by user's city.
 
-const WORLD_POSTS = [
-  { id: 1, user: "Chris Bumstead", username: "cbum", avatar: "CB", time: "2h ago",
-    caption: "Prep is going insane this year. I genuinely think this is the best shape I've ever been in. Classic Olympia here we come 💪",
-    tags: ["#Olympia","#ClassicPhysique","#Cbum"], likes: 48200,
-    photo: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80" },
-  { id: 2, user: "Courtney Black", username: "courtney_black", avatar: "CB", time: "4h ago",
-    caption: "New Gymshark collab just dropped and I am OBSESSED 🔥 Link in bio - these might be the best leggings I've ever worn.",
-    tags: ["#Gymshark","#Fitness","#GymFashion"], likes: 31500,
-    photo: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&q=80" },
-  { id: 3, user: "Jeff Nippard", username: "jeffnippard", avatar: "JN", time: "6h ago",
-    caption: "Science-based arm training guide is LIVE on YouTube. This is the most comprehensive arm video I've ever made. Go watch it!",
-    tags: ["#Science","#ArmDay","#NaturalBodybuilding"], likes: 22800,
-    photo: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&q=80" },
-  { id: 4, user: "Natacha Oceane", username: "natacha_oceane", avatar: "NO", time: "8h ago",
-    caption: "Your body is not a before and after. Stop treating it like a project to fix and start treating it like a home to live in 💚",
-    tags: ["#BodyPositivity","#MindfulFitness","#Wellness"], likes: 67400,
-    photo: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=800&q=80" },
-];
 
 const TRENDING_BRANDS = [
-  { id: 1, name: "Gymshark", handle: "@gymshark", emoji: "💪", category: "Apparel", posts: "2.4M", color: "#161D19", followers: "7.2M" },
-  { id: 2, name: "Nike Training", handle: "@niketraining", emoji: "👟", category: "Footwear & Apparel", posts: "8.1M", color: "#E5000F", followers: "31.5M" },
-  { id: 3, name: "Dior Fitness", handle: "@dior", emoji: "👗", category: "Luxury Activewear", posts: "890K", color: "#C9A96E", followers: "4.1M" },
-  { id: 4, name: "Lululemon", handle: "@lululemon", emoji: "🧘", category: "Activewear", posts: "3.2M", color: "#BE3A34", followers: "5.8M" },
-  { id: 5, name: "Whoop", handle: "@whoop", emoji: "⌚", category: "Wearables", posts: "420K", color: "#00D4AA", followers: "1.3M" },
+  { id: 1, name: "Gymshark", handle: "@gymshark", emoji: "💪", category: "Apparel", color: "#161D19" },
+  { id: 2, name: "Nike Training", handle: "@niketraining", emoji: "👟", category: "Footwear & Apparel", color: "#E5000F" },
+  { id: 3, name: "Dior Fitness", handle: "@dior", emoji: "👗", category: "Luxury Activewear", color: "#C9A96E" },
+  { id: 4, name: "Lululemon", handle: "@lululemon", emoji: "🧘", category: "Activewear", color: "#BE3A34" },
+  { id: 5, name: "Whoop", handle: "@whoop", emoji: "⌚", category: "Wearables", color: "#00D4AA" },
 ];
 
-const TRENDING_PEOPLE = [
-  { id: 1, name: "Chris Bumstead", handle: "@cbum", avatar: "CB", specialty: "Classic Physique - 4x Olympia", followers: "22.4M", trend: "+18K today" },
-  { id: 2, name: "Courtney Black", handle: "@courtney_black", avatar: "CB2", specialty: "HIIT - Gymshark Athlete", followers: "4.1M", trend: "+6.2K today" },
-  { id: 3, name: "Jeff Nippard", handle: "@jeffnippard", avatar: "JN", specialty: "Science-Based Training", followers: "8.8M", trend: "+9.1K today" },
-  { id: 4, name: "Natacha Oceane", handle: "@natacha_oceane", avatar: "NO", specialty: "Mindful Fitness - Wellness", followers: "3.2M", trend: "+4.8K today" },
-  { id: 5, name: "Andrew Huberman", handle: "@hubermanlab", avatar: "AH", specialty: "Neuroscience - Performance", followers: "6.7M", trend: "+12.3K today" },
-];
 
-const SUGGESTED_ACCOUNTS = [
-  { id: 1, avatar: "RS", name: "Rachel Stone", handle: "@rachel_lifts", specialty: "Olympic Weightlifting", followers: "84K", mutual: 3 },
-  { id: 2, avatar: "TM", name: "Tyler Moore", handle: "@tyler_macro", specialty: "Nutrition Coach - IFBB", followers: "142K", mutual: 5 },
-  { id: 3, avatar: "AM", name: "Aisha Mohammed", handle: "@aisha_runs", specialty: "Marathon - Trail Running", followers: "56K", mutual: 2 },
-  { id: 4, avatar: "BK", name: "Brandon Kim", handle: "@bk_calisthenics", specialty: "Calisthenics - Street Workout", followers: "218K", mutual: 7 },
-  { id: 5, avatar: "LF", name: "Luna Ferreira", handle: "@luna_wellness", specialty: "Pilates - Breathwork", followers: "93K", mutual: 4 },
-];
 
 // -----------------------------------------------------------------------------
 // TYPE DEFINITIONS
@@ -676,11 +626,8 @@ function BrandCard({ brand, rank }: { brand: typeof TRENDING_BRANDS[0]; rank: nu
       <div style={{ flex:1,minWidth:0 }}>
         <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{brand.name}</div>
         <div style={{ fontSize:11,color:C.darkSub,marginTop:1 }}>{brand.category}</div>
-        <div style={{ fontSize:10,color:C.blue,marginTop:2 }}>{brand.followers} followers</div>
       </div>
       <div style={{ textAlign:"right",flexShrink:0 }}>
-        <div style={{ fontSize:10,color:C.darkSub }}>{brand.posts}</div>
-        <div style={{ fontSize:9,color:C.darkSub }}>posts</div>
         <div style={{ marginTop:6,padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",color:C.blue,fontSize:10,fontWeight:700,border:`1px solid rgba(124,58,237,0.3)` }}>View ?</div>
       </div>
     </div>
@@ -688,7 +635,7 @@ function BrandCard({ brand, rank }: { brand: typeof TRENDING_BRANDS[0]; rank: nu
 }
 
 // -- Trending Person Card ------------------------------------------------------
-function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0]; rank: number }) {
+function TrendingPersonCard({ person, rank }: { person: any; rank: number }) {
   const [following, setFollowing] = useState(false);
   return (
     <Link href={`/profile/${person.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
@@ -712,7 +659,7 @@ function TrendingPersonCard({ person, rank }: { person: typeof TRENDING_PEOPLE[0
 }
 
 // -- Suggested Account Card ----------------------------------------------------
-function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
+function SuggestedCard({ account }: { account: any }) {
   const [following, setFollowing] = useState(false);
   return (
     <Link href={`/profile/${account.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
@@ -740,12 +687,11 @@ function SuggestedCard({ account }: { account: typeof SUGGESTED_ACCOUNTS[0] }) {
 // LOCAL TAB
 // -----------------------------------------------------------------------------
 function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents, setShowAllEvents }: { userCity: string; localPosts: Post[]; onChangeCity: () => void; dbEvents: DbEvent[]; showAllEvents: boolean; setShowAllEvents: (v: boolean) => void }) {
-  const postsToShow = localPosts.length > 0 ? localPosts : LOCAL_POSTS;
+  const postsToShow = localPosts;
   // True when we're showing nationwide trending posts as a fallback for an
   // empty city. The discover loader tags these with `_isTrending` so we can
   // detect them here and show the appropriate banner copy.
   const showingTrending = localPosts.length > 0 && (localPosts[0] as any)._isTrending === true;
-  const showingMock = localPosts.length === 0; // true LAST-RESORT (no real posts at all)
 
   // Real events from the database, already filtered by city in the parent
   const allEvents = dbEvents;
@@ -768,8 +714,8 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
             <div style={{ fontSize:12,color:"rgba(255,255,255,0.85)",marginTop:2 }}>
               {showingTrending
                 ? `No posts in ${userCity} yet — be the first! Showing top posts from across the app.`
-                : showingMock
-                  ? `Sample content shown · Tag your city in posts to surface here`
+                : postsToShow.length === 0
+                  ? `Nothing here yet — posts tagged ${userCity} will show up here`
                   : `Showing fitness content near you · ${postsToShow.length} posts this week`}
             </div>
           </div>
@@ -778,7 +724,14 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
           </button>
         </div>
 
-        {postsToShow.map((post: any) => <DiscoverPost key={post.id} post={post} liked={false} />)}
+        {postsToShow.length === 0 ? (
+          <div style={{ background:C.darkCard,border:`1px solid ${C.darkBorder}`,borderRadius:18,padding:"40px 24px",textAlign:"center" }}>
+            <div style={{ fontSize:40,marginBottom:10 }}>📍</div>
+            <div style={{ fontWeight:900,fontSize:16,color:"#E2E8F0",marginBottom:6 }}>No posts near {userCity} yet</div>
+            <div style={{ fontSize:13,color:C.darkSub,lineHeight:1.5,marginBottom:16 }}>Be the first — share a workout or meal and tag your city to put {userCity} on the map.</div>
+            <Link href="/post" style={{ display:"inline-block",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:800,fontSize:13,borderRadius:99,padding:"10px 22px",textDecoration:"none" }}>+ Create a post</Link>
+          </div>
+        ) : postsToShow.map((post: any) => <DiscoverPost key={post.id} post={post} liked={false} />)}
       </div>
 
       {/* RIGHT: Local events sidebar */}
@@ -788,7 +741,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>📅 Local Events This Week</div>
-              <div style={{ fontSize:11,color:C.darkSub }}>Las Vegas · Mar 27·30</div>
+              <div style={{ fontSize:11,color:C.darkSub }}>{userCity} · this week</div>
             </div>
             <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#86CFAE",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
           </div>
@@ -827,7 +780,38 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
 // -----------------------------------------------------------------------------
 // WORLD TAB
 // -----------------------------------------------------------------------------
-function WorldTab() {
+type RealPerson = { id: string; username: string; full_name: string | null; avatar_url: string | null; city: string | null; followers_count: number | null };
+function fmtFollowerCount(n?: number | null): string { const v = n ?? 0; return v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, "")}K` : String(v); }
+
+// Real member card — replaces TrendingPersonCard/SuggestedCard, which rendered
+// hardcoded celebrities (fabricated stats and dead profile links).
+function RealPersonCard({ person, rank }: { person: RealPerson; rank: number }) {
+  return (
+    <Link href={`/profile/${person.username}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
+      <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
+        <div style={{ width:14,fontSize:11,fontWeight:900,color:C.darkSub,flexShrink:0,textAlign:"center" }}>#{rank}</div>
+        {person.avatar_url ? (
+          <img src={person.avatar_url} alt="" style={{ width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0 }} />
+        ) : (
+          <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+            {(person.full_name || person.username || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+          </div>
+        )}
+        <div style={{ flex:1,minWidth:0 }}>
+          <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.full_name || person.username}</div>
+          <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>@{person.username}{person.city ? ` · ${person.city}` : ""}</div>
+          <div style={{ fontSize:10,color:"#5BBE93",marginTop:2,fontWeight:700 }}>{fmtFollowerCount(person.followers_count)} followers</div>
+        </div>
+        {/* preventDefault stops the Link navigation when the follow button is tapped */}
+        <div onClick={e => { e.preventDefault(); e.stopPropagation(); }} style={{ flexShrink:0 }}>
+          <FollowButton targetUserId={person.id} size="sm" />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function WorldTab({ posts, people }: { posts: any[]; people: RealPerson[] }) {
   return (
     <div className="discover-layout" style={{ display:"flex", gap:48, alignItems:"flex-start", maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px" }}>
 
@@ -842,7 +826,14 @@ function WorldTab() {
           </div>
         </div>
 
-        {WORLD_POSTS.map(post => <DiscoverPost key={post.id} post={post} liked={false} />)}
+        {posts.length === 0 ? (
+          <div style={{ background:C.darkCard,border:`1px solid ${C.darkBorder}`,borderRadius:18,padding:"40px 24px",textAlign:"center" }}>
+            <div style={{ fontSize:40,marginBottom:10 }}>🌍</div>
+            <div style={{ fontWeight:900,fontSize:16,color:"#E2E8F0",marginBottom:6 }}>Nothing trending yet</div>
+            <div style={{ fontSize:13,color:C.darkSub,lineHeight:1.5,marginBottom:16 }}>The community is just getting started — your post could be the first thing everyone sees.</div>
+            <Link href="/post" style={{ display:"inline-block",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:800,fontSize:13,borderRadius:99,padding:"10px 22px",textDecoration:"none" }}>+ Create a post</Link>
+          </div>
+        ) : posts.map((post: any) => <DiscoverPost key={post.id} post={post} liked={false} />)}
       </div>
 
       {/* RIGHT: Brands + People + Suggested sidebar */}
@@ -853,9 +844,9 @@ function WorldTab() {
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>🔥 Trending Brands</div>
-              <div style={{ fontSize:11,color:C.darkSub }}>Top 5 this week</div>
+              <div style={{ fontSize:11,color:C.darkSub }}>Featured brands</div>
             </div>
-            <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
+            
           </div>
         </div>
         {TRENDING_BRANDS.map((b,i) => <BrandCard key={b.id} brand={b} rank={i+1} />)}
@@ -865,24 +856,13 @@ function WorldTab() {
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>? Trending People</div>
-              <div style={{ fontSize:11,color:C.darkSub }}>Top 5 this week</div>
+              <div style={{ fontSize:11,color:C.darkSub }}>Most followed on Livelee</div>
             </div>
-            <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
+            
           </div>
         </div>
-        {TRENDING_PEOPLE.map((p,i) => <TrendingPersonCard key={p.id} person={p} rank={i+1} />)}
+        {people.length === 0 ? (<div style={{ fontSize:12,color:C.darkSub,padding:"8px 2px" }}>No members to show yet.</div>) : people.map((p,i) => <RealPersonCard key={p.id} person={p} rank={i+1} />)}
 
-        {/* -- Suggested Accounts -- */}
-        <div style={{ margin:"20px 0 16px",paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}` }}>
-          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-            <div>
-              <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>💡 Suggested For You</div>
-              <div style={{ fontSize:11,color:C.darkSub }}>Based on your interests</div>
-            </div>
-            <button style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
-          </div>
-        </div>
-        {SUGGESTED_ACCOUNTS.map(a => <SuggestedCard key={a.id} account={a} />)}
       </div>
     </div>
   );
@@ -891,7 +871,7 @@ function WorldTab() {
 // -----------------------------------------------------------------------------
 // DISCOVER TAB — find new people, creators, and brands to follow
 // -----------------------------------------------------------------------------
-function DiscoverTab() {
+function DiscoverTab({ people }: { people: RealPerson[] }) {
   return (
     <div className="discover-layout" style={{ display:"flex", gap:48, alignItems:"flex-start", maxWidth:1200, margin:"0 auto", padding:"24px 24px 60px" }}>
 
@@ -908,21 +888,16 @@ function DiscoverTab() {
         {/* Trending people */}
         <div style={{ marginBottom:14 }}>
           <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:12 }}>🔥 Trending People</div>
-          {TRENDING_PEOPLE.map((p,i) => <TrendingPersonCard key={p.id} person={p} rank={i+1} />)}
+          {people.length === 0 ? (<div style={{ fontSize:12,color:C.darkSub,padding:"8px 2px" }}>No members to show yet.</div>) : people.map((p,i) => <RealPersonCard key={p.id} person={p} rank={i+1} />)}
         </div>
 
-        {/* Suggested accounts */}
-        <div style={{ marginTop:24 }}>
-          <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:12 }}>💡 Suggested For You</div>
-          {SUGGESTED_ACCOUNTS.map(a => <SuggestedCard key={a.id} account={a} />)}
-        </div>
       </div>
 
       {/* RIGHT: Brands to discover */}
       <div className="discover-sidebar" style={{ width:320, flexShrink:0 }}>
         <div style={{ marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.darkBorder}` }}>
           <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>🔥 Trending Brands</div>
-          <div style={{ fontSize:11,color:C.darkSub }}>Top brands this week</div>
+          <div style={{ fontSize:11,color:C.darkSub }}>Featured brands</div>
         </div>
         {TRENDING_BRANDS.map((b,i) => <BrandCard key={b.id} brand={b} rank={i+1} />)}
       </div>
@@ -944,6 +919,37 @@ export default function DiscoverPage() {
   // City-based local feed
   const [userCity, setUserCity] = useState("Las Vegas, NV");
   const [localPosts, setLocalPosts] = useState<any[]>([]);
+  const [worldPosts, setWorldPosts] = useState<any[]>([]);
+  const [topPeople, setTopPeople] = useState<RealPerson[]>([]);
+
+  // Real data for the Worldwide + Discover tabs — replaces the hardcoded
+  // celebrity/mock arrays (fabricated posts and stats attributed to real
+  // public figures were both a UX honesty problem and an App Review risk).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const [{ data: posts }, { data: users }] = await Promise.all([
+        supabase
+          .from("posts")
+          .select("*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)")
+          .eq("is_public", true)
+          .order("likes_count", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("users")
+          .select("id, username, full_name, avatar_url, city, followers_count, deleted_at")
+          .order("followers_count", { ascending: false })
+          .limit(12),
+      ]);
+      if (!alive) return;
+      setWorldPosts(posts || []);
+      setTopPeople(((users || []) as any[]).filter(u =>
+        !u.deleted_at && u.username && u.full_name !== "Deleted User" && !String(u.username).startsWith("deleted_")
+      ).slice(0, 5) as RealPerson[]);
+    })();
+    return () => { alive = false; };
+  }, []);
   const [showChangeCityOverlay, setShowChangeCityOverlay] = useState(false);
   const [newCityInput, setNewCityInput] = useState("");
 
@@ -1103,8 +1109,7 @@ export default function DiscoverPage() {
       }
 
       // ── Empty-state fallback: show nationwide trending posts ─────────
-      // City has no posts yet. Instead of showing mock LOCAL_POSTS data
-      // (which lies to new users), pull the most-liked recent posts from
+      // City has no posts yet — pull the most-liked recent posts from
       // anywhere. This gives new users in small cities real content to
       // engage with on day one and surfaces the app's actual community
       // rather than fake placeholder content.
@@ -1123,8 +1128,8 @@ export default function DiscoverPage() {
         setLocalPosts(trending.map((p: any) => ({ ...p, _isTrending: true })));
       }
       // If even trending is empty (brand-new app, almost no posts at all),
-      // fall through with localPosts empty — LocalTab uses LOCAL_POSTS mock
-      // as the last-resort fallback so the page is never blank.
+      // fall through with localPosts empty — LocalTab renders an honest
+      // empty state with a create-post CTA.
     }
     loadLocalPosts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1238,8 +1243,8 @@ export default function DiscoverPage() {
 
       {/* -- Tab content -- */}
       {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} dbEvents={dbEvents} showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} />
-        : tab === "world" ? <WorldTab />
-        : <DiscoverTab />}
+        : tab === "world" ? <WorldTab posts={worldPosts} people={topPeople} />
+        : <DiscoverTab people={topPeople} />}
 
       {/* -- Change City Overlay -- */}
       {showChangeCityOverlay && (
