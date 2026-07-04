@@ -1682,15 +1682,19 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 }
 
 // ── Editable sidebar section ──────────────────────────────────────────────────
-function EditableList({title,items,onSave,renderItem,emptyItem}:{
+function EditableList({title,items,onSave,renderItem,emptyItem,canEdit=true}:{
   title:string;
   items:any[];
   onSave:(i:any[])=>void;
   renderItem:(item:any,i:number,setItems:React.Dispatch<React.SetStateAction<any[]>>)=>React.ReactNode;
   emptyItem:any;
+  canEdit?:boolean;
 }) {
   const [editing,setEditing] = useState(false);
   const [list,setList]       = useState(items);
+  // Visitors shouldn't see an empty section (or an Edit button) on someone
+  // else's profile.
+  if (!canEdit && items.length === 0) return null;
   if (editing) return (
     <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purple}`,marginBottom:20}}>
       <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>{title}</div>
@@ -1708,7 +1712,7 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
     <div style={{background:"#111811",borderRadius:22,padding:24,border:`1.5px solid #2A3A2A`,marginBottom:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontWeight:900,fontSize:17,color:C.text}}>{title}</div>
-        <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.purple,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>
+        {canEdit && <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.purple,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>}
       </div>
       {items.map((item,i)=>(
         <div key={i} style={{background:i%2===0?"#1A2A1A":"#141F14",borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12,border:"1px solid #2A3A2A"}}>
@@ -1716,6 +1720,9 @@ function EditableList({title,items,onSave,renderItem,emptyItem}:{
           <span style={{fontSize:14,fontWeight:700,color:C.text}}>{item.name || item.label || Object.values(item).filter((_,idx)=>idx>0).join(' ')}</span>
         </div>
       ))}
+      {items.length === 0 && (
+        <div style={{fontSize:13,color:C.sub,textAlign:"center",padding:"14px 0",lineHeight:1.5}}>Nothing here yet — tap ✏️ Edit to add yours.</div>
+      )}
     </div>
   );
 }
@@ -1890,7 +1897,22 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // Avatar zoom — same scheme as banner. 100 = fit, 200 = 2x.
   const [avatarScale, setAvatarScale] = useState(100);
   const [avatarDragState, setAvatarDragState] = useState<{startY:number;startPos:number}|null>(null);
-  const [brands,setBrands] = useState([{emoji:"👟",name:"New Balance"},{emoji:"👕",name:"Gym Shark"},{emoji:"🎧",name:"AirPods"}]);
+  // Favorite brands — starts EMPTY (the old hardcoded New Balance/Gym Shark/
+  // AirPods defaults showed fake data on every fresh account). Persisted per
+  // user in localStorage so edits survive reloads on this device; a users-table
+  // column is the proper cross-device fix (see code-review notes).
+  const [brands,setBrands] = useState<{emoji:string;name:string}[]>([]);
+  useEffect(() => {
+    if (!isOwn || !viewUserId) return;
+    try {
+      const raw = localStorage.getItem(`favorite_brands_${viewUserId}`);
+      if (raw) setBrands(JSON.parse(raw));
+    } catch { /* corrupted entry — start fresh */ }
+  }, [isOwn, viewUserId]);
+  const saveBrands = (items: {emoji:string;name:string}[]) => {
+    setBrands(items);
+    try { localStorage.setItem(`favorite_brands_${viewUserId}`, JSON.stringify(items)); } catch { /* storage full/blocked */ }
+  };
 
   // ── Crop state ──
   const [cropSrc,setCropSrc] = useState<string|null>(null);
@@ -4476,7 +4498,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               if (key === "profile") setEditProfile(true);
               else if (key === "goal") setShowGoalCreate(true);
               else if (key === "device") router.push("/settings");
-              else if (key === "workout") router.push("/post");
+              else if (key === "workout") router.push("/post?openBuilder=1");
               else if (key === "follow") router.push("/discover");
               else if (key === "group") router.push("/connect");
             }}
@@ -5346,7 +5368,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             {/* Body Weight Tracker */}
             {viewUserId && <WeightTracker userId={viewUserId} />}
 
-            <EditableList title="Favorite Brands" items={brands} onSave={setBrands} emptyItem={{emoji:"👟",name:"New Brand"}}
+            <EditableList title="Favorite Brands" items={brands} onSave={saveBrands} canEdit={isOwn} emptyItem={{emoji:"👟",name:"New Brand"}}
               renderItem={(item,i,setList)=>(
                 <div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
                   <input style={{width:48,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 4px",textAlign:"center",fontSize:18,outline:"none",background:"#0E1311"}} value={item.emoji} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,emoji:e.target.value}:x))}/>
