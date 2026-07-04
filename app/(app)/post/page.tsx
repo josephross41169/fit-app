@@ -26,9 +26,9 @@ import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSu
 import { saveFood, saveMeal, fetchSavedFoods, type SavedFoodItem, type SavedFood } from "@/lib/savedFoods";
 
 const C = {
-  blue: "#7C3AED",
-  greenLight: "#1A1228",
-  greenMid: "#2D1B69",
+  blue: "#5BBE93",
+  greenLight: "#111811",
+  greenMid: "#1B231E",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
@@ -134,9 +134,9 @@ function CardioForm({
     : null;
 
   return (
-    <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}`, position: "relative" }}>
+    <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}`, position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA" }}>🏃 Cardio{index > 0 ? ` #${index + 1}` : ""}</div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE" }}>🏃 Cardio{index > 0 ? ` #${index + 1}` : ""}</div>
         {onRemove && (
           <button onClick={onRemove} aria-label="Remove this cardio" style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 2 }}>×</button>
         )}
@@ -398,8 +398,8 @@ function ExerciseSearchInput({
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-          background: '#1A1228', border: '1.5px solid #7C3AED', borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(124,58,237,0.25)', overflow: 'hidden', marginTop: 4,
+          background: '#111811', border: '1.5px solid #5BBE93', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(91,190,147,0.25)', overflow: 'hidden', marginTop: 4,
         }}>
           {results.map((ex, i) => (
             <button
@@ -408,13 +408,13 @@ function ExerciseSearchInput({
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '10px 14px', border: 'none', background: 'transparent',
-                cursor: 'pointer', borderBottom: i < results.length - 1 ? '1px solid #2D1B69' : 'none',
+                cursor: 'pointer', borderBottom: i < results.length - 1 ? '1px solid #1B231E' : 'none',
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {ex.fromHistory && <span style={{ fontSize: 11 }}>⭐</span>}{ex.name}
               </div>
-              <div style={{ fontSize: 11, color: ex.fromHistory ? '#A78BFA' : '#9CA3AF', marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: ex.fromHistory ? '#86CFAE' : '#9CA3AF', marginTop: 1 }}>
                 {ex.sub}
               </div>
             </button>
@@ -497,7 +497,7 @@ function FoodSearchInput({
       <div style={{ position: 'relative' }}>
         <input
           style={{
-            background: "#111111", border: "1.5px solid #2D1B69", borderRadius: 10,
+            background: "#111111", border: "1.5px solid #1B231E", borderRadius: 10,
             padding: "9px 12px 9px 38px", fontSize: 14, color: "#F0F0F0", outline: "none",
             width: "100%", boxSizing: "border-box" as const,
           }}
@@ -514,8 +514,8 @@ function FoodSearchInput({
       {open && results.length > 0 && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-          background: '#1A1228', border: '1.5px solid #7C3AED', borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(124,58,237,0.25)', overflow: 'hidden', marginTop: 4,
+          background: '#111811', border: '1.5px solid #5BBE93', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(91,190,147,0.25)', overflow: 'hidden', marginTop: 4,
         }}>
           {results.map((food, i) => (
             <button
@@ -524,14 +524,14 @@ function FoodSearchInput({
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '10px 14px', border: 'none', background: 'transparent',
-                cursor: 'pointer', borderBottom: i < results.length - 1 ? '1px solid #2D1B69' : 'none',
+                cursor: 'pointer', borderBottom: i < results.length - 1 ? '1px solid #1B231E' : 'none',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0' }}>{food.name}</div>
                   {food.brand && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{food.brand}</div>}
-                  <div style={{ fontSize: 11, color: '#A78BFA', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#86CFAE', marginTop: 2 }}>
                     per {food.servingSize} · {food.protein}g P · {food.carbs}g C · {food.fat}g F
                   </div>
                 </div>
@@ -2697,7 +2697,7 @@ export default function PostPage() {
         />}
         <button
           onClick={() => setOpen(true)}
-          style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+          style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
         >
           📤 Share PR Card
         </button>
@@ -2729,13 +2729,13 @@ export default function PostPage() {
           {hasPRs ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! 🎉` : "Saved to Log!"}
         </div>
         {hasPRs && (
-          <div style={{ background: "#1A1228", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #F5A623" }}>
+          <div style={{ background: "#111811", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #F5A623" }}>
             {newPRs.map((pr, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < newPRs.length - 1 ? "1px solid #2D1B69" : "none" }}>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < newPRs.length - 1 ? "1px solid #1B231E" : "none" }}>
                 <span style={{ fontSize: 22 }}>🏆</span>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#F5A623" }}>{pr.exercise}</div>
-                  <div style={{ fontSize: 12, color: "#A78BFA" }}>{pr.weight}lbs · {pr.reps} reps{pr.isNew ? " · First PR!" : " · New Best!"}</div>
+                  <div style={{ fontSize: 12, color: "#86CFAE" }}>{pr.weight}lbs · {pr.reps} reps{pr.isNew ? " · First PR!" : " · New Best!"}</div>
                 </div>
               </div>
             ))}
@@ -2744,16 +2744,16 @@ export default function PostPage() {
         {/* Badge unlocks — shown when the auto-award engine returned new
             badges. Card is purple-bordered so it's distinct from PR cards. */}
         {hasNewBadges && awardedBadgeMeta.length > 0 && (
-          <div style={{ background: "linear-gradient(135deg,#1A0F30,#2D1B69)", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #A78BFA", boxShadow: "0 0 24px rgba(167,139,250,0.4)" }}>
-            <div style={{ fontWeight: 900, fontSize: 14, color: "#E9D5FF", marginBottom: 10, letterSpacing: 0.5 }}>
+          <div style={{ background: "linear-gradient(135deg,#0E1311,#1B231E)", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #86CFAE", boxShadow: "0 0 24px rgba(134,207,174,0.4)" }}>
+            <div style={{ fontWeight: 900, fontSize: 14, color: "#D6EFE2", marginBottom: 10, letterSpacing: 0.5 }}>
               ✨ {awardedBadgeMeta.length} NEW BADGE{awardedBadgeMeta.length > 1 ? "S" : ""} UNLOCKED!
             </div>
             {awardedBadgeMeta.map((b, i) => (
-              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < awardedBadgeMeta.length - 1 ? "1px solid #3D2A6E" : "none" }}>
+              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < awardedBadgeMeta.length - 1 ? "1px solid #2A3A2A" : "none" }}>
                 <span style={{ fontSize: 26 }}>{b.emoji}</span>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#fff" }}>{b.label}</div>
-                  <div style={{ fontSize: 12, color: "#A78BFA" }}>{b.desc}</div>
+                  <div style={{ fontSize: 12, color: "#86CFAE" }}>{b.desc}</div>
                 </div>
               </div>
             ))}
@@ -2771,7 +2771,7 @@ export default function PostPage() {
             />
             <button
               onClick={() => router.push("/profile")}
-              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #2D1F52", background: "#1A1228", color: "#9CA3AF", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #1B231E", background: "#111811", color: "#9CA3AF", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               View Profile →
             </button>
@@ -2796,9 +2796,9 @@ export default function PostPage() {
   }
 
   const TAB_DEFS = [
-    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#7C3AED" },
+    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#5BBE93" },
     { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#F59E0B" },
-    { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#7C3AED" },
+    { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#5BBE93" },
   ];
 
   return (
@@ -2814,7 +2814,7 @@ export default function PostPage() {
             style={{
               background:"#111118", borderRadius:20, padding:"20px 20px 16px",
               maxWidth:480, width:"100%", maxHeight:"80vh", overflowY:"auto",
-              border:"1.5px solid #2D1F52",
+              border:"1.5px solid #1B231E",
             }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
               <div>
@@ -2833,19 +2833,19 @@ export default function PostPage() {
                   style={{
                     width:"100%", textAlign:"left",
                     padding:"12px 14px", borderRadius:12,
-                    background:"rgba(124,58,237,0.10)",
-                    border:"1.5px solid rgba(124,58,237,0.35)",
+                    background:"rgba(91,190,147,0.10)",
+                    border:"1.5px solid rgba(91,190,147,0.35)",
                     color:"#F0F0F0", cursor:"pointer",
                     transition:"all 0.15s",
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.20)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.10)"; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(91,190,147,0.20)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(91,190,147,0.10)"; }}
                 >
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom:4 }}>
                     <span style={{ fontSize:14, fontWeight:800, color:"#F0F0F0" }}>
                       Day {day.dayNum} · {day.label}
                     </span>
-                    <span style={{ fontSize:11, color:"#A78BFA", fontWeight:700, flexShrink:0 }}>
+                    <span style={{ fontSize:11, color:"#86CFAE", fontWeight:700, flexShrink:0 }}>
                       {day.estimatedMinutes}m
                     </span>
                   </div>
@@ -2882,7 +2882,7 @@ export default function PostPage() {
             width: 220px;
             flex-shrink: 0;
             background: #0D0D0D;
-            border-right: 2px solid #2D1F52;
+            border-right: 2px solid #1B231E;
             padding: 32px 16px;
             position: sticky;
             top: 0;
@@ -2907,7 +2907,7 @@ export default function PostPage() {
           {(["log", "feed"] as MainMode[]).map(m => (
             <button key={m} onClick={() => setMainMode(m)} style={{
               flex: 1, padding: "11px 0", fontWeight: 800, fontSize: 13, border: "none", cursor: "pointer",
-              background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "transparent",
+              background: mainMode === m ? `linear-gradient(135deg,${C.blue},#86CFAE)` : "transparent",
               color: mainMode === m ? "#fff" : C.sub, transition: "all 0.2s",
             }}>
               {m === "log" ? "📋 Log Activity" : "📢 Share to Feed"}
@@ -2943,7 +2943,7 @@ export default function PostPage() {
               <button key={m} onClick={() => setMainMode(m)} style={{
                 width: "100%", padding: "12px 14px", borderRadius: 14, border: "none", cursor: "pointer",
                 marginBottom: 6, textAlign: "left", fontWeight: 800, fontSize: 14,
-                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "#1A1228",
+                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#86CFAE)` : "#111811",
                 color: mainMode === m ? "#fff" : C.sub,
                 transition: "all 0.15s",
               }}>
@@ -2960,7 +2960,7 @@ export default function PostPage() {
                 <button key={t.key} onClick={() => setLogTab(t.key)} style={{
                   width: "100%", padding: "16px 18px", borderRadius: 16, border: "none", cursor: "pointer",
                   marginBottom: 8, textAlign: "left", fontWeight: 800, fontSize: 16,
-                  background: logTab === t.key ? t.color : "#1A1228",
+                  background: logTab === t.key ? t.color : "#111811",
                   color: logTab === t.key ? "#fff" : C.sub,
                   transition: "all 0.15s",
                   boxShadow: logTab === t.key ? `0 4px 16px ${t.color}40` : "none",
@@ -2999,20 +2999,20 @@ export default function PostPage() {
                   once resumed (todayLogId set) or if none exists today. */}
               {todayLog && !todayLogId && (
                 <div style={{
-                  background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(167,139,250,0.08))",
+                  background: "linear-gradient(135deg, rgba(91,190,147,0.18), rgba(134,207,174,0.08))",
                   borderRadius: 14, padding: "12px 14px",
-                  border: "1.5px solid rgba(124,58,237,0.4)",
+                  border: "1.5px solid rgba(91,190,147,0.4)",
                   display: "flex", alignItems: "center", gap: 12,
                 }}>
                   <div style={{ fontSize: 22 }}>🔁</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>Continue today's workout?</div>
-                    <div style={{ fontSize: 11, color: "#A78BFA", fontWeight: 600, marginTop: 1 }}>
+                    <div style={{ fontSize: 11, color: "#86CFAE", fontWeight: 600, marginTop: 1 }}>
                       You already logged {todayLog.type} today — add onto it instead of starting new.
                     </div>
                   </div>
                   <button onClick={resumeTodayWorkout}
-                    style={{ flexShrink: 0, padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#7C3AED,#A78BFA)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    style={{ flexShrink: 0, padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#5BBE93,#86CFAE)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                     Continue
                   </button>
                 </div>
@@ -3022,13 +3022,13 @@ export default function PostPage() {
                   existing log, and lets the user bail back to a fresh entry. */}
               {todayLogId && (
                 <div style={{
-                  background: "rgba(124,58,237,0.12)",
+                  background: "rgba(91,190,147,0.12)",
                   borderRadius: 14, padding: "10px 14px",
-                  border: "1.5px solid rgba(124,58,237,0.4)",
+                  border: "1.5px solid rgba(91,190,147,0.4)",
                   display: "flex", alignItems: "center", gap: 10,
                 }}>
                   <div style={{ fontSize: 18 }}>✏️</div>
-                  <div style={{ flex: 1, fontSize: 12, color: "#A78BFA", fontWeight: 700 }}>
+                  <div style={{ flex: 1, fontSize: 12, color: "#86CFAE", fontWeight: 700 }}>
                     Adding to today's workout — saving will update your existing post.
                   </div>
                   <button onClick={() => setTodayLogId(null)}
@@ -3044,14 +3044,14 @@ export default function PostPage() {
                   against. Tappable × dismisses without clearing exercises. */}
               {loadedPlanLabel && (
                 <div style={{
-                  background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(74,222,128,0.10))",
+                  background: "linear-gradient(135deg, rgba(91,190,147,0.18), rgba(74,222,128,0.10))",
                   borderRadius: 14, padding: "10px 14px",
-                  border: "1.5px solid rgba(124,58,237,0.4)",
+                  border: "1.5px solid rgba(91,190,147,0.4)",
                   marginBottom: 10,
                   display: "flex", alignItems: "center", gap: 10,
                 }}>
                   <div style={{ fontSize: 18 }}>📋</div>
-                  <div style={{ flex: 1, fontSize: 12, color: "#A78BFA", fontWeight: 700 }}>
+                  <div style={{ flex: 1, fontSize: 12, color: "#86CFAE", fontWeight: 700 }}>
                     From your AI Plan: <span style={{ color: "#F0F0F0" }}>{loadedPlanLabel}</span>
                   </div>
                   <button onClick={() => setLoadedPlanLabel(null)}
@@ -3072,7 +3072,7 @@ export default function PostPage() {
                       style={{
                         fontSize: 12, fontWeight: 800,
                         padding: "7px 14px", borderRadius: 99,
-                        background: "linear-gradient(135deg, #7C3AED, #A78BFA)",
+                        background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
                         border: "none", color: "#fff",
                         cursor: "pointer",
                         display: "flex", alignItems: "center", gap: 6,
@@ -3127,7 +3127,7 @@ export default function PostPage() {
                           onChange={e => setWoDate(e.target.value)}
                         />
                         {chip && (
-                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#7C3AED33", color: woDate === todayStr ? C.green : "#A78BFA", fontWeight: 800, fontSize: 12 }}>
+                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#5BBE9333", color: woDate === todayStr ? C.green : "#86CFAE", fontWeight: 800, fontSize: 12 }}>
                             {chip}
                           </span>
                         )}
@@ -3187,9 +3187,9 @@ export default function PostPage() {
                     }}
                     style={{
                       flex: "1 1 130px", padding: "11px 14px", borderRadius: 12,
-                      background: includeCardio ? "rgba(124,58,237,0.18)" : C.white,
+                      background: includeCardio ? "rgba(91,190,147,0.18)" : C.white,
                       border: `2px solid ${includeCardio ? C.blue : C.greenMid}`,
-                      color: includeCardio ? "#A78BFA" : C.sub,
+                      color: includeCardio ? "#86CFAE" : C.sub,
                       fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left",
                     }}>
                     {includeCardio ? "✓" : "+"} 🏃 Cardio
@@ -3203,9 +3203,9 @@ export default function PostPage() {
                     }}
                     style={{
                       flex: "1 1 130px", padding: "11px 14px", borderRadius: 12,
-                      background: includeLifting ? "rgba(124,58,237,0.18)" : C.white,
+                      background: includeLifting ? "rgba(91,190,147,0.18)" : C.white,
                       border: `2px solid ${includeLifting ? C.blue : C.greenMid}`,
-                      color: includeLifting ? "#A78BFA" : C.sub,
+                      color: includeLifting ? "#86CFAE" : C.sub,
                       fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left",
                     }}>
                     {includeLifting ? "✓" : "+"} 🏋️ Lifting
@@ -3260,7 +3260,7 @@ export default function PostPage() {
                       style={{
                         width: "100%", marginBottom: 14, padding: "11px",
                         borderRadius: 10, border: `1.5px dashed ${C.blue}`,
-                        background: "transparent", color: "#A78BFA",
+                        background: "transparent", color: "#86CFAE",
                         fontWeight: 800, fontSize: 13, cursor: "pointer",
                       }}
                     >
@@ -3272,8 +3272,8 @@ export default function PostPage() {
 
                 {/* ── LIFTING DURATION (only when lifting toggled on) ── */}
                 {includeLifting && (
-                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>🏋️ Lifting</div>
+                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>🏋️ Lifting</div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                     <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
                       <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={woDuration} onChange={e => setWoDuration(e.target.value.replace(/[^0-9]/g, ""))} />
@@ -3292,8 +3292,8 @@ export default function PostPage() {
                   const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
                   if (!cat) return null;
                   return (
-                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
+                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
                         <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value.replace(/[^0-9]/g, ""))} />
@@ -3319,7 +3319,7 @@ export default function PostPage() {
                       <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
                     </button>
                     {templateDropdownOpen && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#1A1228", border: "1.5px solid #7C3AED", borderRadius: 12, boxShadow: "0 8px 32px rgba(124,58,237,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#111811", border: "1.5px solid #5BBE93", borderRadius: 12, boxShadow: "0 8px 32px rgba(91,190,147,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
                         {templates.length === 0 ? (
                           <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Tap "🔨 Build Template" to create one.</div>
                         ) : templates.map((tpl, i) => {
@@ -3340,7 +3340,7 @@ export default function PostPage() {
                           const isMultiDay = dayCount > 1;
                           const isExpanded = expandedTemplateId === tpl.id;
                           return (
-                            <div key={tpl.id} style={{ borderBottom: i < templates.length - 1 ? "1px solid #2D1B69" : "none" }}>
+                            <div key={tpl.id} style={{ borderBottom: i < templates.length - 1 ? "1px solid #1B231E" : "none" }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", gap: 10 }}>
                                 <button
                                   onMouseDown={() => {
@@ -3357,7 +3357,7 @@ export default function PostPage() {
                                 >
                                   <div style={{
                                     width: 32, height: 32, borderRadius: 8,
-                                    background: "rgba(124,58,237,0.18)",
+                                    background: "rgba(91,190,147,0.18)",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                     fontSize: 16, flexShrink: 0,
                                   }}>
@@ -3371,7 +3371,7 @@ export default function PostPage() {
                                     </div>
                                   </div>
                                   {isMultiDay && (
-                                    <span style={{ color: "#A78BFA", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                    <span style={{ color: "#86CFAE", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                                       {isExpanded ? "▲" : "Pick day ▼"}
                                     </span>
                                   )}
@@ -3395,8 +3395,8 @@ export default function PostPage() {
                                       style={{
                                         textAlign: "left", padding: "10px 12px",
                                         borderRadius: 10,
-                                        background: "rgba(124,58,237,0.12)",
-                                        border: "1px solid rgba(124,58,237,0.4)",
+                                        background: "rgba(91,190,147,0.12)",
+                                        border: "1px solid rgba(91,190,147,0.4)",
                                         color: "#F0F0F0", cursor: "pointer",
                                         display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
                                       }}
@@ -3410,7 +3410,7 @@ export default function PostPage() {
                                           {(day.exercises || []).slice(0, 3).length > 0 && ` · ${(day.exercises || []).slice(0, 3).map((e: any) => e.name).filter(Boolean).join(", ")}${(day.exercises || []).length > 3 ? "…" : ""}`}
                                         </div>
                                       </div>
-                                      <span style={{ fontSize: 11, color: "#A78BFA", fontWeight: 700, flexShrink: 0 }}>Use →</span>
+                                      <span style={{ fontSize: 11, color: "#86CFAE", fontWeight: 700, flexShrink: 0 }}>Use →</span>
                                     </button>
                                   ))}
                                 </div>
@@ -3559,7 +3559,7 @@ export default function PostPage() {
 
                       {/* Previous session reference */}
                       {prev && (
-                        <div style={{ background: "#1A1228", borderRadius: 10, padding: "7px 12px", marginBottom: 10, fontSize: 12, color: "#A78BFA" }}>
+                        <div style={{ background: "#111811", borderRadius: 10, padding: "7px 12px", marginBottom: 10, fontSize: 12, color: "#86CFAE" }}>
                           <span style={{ fontWeight: 700 }}>Last time ({prev.date}): </span>
                           {prev.sets.map((s, si) => `${s.weight}lbs\u00d7${s.reps}`).join(' \u00b7 ')}
                         </div>
@@ -3594,12 +3594,12 @@ export default function PostPage() {
                       <button type="button"
                         onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, bodyweight: !x.bodyweight } : x))}
                         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", marginBottom: 10,
-                          background: ex.bodyweight ? "rgba(124,58,237,0.15)" : "transparent",
+                          background: ex.bodyweight ? "rgba(91,190,147,0.15)" : "transparent",
                           border: `1.5px solid ${ex.bodyweight ? C.blue : C.greenMid}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>
                         <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                           border: `2px solid ${ex.bodyweight ? C.blue : C.sub}`, background: ex.bodyweight ? C.blue : "transparent",
                           color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.bodyweight ? "✓" : ""}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.bodyweight ? "#C4B5FD" : C.sub }}>Bodyweight (no added weight)</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.bodyweight ? "#86CFAE" : C.sub }}>Bodyweight (no added weight)</span>
                       </button>
 
                       {/* Per-set rows — each set has its own reps + weight
@@ -3732,7 +3732,7 @@ export default function PostPage() {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
@@ -3756,14 +3756,14 @@ export default function PostPage() {
 
             function MacroBar({ label, current, goal, color }: { label: string; current: number; goal: number; color: string }) {
               const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
-              const barColor = pct > 110 ? '#EF4444' : pct >= 80 ? '#A78BFA' : '#F59E0B';
+              const barColor = pct > 110 ? '#EF4444' : pct >= 80 ? '#86CFAE' : '#F59E0B';
               return (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#F0F0F0' }}>{label}</span>
                     <span style={{ fontSize: 12, color: barColor, fontWeight: 700 }}>{current}g / {goal}g</span>
                   </div>
-                  <div style={{ background: '#2D1B69', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+                  <div style={{ background: '#1B231E', borderRadius: 6, height: 8, overflow: 'hidden' }}>
                     <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 6, transition: 'width 0.4s ease' }} />
                   </div>
                 </div>
@@ -3826,7 +3826,7 @@ export default function PostPage() {
                         ))}
                       </div>
 
-                      <button onClick={saveMacroGoals} style={{ width: '100%', padding: '10px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg,#7C3AED,#A78BFA)`, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                      <button onClick={saveMacroGoals} style={{ width: '100%', padding: '10px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg,#5BBE93,#86CFAE)`, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
                         Save Goals
                       </button>
                     </div>
@@ -3837,22 +3837,22 @@ export default function PostPage() {
                         const todayCal = (dailyTotals?.calories || 0) + autoCalories;
                         const goalCal = macroGoals.calories;
                         const pct = goalCal > 0 ? Math.min(100, Math.round((todayCal / goalCal) * 100)) : 0;
-                        const barColor = todayCal > goalCal * 1.1 ? '#EF4444' : todayCal >= goalCal * 0.8 ? '#A78BFA' : '#F59E0B';
+                        const barColor = todayCal > goalCal * 1.1 ? '#EF4444' : todayCal >= goalCal * 0.8 ? '#86CFAE' : '#F59E0B';
                         return (
                           <div style={{ marginBottom: 14 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                               <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0' }}>🔥 Calories</span>
                               <span style={{ fontSize: 13, color: barColor, fontWeight: 800 }}>{Math.round(todayCal)} / {goalCal} kcal</span>
                             </div>
-                            <div style={{ background: '#2D1B69', borderRadius: 8, height: 12, overflow: 'hidden' }}>
+                            <div style={{ background: '#1B231E', borderRadius: 8, height: 12, overflow: 'hidden' }}>
                               <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${barColor}, ${barColor}cc)`, borderRadius: 8, transition: 'width 0.4s ease' }} />
                             </div>
                           </div>
                         );
                       })()}
-                      <MacroBar label="🥩 Protein" current={Math.round((dailyTotals?.protein || 0) + autoProtein)} goal={macroGoals.protein} color="#7C3AED" />
+                      <MacroBar label="🥩 Protein" current={Math.round((dailyTotals?.protein || 0) + autoProtein)} goal={macroGoals.protein} color="#5BBE93" />
                       <MacroBar label="🍞 Carbs" current={Math.round((dailyTotals?.carbs || 0) + autoCarbs)} goal={macroGoals.carbs} color="#F59E0B" />
-                      <MacroBar label="🥑 Fat" current={Math.round((dailyTotals?.fat || 0) + autoFat)} goal={macroGoals.fat} color="#A78BFA" />
+                      <MacroBar label="🥑 Fat" current={Math.round((dailyTotals?.fat || 0) + autoFat)} goal={macroGoals.fat} color="#86CFAE" />
                       {/* Water progress */}
                       {(() => {
                         const todayWater = (dailyTotals?.water_oz || 0) + (parseFloat(water) || 0);
@@ -3864,7 +3864,7 @@ export default function PostPage() {
                               <span style={{ fontSize: 12, fontWeight: 700, color: '#F0F0F0' }}>💧 Water</span>
                               <span style={{ fontSize: 12, color: '#38BDF8', fontWeight: 700 }}>{Math.round(todayWater)}oz / {goalWater}oz</span>
                             </div>
-                            <div style={{ background: '#2D1B69', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+                            <div style={{ background: '#1B231E', borderRadius: 6, height: 8, overflow: 'hidden' }}>
                               <div style={{ width: `${pct}%`, height: '100%', background: '#38BDF8', borderRadius: 6 }} />
                             </div>
                           </div>
@@ -3922,7 +3922,7 @@ export default function PostPage() {
                       {suppFavorites.map(fav => {
                         const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
                         return (
-                          <div key={fav.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: alreadyAdded ? "rgba(124,58,237,0.18)" : C.greenLight, border: `1px solid ${alreadyAdded ? C.blue : C.greenMid}`, borderRadius: 999, padding: "4px 7px 4px 5px" }}>
+                          <div key={fav.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: alreadyAdded ? "rgba(91,190,147,0.18)" : C.greenLight, border: `1px solid ${alreadyAdded ? C.blue : C.greenMid}`, borderRadius: 999, padding: "4px 7px 4px 5px" }}>
                             <button
                               onClick={() => {
                                 if (alreadyAdded) return;
@@ -3997,7 +3997,7 @@ export default function PostPage() {
                       setSuppName(""); setSuppPhoto(null);
                     }}
                     disabled={!suppName.trim()}
-                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#A78BFA)` : "#374151", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
+                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#86CFAE)` : "#374151", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
                     + Add
                   </button>
                 </div>
@@ -4024,7 +4024,7 @@ export default function PostPage() {
                         ANTHROPIC_API_KEY (server) and NEXT_PUBLIC_AI_SCAN_ENABLED=true. */}
                     {process.env.NEXT_PUBLIC_AI_SCAN_ENABLED === "true" && (
                       <button onClick={() => setShowAIScanner(true)}
-                        style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                        style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
                         🤖 Scan with AI
                       </button>
                     )}
@@ -4115,7 +4115,7 @@ export default function PostPage() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {foodItems.map((item, i) => (
-                      <div key={i} style={{ background: '#0D0D0D', borderRadius: 14, padding: '10px 12px', border: '1px solid #2D1B69' }}>
+                      <div key={i} style={{ background: '#0D0D0D', borderRadius: 14, padding: '10px 12px', border: '1px solid #1B231E' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                           <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                           <input
@@ -4139,7 +4139,7 @@ export default function PostPage() {
                               .slice(0, 6);
                             if (matches.length === 0) return null;
                             return (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, background: '#1B1330', border: '1px solid #2E2440', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, background: '#111811', border: '1px solid #2E2440', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
                                 {matches.map((s) => (
                                   <button
                                     key={s.id}
@@ -4208,7 +4208,7 @@ export default function PostPage() {
                               input.click();
                             }}
                             title={item.photoUrl ? "Photo attached" : "Add photo"}
-                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: item.photoUrl ? "#1F3D2D" : "#2D1F52", color: item.photoUrl ? "#4ADE80" : "#A78BFA", fontSize: 14, cursor: "pointer", flexShrink: 0 }}>📷</button>
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: item.photoUrl ? "#1F3D2D" : "#1B231E", color: item.photoUrl ? "#4ADE80" : "#86CFAE", fontSize: 14, cursor: "pointer", flexShrink: 0 }}>📷</button>
                           <button
                             onClick={async () => {
                               if (!user?.id || !item.name?.trim()) return;
@@ -4216,7 +4216,7 @@ export default function PostPage() {
                               if (saved) setFavoritesRefreshKey(k => k + 1);
                             }}
                             title="Save as favorite"
-                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#2D1F52", color: "#F5A623", fontSize: 15, cursor: "pointer", flexShrink: 0 }}>☆</button>
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#1B231E", color: "#F5A623", fontSize: 15, cursor: "pointer", flexShrink: 0 }}>☆</button>
                           <button onClick={() => setFoodItems(f => f.filter((_, j) => j !== i))} aria-label="Remove item" title="Remove item"
                             style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 20, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
                         </div>
@@ -4231,11 +4231,11 @@ export default function PostPage() {
                             <span style={{ fontSize: 10, color: '#9CA3AF' }}>Qty</span>
                             <button onClick={() => setFoodItems(f => f.map((x, j) => j === i ? { ...x, qty: String(Math.max(1, (parseInt(x.qty || '1') || 1) - 1)) } : x))}
                               aria-label="Decrease quantity"
-                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #2D1B69', background: '#2D1F52', color: '#A78BFA', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>−</button>
+                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #1B231E', background: '#1B231E', color: '#86CFAE', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>−</button>
                             <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0', minWidth: 22, textAlign: 'center' as const }}>×{parseInt(item.qty || '1') || 1}</span>
                             <button onClick={() => setFoodItems(f => f.map((x, j) => j === i ? { ...x, qty: String((parseInt(x.qty || '1') || 1) + 1) } : x))}
                               aria-label="Increase quantity"
-                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #2D1B69', background: '#2D1F52', color: '#A78BFA', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>+</button>
+                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #1B231E', background: '#1B231E', color: '#86CFAE', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>+</button>
                           </div>
                           <span style={{ fontSize: 10, color: '#9CA3AF' }}>Macros</span>
                           {['protein', 'carbs', 'fat'].map(k => (
@@ -4255,8 +4255,8 @@ export default function PostPage() {
                     ))}
                     {/* Auto-calculated totals */}
                     {autoCalories > 0 && (
-                      <div style={{ background: '#1A1228', borderRadius: 12, padding: '10px 14px', border: '1px solid #7C3AED', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#A78BFA' }}>This meal:</span>
+                      <div style={{ background: '#111811', borderRadius: 12, padding: '10px 14px', border: '1px solid #5BBE93', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#86CFAE' }}>This meal:</span>
                         <div style={{ display: 'flex', gap: 14 }}>
                           <span style={{ fontSize: 12, color: '#F5A623', fontWeight: 700 }}>{Math.round(autoCalories)} cal</span>
                           {autoProtein > 0 && <span style={{ fontSize: 12, color: '#F0F0F0' }}>{Math.round(autoProtein)}g P</span>}
@@ -4365,7 +4365,7 @@ export default function PostPage() {
                 if (autoCarbs > 0) setCarbs(String(Math.round(autoCarbs)));
                 if (autoFat > 0) setFat(String(Math.round(autoFat)));
                 handleSave();
-              }} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              }} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
@@ -4387,7 +4387,7 @@ export default function PostPage() {
                   {wellnessActivities.map((act, idx) => {
                     const isFasting = act.type === 'Fasting';
                     return (
-                      <div key={act.id} style={{ background: '#0D0D0D', borderRadius: 14, padding: 12, border: '1px solid #2D1B69', position: 'relative' }}>
+                      <div key={act.id} style={{ background: '#0D0D0D', borderRadius: 14, padding: 12, border: '1px solid #1B231E', position: 'relative' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: isFasting ? '1fr auto' : '1.4fr 1fr auto', gap: 8, alignItems: 'end' }}>
                           <div>
                             <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity</label>
@@ -4470,8 +4470,8 @@ export default function PostPage() {
                 {/* Fasting-specific block — minimum 12 hours enforced on save.
                     Only shown when Fasting is in the activities list. */}
                 {hasFasting && (
-                  <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(124,58,237,0.08)", border: `1.5px solid ${C.blue}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#A78BFA", marginBottom: 10 }}>⏳ Fasting Details</div>
+                  <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>⏳ Fasting Details</div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Hours fasted</label>
                     <input
                       style={iStyle}
@@ -4489,8 +4489,8 @@ export default function PostPage() {
 
                 {/* Sleep-specific fields. Only shown when Sleep is in the list. */}
                 {hasSleep && (
-                  <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #2D1B69', marginBottom: 12 }}>
-                    <div style={{ fontWeight: 800, fontSize: 13, color: '#A78BFA', marginBottom: 12 }}>😴 Sleep Details</div>
+                  <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #1B231E', marginBottom: 12 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: '#86CFAE', marginBottom: 12 }}>😴 Sleep Details</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                       <div>
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Hours Slept</label>
@@ -4502,7 +4502,7 @@ export default function PostPage() {
                           {[1, 2, 3, 4, 5].map(q => (
                             <button key={q} onClick={() => setSleepQuality(sleepQuality === q ? null : q)} style={{
                               flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                              background: sleepQuality === q ? '#7C3AED' : '#1A1228',
+                              background: sleepQuality === q ? '#5BBE93' : '#111811',
                               color: sleepQuality === q ? '#fff' : '#9CA3AF',
                               fontWeight: 800, fontSize: 13, transition: 'all 0.15s',
                             }}>{q}</button>
@@ -4524,8 +4524,8 @@ export default function PostPage() {
                 )}
 
                 {/* Steps, HRV, Resting HR — shared across all activities for the day */}
-                <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #2D1B69', marginBottom: 12 }}>
-                  <div style={{ fontWeight: 800, fontSize: 13, color: '#A78BFA', marginBottom: 12 }}>📊 Body Stats (optional)</div>
+                <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #1B231E', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#86CFAE', marginBottom: 12 }}>📊 Body Stats (optional)</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Steps</label>
@@ -4589,7 +4589,7 @@ export default function PostPage() {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save to Log"}
               </button>
             </div>
@@ -4718,7 +4718,7 @@ export default function PostPage() {
               </div>
             </div>
 
-            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#A78BFA)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
+            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
               {loading?"Posting...":"Post to Feed 🚀"}
             </button>
           </div>
