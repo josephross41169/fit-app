@@ -96,24 +96,6 @@ function notifText(n: Notif): string {
   }
 }
 
-// ── Static fallback notifications (shown when no DB notifs yet) ──────────────
-const STATIC_NOTIFS: Notif[] = [
-  { id: "s1", type: "follow", actor_id: null, actor_name: "Alexis Rivera", actor_username: "alexis_fit",
-    actor_avatar: null, target_id: null, target_preview: null,
-    created_at: new Date(Date.now() - 3_600_000).toISOString(), read_at: null },
-  { id: "s2", type: "like_post", actor_id: null, actor_name: "Jordan Kim", actor_username: "jordan_gains",
-    actor_avatar: null, target_id: null, target_preview: null,
-    created_at: new Date(Date.now() - 7_200_000).toISOString(), read_at: null },
-  { id: "s3", type: "comment_post", actor_id: null, actor_name: "Maya Torres", actor_username: "maya_moves",
-    actor_avatar: null, target_id: null, target_preview: "This is inspiring! 🔥",
-    created_at: new Date(Date.now() - 14_400_000).toISOString(), read_at: "1" },
-  { id: "s4", type: "like_activity", actor_id: null, actor_name: "Chris Wallace", actor_username: "chris_power",
-    actor_avatar: null, target_id: null, target_preview: null,
-    created_at: new Date(Date.now() - 86_400_000).toISOString(), read_at: "1" },
-  { id: "s5", type: "badge", actor_id: null, actor_name: "Livelee", actor_username: "livelee",
-    actor_avatar: null, target_id: null, target_preview: "First Workout 🏋️",
-    created_at: new Date(Date.now() - 172_800_000).toISOString(), read_at: "1" },
-];
 
 type FilterTab = "all" | "follows" | "likes" | "comments";
 
@@ -122,7 +104,6 @@ export default function NotificationsPage() {
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
-  const [useStatic, setUseStatic] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -136,21 +117,16 @@ export default function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(60);
 
-      if (error) {
-        // Table might not exist yet — fall back to static demo data
-        setUseStatic(true);
-        setNotifs(STATIC_NOTIFS);
-      } else if (!data || data.length === 0) {
-        // Empty — show static demo so the page isn't barren
-        setUseStatic(true);
-        setNotifs(STATIC_NOTIFS);
+      // No demo fallback: real notifications or an honest empty state.
+      // (The old static demo data confused new users — fake "likes" for
+      // posts they never made — and read as placeholder content in review.)
+      if (error || !data) {
+        setNotifs([]);
       } else {
-        setUseStatic(false);
         setNotifs(data as Notif[]);
       }
     } catch {
-      setUseStatic(true);
-      setNotifs(STATIC_NOTIFS);
+      setNotifs([]);
     } finally {
       setLoading(false);
     }
@@ -160,14 +136,14 @@ export default function NotificationsPage() {
 
   // Mark all as read when page opens
   useEffect(() => {
-    if (!user || useStatic) return;
+    if (!user) return;
     supabase
       .from("notifications")
       .update({ read_at: new Date().toISOString() })
       .eq("recipient_id", user.id)
       .is("read_at", null)
       .then(() => {});
-  }, [user, useStatic]);
+  }, [user]);
 
   const filtered = notifs.filter(n => {
     if (filter === "all") return true;
@@ -203,12 +179,6 @@ export default function NotificationsPage() {
               }}>{unreadCount}</div>
             )}
           </div>
-          {useStatic && (
-            <div style={{
-              fontSize: 10, fontWeight: 700, color: C.sub, background: C.card,
-              borderRadius: 8, padding: "3px 8px", border: `1px solid ${C.border}`,
-            }}>DEMO</div>
-          )}
         </div>
 
         {/* Filter tabs */}
