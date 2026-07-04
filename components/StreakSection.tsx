@@ -187,7 +187,7 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
                       {cur}
                     </div>
                     <div style={{ fontSize: 11, color: themeTokens.sub, fontWeight: 600 }}>
-                      {cur === 0 ? "no streak" : cur === 1 ? "day" : "days"}
+                      {cur === 0 ? "start today" : cur === 1 ? "day" : "days"}
                     </div>
                   </div>
                 </div>
