@@ -43,7 +43,7 @@ const C = {
   text: "#F0F0F0",
   sub: "#9CA3AF",
   gold: "#F5A623",
-  blue: "#7C3AED",
+  blue: "#5BBE93",
   chip: "#1A1228",
   chipBorder: "#2D1F52",
   inputBg: "#0D0D0D",
@@ -187,7 +187,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
   }
 
   function handleTap(fav: SavedFood) {
-    if (manageMode) return; // in manage mode, taps go to the edit/delete buttons
+    if (manageMode) { openEdit(fav); return; } // in manage mode, tapping the card opens the editor (bigger target than the pencil)
     if (fav.is_meal && fav.items && fav.items.length > 0) {
       onAddCombo(fav.items);
     } else {
@@ -250,7 +250,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
               style={{
                 fontSize: 12, fontWeight: 800, padding: "7px 14px", borderRadius: 20,
                 border: active ? "none" : `1.5px solid ${C.chipBorder}`,
-                background: active ? "linear-gradient(135deg, #7C3AED, #A78BFA)" : "transparent",
+                background: active ? "linear-gradient(135deg, #5BBE93, #86CFAE)" : "transparent",
                 color: active ? "#fff" : C.sub, cursor: "pointer",
               }}
             >
@@ -295,7 +295,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
             <button
               onClick={handleSubmitForm}
               disabled={!fName.trim() || saving}
-              style={{ flex: 1, fontSize: 13, fontWeight: 800, padding: "10px 14px", borderRadius: 10, border: "none", background: !fName.trim() || saving ? "#3A2D5C" : "linear-gradient(135deg, #7C3AED, #A78BFA)", color: "#fff", cursor: !fName.trim() || saving ? "default" : "pointer" }}
+              style={{ flex: 1, fontSize: 13, fontWeight: 800, padding: "10px 14px", borderRadius: 10, border: "none", background: !fName.trim() || saving ? "#24382E" : "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", cursor: !fName.trim() || saving ? "default" : "pointer" }}
             >
               {saving ? "Saving…" : editingId ? "Save changes" : `⭐ Save to ${activeTab}`}
             </button>
@@ -321,57 +321,47 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
           </div>
         ) : null
       ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+          {/* Compact quick-add row: one swipeable line instead of a wrapping
+              grid. The whole card adds the item; the small + badge signals
+              tappability without a text row on every card. */}
           {visible.map(fav => (
             <div
               key={fav.id}
-              style={{
-                width: 150,
-                borderRadius: 14,
-                background: C.chip,
-                border: `1.5px solid ${C.chipBorder}`,
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-              }}
+              style={{ width: 96, flexShrink: 0, borderRadius: 12, background: C.chip, border: `1px solid ${C.chipBorder}`, overflow: "hidden", display: "flex", flexDirection: "column" }}
             >
-              {/* Tappable area = add to meal */}
               <button
                 onClick={() => handleTap(fav)}
-                style={{ border: "none", background: "transparent", padding: 0, cursor: manageMode ? "default" : "pointer", textAlign: "left", width: "100%" }}
+                style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", textAlign: "left", width: "100%" }}
               >
-                {/* Photo (or gradient placeholder) */}
-                <div style={{ width: "100%", height: 96, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#7C3AED,#4ADE80)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ position: "relative", width: "100%", height: 60, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#12291D,#1E5B3F)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {fav.photo_url ? (
                     <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   ) : (
-                    <span style={{ fontSize: 30 }}>{fav.is_meal ? "🍱" : "🍽️"}</span>
+                    <span style={{ fontSize: 22 }}>{fav.is_meal ? "🍱" : "🍽️"}</span>
                   )}
-                </div>
-                {/* Text */}
-                <div style={{ padding: "8px 10px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {fav.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
-                    {Math.round(fav.calories)} cal{fav.protein ? ` · ${Math.round(fav.protein)}g P` : ""}{fav.is_meal ? " · meal" : ""}
-                  </div>
                   {!manageMode ? (
-                    <div style={{ fontSize: 11, fontWeight: 800, color: C.blue, marginTop: 6 }}>＋ Tap to add</div>
+                    <div style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "#5BBE93", color: "#fff", fontSize: 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>+</div>
                   ) : null}
                 </div>
+                <div style={{ padding: "6px 8px 7px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1.25, height: 28, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {fav.name}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.gold, fontWeight: 700, marginTop: 3 }}>
+                    {Math.round(fav.calories)} cal{fav.protein ? <span style={{ color: C.sub, fontWeight: 600 }}>{` · ${Math.round(fav.protein)}g P`}</span> : null}{fav.is_meal ? <span style={{ color: C.sub, fontWeight: 600 }}> · meal</span> : null}
+                  </div>
+                </div>
               </button>
-
-              {/* Manage actions */}
               {manageMode ? (
                 <div style={{ display: "flex", borderTop: `1px solid ${C.chipBorder}` }}>
-                  <button onClick={() => openEdit(fav)}
-                    style={{ flex: 1, padding: "8px 0", border: "none", background: "transparent", color: C.gold, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                    ✏️ Edit
+                  <button onClick={() => openEdit(fav)} title="Edit"
+                    style={{ flex: 1, padding: "6px 0", border: "none", background: "transparent", color: C.gold, fontSize: 12, cursor: "pointer" }}>
+                    ✏️
                   </button>
-                  <button onClick={() => handleDelete(fav.id)}
-                    style={{ flex: 1, padding: "8px 0", border: "none", borderLeft: `1px solid ${C.chipBorder}`, background: "transparent", color: "#FF6B6B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                    🗑 Delete
+                  <button onClick={() => handleDelete(fav.id)} title="Delete"
+                    style={{ flex: 1, padding: "6px 0", border: "none", borderLeft: `1px solid ${C.chipBorder}`, background: "transparent", color: "#FF6B6B", fontSize: 12, cursor: "pointer" }}>
+                    🗑
                   </button>
                 </div>
               ) : null}
