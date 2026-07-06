@@ -4253,6 +4253,14 @@ export default function PostPage() {
                         </div>
                       </div>
                     ))}
+                    {/* Second "+ Add Food" button at the BOTTOM of the list so
+                        you can add the next food right where you just finished —
+                        no scrolling back up to the section header. Mirrors the
+                        "+ Add Exercise" pattern on the workout tab. */}
+                    <button onClick={() => setFoodItems(f => [...f, { name: "", calories: "" }])}
+                      style={{ width: "100%", marginTop: 6, fontSize: 13, fontWeight: 800, padding: "11px 0", borderRadius: 12, border: `1.5px dashed ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                      + Add Food
+                    </button>
                     {/* Auto-calculated totals */}
                     {autoCalories > 0 && (
                       <div style={{ background: '#111811', borderRadius: 12, padding: '10px 14px', border: '1px solid #5BBE93', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 }}>
