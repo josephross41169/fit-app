@@ -3,6 +3,9 @@ import { useState, useCallback, useEffect, CSSProperties } from "react";
 import { generatePlan, swapExercise, Goal, Level, Sex, Injury, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
 import { Equipment, EQUIPMENT_TYPES } from "@/lib/exercises";
 import { getExerciseImage } from "@/lib/exerciseImages";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C = {
@@ -291,6 +294,49 @@ export default function WorkoutPlanPage() {
   const [minutes, setMinutes] = useState<number | null>(null);
   const [injuries, setInjuries] = useState<Injury[]>([]);
 
+  // ── Autofill from Stats → Body ──
+  // If the user saved Advanced Body Metrics on the Stats page, prefill the
+  // matching fields here (only if still empty) so they don't enter the same
+  // numbers twice. Everything stays editable — this is a starting point.
+  const { user } = useAuth();
+  const [autofilledFromStats, setAutofilledFromStats] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from("users")
+        .select("body_weight_lbs,height_in,date_of_birth,biological_sex")
+        .eq("id", user.id)
+        .single();
+      if (!alive || !data) return;
+      let any = false;
+      if (data.biological_sex === "male" || data.biological_sex === "female") {
+        setSex(prev => prev || (data.biological_sex as Sex));
+        any = true;
+      }
+      if (data.date_of_birth) {
+        const dob = new Date(data.date_of_birth);
+        const yrs = Math.floor((Date.now() - dob.getTime()) / 31557600000);
+        if (!isNaN(yrs) && yrs > 10 && yrs < 100) {
+          setAge(prev => prev || String(yrs));
+          any = true;
+        }
+      }
+      if (data.height_in && data.height_in > 0) {
+        setHeightFt(prev => prev || String(Math.floor(data.height_in / 12)));
+        setHeightIn(prev => prev || String(Math.round(data.height_in % 12)));
+        any = true;
+      }
+      if (data.body_weight_lbs && data.body_weight_lbs > 0) {
+        setWeightLb(prev => prev || String(Math.round(data.body_weight_lbs)));
+        any = true;
+      }
+      if (any) setAutofilledFromStats(true);
+    })();
+    return () => { alive = false; };
+  }, [user]);
+
   // Restore the most recent plan from localStorage on mount so users see
   // their last generated plan when they return to this page (instead of
   // having to re-generate).
@@ -448,6 +494,12 @@ export default function WorkoutPlanPage() {
           </div>
         </div>
 
+        {autofilledFromStats && (
+          <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(91,190,147,0.10)", border: "1px solid rgba(91,190,147,0.45)", borderRadius: 10, padding: "9px 12px", marginBottom: 16, fontSize: 12, color: "#86CFAE" }}>
+            <span style={{ fontWeight: 800 }}>✓</span>
+            <span>Filled from your saved body metrics — edit below, or update them on <Link href="/stats" style={{ color: "#5BBE93", fontWeight: 800, textDecoration: "underline" }}>Stats → Body</Link>.</span>
+          </div>
+        )}
         {/* Sex */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Sex <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional</span></div>
