@@ -501,7 +501,7 @@ function FoodSearchInput({
             padding: "9px 12px 9px 38px", fontSize: 14, color: "#F0F0F0", outline: "none",
             width: "100%", boxSizing: "border-box" as const,
           }}
-          placeholder="🔍 Search food database (e.g. chicken breast, oats)..."
+          placeholder="Search food database (e.g. chicken breast, oats)..."
           value={query}
           onChange={e => search(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
@@ -2797,7 +2797,7 @@ export default function PostPage() {
 
   const TAB_DEFS = [
     { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#5BBE93" },
-    { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#F59E0B" },
+    { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#5BBE93" },
     { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#5BBE93" },
   ];
 
@@ -3918,30 +3918,37 @@ export default function PostPage() {
                     )}
                   </div>
                   {suppFavorites.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+                      {/* Compact quick-add strip — same card design as the food
+                          favorites below: photo tile with a + badge, name
+                          underneath, one swipeable row. */}
                       {suppFavorites.map(fav => {
                         const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
                         return (
-                          <div key={fav.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: alreadyAdded ? "rgba(91,190,147,0.18)" : C.greenLight, border: `1px solid ${alreadyAdded ? C.blue : C.greenMid}`, borderRadius: 999, padding: "4px 7px 4px 5px" }}>
-                            <button
+                          <div key={fav.id} style={{ width: 96, flexShrink: 0, borderRadius: 12, background: alreadyAdded ? "rgba(91,190,147,0.12)" : "#111811", border: `1px solid ${alreadyAdded ? C.blue : "#1B231E"}`, overflow: "hidden" }}>
+                            <div
+                              role="button"
                               onClick={() => {
                                 if (alreadyAdded) return;
                                 setSupplements(arr => [...arr, { name: fav.name, photo_url: fav.photo_url || null, favId: fav.id, favCount: fav.use_count }]);
                               }}
-                              disabled={alreadyAdded}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "none", border: "none", cursor: alreadyAdded ? "default" : "pointer", padding: 0 }}>
-                              {fav.photo_url
-                                ? <img src={fav.photo_url} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                                : <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#1F2937", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>💊</span>}
-                              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fav.name}</span>
-                              {alreadyAdded
-                                ? <span style={{ fontSize: 12, color: C.blue, fontWeight: 800 }}>✓</span>
-                                : <span style={{ fontSize: 14, color: C.blue, fontWeight: 800 }}>＋</span>}
-                            </button>
-                            <button
-                              onClick={async () => { await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
-                              aria-label={`Remove ${fav.name} from favorites`} title="Remove from favorites"
-                              style={{ width: 18, height: 18, borderRadius: "50%", border: "none", background: "transparent", color: C.sub, fontSize: 14, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                              style={{ cursor: alreadyAdded ? "default" : "pointer", textAlign: "left", width: "100%" }}>
+                              <div style={{ position: "relative", width: "100%", height: 60, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#12291D,#1E5B3F)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {fav.photo_url
+                                  ? <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                                  : <span style={{ fontSize: 22 }}>💊</span>}
+                                <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: alreadyAdded ? "#1B231E" : "#5BBE93", color: alreadyAdded ? "#5BBE93" : "#fff", fontSize: alreadyAdded ? 12 : 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{alreadyAdded ? "✓" : "+"}</span>
+                                <button
+                                  onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
+                                  aria-label={`Remove ${fav.name} from favorites`} title="Remove from favorites"
+                                  style={{ position: "absolute", top: 4, left: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#D1D5DB", fontSize: 12, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                              </div>
+                              <div style={{ padding: "6px 8px 7px" }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1.25, height: 28, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                                  {fav.name}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
