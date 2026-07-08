@@ -13,14 +13,41 @@ export default function LandingPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // ── FALLBACK-LOAD ROUTE RESTORATION (native shell) ────────────────────
+    // In the Capacitor bundle, dynamic routes like /profile/<username> have
+    // no static file — they only exist as client-side routes. If the WebView
+    // ever RELOADS while on one (iOS kills/reloads backgrounded WebViews on
+    // iPad constantly, which App Review devices do), Capacitor serves
+    // index.html as the fallback… which is THIS page. Without the check
+    // below, the user gets bounced to Home or stranded on the marketing
+    // page ("routed back to login" — App Review, twice). If we boot here
+    // but the URL says we're supposed to be somewhere else, re-enter that
+    // route client-side and stop.
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path && path !== "/" && path !== "/index.html") {
+        router.replace(path + window.location.search);
+        return;
+      }
+    }
+
     // SAFETY NET: never let the splash hang forever. On iOS Capacitor the
     // session read (Keychain + Supabase) can in rare cases stall — if it does,
     // we must still show the marketing page rather than a permanent blank
     // dark screen (this caused App Store rejection 2.1: "blank screen on
-    // launch"). After 2.5s we give up waiting and reveal the page regardless.
+    // launch"). BUT: if a Supabase session token exists in localStorage, this
+    // is a logged-in user having a slow moment — showing them the marketing
+    // page (with its Log In buttons) reads as being logged out. Give those
+    // users a longer grace period before giving up.
+    let hasLocalSession = false;
+    try {
+      hasLocalSession = Object.keys(localStorage).some(
+        k => k.startsWith("sb-") && k.includes("auth-token")
+      );
+    } catch { /* storage unavailable — treat as logged out */ }
     const failSafe = setTimeout(() => {
       if (!cancelled) setChecking(false);
-    }, 2500);
+    }, hasLocalSession ? 8000 : 2500);
 
     (async () => {
       try {
