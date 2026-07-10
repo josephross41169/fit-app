@@ -4581,8 +4581,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   <span style={{fontSize:13}}>📷</span>
                 </label>
               )}
-              {/* Camera button always visible at bottom right when not repositioning */}
-              {!avatarRepositionMode && (
+              {/* Camera button always visible at bottom right when not repositioning.
+                  isOwn-gated: visitors must never see edit controls on someone
+                  else's profile. */}
+              {isOwn && !avatarRepositionMode && (
                 <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#5BBE93",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
                   <input type="file" accept="image/*,video/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
@@ -4590,7 +4592,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               )}
               {/* Reposition button — show when image exists and not in reposition mode.
                   Hidden on mobile via .hide-on-mobile — touch UX will handle this differently later. */}
-              {profileImg && !avatarRepositionMode && user && (
+              {profileImg && !avatarRepositionMode && isOwn && (
                 <button className="hide-on-mobile" onClick={e=>{e.preventDefault();setAvatarRepositionMode(true);}}
                   style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"4px 10px",cursor:"pointer",border:"none",display:"flex",alignItems:"center",gap:4,zIndex:5}}>
                   <span style={{fontSize:11}}>↕</span>
@@ -4680,10 +4682,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             >
               {bannerImg
                 ? <img src={ImagePresets.full(bannerImg)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`center ${bannerPosition}%`,transform:`scale(${bannerScale/100})`,transformOrigin:"center center",transition:dragState?"none":"transform 0.1s, object-position 0.1s",pointerEvents:"none"}} alt="Banner"/>
-                : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>📷 Tap to add Banner</span>}
+                : <span style={{fontWeight:900,fontSize:17,color:"rgba(255,255,255,0.7)"}}>{isOwn ? "📷 Tap to add Banner" : ""}</span>}
               {/* Reposition button — show on hover or when in reposition mode.
                   Hidden on mobile via .hide-on-mobile (touch UX later). */}
-              {bannerImg && !repositionMode && (bannerHovered || true) && user && (
+              {bannerImg && !repositionMode && isOwn && (
                 <button
                   className="hide-on-mobile"
                   onClick={e=>{e.preventDefault();setRepositionMode(true);}}
@@ -4714,8 +4716,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   </div>
                 </div>
               )}
-              {/* Always-visible camera button overlay for banner */}
-              {!repositionMode && (
+              {/* Always-visible camera button overlay for banner (own profile only) */}
+              {isOwn && !repositionMode && (
                 <label style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:5}}>
                   <span style={{fontSize:16}}>📷</span>
                   <span style={{color:"#fff",fontSize:12,fontWeight:700}}>Change</span>
