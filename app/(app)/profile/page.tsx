@@ -124,19 +124,29 @@ function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; 
   }, [onClose]);
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9997, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {photos.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#0E1311', border: '1px solid #1B231E', borderRadius: 24, width: '100%', maxWidth: 360, padding: '20px 24px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontWeight: 900, fontSize: 18, color: '#F0F0F0' }}>All Photos</div>
+              <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: '#1B231E', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>×</button>
+            </div>
+            <div style={{ textAlign: 'center', padding: '28px 0 8px', color: '#9CA3AF' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u{1F4F7}'}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#F0F0F0', marginBottom: 6 }}>No feed photos yet</div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, maxWidth: 240, margin: '0 auto' }}>Photos from your posts will collect here — share a workout or meal to start your gallery.</div>
+            </div>
+          </div>
+        </div>
+      ) : (
+      <>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#0E1311', borderBottom: '1px solid #1B231E', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0 }}>
         <div style={{ fontWeight: 900, fontSize: 18, color: '#F0F0F0' }}>
-          All Photos {photos.length > 0 && (<span style={{ color: '#9CA3AF', fontSize: 13, fontWeight: 600, marginLeft: 6 }}>({photos.length})</span>)}
+          All Photos <span style={{ color: '#9CA3AF', fontSize: 13, fontWeight: 600, marginLeft: 6 }}>({photos.length})</span>
         </div>
-        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.10)', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>x</button>
+        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.10)', color: '#fff', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
       </div>
       <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', padding: '16px clamp(12px, 4vw, 32px) 32px', maxWidth: 1200, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-        {photos.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9CA3AF' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u{1F4F7}'}</div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>No feed photos yet.</div>
-          </div>
-        ) : (
           <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
             {photos.map((src, idx) => (
               <button key={idx} onClick={() => onSelectPhoto(src)} style={{ padding: 0, border: 'none', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', background: '#161D19', aspectRatio: '1', display: 'block' }}>
@@ -144,8 +154,9 @@ function AllPhotosModal({ photos, onClose, onSelectPhoto }: { photos: string[]; 
               </button>
             ))}
           </div>
-        )}
       </div>
+      </>
+      )}
     </div>
   );
 }
