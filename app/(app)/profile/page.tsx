@@ -3518,20 +3518,21 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
       {/* ── Highlight Picker Modal ── */}
       {showHighlightPicker && (
-        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={()=>setShowHighlightPicker(false)}>
-          <div style={{background:C.white,borderRadius:"0 0 24px 24px",padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px",overflow:"hidden"}} onClick={()=>setShowHighlightPicker(false)}>
+          <div style={{background:C.white,borderRadius:24,width:"100%",maxWidth:560,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}} onClick={e=>e.stopPropagation()}>
+          <div style={{padding:"20px 24px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,borderBottom:`1px solid ${C.purpleMid}`}}>
             <div>
               <div style={{fontWeight:900,fontSize:18,color:C.text}}>Choose a Highlight</div>
               <div style={{fontSize:12,color:C.sub,marginTop:2}}>Tap any photo to add it to highlights</div>
             </div>
-            <button onClick={()=>setShowHighlightPicker(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#1B231E",color:C.text,fontSize:20,cursor:"pointer"}}>×</button>
+            <button onClick={()=>setShowHighlightPicker(false)} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#1B231E",color:C.text,fontSize:20,cursor:"pointer",flexShrink:0}}>×</button>
           </div>
-          <div style={{flex:1,overflowY:"auto",padding:"16px 20px 32px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{flex:1,overflowY:"auto",padding:"16px 20px 24px"}} onClick={e=>e.stopPropagation()}>
             {feedPhotos.length === 0 ? (
-              <div style={{textAlign:"center",padding:"60px 0",color:C.sub}}>
+              <div style={{textAlign:"center",padding:"40px 0 32px",color:C.sub}}>
                 <div style={{fontSize:40,marginBottom:12}}>📭</div>
                 <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No media yet</div>
-                <div style={{fontSize:13}}>Post photos or videos to your feed first, then add them as highlights</div>
+                <div style={{fontSize:13,maxWidth:280,margin:"0 auto",lineHeight:1.5}}>Post photos or videos to your feed first, then add them as highlights</div>
               </div>
             ) : (
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
@@ -3607,6 +3608,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 r.readAsDataURL(f); e.target.value="";
               }}/>
             </label>
+          </div>
           </div>
         </div>
       )}
