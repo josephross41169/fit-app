@@ -133,6 +133,17 @@ export default function PrivacyPage() {
         "Protected Health Information" under HIPAA — Livelee is not a covered
         healthcare entity. However, we treat health-related data with care and do
         not sell or share it for advertising purposes.
+        {"\n\n"}
+        Apple Health (HealthKit): If you grant permission, Livelee reads data
+        from Apple Health — such as steps, workouts, heart rate, active energy,
+        and sleep — and may write workouts you log back to Apple Health. This
+        data is used solely to provide app features like activity tracking,
+        streaks, and calorie estimates. Data obtained through HealthKit is never
+        used for advertising or marketing, is never sold, and is never shared
+        with third parties for advertising, data brokering, or
+        information-reselling purposes. You can revoke Livelee's access at any
+        time in iOS Settings → Privacy &amp; Security → Health, and deleting
+        your account deletes the health data we store.
       </Section>
 
       <Section title="9. International Users">
