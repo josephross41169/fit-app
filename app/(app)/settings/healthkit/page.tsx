@@ -8,7 +8,7 @@
 // works in the Livelee iOS app" message because HealthKit is iOS-only.
 //
 // Three states:
-//   1. Available, not connected   → big "Connect Apple Health" button
+//   1. Available, not connected   → explainer + neutral "Continue" button (Apple 5.1.1: no action verbs before the system permission sheet)
 //   2. Available, connected       → status panel + manual "Sync now" button
 //   3. Not available              → friendly explainer
 //
@@ -152,7 +152,7 @@ export default function HealthKitSettingsPage() {
             style={{
               width: "100%",
               padding: "14px 16px",
-              background: "linear-gradient(135deg,#5BBE93,#A855F7)",
+              background: "linear-gradient(135deg,#5BBE93,#86CFAE)",
               border: "none",
               borderRadius: 12,
               color: "#fff",
@@ -162,7 +162,7 @@ export default function HealthKitSettingsPage() {
               opacity: connecting ? 0.6 : 1,
             }}
           >
-            {connecting ? "Connecting..." : "Connect Apple Health"}
+            {connecting ? "Opening..." : "Continue"}
           </button>
 
           <div style={{ fontSize: 12, color: "#6B7280", marginTop: 12, lineHeight: 1.5 }}>
