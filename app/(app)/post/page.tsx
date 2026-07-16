@@ -22,7 +22,8 @@ import LocationPicker, { type Location as PickedLocation } from "@/components/Lo
 import MentionInput from "@/components/MentionInput";
 import TemplateBuilder, { type Template as BuilderTemplate, type TemplateExercise } from "@/components/TemplateBuilder";
 import FoodFavorites from "@/components/FoodFavorites";
-import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSupplement, type SavedSupplement } from "@/lib/savedSupplements";
+import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSupplement, saveStack, type SavedSupplement } from "@/lib/savedSupplements";
+import SupplementFactsEditor from "@/components/SupplementFactsEditor";
 import { saveFood, saveMeal, fetchSavedFoods, type SavedFoodItem, type SavedFood } from "@/lib/savedFoods";
 
 const C = {
@@ -830,7 +831,8 @@ export default function PostPage() {
   // (photo_url is a data: URL until save, when it's uploaded). favId, when
   // present, links this back to the saved favorite it came from so we can
   // bump that favorite's use_count on save.
-  const [supplements, setSupplements] = useState<{ name: string; photo_url: string | null; favId?: string; favCount?: number }[]>([]);
+  const [supplements, setSupplements] = useState<{ name: string; photo_url: string | null; favId?: string; favCount?: number; ingredients?: any[] | null; serving_size?: string | null }[]>([]);
+  const [factsEditFor, setFactsEditFor] = useState<SavedSupplement | null>(null);
   const [suppName, setSuppName] = useState("");
   const [suppPhoto, setSuppPhoto] = useState<string | null>(null);
   // Saved supplement favorites (one-tap re-add), mirrors food favorites.
@@ -1794,7 +1796,7 @@ export default function PostPage() {
         const finalCalories = autoCalNut > 0 ? autoCalNut : null;
         // Upload any supplement photos that are still local data: URLs, then
         // store the supplements array (name + uploaded photo_url) on the log.
-        let supplementsToStore: { name: string; photo_url: string | null }[] | null = null;
+        let supplementsToStore: { name: string; photo_url: string | null; ingredients?: any[] | null; serving_size?: string | null }[] | null = null;
         if (supplements.length > 0) {
           supplementsToStore = [];
           for (let si = 0; si < supplements.length; si++) {
@@ -1804,7 +1806,7 @@ export default function PostPage() {
               try { url = await uploadPhoto(await compressImage(url), 'activity', `${user.id}/supplement-${Date.now()}-${si}.jpg`); }
               catch { url = null; }
             }
-            supplementsToStore.push({ name: s.name, photo_url: url });
+            supplementsToStore.push({ name: s.name, photo_url: url, ingredients: (s as any).ingredients || null, serving_size: (s as any).serving_size || null } as any);
           }
           // Bump use_count for any supplement that came from a saved favorite
           // so the favorites bar orders most-used first. Fire-and-forget.
@@ -3930,7 +3932,22 @@ export default function PostPage() {
                               role="button"
                               onClick={() => {
                                 if (alreadyAdded) return;
-                                setSupplements(arr => [...arr, { name: fav.name, photo_url: fav.photo_url || null, favId: fav.id, favCount: fav.use_count }]);
+                                {
+                                  if ((fav as any).is_stack && Array.isArray((fav as any).items)) {
+                                    // A stack: one tap logs every item, each carrying its own
+                                    // saved facts when that item is also an individual favorite.
+                                    const additions = ((fav as any).items as any[])
+                                      .filter(it => !supplements.some(s2 => s2.name.toLowerCase() === String(it.name).toLowerCase()))
+                                      .map(it => {
+                                        const src = suppFavorites.find(f2 => f2.name.toLowerCase() === String(it.name).toLowerCase());
+                                        return { name: it.name, photo_url: it.photo_url || src?.photo_url || null, favId: src?.id, favCount: src?.use_count, ingredients: (src as any)?.ingredients || null, serving_size: (src as any)?.serving_size || null };
+                                      });
+                                    setSupplements(arr => [...arr, ...additions]);
+                                    bumpSupplementUse(fav.id, fav.use_count);
+                                  } else {
+                                    setSupplements(arr => [...arr, { name: fav.name, photo_url: fav.photo_url || null, favId: fav.id, favCount: fav.use_count, ingredients: (fav as any).ingredients || null, serving_size: (fav as any).serving_size || null }]);
+                                  }
+                                }
                               }}
                               style={{ cursor: alreadyAdded ? "default" : "pointer", textAlign: "left", width: "100%" }}>
                               <div style={{ position: "relative", width: "100%", height: 60, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#12291D,#1E5B3F)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -3938,6 +3955,12 @@ export default function PostPage() {
                                   ? <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                                   : <span style={{ fontSize: 22 }}>💊</span>}
                                 <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: alreadyAdded ? "#1B231E" : "#5BBE93", color: alreadyAdded ? "#5BBE93" : "#fff", fontSize: alreadyAdded ? 12 : 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{alreadyAdded ? "✓" : "+"}</span>
+                                {!(fav as any).is_stack && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFactsEditFor(fav); }}
+                                    aria-label={`Edit supplement facts for ${fav.name}`} title="Supplement facts"
+                                    style={{ position: "absolute", bottom: 4, right: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#86CFAE", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✏️</button>
+                                )}
                                 <button
                                   onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
                                   aria-label={`Remove ${fav.name} from favorites`} title="Remove from favorites"
@@ -3972,6 +3995,26 @@ export default function PostPage() {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {supplements.length >= 2 && user?.id && (
+                  <button
+                    onClick={async () => {
+                      const name = window.prompt("Name this stack (e.g. Morning stack):");
+                      if (!name?.trim()) return;
+                      const created = await saveStack(user.id, name.trim(), supplements.map(s2 => ({ name: s2.name, photo_url: s2.photo_url })));
+                      if (created) setSuppFavRefresh(k => k + 1);
+                    }}
+                    style={{ width: "100%", marginBottom: 12, fontSize: 12, fontWeight: 800, padding: "9px 0", borderRadius: 10, border: `1.5px dashed ${C.blue}`, background: "transparent", color: C.blue, cursor: "pointer" }}>
+                    ⭐ Save these {supplements.length} as a stack
+                  </button>
+                )}
+                {factsEditFor && (
+                  <SupplementFactsEditor
+                    supplement={factsEditFor}
+                    onClose={() => setFactsEditFor(null)}
+                    onSaved={() => setSuppFavRefresh(k => k + 1)}
+                  />
                 )}
 
                 {/* Add row: optional photo + name + add button */}
