@@ -87,49 +87,78 @@ type AnyStorage = {
 // session survives app restarts.
 function buildNativeStorage(): AnyStorage {
   let prefs: any = null;
+  // In-memory mirror of KNOWN values. Only successful reads/writes may
+  // populate it — a failed or timed-out read must NEVER be cached, otherwise
+  // one slow Keychain read on cold launch poisons the session key as "null"
+  // for the whole run and the app boots logged-out even though the session
+  // is safely persisted. (This was the sign-out-on-every-launch bug.)
   const mirror = new Map<string, string | null>();
-  // Lazy-load the plugin so the bundle still works on web (where this file is
-  // also imported but isNativeShell is false and these methods never run).
   const loadPlugin = async () => {
     if (prefs) return prefs;
     const mod = await import('@capacitor/preferences');
     prefs = mod.Preferences;
     return prefs;
   };
+
+  // localStorage also works inside the WKWebView and persists between
+  // launches. It's the belt to the Keychain's braces: every write goes to
+  // BOTH stores and reads fall back to it, so the session survives even if
+  // the Preferences bridge is slow, missing, or broken in a given build.
+  const lsGet = (key: string): string | null => { try { return window.localStorage.getItem(key); } catch { return null; } };
+  const lsSet = (key: string, value: string): void => { try { window.localStorage.setItem(key, value); } catch {} };
+  const lsRemove = (key: string): void => { try { window.localStorage.removeItem(key); } catch {} };
+
+  // Sentinel distinguishing "the store answered: no value" (authoritative)
+  // from "the store failed/timed out" (must not be treated as an answer).
+  const PREFS_FAIL = '__livelee_prefs_fail__';
+  const prefsGet = (key: string): Promise<string> =>
+    withTimeout((async () => {
+      try {
+        const p = await loadPlugin();
+        const { value } = await p.get({ key });
+        return value === null || value === undefined ? '__livelee_prefs_null__' : String(value);
+      } catch {
+        return PREFS_FAIL;
+      }
+    })(), 4000, PREFS_FAIL);
+
   return {
     getItem(key: string): string | null | Promise<string | null> {
-      // Cache hit → return synchronously, no bridge round-trip. This is what
-      // collapses the dozens-of-reads-per-screen cost to a single first read.
       if (mirror.has(key)) return mirror.get(key) ?? null;
-      return withTimeout((async () => {
-        try {
-          const p = await loadPlugin();
-          const { value } = await p.get({ key });
-          return value ?? null;
-        } catch {
-          return null;
+      return (async () => {
+        const fromPrefs = await prefsGet(key);
+        if (fromPrefs !== PREFS_FAIL && fromPrefs !== '__livelee_prefs_null__') {
+          mirror.set(key, fromPrefs);
+          lsSet(key, fromPrefs); // keep the fallback copy in sync
+          return fromPrefs;
         }
-      })(), 4000, null).then((v) => {
-        mirror.set(key, v);
-        return v;
-      });
+        // Primary store empty or unavailable — consult the fallback.
+        const fromLs = lsGet(key);
+        if (fromLs !== null) {
+          mirror.set(key, fromLs);
+          // Heal the primary store in the background for future launches.
+          (async () => { try { const p = await loadPlugin(); await p.set({ key, value: fromLs }); } catch {} })();
+          return fromLs;
+        }
+        // Both empty. Cache the null ONLY when the primary store answered
+        // authoritatively; after a failure we leave the mirror alone so a
+        // later read retries once the bridge is ready.
+        if (fromPrefs === '__livelee_prefs_null__') mirror.set(key, null);
+        return null;
+      })();
     },
     setItem(key: string, value: string): Promise<void> {
-      mirror.set(key, value); // keep the mirror current immediately
+      mirror.set(key, value);
+      lsSet(key, value); // synchronous — survives even a broken plugin
       return withTimeout((async () => {
-        try {
-          const p = await loadPlugin();
-          await p.set({ key, value });
-        } catch {}
+        try { const p = await loadPlugin(); await p.set({ key, value }); } catch {}
       })(), 4000, undefined);
     },
     removeItem(key: string): Promise<void> {
       mirror.set(key, null);
+      lsRemove(key);
       return withTimeout((async () => {
-        try {
-          const p = await loadPlugin();
-          await p.remove({ key });
-        } catch {}
+        try { const p = await loadPlugin(); await p.remove({ key }); } catch {}
       })(), 4000, undefined);
     },
   };
