@@ -27,7 +27,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#0E0820',
+      backgroundColor: '#0D0D0D',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
@@ -37,12 +37,15 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'dark',
-      backgroundColor: '#0E0820',
+      backgroundColor: '#0D0D0D',
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
   },
+  // WebView background while the page paints — prevents any white flash
+  // between the native launch screen and first render.
+  backgroundColor: '#0D0D0D',
   ios: {
     // 'never' = iOS doesn't auto-adjust the WebView's content insets.
     // The WebView extends edge-to-edge AND env(safe-area-inset-top)
