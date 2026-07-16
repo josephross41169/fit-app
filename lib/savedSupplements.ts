@@ -8,12 +8,21 @@
 
 import { supabase } from "./supabase";
 
+import type { IngredientRow } from "./nutrients";
+
 export interface SavedSupplement {
   id: string;
   name: string;
   photo_url?: string | null;
   use_count: number;
   last_used_at?: string | null;
+  // ── Supplement Facts (optional, one-time setup) ──
+  brand?: string | null;
+  serving_size?: string | null;      // e.g. "2 tablets", "1 scoop (30g)"
+  ingredients?: IngredientRow[] | null; // per-serving amounts
+  // ── Stacks: a favorite that logs several supplements at once ──
+  is_stack?: boolean | null;
+  items?: { name: string; photo_url?: string | null }[] | null;
 }
 
 // ─── Fetch ───────────────────────────────────────────────────────────────────
@@ -97,5 +106,54 @@ export async function deleteSavedSupplement(id: string): Promise<boolean> {
     return !error;
   } catch {
     return false;
+  }
+}
+
+// ─── Update Supplement Facts (label data) ────────────────────────────────────
+// One-time setup per supplement; logging never changes. Any log made after
+// this carries the ingredients snapshot automatically.
+export async function updateSupplementFacts(
+  id: string,
+  facts: { brand?: string | null; serving_size?: string | null; ingredients?: import("./nutrients").IngredientRow[] | null },
+): Promise<boolean> {
+  try {
+    const { error } = await (supabase as any)
+      .from("saved_supplements")
+      .update({
+        brand: facts.brand ?? null,
+        serving_size: facts.serving_size ?? null,
+        ingredients: facts.ingredients ?? null,
+      })
+      .eq("id", id);
+    if (error) console.warn("[savedSupplements] facts update failed:", error.message);
+    return !error;
+  } catch (e) {
+    console.warn("[savedSupplements] facts update threw:", e);
+    return false;
+  }
+}
+
+// ─── Save a stack (several supplements as one one-tap favorite) ─────────────
+// Mirrors the saved-meal pattern in savedFoods: is_stack + items.
+export async function saveStack(
+  userId: string,
+  name: string,
+  items: { name: string; photo_url?: string | null }[],
+): Promise<SavedSupplement | null> {
+  if (!name.trim() || items.length < 2) return null;
+  try {
+    const { data, error } = await supabase
+      .from("saved_supplements")
+      .insert({ user_id: userId, name: name.trim(), is_stack: true, items } as any)
+      .select()
+      .single();
+    if (error) {
+      console.warn("[savedSupplements] stack save failed:", error.message);
+      return null;
+    }
+    return data as SavedSupplement;
+  } catch (e) {
+    console.warn("[savedSupplements] stack save threw:", e);
+    return null;
   }
 }
