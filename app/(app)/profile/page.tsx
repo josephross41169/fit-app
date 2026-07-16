@@ -31,6 +31,8 @@ import { isBusinessAccount } from "@/lib/businessTypes";
 import BusinessProfileView from "@/components/BusinessProfileView";
 import TaggedPostsModal from "@/components/TaggedPostsModal";
 import StreakSection from "@/components/StreakSection";
+import MicrosSection from "@/components/MicrosSection";
+import CoachNotes from "@/components/CoachNotes";
 
 const C = {
   purple:"#5BBE93", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
@@ -5249,6 +5251,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 Badges since streaks reflect current behavior and badges
                 reflect lifetime achievements; current state should be more
                 prominent. */}
+            {viewUserId && <MicrosSection userId={viewUserId} isOwn={isOwn} />}
             {viewUserId && <StreakSection userId={viewUserId} theme="purple" />}
 
             {/* Badges & Awards */}
@@ -5383,6 +5386,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             {/* Body Weight Tracker */}
             {viewUserId && <WeightTracker userId={viewUserId} />}
 
+            <CoachNotes isOwn={isOwn} />
             <EditableList title="Favorite Brands" items={brands} onSave={saveBrands} canEdit={isOwn} emptyItem={{emoji:"👟",name:"New Brand"}}
               renderItem={(item,i,setList)=>(
                 <div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
