@@ -1315,7 +1315,7 @@ export default function StatsPage(){
             </div>
           )}
         </div>
-        <div style={{display:"flex",gap:0,overflowX:"auto",scrollbarWidth:"none"}}>
+        <div style={{display:"flex",gap:0,flexWrap:"wrap",rowGap:6}}>
           {TABS.map(t=>(
             <button key={t.key} onClick={()=>setTab(t.key)} style={{
               flexShrink:0,padding:"9px 14px",border:"none",background:"transparent",
