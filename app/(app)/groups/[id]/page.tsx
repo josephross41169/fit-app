@@ -2738,7 +2738,7 @@ export default function GroupPage() {
           {/* Sub-tabs — only shown for sections that have multiple kids.
               Board has none (just renders the leaderboard directly). */}
           {section === "social" && (
-            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}`, overflowX:"auto" }}>
+            <div className="groups-subtabs" style={{ display:"flex", gap:3, flexWrap:"wrap", rowGap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}` }}>
               {([
                 { key:"posts",   label:"📸 Posts"   },
                 { key:"notes",   label:"💬 Notes"   },
@@ -2755,7 +2755,7 @@ export default function GroupPage() {
           )}
 
           {section === "challenges" && (
-            <div className="groups-subtabs" style={{ display:"flex", gap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}`, overflowX:"auto" }}>
+            <div className="groups-subtabs" style={{ display:"flex", gap:3, flexWrap:"wrap", rowGap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}` }}>
               {([
                 { key:"challenges", label:"⚡ Challenges" },
                 { key:"war",        label:"⚔️ Wars"      },
