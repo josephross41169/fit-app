@@ -203,7 +203,7 @@ export default function PRsPage() {
         </div>
 
         {/* Muscle filter chips */}
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 14, marginRight: -20, paddingRight: 20 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", rowGap: 6, paddingBottom: 14 }}>
           {muscles.map(m => {
             const color = MUSCLE_COLORS[m] || "#6B7280";
             const active = selectedMuscle === m;
