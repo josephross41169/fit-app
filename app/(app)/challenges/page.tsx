@@ -96,7 +96,7 @@ export default function OpenChallengeBoardPage() {
           Groups looking for opponents · Accept to start a war
         </div>
         {/* Filter pills */}
-        <div style={{ display:"flex", gap:6, overflowX:"auto", scrollbarWidth:"none" }}>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", rowGap:6 }}>
           {["all", ...Object.keys(METRICS)].map(k => (
             <button key={k} onClick={() => setFilter(k)} style={{
               padding:"5px 12px", borderRadius:20, border:`1px solid ${filter===k ? C.purple : C.border}`,
