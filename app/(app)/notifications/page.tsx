@@ -182,7 +182,7 @@ export default function NotificationsPage() {
         </div>
 
         {/* Filter tabs */}
-        <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 12 }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", rowGap: 6, paddingBottom: 12 }}>
           {TABS.map(t => (
             <button key={t.key} onClick={() => setFilter(t.key)} style={{
               padding: "8px 16px", borderRadius: 20, border: "none", cursor: "pointer",
