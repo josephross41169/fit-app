@@ -833,6 +833,7 @@ export default function PostPage() {
   // bump that favorite's use_count on save.
   const [supplements, setSupplements] = useState<{ name: string; photo_url: string | null; favId?: string; favCount?: number; ingredients?: any[] | null; serving_size?: string | null }[]>([]);
   const [factsEditFor, setFactsEditFor] = useState<SavedSupplement | null>(null);
+  const [showAllSupps, setShowAllSupps] = useState(false);
   const [suppName, setSuppName] = useState("");
   const [suppPhoto, setSuppPhoto] = useState<string | null>(null);
   // Saved supplement favorites (one-tap re-add), mirrors food favorites.
@@ -2803,6 +2804,58 @@ export default function PostPage() {
     { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#5BBE93" },
   ];
 
+  function renderSuppCard(fav: any) {
+                        const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
+                        return (
+                          <div key={fav.id} style={{ width: 96, flexShrink: 0, borderRadius: 12, background: alreadyAdded ? "rgba(91,190,147,0.12)" : "#111811", border: `1px solid ${alreadyAdded ? C.blue : "#1B231E"}`, overflow: "hidden" }}>
+                            <div
+                              role="button"
+                              onClick={() => {
+                                if (alreadyAdded) return;
+                                {
+                                  if ((fav as any).is_stack && Array.isArray((fav as any).items)) {
+                                    // A stack: one tap logs every item, each carrying its own
+                                    // saved facts when that item is also an individual favorite.
+                                    const additions = ((fav as any).items as any[])
+                                      .filter(it => !supplements.some(s2 => s2.name.toLowerCase() === String(it.name).toLowerCase()))
+                                      .map(it => {
+                                        const src = suppFavorites.find(f2 => f2.name.toLowerCase() === String(it.name).toLowerCase());
+                                        return { name: it.name, photo_url: it.photo_url || src?.photo_url || null, favId: src?.id, favCount: src?.use_count, ingredients: (src as any)?.ingredients || null, serving_size: (src as any)?.serving_size || null };
+                                      });
+                                    setSupplements(arr => [...arr, ...additions]);
+                                    bumpSupplementUse(fav.id, fav.use_count);
+                                  } else {
+                                    setSupplements(arr => [...arr, { name: fav.name, photo_url: fav.photo_url || null, favId: fav.id, favCount: fav.use_count, ingredients: (fav as any).ingredients || null, serving_size: (fav as any).serving_size || null }]);
+                                  }
+                                }
+                              }}
+                              style={{ cursor: alreadyAdded ? "default" : "pointer", textAlign: "left", width: "100%" }}>
+                              <div style={{ position: "relative", width: "100%", height: 60, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#12291D,#1E5B3F)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {fav.photo_url
+                                  ? <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                                  : <span style={{ fontSize: 22 }}>💊</span>}
+                                <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: alreadyAdded ? "#1B231E" : "#5BBE93", color: alreadyAdded ? "#5BBE93" : "#fff", fontSize: alreadyAdded ? 12 : 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{alreadyAdded ? "✓" : "+"}</span>
+                                {!(fav as any).is_stack && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFactsEditFor(fav); }}
+                                    aria-label={`Edit supplement facts for ${fav.name}`} title="Supplement facts"
+                                    style={{ position: "absolute", bottom: 4, right: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#86CFAE", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✏️</button>
+                                )}
+                                <button
+                                  onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
+                                  aria-label={`Remove ${fav.name} from favorites`} title="Remove from favorites"
+                                  style={{ position: "absolute", top: 4, left: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#D1D5DB", fontSize: 12, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
+                              </div>
+                              <div style={{ padding: "6px 8px 7px" }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1.25, height: 28, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                                  {fav.name}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+  }
+
   return (
     <div style={{ background: C.bg, minHeight: "100vh", paddingBottom: 100 }}>
       {/* ── AI Plan picker modal ──
@@ -3920,65 +3973,37 @@ export default function PostPage() {
                     )}
                   </div>
                   {suppFavorites.length > 0 ? (
-                    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
-                      {/* Compact quick-add strip — same card design as the food
-                          favorites below: photo tile with a + badge, name
-                          underneath, one swipeable row. */}
-                      {suppFavorites.map(fav => {
-                        const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
-                        return (
-                          <div key={fav.id} style={{ width: 96, flexShrink: 0, borderRadius: 12, background: alreadyAdded ? "rgba(91,190,147,0.12)" : "#111811", border: `1px solid ${alreadyAdded ? C.blue : "#1B231E"}`, overflow: "hidden" }}>
-                            <div
-                              role="button"
-                              onClick={() => {
-                                if (alreadyAdded) return;
-                                {
-                                  if ((fav as any).is_stack && Array.isArray((fav as any).items)) {
-                                    // A stack: one tap logs every item, each carrying its own
-                                    // saved facts when that item is also an individual favorite.
-                                    const additions = ((fav as any).items as any[])
-                                      .filter(it => !supplements.some(s2 => s2.name.toLowerCase() === String(it.name).toLowerCase()))
-                                      .map(it => {
-                                        const src = suppFavorites.find(f2 => f2.name.toLowerCase() === String(it.name).toLowerCase());
-                                        return { name: it.name, photo_url: it.photo_url || src?.photo_url || null, favId: src?.id, favCount: src?.use_count, ingredients: (src as any)?.ingredients || null, serving_size: (src as any)?.serving_size || null };
-                                      });
-                                    setSupplements(arr => [...arr, ...additions]);
-                                    bumpSupplementUse(fav.id, fav.use_count);
-                                  } else {
-                                    setSupplements(arr => [...arr, { name: fav.name, photo_url: fav.photo_url || null, favId: fav.id, favCount: fav.use_count, ingredients: (fav as any).ingredients || null, serving_size: (fav as any).serving_size || null }]);
-                                  }
-                                }
-                              }}
-                              style={{ cursor: alreadyAdded ? "default" : "pointer", textAlign: "left", width: "100%" }}>
-                              <div style={{ position: "relative", width: "100%", height: 60, background: fav.photo_url ? "#000" : "linear-gradient(135deg,#12291D,#1E5B3F)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                {fav.photo_url
-                                  ? <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                                  : <span style={{ fontSize: 22 }}>💊</span>}
-                                <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: alreadyAdded ? "#1B231E" : "#5BBE93", color: alreadyAdded ? "#5BBE93" : "#fff", fontSize: alreadyAdded ? 12 : 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{alreadyAdded ? "✓" : "+"}</span>
-                                {!(fav as any).is_stack && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFactsEditFor(fav); }}
-                                    aria-label={`Edit supplement facts for ${fav.name}`} title="Supplement facts"
-                                    style={{ position: "absolute", bottom: 4, right: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#86CFAE", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✏️</button>
-                                )}
-                                <button
-                                  onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
-                                  aria-label={`Remove ${fav.name} from favorites`} title="Remove from favorites"
-                                  style={{ position: "absolute", top: 4, left: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#D1D5DB", fontSize: 12, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
-                              </div>
-                              <div style={{ padding: "6px 8px 7px" }}>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1.25, height: 28, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                                  {fav.name}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 4 }}>
+                      {/* No horizontal scroll: up to 4 wrap; more collapse into
+                          a "+N" tile that opens a full-screen picker. */}
+                      {(suppFavorites.length > 4 ? suppFavorites.slice(0, 3) : suppFavorites).map(fav => renderSuppCard(fav))}
+                      {suppFavorites.length > 4 ? (
+                        <button
+                          onClick={() => setShowAllSupps(true)}
+                          style={{ width: 96, flexShrink: 0, borderRadius: 12, background: "#111811", border: "1px dashed #2A3A2A", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 95, color: C.text }}>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: "#5BBE93" }}>+{suppFavorites.length - 3}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, marginTop: 2 }}>See all</span>
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     <div style={{ fontSize: 12, color: C.sub }}>No saved supplements yet — add one below, then tap ☆ to save it.</div>
                   )}
+                  {showAllSupps ? (
+                    <div onClick={() => setShowAllSupps(false)} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                      <div onClick={e => e.stopPropagation()} style={{ background: "#0E1311", border: "1px solid #1B231E", borderRadius: 20, width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                        <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid #1B231E", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+                          <div style={{ fontWeight: 900, fontSize: 16, color: C.text }}>Saved supplements <span style={{ color: C.sub, fontSize: 13 }}>({suppFavorites.length})</span></div>
+                          <button onClick={() => setShowAllSupps(false)} style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#1B231E", color: C.text, fontSize: 18, cursor: "pointer" }}>×</button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px" }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            {suppFavorites.map(fav => renderSuppCard(fav))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Added supplements */}
