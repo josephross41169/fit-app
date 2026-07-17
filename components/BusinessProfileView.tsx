@@ -670,7 +670,7 @@ export default function BusinessProfileView({
         <div className="biz-body">
           <div className="biz-main">
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24, overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", rowGap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
           {([
             { key: "posts", label: "📸 Posts", show: true },
             { key: "community", label: "🤝 Community", show: true },
