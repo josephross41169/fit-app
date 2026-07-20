@@ -34,13 +34,22 @@ export async function POST(req: NextRequest) {
     if (userErr || !userData?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const userId = userData.user.id;
 
-    // ── Cached note for today? Return it (structural 1/day cap) ──
-    const today = new Date().toISOString().slice(0, 10);
+    // ── Cached note for THIS WEEK? Return it (structural 1/week cap) ──
+    // We key the cache by the Monday of the current week, so every request
+    // between Monday and Sunday reuses the same note and makes zero API
+    // calls. One generation per user per week — ~7x cheaper than daily,
+    // and a weekly "here's your week" note reads more naturally anyway.
+    const weekKey = (() => {
+      const d = new Date();
+      const day = (d.getUTCDay() + 6) % 7; // 0 = Monday ... 6 = Sunday
+      d.setUTCDate(d.getUTCDate() - day);
+      return d.toISOString().slice(0, 10);
+    })();
     const { data: existing } = await admin
       .from("ai_notes")
       .select("content, created_at")
       .eq("user_id", userId)
-      .eq("note_date", today)
+      .eq("note_date", weekKey)
       .maybeSingle();
     if (existing?.content) {
       return NextResponse.json({ note: existing.content, cached: true });
@@ -99,7 +108,7 @@ export async function POST(req: NextRequest) {
         model: "claude-sonnet-4-5",
         max_tokens: 200,
         system:
-          "You are a friendly fitness companion writing ONE private note (2-3 sentences, max 60 words) on a user's weekly activity summary. Be warm and observational. Point out at most ONE pattern — especially gaps in LOGGING (e.g. dinners never logged makes their nutrition picture incomplete) — framed as a logging observation, never as a judgment about their eating or body. Never give medical, diet, or training prescriptions. Never mention calories, weight loss, or deficiency. No greetings, no sign-off, no emojis.",
+          "You are a friendly fitness companion writing ONE private note (2-3 sentences, max 60 words) reflecting on the user's PAST WEEK of activity. Frame it as a look back at their week. Be warm and observational. Point out at most ONE pattern — especially gaps in LOGGING (e.g. dinners never logged makes their nutrition picture incomplete) — framed as a logging observation, never as a judgment about their eating or body. Never give medical, diet, or training prescriptions. Never mention calories, weight loss, or deficiency. No greetings, no sign-off, no emojis.",
         messages: [{ role: "user", content: summary }],
       }),
     });
@@ -112,7 +121,7 @@ export async function POST(req: NextRequest) {
     if (!note) return NextResponse.json({ note: null, reason: "empty" });
 
     // Cache (upsert so a race can't duplicate)
-    await admin.from("ai_notes").upsert({ user_id: userId, note_date: today, content: note }, { onConflict: "user_id,note_date" });
+    await admin.from("ai_notes").upsert({ user_id: userId, note_date: weekKey, content: note }, { onConflict: "user_id,note_date" });
 
     return NextResponse.json({ note, cached: false });
   } catch (e: any) {
