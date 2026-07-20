@@ -1,6 +1,6 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // Livelee — Capacitor configuration for iOS + Android wrappers.
 //
 // IMPORTANT: appId MUST match the bundle ID registered with Apple in App
@@ -26,7 +26,7 @@ const config: CapacitorConfig = {
   webDir: 'out',
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 400,
       backgroundColor: '#0D0D0D',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
