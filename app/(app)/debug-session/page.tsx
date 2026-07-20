@@ -1,6 +1,6 @@
 "use client";
-// ─────────────────────────────────────────────────────────────────────────────
-// /debug-session — on-device auth + storage diagnostics.
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// /debug-session â on-device auth + storage diagnostics.
 //
 // Purpose: the App Store build fails to persist sessions and rejects writes
 // (RLS) while the IDENTICAL code works on web. Every layer passes code review,
@@ -8,9 +8,9 @@
 // the checks inside the real shipped app and prints the truth.
 //
 // Not linked from any navigation. Reach it by URL on web, or on native via
-// Settings → (temporary) or by deep navigation. Safe to ship: it exposes no
+// Settings â (temporary) or by deep navigation. Safe to ship: it exposes no
 // secrets (token payloads are decoded locally, never logged/sent).
-// ─────────────────────────────────────────────────────────────────────────────
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -54,7 +54,7 @@ export default function DebugSessionPage() {
         await mod.Preferences.set({ key, value: stamp });
         const { value } = await mod.Preferences.get({ key });
         await mod.Preferences.remove({ key });
-        add("Preferences write→read round-trip", value === stamp ? "ok — persisted storage WORKS" : `MISMATCH (wrote ${stamp}, read ${value})`, value === stamp);
+        add("Preferences writeâread round-trip", value === stamp ? "ok â persisted storage WORKS" : `MISMATCH (wrote ${stamp}, read ${value})`, value === stamp);
       } catch (e: any) {
         add("Preferences plugin", `FAILED: ${e?.message || e}`, false);
       }
@@ -62,7 +62,7 @@ export default function DebugSessionPage() {
       // 3) Session state
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        add("getSession()", "NO SESSION — the client is anonymous right now", false);
+        add("getSession()", "NO SESSION â the client is anonymous right now", false);
       } else {
         add("getSession()", "session present", true);
         add("session.user.id", session.user?.id || "(missing)", !!session.user?.id);
@@ -71,7 +71,30 @@ export default function DebugSessionPage() {
         add("access_token role", payload?.role || "(none)", payload?.role === "authenticated");
         const secsLeft = payload?.exp ? payload.exp - Math.floor(Date.now() / 1000) : null;
         add("token expires in", secsLeft === null ? "(unknown)" : `${secsLeft}s`, secsLeft === null ? undefined : secsLeft > 0);
-        add("sub matches user.id", payload?.sub === session.user?.id ? "yes" : "NO — token/user mismatch", payload?.sub === session.user?.id);
+        add("sub matches user.id", payload?.sub === session.user?.id ? "yes" : "NO â token/user mismatch", payload?.sub === session.user?.id);
+      }
+
+      // 3b) getUser() â validates the token against the auth server over the
+      // network. This is what the Groups screen depends on: if this returns
+      // null, loadJoinedGroups() bails silently and Groups renders empty.
+      try {
+        const { data: gu, error: guErr } = await supabase.auth.getUser();
+        add("auth.getUser() (network validation)", guErr ? `ERROR: ${guErr.message}` : gu?.user?.id ? `ok â ${gu.user.id.slice(0, 8)}â¦` : "returned NO user", !!gu?.user?.id);
+        // 3c) The exact call the Groups tab makes, via the same fetch path
+        // (in the native shell this goes through the /api rewrite shim).
+        if (gu?.user?.id) {
+          try {
+            const res = await fetch(`/api/db?action=get_user_groups&userId=${gu.user.id}`);
+            const body = await res.text();
+            let count: string = "?";
+            try { count = String((JSON.parse(body).groups || []).length); } catch {}
+            add("GROUPS API via app fetch path", res.ok ? `ok â status ${res.status}, ${count} groups` : `FAILED â status ${res.status}: ${body.slice(0, 120)}`, res.ok);
+          } catch (e: any) {
+            add("GROUPS API via app fetch path", `THREW: ${e?.message || e} (shim/domain reachability problem)`, false);
+          }
+        }
+      } catch (e: any) {
+        add("auth.getUser()", `THREW: ${e?.message || e}`, false);
       }
 
       // 4) Authenticated READ (proves the token actually reaches the DB)
@@ -80,26 +103,26 @@ export default function DebugSessionPage() {
           .from("activity_logs")
           .select("id", { count: "exact", head: true })
           .eq("user_id", session?.user?.id || "00000000-0000-0000-0000-000000000000");
-        add("own-rows read (uses token)", error ? `ERROR: ${error.message}` : `ok — ${count ?? 0} rows visible as you`, !error);
+        add("own-rows read (uses token)", error ? `ERROR: ${error.message}` : `ok â ${count ?? 0} rows visible as you`, !error);
       } catch (e: any) {
         add("own-rows read", `THREW: ${e?.message || e}`, false);
       }
 
-      // 5) LIVE WRITE TEST — minimal private wellness row, then delete it.
+      // 5) LIVE WRITE TEST â minimal private wellness row, then delete it.
       try {
         const uid = session?.user?.id;
         if (!uid) {
-          add("write test", "skipped — no session", false);
+          add("write test", "skipped â no session", false);
         } else {
           const { data, error } = await supabase
             .from("activity_logs")
-            .insert({ user_id: uid, log_type: "wellness", wellness_type: "Other", notes: "debug probe — auto-deleted", is_public: false })
+            .insert({ user_id: uid, log_type: "wellness", wellness_type: "Other", notes: "debug probe â auto-deleted", is_public: false })
             .select("id")
             .single();
           if (error) {
             add("WRITE TEST", `FAILED: ${error.message} (code ${ (error as any).code || "?"})`, false);
           } else {
-            add("WRITE TEST", `SUCCESS — row ${data.id} inserted`, true);
+            add("WRITE TEST", `SUCCESS â row ${data.id} inserted`, true);
             const { error: delErr } = await supabase.from("activity_logs").delete().eq("id", data.id);
             add("cleanup delete", delErr ? `failed: ${delErr.message}` : "ok", !delErr);
           }
@@ -115,7 +138,7 @@ export default function DebugSessionPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0D", color: "#F0F0F0", padding: "24px 16px", fontFamily: "monospace" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
-        <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 4 }}>🔧 Session Diagnostics</div>
+        <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 4 }}>ð§ Session Diagnostics</div>
         <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>
           Runs entirely on this device. Screenshot the results.
         </div>
@@ -124,7 +147,7 @@ export default function DebugSessionPage() {
           disabled={running}
           style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: running ? "#24382E" : "#5BBE93", color: "#04342C", fontWeight: 900, fontSize: 15, cursor: "pointer", marginBottom: 20 }}
         >
-          {running ? "Running…" : "▶ Run all checks"}
+          {running ? "Runningâ¦" : "â¶ Run all checks"}
         </button>
         {lines.map((l, i) => (
           <div key={i} style={{ padding: "10px 12px", borderRadius: 10, marginBottom: 8, background: "#111811", border: `1px solid ${l.ok === false ? "#7F1D1D" : l.ok ? "#1E5B3F" : "#1B231E"}` }}>
