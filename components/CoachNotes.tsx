@@ -46,7 +46,7 @@ export default function CoachNotes({ isOwn }: { isOwn: boolean }) {
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "16px 18px", marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
         <span style={{ fontWeight: 900, fontSize: 16, color: C.text }}>🤖 Coach's notes</span>
-        <span style={{ fontSize: 11, color: C.sub }}>only you can see this · updates daily</span>
+        <span style={{ fontSize: 11, color: C.sub }}>only you can see this · updates weekly</span>
       </div>
       <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>{note}</div>
     </div>
