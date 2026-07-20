@@ -23,11 +23,19 @@ export default function LandingPage() {
     // page ("routed back to login" — App Review, twice). If we boot here
     // but the URL says we're supposed to be somewhere else, re-enter that
     // route client-side and stop.
+    let restoring = false;
     if (typeof window !== "undefined") {
       const path = window.location.pathname;
       if (path && path !== "/" && path !== "/index.html") {
+        // Attempt to re-enter the intended route — but DON'T return here.
+        // If this replace stalls or fails (slow chunk load, router not
+        // ready in the native shell), an early return would leave this
+        // page rendering its dark "checking" state forever: a black
+        // screen with no error. The normal session flow below keeps
+        // running as a safety net — it waits a beat to give restoration
+        // first shot, then routes the user somewhere real.
+        restoring = true;
         router.replace(path + window.location.search);
-        return;
       }
     }
 
@@ -54,7 +62,13 @@ export default function LandingPage() {
         const { data } = await supabase.auth.getSession();
         if (!cancelled && data.session) {
           clearTimeout(failSafe);
-          router.replace("/profile");
+          if (restoring) {
+            // Give the in-flight route restoration 1.5s to win; if it
+            // worked, this component unmounts and the timer is harmless.
+            setTimeout(() => { if (!cancelled) router.replace("/profile"); }, 1500);
+          } else {
+            router.replace("/profile");
+          }
           return;
         }
       } catch { /* no session check — fall through to marketing */ }
