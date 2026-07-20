@@ -278,6 +278,7 @@ export default function SettingsPage() {
 
       {/* ── SECTION: Account ──────────────────────────────────────────── */}
       <Section title="👤 Account">
+        <a href="/debug-session" style={{ display: "block", textAlign: "center", fontSize: 12, color: "#6B7280", textDecoration: "underline", marginBottom: 14 }}>🔧 Connection diagnostics</a>
         <button
           onClick={async () => {
             await supabase.auth.signOut();
