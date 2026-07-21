@@ -58,3 +58,15 @@ echo "Building mobile bundle + syncing iOS..."
 npm run build:mobile
 
 echo "===== ci_post_clone: done ====="
+
+# ── AUTO-VERSION ──────────────────────────────────────────────────────────────
+# Every Apple approval permanently closes its version train and rejects any
+# new build with the same CFBundleShortVersionString (errors 90062/90186 —
+# this failed builds on 1.0, 1.0.1, 1.1 AND 1.1.1). Deriving the marketing
+# version from CI_BUILD_NUMBER makes every build strictly higher than every
+# previous one, so that entire failure class is impossible from now on.
+# The App Store will show versions like 1.2.213. To make a marketing bump
+# (e.g. "2.0"), change the prefix below — nothing else ever needs touching.
+PBXPROJ="$(dirname "$0")/../App.xcodeproj/project.pbxproj"
+sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = 1.2.${CI_BUILD_NUMBER};/g" "$PBXPROJ"
+echo "[auto-version] MARKETING_VERSION set to 1.2.${CI_BUILD_NUMBER}"
