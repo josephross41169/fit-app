@@ -26,7 +26,7 @@ const config: CapacitorConfig = {
   webDir: 'out',
   plugins: {
     SplashScreen: {
-      launchShowDuration: 400,
+      launchShowDuration: 800,
       backgroundColor: '#0D0D0D',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
