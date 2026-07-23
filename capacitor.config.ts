@@ -27,6 +27,9 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 800,
+      // App calls SplashScreen.hide() itself on first paint (lib/auth.tsx) —
+      // keeps the branded splash up through the whole boot, no black gap.
+      launchAutoHide: false,
       backgroundColor: '#0D0D0D',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
