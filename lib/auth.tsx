@@ -81,6 +81,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // ── Hold the branded splash until first real paint ──
+    // capacitor.config sets launchAutoHide:false, so the Livelee splash
+    // stays up while the WebView boots instead of dropping to a black gap
+    // after a fixed timer. We hide it after the first two animation frames
+    // (≈ first painted frame), with an 8s failsafe so it can never stick.
+    if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+      const hideSplash = async () => { try { const m = await import('@capacitor/splash-screen'); await m.SplashScreen.hide(); } catch {} };
+      const failsafe = setTimeout(hideSplash, 8000);
+      requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(failsafe); hideSplash(); }));
+    }
+
     let mounted = true;
     let recoveryInFlight = false;
 
