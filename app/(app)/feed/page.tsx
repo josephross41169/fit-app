@@ -280,91 +280,10 @@ function fmtCount(n?: number | null): string { const v = n ?? 0; return v >= 100
 function initialsOf(name?: string | null, fallback?: string | null): string { const t = (name || fallback || "?").trim(); return t.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase(); }
 function fmtDistance(d?: string | null): string { const t = String(d ?? "").trim(); if (!t) return ""; return /^\d+(\.\d+)?$/.test(t) ? `${t} mi` : t; }
 
-const INITIAL_STORIES = [
-  { id: 1, username: "You", isYou: true, photo: null as string | null, hasNew: false },
-  { id: 2, username: "jake_lifts", photo: null as string | null, hasNew: true },
-  { id: 3, username: "sara_runs", photo: null as string | null, hasNew: true },
-  { id: 4, username: "mike_gains", photo: null as string | null, hasNew: false },
-  { id: 5, username: "lena_fit", photo: null as string | null, hasNew: true },
-  { id: 6, username: "chris_rx", photo: null as string | null, hasNew: false },
-];
+// (Removed unused INITIAL_STORIES mock.)
 
-const INITIAL_POSTS: Post[] = [
-  {
-    id: 1, user: "Jake Morrison", username: "jake_lifts", avatar: "JM",
-    time: "2h ago", dateShort: "3.24", dayLabel: "Tuesday",
-    photos: [], caption: "Chest & shoulders on FIRE 🔥 PR on bench today! Nothing beats that feeling when the weight just flies up.",
-    likes: 47, liked: false,
-    comments: [
-      { id: 1, user: "Sara Chen", avatar: "SC", text: "Absolute beast mode! What was your PR?", time: "1h ago" },
-      { id: 2, user: "Mike Davis", avatar: "MD", text: "Let's gooo!! 💪", time: "45m ago" },
-    ],
-    workout: {
-      type: "Chest Day", duration: "65 min", calories: 490,
-      exercises: [
-        { name: "Bench Press", sets: 5, reps: 8, weight: "185 lbs" },
-        { name: "Incline DB Press", sets: 4, reps: 10, weight: "70 lbs" },
-        { name: "Cable Flyes", sets: 3, reps: 15, weight: "35 lbs" },
-        { name: "Push-Ups", sets: 3, reps: 20, weight: "BW" },
-      ],
-      cardio: [],
-    },
-    nutrition: {
-      calories: 2380, protein: 195, carbs: 245, fat: 58, sugar: 32,
-      meals: [
-        { key: "Breakfast", emoji: "🥣", name: "Protein Oats", cal: 580 },
-        { key: "Lunch", emoji: "🌯", name: "Turkey Wrap", cal: 720 },
-        { key: "Dinner", emoji: "🍝", name: "Pasta & Chicken", cal: 1080 },
-      ],
-    },
-    wellness: null,
-  },
-  {
-    id: 2, user: "Sara Chen", username: "sara_runs", avatar: "SC",
-    time: "4h ago", dateShort: "3.24", dayLabel: "Tuesday",
-    photos: [], caption: "Fueling after a 10K this morning ✅ Hitting macros perfectly this week! Consistency is everything.",
-    likes: 31, liked: true,
-    comments: [
-      { id: 1, user: "Lena Torres", avatar: "LT", text: "You're such an inspiration! 🙌", time: "3h ago" },
-    ],
-    workout: {
-      type: "Morning Run", duration: "52 min", calories: 620,
-      exercises: [],
-      cardio: [{ type: "Running", duration: "52 min", distance: "10 km" }],
-    },
-    nutrition: {
-      calories: 1920, protein: 142, carbs: 210, fat: 52, sugar: 28,
-      meals: [
-        { key: "Breakfast", emoji: "🍳", name: "Eggs & Toast", cal: 480 },
-        { key: "Lunch", emoji: "🍗", name: "Chicken & Rice", cal: 740 },
-        { key: "Dinner", emoji: "🥗", name: "Salmon Salad", cal: 700 },
-      ],
-    },
-    wellness: { entries: [{ emoji: "🧘", activity: "Yoga", notes: "30 min post-run stretch" }] },
-  },
-  {
-    id: 3, user: "Mike Davis", username: "mike_gains", avatar: "MD",
-    time: "6h ago", dateShort: "3.23", dayLabel: "Monday",
-    photos: [], caption: "Nobody said leg day was easy. Nobody said it wasn't worth it. 275 on squats today 💪",
-    likes: 89, liked: false,
-    comments: [
-      { id: 1, user: "Jake Morrison", avatar: "JM", text: "Bro 275 is INSANE. What program are you running?", time: "5h ago" },
-      { id: 2, user: "Chris", avatar: "CR", text: "Legend 🐐", time: "4h ago" },
-    ],
-    workout: {
-      type: "Leg Day", duration: "68 min", calories: 510,
-      exercises: [
-        { name: "Squats", sets: 5, reps: 5, weight: "275 lbs" },
-        { name: "Romanian Deadlift", sets: 4, reps: 8, weight: "185 lbs" },
-        { name: "Leg Press", sets: 3, reps: 12, weight: "360 lbs" },
-        { name: "Calf Raises", sets: 4, reps: 20, weight: "100 lbs" },
-      ],
-      cardio: [],
-    },
-    nutrition: null,
-    wellness: null,
-  },
-];
+// (Removed INITIAL_POSTS mock — the feed must never show fabricated
+// content. Initial state is empty; real posts arrive from the fetch.)
 
 // ── Story Viewer ──────────────────────────────────────────────────────────────
 // ── Story types ─────────────────────────────────────────────────────────────
@@ -2115,7 +2034,7 @@ function ActivityFilterChips({ value, onChange }: { value: ActivityFilter; onCha
 export default function FeedPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [posts, setPosts] = useState(INITIAL_POSTS);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [dbPosts, setDbPosts] = useState<any[]>([]);
   const [dbPostsPage, setDbPostsPage] = useState(0);
   const [dbPostsHasMore, setDbPostsHasMore] = useState(true);
