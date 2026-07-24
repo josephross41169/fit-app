@@ -26,7 +26,10 @@ const config: CapacitorConfig = {
   webDir: 'out',
   plugins: {
     SplashScreen: {
-      launchShowDuration: 800,
+      // launchShowDuration intentionally NOT set: with launchAutoHide:false
+      // the app hides the splash itself on first paint (lib/auth.tsx). A
+      // duration here makes some Capacitor versions hide on the timer anyway,
+      // reintroducing the black gap when boot outlasts it.
       // App calls SplashScreen.hide() itself on first paint (lib/auth.tsx) —
       // keeps the branded splash up through the whole boot, no black gap.
       launchAutoHide: false,
