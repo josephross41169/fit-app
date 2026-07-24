@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import ToastHost, { showToast } from '@/components/ToastHost';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
@@ -90,6 +91,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const hideSplash = async () => { try { const m = await import('@capacitor/splash-screen'); await m.SplashScreen.hide(); } catch {} };
       const failsafe = setTimeout(hideSplash, 8000);
       requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(failsafe); hideSplash(); }));
+    }
+
+    // ── Replace native alert() with branded toasts, app-wide ──
+    // ~93 call sites use alert(); routing them through the toast system here
+    // upgrades every one (and any future ones) without touching call sites.
+    if (typeof window !== 'undefined') {
+      const nativeAlert = window.alert.bind(window);
+      window.alert = (msg?: any) => {
+        try { showToast(String(msg ?? '')); } catch { nativeAlert(msg); }
+      };
     }
 
     let mounted = true;
@@ -285,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, refreshProfile }}>
       {children}
+      <ToastHost />
     </AuthContext.Provider>
   );
 }
