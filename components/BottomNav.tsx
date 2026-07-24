@@ -6,8 +6,8 @@ import { useAuth } from "@/lib/auth";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
-const PURPLE = "#5BBE93";
-const PURPLE_BG = "rgba(124,58,237,0.15)";
+const ACCENT = "#5BBE93";
+const ACCENT_BG = "rgba(91,190,147,0.15)";
 
 // ── Nav tab definitions ───────────────────────────────────────────────────────
 // Each tab has a `slot` declaring where it appears on mobile:
@@ -29,7 +29,7 @@ const tabs: Tab[] = [
   {
     href: "/profile", label: "Home", slot: "primary",
     icon: (active) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? ACCENT : "none"} stroke={active ? ACCENT : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         <polyline points="9,22 9,12 15,12 15,22" />
       </svg>
@@ -41,7 +41,7 @@ const tabs: Tab[] = [
   {
     href: "/feed", label: "Social", slot: "primary",
     icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill="none" stroke={active ? ACCENT : "#6B7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
         <rect x="3" y="8" width="14" height="12" rx="2" />
         <path d="M7 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
       </svg>
@@ -51,7 +51,7 @@ const tabs: Tab[] = [
     href: "/post", label: "Post", slot: "primary",
     icon: (_active) => (
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg -mt-3"
-        style={{ background: `linear-gradient(135deg, ${PURPLE}, #86CFAE)` }}>
+        style={{ background: `linear-gradient(135deg, ${ACCENT}, #86CFAE)` }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-6 h-6">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
@@ -64,7 +64,7 @@ const tabs: Tab[] = [
     // user's own groups are one tap away (no separate nav item needed).
     href: "/connect?tab=mygroups", label: "Groups", slot: "primary",
     icon: (active) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? ACCENT : "none"} stroke={active ? ACCENT : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
         <circle cx="9" cy="7" r="4"/>
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -113,7 +113,7 @@ const tabs: Tab[] = [
   {
     href: "/notifications", label: "Alerts", slot: "hidden",
     icon: (active) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? ACCENT : "none"} stroke={active ? ACCENT : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
       </svg>
@@ -123,7 +123,7 @@ const tabs: Tab[] = [
   {
     href: "/messages", label: "Messages", slot: "hidden",
     icon: (active) => (
-      <svg viewBox="0 0 24 24" fill={active ? PURPLE : "none"} stroke={active ? PURPLE : "#6B7280"} strokeWidth="2" className="w-6 h-6">
+      <svg viewBox="0 0 24 24" fill={active ? ACCENT : "none"} stroke={active ? ACCENT : "#6B7280"} strokeWidth="2" className="w-6 h-6">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     ),
@@ -166,7 +166,7 @@ function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: Tab; a
         gap: collapsed ? 0 : 12,
         padding: collapsed ? "12px 0" : "10px 14px",
         borderRadius: 14,
-        background: active ? PURPLE_BG : "transparent",
+        background: active ? ACCENT_BG : "transparent",
         position: "relative",
         justifyContent: collapsed ? "center" : "flex-start",
         transition: "all 0.2s",
@@ -177,7 +177,7 @@ function SideNavItemCollapsible({ tab, active, badge, collapsed }: { tab: Tab; a
         {badge ? <Badge count={badge} /> : null}
       </div>
       {!collapsed && (
-        <span style={{ fontSize: 14, fontWeight: 600, color: active ? PURPLE : "#9CA3AF", whiteSpace: "nowrap", overflow: "hidden" }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: active ? ACCENT : "#9CA3AF", whiteSpace: "nowrap", overflow: "hidden" }}>
           {tab.label}
         </span>
       )}
@@ -285,7 +285,7 @@ export default function BottomNav() {
                         {badge > 0 && <Badge count={badge} />}
                       </div>
                       <span style={{ fontSize:11, fontWeight:700,
-                        color: active ? PURPLE : "#9CA3AF" }}>
+                        color: active ? ACCENT : "#9CA3AF" }}>
                         {tab.label}
                       </span>
                     </Link>
@@ -311,7 +311,7 @@ export default function BottomNav() {
                 </div>
                 {tab.href !== "/post" && (
                   <span className="text-xs font-medium"
-                    style={{ color: active ? PURPLE : "#6B7280" }}>
+                    style={{ color: active ? ACCENT : "#6B7280" }}>
                     {tab.label}
                   </span>
                 )}
@@ -329,12 +329,12 @@ export default function BottomNav() {
                 borderRadius:"50%",background:"#EF4444",border:"2px solid #0E1311" }}/>
             )}
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <circle cx="5"  cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
-              <circle cx="12" cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
-              <circle cx="19" cy="12" r="2" fill={moreOpen ? PURPLE : "#6B7280"}/>
+              <circle cx="5"  cy="12" r="2" fill={moreOpen ? ACCENT : "#6B7280"}/>
+              <circle cx="12" cy="12" r="2" fill={moreOpen ? ACCENT : "#6B7280"}/>
+              <circle cx="19" cy="12" r="2" fill={moreOpen ? ACCENT : "#6B7280"}/>
             </svg>
             <span style={{ fontSize:10, fontWeight:600,
-              color: moreOpen ? PURPLE : "#6B7280" }}>More</span>
+              color: moreOpen ? ACCENT : "#6B7280" }}>More</span>
           </button>
         </div>
       </nav>
@@ -351,7 +351,7 @@ export default function BottomNav() {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", marginBottom: 32, padding: "0 4px" }}>
           {!collapsed && (
-            <span className="text-2xl font-black" style={{ color: PURPLE, whiteSpace: "nowrap" }}>Livelee</span>
+            <span className="text-2xl font-black" style={{ color: ACCENT, whiteSpace: "nowrap" }}>Livelee</span>
           )}
           <button
             onClick={toggleSidebar}
@@ -369,15 +369,15 @@ export default function BottomNav() {
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               {collapsed ? (
                 <>
-                  <line x1="3" y1="5" x2="15" y2="5" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="3" y1="9" x2="15" y2="9" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="3" y1="13" x2="15" y2="13" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="5" x2="15" y2="5" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="9" x2="15" y2="9" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="13" x2="15" y2="13" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"/>
                 </>
               ) : (
                 <>
-                  <line x1="3" y1="5" x2="15" y2="5" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="3" y1="9" x2="12" y2="9" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="3" y1="13" x2="15" y2="13" stroke={PURPLE} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="5" x2="15" y2="5" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="9" x2="12" y2="9" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="13" x2="15" y2="13" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"/>
                 </>
               )}
             </svg>
