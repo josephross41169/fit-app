@@ -280,7 +280,7 @@ function CardioForm({
 // "default" rep count used to seed the per-set repsArr. `repsArr` is the
 // new source of truth: one entry per set so users can log pyramid sets
 // like 12/8/6 without losing data. Same pattern as `weights`.
-type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string; bodyweight?: boolean;
+type Exercise = { name: string; sets: string; reps: string; weight: string; weights: string[]; repsArr?: string[]; notes?: string; bodyweight?: boolean; timed?: boolean;
   // Ab/finisher circuit: logged as one timed block (name + minutes) instead of
   // the full sets/reps/weight grid. `circuitMinutes` holds the duration, and
   // `circuitMoves` optionally lists the individual exercises in the circuit for
@@ -1456,6 +1456,7 @@ export default function PostPage() {
           name: ex.name,
           sets: ex.sets,
           reps: ex.reps,
+          timed: ex.timed || false,
           weight: (ex.weights || [])[0] || ex.weight || '',
           weights: ex.weights || [],
           repsArr: ex.repsArr || [],
@@ -1649,6 +1650,7 @@ export default function PostPage() {
             repsArr,
             notes: ex.notes || undefined,
             bodyweight: ex.bodyweight || false,
+            timed: ex.timed || false,
           };
         });
 
@@ -3656,12 +3658,25 @@ export default function PostPage() {
                           color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.bodyweight ? "✓" : ""}</span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: ex.bodyweight ? "#86CFAE" : C.sub }}>Bodyweight (no added weight)</span>
                       </button>
+                      {/* Timed toggle — planks, carries, dead hangs, intervals:
+                          measure sets in SECONDS instead of reps. Values live in
+                          the same per-set slots; `timed` flags how to read them. */}
+                      <button type="button"
+                        onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, timed: !x.timed } : x))}
+                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", marginBottom: 10,
+                          background: ex.timed ? "rgba(91,190,147,0.15)" : "transparent",
+                          border: `1.5px solid ${ex.timed ? C.blue : C.greenMid}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                          border: `2px solid ${ex.timed ? C.blue : C.sub}`, background: ex.timed ? C.blue : "transparent",
+                          color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.timed ? "✓" : ""}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.timed ? "#86CFAE" : C.sub }}>⏱ Timed — track seconds instead of reps</span>
+                      </button>
 
                       {/* Per-set rows — each set has its own reps + weight
                           inputs side-by-side, with quick +2.5/+5/+10 lb
                           buttons. Lets users log pyramid sets, drop sets,
                           warm-up sets etc. without losing detail. */}
-                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>{ex.bodyweight ? "Reps (per set)" : "Reps × Weight (per set)"}</label>
+                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>{ex.timed ? (ex.bodyweight ? "Time in seconds (per set)" : "Seconds × Weight (per set)") : (ex.bodyweight ? "Reps (per set)" : "Reps × Weight (per set)")}</label>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {Array.from({ length: numSets }).map((_, s) => {
                           function updateW(delta: number) {
@@ -3681,7 +3696,7 @@ export default function PostPage() {
                                   numeric keypad on mobile so it feels native. */}
                               <input
                                 style={ex.bodyweight ? { ...iStyle, flex: 1, padding: "7px 10px", fontSize: 13 } : { ...iStyle, width: 56, padding: "7px 8px", fontSize: 13, textAlign: "center" as const, flexShrink: 0 }}
-                                type="text" inputMode="numeric" placeholder="reps"
+                                type="text" inputMode="numeric" placeholder={ex.timed ? "sec" : "reps"}
                                 value={(ex.repsArr || [])[s] ?? ''}
                                 onChange={e => setExercises(exs => exs.map((x, j) => {
                                   if (j !== i) return x;
