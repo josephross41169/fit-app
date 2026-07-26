@@ -94,6 +94,10 @@ export function normalizeExerciseName(name: any): string {
  *  + the rep count at that weight. Falls back to 0 if no parseable weight. */
 export function bestSetInExercise(ex: LiftEntry): { weight: number; reps: number } {
   if (!ex) return { weight: 0, reps: 0 };
+  // Timed exercises (planks, carries, dead hangs) store SECONDS in the reps
+  // slot. They must never enter weight×reps PR math — a 90s plank is not a
+  // 90-rep set. Returning zeros keeps them out of every record.
+  if ((ex as any).timed) return { weight: 0, reps: 0 };
   // Reps come from the entry-level `reps` field; we treat all sets as having
   // the same rep target since that's how the app currently structures it.
   // If users start logging different reps per set we'd need a per-set rep
