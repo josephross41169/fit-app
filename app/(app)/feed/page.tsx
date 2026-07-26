@@ -163,7 +163,7 @@ function ReactionBar({
 }
 
 type Comment = { id: number; user: string; avatar: string; text: string; time: string; };
-type Exercise = { name: string; sets: number; reps: number; weight: string; weights?: string[]; repsArr?: string[]; };
+type Exercise = { name: string; sets: number; reps: number; weight: string; weights?: string[]; repsArr?: string[]; timed?: boolean; };
 type Meal = { key: string; emoji: string; name: string; cal: number; };
 type Post = {
   id: number;
@@ -674,6 +674,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const totalSets = exercises.reduce((s, ex) => s + (ex.sets || 0), 0);
   const totalVol = exercises.reduce((s, ex) => {
     const w = parseFloat(String(ex.weight)) || 0;
+    if (ex.timed) return s; // timed sets store seconds, not reps — no volume
     return s + (w * (ex.sets || 0) * (ex.reps || 0));
   }, 0);
   const isPR = (workout as any).isPR;
@@ -762,7 +763,11 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               const setCount = wsArr.length > 1 ? wsArr.length : (ex.sets || 1);
               const savedReps: string[] = Array.isArray(ex.repsArr) ? ex.repsArr.filter((r: any) => r !== '' && r != null) : [];
               const rArr: string[] = savedReps.length > 1 ? (ex.repsArr as string[]) : Array(Math.max(1, setCount)).fill(String(ex.reps ?? ''));
-              const repsDisplay = rArr.length > 1 ? rArr.join(' / ') : (rArr[0] || String(ex.reps ?? '') || '—');
+              // Timed exercises store seconds in the reps slots: 45 → "45s",
+              // 90 → "1:30" so a plank never reads like a 90-rep set.
+              const fmtT = (v: string) => { const n = parseInt(v); if (!n || isNaN(n)) return v || '—'; return n < 60 ? `${n}s` : `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`; };
+              const shown = ex.timed ? rArr.map(fmtT) : rArr;
+              const repsDisplay = shown.length > 1 ? shown.join(' / ') : (shown[0] || (ex.timed ? fmtT(String(ex.reps ?? '')) : String(ex.reps ?? '')) || '—');
               return (
                 <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 30px 58px 88px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                   <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ex.name}</span>
