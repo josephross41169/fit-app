@@ -67,6 +67,21 @@ echo "===== ci_post_clone: done ====="
 # previous one, so that entire failure class is impossible from now on.
 # The App Store will show versions like 1.2.213. To make a marketing bump
 # (e.g. "2.0"), change the prefix below — nothing else ever needs touching.
-PBXPROJ="$(dirname "$0")/../App.xcodeproj/project.pbxproj"
-sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = 1.2.${CI_BUILD_NUMBER};/g" "$PBXPROJ"
-echo "[auto-version] MARKETING_VERSION set to 1.2.${CI_BUILD_NUMBER}"
+# NOTE ON PATHS: this script does `cd "$CI_PRIMARY_REPOSITORY_PATH"` earlier,
+# so $(dirname "$0") is NOT reliable here — when Xcode Cloud invokes the script
+# with a relative path, dirname resolves against the new working directory and
+# points outside the repo. sed then fails, and because `set -e` is active the
+# whole build dies during post-clone (no start time, no error counts). Builds
+# 221-223 failed exactly this way. Always use the absolute repo path, and never
+# let this block abort the build.
+PBXPROJ="$CI_PRIMARY_REPOSITORY_PATH/ios/App/App.xcodeproj/project.pbxproj"
+if [ -n "$CI_BUILD_NUMBER" ] && [ -f "$PBXPROJ" ]; then
+  if sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = 1.2.${CI_BUILD_NUMBER};/g" "$PBXPROJ"; then
+    echo "[auto-version] MARKETING_VERSION set to 1.2.${CI_BUILD_NUMBER}"
+    grep -m1 "MARKETING_VERSION" "$PBXPROJ" || true
+  else
+    echo "[auto-version] WARNING: sed failed; leaving MARKETING_VERSION as-is."
+  fi
+else
+  echo "[auto-version] WARNING: skipped (CI_BUILD_NUMBER='${CI_BUILD_NUMBER}', pbxproj at '$PBXPROJ')."
+fi
