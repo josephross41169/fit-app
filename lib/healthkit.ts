@@ -233,10 +233,36 @@ export async function runHealthKitSync(userId: string): Promise<SyncResult> {
         };
       }).filter(r => r.external_id);
 
-      if (rows.length > 0) {
+      // ── De-dupe against manual logs ────────────────────────────────────
+      // If the user already logged this session themselves, skip the
+      // HealthKit copy instead of importing a duplicate. Rule: a HealthKit
+      // workout is "already logged" when a manual workout (no
+      // external_source) has a timestamp inside the HealthKit session's
+      // time window, padded 45 min each side — people log right before or
+      // after training. Watch-only sessions still import normally.
+      let manualTimes: number[] = [];
+      try {
+        const { data: manual } = await supabase
+          .from('activity_logs')
+          .select('logged_at')
+          .eq('user_id', userId)
+          .eq('log_type', 'workout')
+          .is('external_source', null)
+          .gte('logged_at', startISO)
+          .lte('logged_at', endISO);
+        manualTimes = (manual || []).map(m => new Date(m.logged_at as string).getTime());
+      } catch { /* if the check fails, import anyway — worst case is a dupe */ }
+      const PAD_MS = 45 * 60 * 1000;
+      const deduped = rows.filter(r => {
+        const start = new Date(r.logged_at as string).getTime();
+        const end = start + ((r.workout_duration_min || 60) * 60 * 1000);
+        return !manualTimes.some(t => t >= start - PAD_MS && t <= end + PAD_MS);
+      });
+
+      if (deduped.length > 0) {
         const { error, count } = await supabase
           .from('activity_logs')
-          .upsert(rows, {
+          .upsert(deduped, {
             onConflict: 'user_id,external_source,external_id',
             ignoreDuplicates: true,
             count: 'exact',
