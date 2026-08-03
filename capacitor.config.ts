@@ -71,3 +71,4 @@ const config: CapacitorConfig = {
 };
 
 export default config;
+// build trigger: workflow fixed to Latest Release
