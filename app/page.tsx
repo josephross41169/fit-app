@@ -57,6 +57,17 @@ export default function LandingPage() {
       if (!cancelled) setChecking(false);
     }, hasLocalSession ? 8000 : 2500);
 
+    // ── Instant entry for returning users ──────────────────────────────
+    // A saved session token means this is a logged-in user. Don't make
+    // them stare at a dark screen while the network re-validates (slow
+    // cold starts made the app dump logged-in users onto the marketing
+    // page — which reads as "it signed me out AGAIN"). Go straight into
+    // the app; the app shell's own auth guard handles a truly-dead token.
+    if (hasLocalSession && !restoring) {
+      router.replace("/profile");
+      return () => { cancelled = true; clearTimeout(failSafe); };
+    }
+
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
