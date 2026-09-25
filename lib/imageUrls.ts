@@ -35,6 +35,12 @@ export function thumbUrl(
 ): string {
   if (!url || typeof url !== 'string') return url || '';
 
+  // Supabase image transformations (/render/image/) are a paid-plan
+  // feature; on the Free plan they return 403 and every photo breaks.
+  // Serve the original file until the project is on a plan that
+  // includes transforms.
+  return url;
+
   // Only transform Supabase storage URLs. Anything else passes through
   // unchanged — third-party URLs, data URLs, blob URLs, etc.
   if (!url.includes('/storage/v1/object/public/')) return url;
