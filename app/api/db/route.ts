@@ -6,6 +6,7 @@ import { recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type Acti
 // site below also calls this so a banner shows up on the recipient's
 // device. If VAPID env vars aren't set, sendPushToUser is a no-op.
 import { sendPushToUser } from '@/lib/pushServer';
+import { XP_FOR_NEXT, type Level } from '@/lib/tiers';
 
 // Mark as dynamic to avoid static collection at build time
 export const dynamic = 'force-dynamic';
@@ -494,7 +495,11 @@ async function handlePOST(req: NextRequest) {
         return NextResponse.json({ error: readError?.message || 'User profile not found after XP insert' }, { status: 500 });
       }
 
-      const newXp = (profile.xp_in_level ?? 0) + xpAmount;
+      // Cap XP at what the next level needs — it doesn't pile up past the
+      // threshold while the user finishes that level's challenges.
+      const cap = XP_FOR_NEXT[(profile.current_level ?? 1) as Level];
+      const raw = (profile.xp_in_level ?? 0) + xpAmount;
+      const newXp = cap ? Math.min(raw, cap) : raw;
       const { error: updateError } = await admin
         .from('users')
         .update({ xp_in_level: newXp })
