@@ -10,6 +10,7 @@ import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
 import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
+import HighlightAlbums from "@/components/HighlightAlbums";
 import TemplateGallery from "@/components/TemplateGallery";
 import { groupBadgesIntoFamilies, TIER_STYLES, type DisplayBadge, type EarnedBadge, type BadgeCounters } from "@/lib/badgeFamilies";
 import { getAllUserRivalryBadges, type RivalryBadgeWithContext } from "@/lib/rivalries";
@@ -2003,14 +2004,14 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         // it says — including empty array. Previously this fell through to
         // localStorage when DB had an empty array, which caused deleted
         // highlights to come back from stale localStorage cache.
-        const { data, error } = await supabase.from('users').select('highlights').eq('id', user!.id).single();
+        const { data, error } = await supabase.from('users').select('highlights').eq('id', viewUserId).single();
         if (!error && data) {
           const dbHighlights = Array.isArray(data.highlights) ? data.highlights : [];
           // Filter to only valid URLs (not base64 blobs which may be truncated)
           const validUrls = dbHighlights.filter((u: string) => u && (u.startsWith('http') || u.startsWith('/')));
           setHighlights(validUrls);
           // Sync localStorage to match DB so future loads are consistent
-          try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(validUrls)); } catch {}
+          if (isOwn) { try { localStorage.setItem(`fit_highlights_${user!.id}`, JSON.stringify(validUrls)); } catch {} }
           return;
         }
       } catch {}
@@ -4876,19 +4877,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   awkwardly in the narrow profile column. They moved to a
                   dedicated row below (see next div). */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights {highlights.length > 0 && <span style={{fontSize:12,color:C.sub,fontWeight:600,marginLeft:6}}>{highlights.length}</span>}</div>
-                <div style={{display:"flex",gap:6}}>
-                  {isOwn && highlights.length > 0 && (
-                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#1B231E",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
-                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
-                    </button>
-                  )}
-                  {isOwn && highlights.length < HIGHLIGHT_SLOTS && (
-                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",border:"none",cursor:"pointer"}}>
-                      + Add
-                    </button>
-                  )}
-                </div>
+                <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
               </div>
               {/* Nav buttons row */}
               <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
@@ -4902,7 +4891,21 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   unmute, opens lightbox on tap. We render an edit overlay on
                   top when editingHighlights is true so users can remove items
                   without losing the strip's visual flow. */}
-              {highlights.length === 0 ? (
+              <HighlightAlbums
+                viewUserId={viewUserId}
+                isOwn={isOwn}
+                favoritesCount={highlights.length}
+                favoritesActions={isOwn && (highlights.length > 0 || highlights.length < HIGHLIGHT_SLOTS) ? (<>{isOwn && highlights.length > 0 && (
+                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#1B231E",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
+                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
+                    </button>
+                  )}
+                  {isOwn && highlights.length < HIGHLIGHT_SLOTS && (
+                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",border:"none",cursor:"pointer"}}>
+                      + Add
+                    </button>
+                  )}</>) : null}
+                favorites={<>{highlights.length === 0 ? (
                 isOwn ? (
                 <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(91,190,147,0.06)",color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
                   <span style={{fontSize:24}}>+</span>
@@ -4935,7 +4938,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 </div>
               ) : (
                 <HighlightsStrip urls={highlights} />
-              )}
+              )}</>}
+              />
             </div>
 
             {/* Goals card — shows up to 5 active or past goals with progress
