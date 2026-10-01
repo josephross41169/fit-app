@@ -233,7 +233,9 @@ export function getLevelProgress(d: CounterData): LevelProgressInfo {
   const readyToLevelUp = !isMax && xpReady && challengesReady;
 
   return {
-    level, xpInLevel: d.xpInLevel, xpNeeded,
+    // XP stops at the threshold — extra XP doesn't carry past what the
+    // next level needs (e.g. never shows 243/90).
+    level, xpInLevel: xpNeeded ? Math.min(d.xpInLevel, xpNeeded) : d.xpInLevel, xpNeeded,
     xpPercent, isMaxLevel: isMax,
     challenges, challengesComplete, challengesTotal,
     readyToLevelUp,
