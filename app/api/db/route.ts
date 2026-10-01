@@ -414,9 +414,40 @@ async function handleGET(req: NextRequest) {
   }
 }
 
+// Who is actually calling? Reads the Supabase access token the client attaches
+// (lib/mobileFetchShim.ts) and verifies it. Returns null if missing/invalid.
+async function callerId(req: NextRequest): Promise<string | null> {
+  const h = req.headers.get('authorization') || '';
+  const token = h.toLowerCase().startsWith('bearer ') ? h.slice(7).trim() : '';
+  if (!token) return null;
+  try {
+    const { data } = await admin.auth.getUser(token);
+    return data?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Actions that delete accounts or change other people's group membership must
+// come from the user named in the payload — otherwise anyone who knows a user
+// id could delete that account or kick people out of groups.
+const VERIFIED_ACTIONS: Record<string, string> = {
+  delete_account: 'userId',
+  set_member_role: 'actorId',
+  kick_member: 'actorId',
+};
+
 async function handlePOST(req: NextRequest) {
   try {
     const { action, payload } = await req.json();
+
+    if (VERIFIED_ACTIONS[action]) {
+      const claimed = payload?.[VERIFIED_ACTIONS[action]];
+      const cid = await callerId(req);
+      if (!cid || cid !== claimed) {
+        return NextResponse.json({ error: 'Not authorized. Please sign in again.' }, { status: 401 });
+      }
+    }
 
     if (action === 'award_xp') {
       const { userId, category } = payload || {};
