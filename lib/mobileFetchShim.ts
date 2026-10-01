@@ -32,6 +32,7 @@ declare global {
       getPlatform?: () => string;
     };
     __liveleeFetchShimInstalled?: boolean;
+    __liveleeAccessToken?: string | null;
   }
 }
 
@@ -51,7 +52,26 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
     return false;
   };
 
-  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  // Attach the signed-in user's access token to our own /api/ calls so the
+  // server can verify WHO is calling (lib/auth.tsx keeps the token current).
+  // Only for /api/ paths, and never overrides an Authorization the caller set.
+  const withAuth = (input: RequestInfo | URL, init?: RequestInit): RequestInit | undefined => {
+    try {
+      const token = window.__liveleeAccessToken;
+      if (!token) return init;
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const path = new URL(url, window.location.href).pathname;
+      if (!path.startsWith('/api/')) return init;
+      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+      return { ...init, headers };
+    } catch {
+      return init;
+    }
+  };
+
+  window.fetch = ((input: RequestInfo | URL, init0?: RequestInit) => {
+    const init = withAuth(input, init0);
     if (shouldRewrite()) {
       // String URL starting with `/api/` → rewrite to absolute live API.
       if (typeof input === 'string' && input.startsWith('/api/')) {

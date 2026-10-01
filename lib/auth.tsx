@@ -50,6 +50,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  // Expose the current access token to the /api fetch wrapper
+  // (lib/mobileFetchShim.ts) so server routes can verify the caller.
+  if (typeof window !== 'undefined') (window as any).__liveleeAccessToken = session?.access_token ?? null;
   const [loading, setLoading] = useState(true);
   // Tracks the currently signed-in user's id without the stale-closure
   // problem inside the async auth listener. Used to tell a *real* sign-in
