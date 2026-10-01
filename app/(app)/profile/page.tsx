@@ -2788,7 +2788,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       const { data: u } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user!.id)
+        .eq('id', viewUserId)
         .single();
 
       // Compute streaks client-side from realDays — DB doesn't track these
@@ -2854,7 +2854,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         const { data: todayLogs } = await supabase
           .from('activity_logs')
           .select('log_type, workout_category')
-          .eq('user_id', user!.id)
+          .eq('user_id', viewUserId)
           .gte('logged_at', localMidnight.toISOString());
         const cats = new Set<string>();
         const cardioSet = new Set(['running', 'walking', 'biking', 'swimming', 'rowing']);
@@ -2870,14 +2870,14 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         const { count: feedCount } = await supabase
           .from('posts')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', user!.id)
+          .eq('user_id', viewUserId)
           .gte('created_at', localMidnight.toISOString());
         if ((feedCount ?? 0) > 0) cats.add('feed_post');
         setTodayXpCategories(cats);
       } catch { /* non-fatal — leaves the set empty */ }
 
       // If user is ready to level up (XP + challenges all met), trigger server-side level_up
-      if (info.readyToLevelUp) {
+      if (isOwn && info.readyToLevelUp) {
         const result = await tryLevelUp(user!.id);
         if (result && result.level !== cd.currentLevel) {
           // Reload counters with new level
