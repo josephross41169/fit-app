@@ -36,6 +36,7 @@ import MicrosSection from "@/components/MicrosSection";
 import CoachNotes from "@/components/CoachNotes";
 import { TileProvider, InTile, TileGrid, JustifiedThumbs, type TileId } from "@/components/ProfileTiles";
 import { currentMonthWorkoutStats } from "@/lib/workoutStats";
+import HighlightBoxEditor from "@/components/HighlightBoxEditor";
 
 const C = {
   purple:"#5BBE93", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
@@ -1834,6 +1835,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   }, []);
   // Mobile "boxes" layout: which tile's full-screen sheet is open.
   const [openTile, setOpenTile] = useState<TileId | null>(null);
+  // Photos the owner hand-picked for the Highlights box (users.highlight_box).
+  // null = automatic (favorites first, then newest post photos).
+  const [boxPhotos, setBoxPhotos] = useState<string[] | null>(null);
   const avatarSize = isMobile ? 220 : 280;
 
   const [profile,setProfile] = useState({
@@ -2003,6 +2007,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   useEffect(() => {
     if (!user) return;
     async function loadHighlights() {
+      // Hand-picked box photos (separate query so a problem here can never
+      // break the main highlights load).
+      supabase.from('users').select('highlight_box').eq('id', viewUserId).single()
+        .then(({ data }: any) => {
+          const b = data?.highlight_box;
+          setBoxPhotos(Array.isArray(b) ? b.filter((u: any) => typeof u === 'string') : null);
+        }, () => {});
       try {
         // Supabase is the source of truth. If the row exists, use whatever
         // it says — including empty array. Previously this fell through to
@@ -3344,6 +3355,16 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       />
     );
   }
+
+  // Load / save the hand-picked Highlights box photos.
+  const saveBoxPhotos = async (list: string[] | null) => {
+    if (!isOwn || !viewUserId) return false;
+    const prev = boxPhotos;
+    setBoxPhotos(list);
+    const { error } = await supabase.from('users').update({ highlight_box: list } as any).eq('id', viewUserId);
+    if (error) { setBoxPhotos(prev); alert("Couldn't save your box photos. Try again."); return false; }
+    return true;
+  };
 
   // One earned-badge family tile (credential / yearly / progression look).
   // Shared by the Badges card and the Badges box preview.
@@ -4967,7 +4988,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             {/* Mobile: the 2×2 boxes. Each opens its section full-screen. */}
             {(() => {
               // Highlights: favorites first, topped up from post photos; never cropped.
-              const thumbs = Array.from(new Set([...highlights, ...feedPhotos])).slice(0, 16);
+              const thumbs = boxPhotos ?? Array.from(new Set([...highlights, ...feedPhotos])).slice(0, 16);
               const latest: any = realDays[0];
               const badgeFams = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
               const badgeCount = badgeFams.length + rivalryBadges.length;
@@ -5094,6 +5115,17 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               );
             })()}
 
+            {isOwn && (
+              <InTile slot="photos">
+                <HighlightBoxEditor
+                  shown={boxPhotos ?? Array.from(new Set([...highlights, ...feedPhotos])).slice(0, 16)}
+                  all={Array.from(new Set([...highlights, ...feedPhotos]))}
+                  isCustom={boxPhotos !== null}
+                  onSave={saveBoxPhotos}
+                  isVideo={isVideoUrl}
+                />
+              </InTile>
+            )}
             <InTile slot="photos">
             <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(91,190,147,0.08)",marginBottom:20}}>
               {/* Title row — just the heading + Edit toggle. The three
