@@ -2,12 +2,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Profile "boxes" layout (mobile).
 //
-// On phones the profile body is a 2×2 grid of tiles — Highlights, Activity,
+// The profile body (phone AND desktop) is a 2×2 grid of tiles — Highlights, Activity,
 // Badges, Goals. Tapping a tile slides in a full-screen sheet holding that
 // section. The existing section JSX in profile/page.tsx is wrapped in
 // <InTile slot="…"> and PORTALED into the sheet, so the sections keep their
-// state/data and nothing had to be rewritten. On desktop <InTile> renders
-// its children in place, so the 3-column desktop layout is unchanged.
+// state/data and nothing had to be rewritten. Phones get a full-screen
+// sheet; desktop (`wide`) gets a right-side drawer over a dimmed backdrop.
 //
 // Closed sheets stay mounted (slid off-screen + visibility:hidden, not
 // display:none) so charts inside still measure their width correctly.
@@ -35,8 +35,9 @@ export function InTile({ slot, children }: { slot: string; children: ReactNode }
   return node ? createPortal(children, node) : null;
 }
 
-export function TileProvider({ mobile, open, onClose, children }: {
-  mobile: boolean; open: TileId | null; onClose: () => void; children: ReactNode;
+export function TileProvider({ mobile, wide = false, open, onClose, children }: {
+  /** true = portal sections into sheets (boxes layout on). */
+  mobile: boolean; wide?: boolean; open: TileId | null; onClose: () => void; children: ReactNode;
 }) {
   const [slots, setSlots] = useState<Slots>({});
   // Stable callback refs (a new ref fn every render would ping-pong state).
@@ -55,12 +56,21 @@ export function TileProvider({ mobile, open, onClose, children }: {
   return (
     <Ctx.Provider value={{ mobile, slots }}>
       {children}
+      {mobile && wide && (
+        <div onClick={onClose} aria-hidden
+          style={{ position: "fixed", inset: 0, zIndex: 199, background: "rgba(0,0,0,0.6)",
+            opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none", transition: "opacity 0.2s" }} />
+      )}
       {mobile && SHEETS.map(s => {
         const isOpen = open === s.id;
         return (
           <div key={s.id} role="dialog" aria-label={s.title} aria-hidden={!isOpen}
             style={{
-              position: "fixed", inset: 0, zIndex: 200, background: "#0E1311",
+              position: "fixed", top: 0, bottom: 0, right: 0, left: wide ? "auto" : 0,
+              width: wide ? "min(680px, 100vw)" : undefined,
+              zIndex: 200, background: "#0E1311",
+              borderLeft: wide ? "1px solid #243329" : undefined,
+              boxShadow: wide ? "-20px 0 60px rgba(0,0,0,0.5)" : undefined,
               overflowY: "auto", WebkitOverflowScrolling: "touch" as any,
               transform: isOpen ? "translateX(0)" : "translateX(100%)",
               visibility: isOpen ? "visible" : "hidden",
@@ -77,11 +87,11 @@ export function TileProvider({ mobile, open, onClose, children }: {
               <button onClick={onClose} aria-label="Back"
                 style={{ height: 44, minWidth: 44, padding: "0 10px", border: "none", background: "transparent",
                   color: "#5BBE93", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 26, lineHeight: 1, marginTop: -2 }}>‹</span> Back
+                <span style={{ fontSize: 26, lineHeight: 1, marginTop: -2 }}>{wide ? "×" : "‹"}</span> {wide ? "Close" : "Back"}
               </button>
               <div style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 17, color: "#F0F0F0", marginRight: 76 }}>{s.title}</div>
             </div>
-            <div style={{ padding: "16px 16px 120px" }}>
+            <div style={{ padding: wide ? "20px 24px 60px" : "16px 16px 120px" }}>
               {s.slots.map(k => <div key={k} ref={reg(k)} />)}
             </div>
           </div>
@@ -94,13 +104,13 @@ export function TileProvider({ mobile, open, onClose, children }: {
 export type TileSpec = { id: TileId; emoji: string; title: string; meta?: ReactNode; preview: ReactNode };
 
 /** The 2×2 grid of boxes on the mobile profile. */
-export function TileGrid({ tiles, onOpen }: { tiles: TileSpec[]; onOpen: (id: TileId) => void }) {
+export function TileGrid({ tiles, onOpen, wide = false }: { tiles: TileSpec[]; onOpen: (id: TileId) => void; wide?: boolean }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 16 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: wide ? 16 : 12, marginBottom: 16 }}>
       {tiles.map(t => (
         <button key={t.id} onClick={() => onOpen(t.id)}
           style={{
-            aspectRatio: "1 / 1", minWidth: 0, background: "#141C18", border: "1.5px solid #243329",
+            aspectRatio: wide ? "16 / 7" : "1 / 1", minWidth: 0, background: "#141C18", border: "1.5px solid #243329",
             borderRadius: 20, padding: 14, display: "flex", flexDirection: "column", textAlign: "left",
             color: "#F0F0F0", cursor: "pointer", overflow: "hidden", WebkitTapHighlightColor: "transparent",
           }}>
