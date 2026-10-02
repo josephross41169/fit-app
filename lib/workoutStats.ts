@@ -111,18 +111,26 @@ export function currentMonthWorkoutStats(workouts: any[], now: Date = new Date()
   });
   let lifts = 0, cardio = 0;
   const groups = new Set<string>();
+  // Per-day workout count (index 0 = the 1st) and per-group session counts,
+  // for the Activity box's mini charts.
+  const daily: number[] = new Array(end.getDate()).fill(0);
+  const groupCounts = new Map<string, number>();
   inMonth.forEach((w: any) => {
     const hitCats = new Set<string>(); const hitCardio = new Set<string>();
     (w.exercises || w.workout?.exercises || []).forEach((ex: any) => { const c = categoryForExercise(ex?.name || ''); if (c) hitCats.add(c); });
     (w.cardio || w.workout?.cardio || []).forEach((c: any) => { const t = cardioChipLabel(c); if (t) hitCardio.add(t); });
     lifts += hitCats.size; cardio += hitCardio.size;
-    hitCats.forEach(c => groups.add(c));
+    hitCats.forEach(c => { groups.add(c); groupCounts.set(c, (groupCounts.get(c) || 0) + 1); });
+    const d = new Date(w.logged_at || w.created_at || w.id || 0);
+    daily[d.getDate() - 1] += 1;
   });
   const refEnd = end > now ? now : end;
   const weeks = Math.max(1, (refEnd.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
   return {
     monthLabel: now.toLocaleString("en-US", { month: "long" }),
     lifts, cardio, muscleGroups: groups.size,
+    daily, today: now.getDate(),
+    topGroups: Array.from(groupCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count })),
     avgPerWeek: inMonth.length ? (inMonth.length / weeks).toFixed(1) : "—",
   };
 }
