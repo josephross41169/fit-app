@@ -119,7 +119,7 @@ export function TileGrid({ tiles, onOpen, wide = false }: { tiles: TileSpec[]; o
             <span style={{ color: "#5BBE93", fontSize: 20, lineHeight: 1 }}>›</span>
           </div>
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>{t.preview}</div>
-          {t.meta != null && <div style={{ fontSize: 12, color: "#8FA39A", marginTop: 8, fontWeight: 600 }}>{t.meta}</div>}
+          {t.meta != null && <div style={{ fontSize: 12, color: "#8FA39A", marginTop: 8, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.meta}</div>}
         </button>
       ))}
     </div>

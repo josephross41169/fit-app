@@ -4,7 +4,6 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from "recharts";
-import { EXERCISES } from "@/lib/exercises";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Workout Progress Graphs
@@ -16,95 +15,10 @@ import { EXERCISES } from "@/lib/exercises";
 // so multi-workout days count correctly — two workouts in one day = 2.
 // ─────────────────────────────────────────────────────────────────────────
 
-// Build a fast lookup of exercise name → category (Chest, Back, Legs, etc.)
-// once at module load. Keys are normalized lowercase; on lookup we also try a
-// substring match so "Bench Press (heavy)" or "barbell bench press" still
-// resolves. This map drives the "What you trained" chip cloud — it shows the
-// real muscle group(s) trained based on the exercises logged, instead of
-// reading the user's freeform workout title (which could be anything).
-const EXERCISE_CATEGORY_MAP: Map<string, string> = (() => {
-  const m = new Map<string, string>();
-  EXERCISES.forEach(e => m.set(e.name.toLowerCase(), e.category));
-  return m;
-})();
-
-// Resolve an exercise name to a muscle-group category. Falls back to substring
-// matching so partial / messy names still bucket correctly. Returns null if
-// nothing matches — the caller can decide how to handle (we ignore it so we
-// never invent a category for a typo).
-function categoryForExercise(name: string): string | null {
-  if (!name) return null;
-  const key = name.toLowerCase().trim();
-  const exact = EXERCISE_CATEGORY_MAP.get(key);
-  if (exact) return exact;
-  // Substring fallback — match the longest known exercise name contained in
-  // the input. Prevents "Squat" matching "Goblet Squat" via prefix when the
-  // full name is in the map. We iterate longest-first.
-  const candidates: string[] = [];
-  EXERCISE_CATEGORY_MAP.forEach((_, k) => {
-    if (key.includes(k) || k.includes(key)) candidates.push(k);
-  });
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.length - a.length);
-  return EXERCISE_CATEGORY_MAP.get(candidates[0]) || null;
-}
-
-// Bucket a cardio entry's freeform type string (which can be anything the
-// user typed when logging — "Morning Run", "treadmill", "running", "trail
-// run", "biking") into one of a fixed set of canonical disciplines. This
-// keeps the "What you trained" chip cloud tight: all run subtypes show up
-// as a single "Running" chip with a combined session count instead of
-// four separate chips.
-//
-// Mirrors the normalizeCardio function in app/(app)/stats/page.tsx — keep
-// them in sync if you add new cardio types in one place. Returns the
-// canonical label or null if the input is blank.
-function normalizeCardioForChip(raw: string): string | null {
-  const s = (raw || '').toLowerCase().trim();
-  if (!s) return null;
-  const TYPES: { keys: string[]; label: string }[] = [
-    { keys: ['run', 'jog', 'sprint', 'treadmill', 'trail'], label: 'Running' },
-    { keys: ['cycle', 'bike', 'cycling', 'spin'], label: 'Cycling' },
-    { keys: ['swim'], label: 'Swimming' },
-    { keys: ['row', 'rowing', 'erg'], label: 'Rowing' },
-    { keys: ['elliptical'], label: 'Elliptical' },
-    { keys: ['stair'], label: 'Stair Climber' },
-    { keys: ['hiit'], label: 'HIIT' },
-    { keys: ['walk'], label: 'Walking' },
-    { keys: ['hike', 'hiking'], label: 'Hiking' },
-  ];
-  for (const { keys, label } of TYPES) {
-    if (keys.some(k => s.includes(k))) return label;
-  }
-  // Unknown type — pass it through as-is (capitalized) rather than dropping
-  // it, so users still see weird/legacy entries instead of them silently
-  // disappearing.
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
-
-// Run-subtype labels. The post page stores `run_type` on running cardio
-// entries (outdoor / treadmill / trail / hiit). We surface those as distinct
-// chips so a treadmill run reads differently from an outdoor run, instead of
-// everything collapsing into one "Running" chip.
-const RUN_TYPE_CHIP_LABELS: Record<string, string> = {
-  outdoor:   'Outdoor Run',
-  treadmill: 'Treadmill Run',
-  trail:     'Trail Run',
-  hiit:      'HIIT',
-};
-
-// Chip label for a cardio ENTRY (not just its type string). Running entries
-// split by run_type; everything else (and runs with no run_type, e.g. legacy
-// logs) falls back to the canonical discipline label.
-function cardioChipLabel(c: any): string | null {
-  const type = (c?.type || '').toString().toLowerCase();
-  const isRun = ['run', 'jog', 'sprint', 'treadmill', 'trail'].some(k => type.includes(k));
-  if (isRun && c?.run_type && RUN_TYPE_CHIP_LABELS[c.run_type]) {
-    return RUN_TYPE_CHIP_LABELS[c.run_type];
-  }
-  // No run_type (or non-running cardio) → canonical discipline.
-  return normalizeCardioForChip(c?.type || '');
-}
+// Exercise→muscle-group + cardio-label helpers live in lib/workoutStats so
+// the profile's Activity box can compute the same headline stats without
+// pulling this chart-heavy component into the main bundle.
+import { categoryForExercise, cardioChipLabel } from "@/lib/workoutStats";
 
 type WorkoutData = {
   date: string; exercise: string; weight: number;
