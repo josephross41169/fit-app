@@ -47,6 +47,60 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// ── Session self-heal helpers ───────────────────────────────────────────
+// WHY: Supabase's Auth tables showed the real cause of "it keeps making me
+// sign back in": every time the app reopened with an expired access token,
+// the token refresh SUCCEEDED on the server, but the iOS WebView dropped the
+// response ("Load failed" on resume). supabase-js then reported "no
+// session", the app bounced to /login, and the user signed in again 3-10s
+// later — 15 times in two months. Nothing was actually expired.
+// Fix: if a saved session still exists, never treat a failed refresh as a
+// sign-out. Retry it directly (bypassing supabase-js's 60s failure cache),
+// and only log out when the server explicitly rejects the refresh token.
+const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SB_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+function readStoredSession(): any | null {
+  try {
+    const k = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+    if (!k) return null;
+    const v = JSON.parse(localStorage.getItem(k) || 'null');
+    return v?.refresh_token ? v : null;
+  } catch { return null; }
+}
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// 'dead'  → server rejected the refresh token: genuinely signed out.
+// Session → recovered.
+// null    → still couldn't reach the server (offline): keep the user in.
+async function recoverSession(): Promise<Session | 'dead' | null> {
+  const delays = [0, 1200, 2500, 4000, 6000];
+  for (const d of delays) {
+    if (d) await sleep(d);
+    const stored = readStoredSession();
+    if (!stored) return 'dead';
+    try {
+      const res = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SB_ANON, Authorization: `Bearer ${SB_ANON}` },
+        body: JSON.stringify({ refresh_token: stored.refresh_token }),
+      });
+      if (res.ok) {
+        const t = await res.json();
+        const { data } = await supabase.auth.setSession({ access_token: t.access_token, refresh_token: t.refresh_token });
+        if (data?.session) return data.session;
+      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        // Double-check storage didn't just get a newer token from a
+        // concurrent refresh before declaring the session dead.
+        const now = readStoredSession();
+        if (!now || now.refresh_token === stored.refresh_token) return 'dead';
+      }
+    } catch { /* network — retry */ }
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -107,25 +161,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let mounted = true;
-    let recoveryInFlight = false;
 
     // ── Initial session load ───────────────────────────────────────────
     // Reads from localStorage on web, Capacitor Preferences on native.
-    // Failing here = no persisted session, treat as logged out.
+    // No session AND nothing saved = logged out. No session but a saved
+    // session exists = a failed refresh (see recoverSession) — heal it.
+    let recoveryInFlight = false;
+    function applySession(s: Session) {
+      setSession(s);
+      setLoading(false);
+      if (userIdRef.current !== s.user.id) {
+        userIdRef.current = s.user.id;
+        setUser(s.user);
+        fetchProfile(s.user).then(withProfile => { if (mounted) setUser(withProfile); });
+      }
+    }
+    function signedOutLocally() {
+      userIdRef.current = null;
+      setUser(null);
+      setSession(null);
+      setLoading(false);
+    }
+    async function heal() {
+      if (recoveryInFlight) return;
+      recoveryInFlight = true;
+      try {
+        const r = await recoverSession();
+        if (!mounted) return;
+        if (r === 'dead') { signedOutLocally(); return; }
+        if (r) { applySession(r); return; }
+        // Offline: keep the user in with their saved identity; the next
+        // foreground / online event retries.
+        const stored = readStoredSession();
+        if (stored?.user) {
+          if (userIdRef.current !== stored.user.id) {
+            userIdRef.current = stored.user.id;
+            setUser(stored.user);
+            fetchProfile(stored.user).then(withProfile => { if (mounted) setUser(withProfile); });
+          }
+          setLoading(false);
+        } else {
+          signedOutLocally();
+        }
+      } finally {
+        recoveryInFlight = false;
+      }
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
-      setSession(session);
-      if (session?.user) {
-        userIdRef.current = session.user.id;
-        setUser(session.user);
-        setLoading(false);
-        fetchProfile(session.user).then(withProfile => { if (mounted) setUser(withProfile); });
-      } else {
-        userIdRef.current = null;
-        setLoading(false);
-      }
+      if (session?.user) { applySession(session); return; }
+      if (readStoredSession()) { heal(); return; }
+      signedOutLocally();
     }).catch(() => {
-      if (mounted) setLoading(false);
+      if (!mounted) return;
+      if (readStoredSession()) heal(); else setLoading(false);
     });
 
     // ── onAuthStateChange — be defensive about iOS PWA flakiness ──────
@@ -192,41 +282,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // First load with no persisted session — definitely logged out.
         // (Real users still get the sign-in screen here on first visit;
         // just don't loop.)
+        // BUT if a saved session exists, the boot-time refresh just failed
+        // (the re-login bug) — heal instead of dropping to the login screen.
+        if (readStoredSession()) { heal(); return; }
         setLoading(false);
         return;
       }
 
-      // For TOKEN_REFRESHED / USER_UPDATED / etc with no session: probe
-      // with a refresh. Avoid stacking concurrent refreshes when iOS
-      // resume fires a flurry of events.
-      if (recoveryInFlight) return;
-      recoveryInFlight = true;
-      try {
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        if (!mounted) return;
-        if (refreshed?.session?.user) {
-          // Recovered. Don't sign them out.
-          setSession(refreshed.session);
-          setLoading(false);
-          if (userIdRef.current !== refreshed.session.user.id) {
-            userIdRef.current = refreshed.session.user.id;
-            setUser(refreshed.session.user);
-            fetchProfile(refreshed.session.user).then(withProfile => { if (mounted) setUser(withProfile); });
-          }
-        } else {
-          // Refresh truly failed — user is logged out for real.
-          userIdRef.current = null;
-          setUser(null);
-          setSession(null);
-          setLoading(false);
-        }
-      } catch {
-        // Network errored on the refresh too. Don't punt the user yet —
-        // the next foreground tick (visibilitychange below) will retry.
-        // Keep current user/session in state.
-      } finally {
-        recoveryInFlight = false;
-      }
+      // For TOKEN_REFRESHED / USER_UPDATED / etc with no session: a
+      // refresh hiccup, not a sign-out. Heal it (only logs out if the
+      // server truly rejects the saved refresh token).
+      if (readStoredSession()) heal(); else signedOutLocally();
     });
 
     // ── visibilitychange recovery ─────────────────────────────────────
@@ -243,7 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // stale-closure issues.
       supabase.auth.getSession().then(({ data }) => {
         const sess = data?.session;
-        if (!sess) return;
+        if (!sess) { if (readStoredSession()) heal(); return; }
         // Only force a refresh when the access token is actually near (or
         // past) expiry. Refreshing on EVERY tab focus is what made the app
         // re-fetch and feel like it reloaded each time you came back — and
@@ -264,6 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.addEventListener('visibilitychange', onVisible);
       // Also on pageshow — iOS fires this when bfcache restores
       window.addEventListener('pageshow', onVisible);
+      window.addEventListener('online', onVisible);
     }
 
     return () => {
@@ -272,6 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', onVisible);
         window.removeEventListener('pageshow', onVisible);
+        window.removeEventListener('online', onVisible);
       }
     };
   }, []);
