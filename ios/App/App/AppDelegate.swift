@@ -47,3 +47,41 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UIScene lifecycle (required by the iOS 27 SDK — apps without it crash on
+// launch). Declared in Info.plist → UIApplicationSceneManifest. UIKit builds
+// the window and the Capacitor bridge view controller from Main.storyboard
+// (UISceneStoryboardFile) and assigns it to `window` before willConnectTo.
+// URL / universal-link opens now arrive here instead of the AppDelegate, so
+// they're forwarded to Capacitor exactly like before.
+// ─────────────────────────────────────────────────────────────────────────────
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard scene is UIWindowScene else { return }
+        // Keep AppDelegate.window pointing at the real window for any code
+        // (or plugin) that still looks it up there.
+        (UIApplication.shared.delegate as? AppDelegate)?.window = window
+        // App launched cold from a link: hand it to Capacitor (this also sets
+        // ApplicationDelegateProxy.lastURL, which App.getLaunchUrl() reads).
+        if let urlContext = connectionOptions.urlContexts.first {
+            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: urlContext.url, options: [:])
+        }
+        if let activity = connectionOptions.userActivities.first {
+            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, continue: activity, restorationHandler: { _ in })
+        }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts {
+            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: context.url, options: [:])
+        }
+    }
+
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, continue: userActivity, restorationHandler: { _ in })
+    }
+}
