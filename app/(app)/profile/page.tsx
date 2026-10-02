@@ -35,6 +35,7 @@ import StreakSection from "@/components/StreakSection";
 import MicrosSection from "@/components/MicrosSection";
 import CoachNotes from "@/components/CoachNotes";
 import { TileProvider, InTile, TileGrid, type TileId } from "@/components/ProfileTiles";
+import { currentMonthWorkoutStats } from "@/lib/workoutStats";
 
 const C = {
   purple:"#5BBE93", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
@@ -3344,6 +3345,94 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     );
   }
 
+  // One earned-badge family tile (credential / yearly / progression look).
+  // Shared by the Badges card and the Badges box preview.
+  const badgeFamilyTile = (g: DisplayBadge) => {
+                        // ── CREDENTIAL: holographic prestige look (compact) ──
+                        if (g.renderType === "credential") {
+                          return (
+                            <div key={g.key} style={{
+                              borderRadius:14,
+                              padding:"12px 6px",
+                              textAlign:"center",
+                              position:"relative",
+                              overflow:"hidden",
+                              border:"2px solid transparent",
+                              // Match BadgeTile compact sizing so all three tile
+                              // types line up evenly in the sidebar grid.
+                              minHeight:132,
+                              display:"flex",
+                              flexDirection:"column",
+                              alignItems:"center",
+                              justifyContent:"center",
+                              background: `
+                                linear-gradient(#0A0A14, #0A0A14) padding-box,
+                                linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
+                              `,
+                              boxShadow:"0 0 12px rgba(120, 115, 245, 0.3)",
+                            }}>
+                              <div style={{
+                                position:"absolute",inset:0,pointerEvents:"none",
+                                background:"linear-gradient(125deg, rgba(255,110,196,0.08), rgba(120,115,245,0.12), rgba(74,222,128,0.08), rgba(250,204,21,0.1))",
+                                backgroundSize:"200% 200%",
+                                animation:"holoShimmer 5s ease infinite",
+                              }} />
+                              <div style={{position:"relative"}}>
+                                <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                                <div style={{fontWeight:800,fontSize:10,color:"#F0F0F0",lineHeight:1.2}}>{g.label}</div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // ── YEARLY: year-stamped (compact) ──
+                        if (g.renderType === "yearly") {
+                          return (
+                            <div key={g.key} style={{
+                              borderRadius:14,
+                              padding:"12px 6px",
+                              textAlign:"center",
+                              position:"relative",
+                              overflow:"hidden",
+                              border:"2px solid #F472B6",
+                              minHeight:132,
+                              display:"flex",
+                              flexDirection:"column",
+                              alignItems:"center",
+                              justifyContent:"center",
+                              background:"linear-gradient(135deg, #12291D, #0E1F17, #183B4E)",
+                              animation:"birthdayPulse 3s ease-in-out infinite",
+                            }}>
+                              {g.year && (
+                                <div style={{position:"absolute",top:3,right:5,
+                                  fontSize:8,fontWeight:900,
+                                  color:"#FFD1E6",letterSpacing:0.5,
+                                  textShadow:"0 0 6px rgba(244,114,182,0.6)"}}>
+                                  {g.year}
+                                </div>
+                              )}
+                              <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                              <div style={{fontWeight:900,fontSize:10,color:"#FFE5F1",lineHeight:1.2}}>{g.label}</div>
+                            </div>
+                          );
+                        }
+
+                        // ── PROGRESSION: BadgeTile component (proper sigils, tier rings, shimmer) ──
+                        return (
+                          <BadgeTile
+                            key={g.key}
+                            tier={g.tier ?? 1}
+                            emoji={g.emoji}
+                            label={g.label}
+                            desc={g.desc}
+                            category={g.category}
+                            earnedCount={g.earnedCount}
+                            maxTier={g.maxTier}
+                            compact
+                          />
+                        );
+  };
+
   return (
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
 
@@ -4877,47 +4966,59 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
             {/* Mobile: the 2×2 boxes. Each opens its section full-screen. */}
             {(() => {
-              const thumbs = (highlights.length ? highlights : feedPhotos).slice(0, 4);
+              // Highlights: favorites first, topped up from post photos; never cropped.
+              const thumbCount = isMobile ? 4 : 6;
+              const thumbs = Array.from(new Set([...highlights, ...feedPhotos])).slice(0, thumbCount);
               const latest: any = realDays[0];
-              const badgeCount = groupBadgesIntoFamilies(earnedBadges, badgeCounters).length + rivalryBadges.length;
+              const badgeFams = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
+              const badgeCount = badgeFams.length + rivalryBadges.length;
+              const mStats = currentMonthWorkoutStats(rawWorkoutLogs);
               const big = { fontSize: 40, fontWeight: 900, color: C.purple, lineHeight: 1, letterSpacing: -1 } as const;
               const sub = { fontSize: 12, color: C.sub, fontWeight: 600, marginTop: 4 } as const;
               return (
                 <TileGrid wide={!isMobile} onOpen={setOpenTile} tiles={[
                   {
                     id: "photos", emoji: "📸", title: "Highlights",
-                    meta: `${highlights.length} favorite${highlights.length === 1 ? "" : "s"}`,
+                    meta: highlights.length ? `${highlights.length} favorite${highlights.length === 1 ? "" : "s"}` : `${feedPhotos.length} photo${feedPhotos.length === 1 ? "" : "s"}`,
                     preview: thumbs.length ? (
-                      <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 4 }}>
-                        {[0, 1, 2, 3].map(i => {
-                          const src = thumbs[i];
-                          if (!src) return <div key={i} style={{ borderRadius: 8, background: "#1B241F" }} />;
-                          return isVideoUrl(src)
-                            ? <video key={i} src={src} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", minHeight: 0, objectFit: "cover", borderRadius: 8, background: "#000" }} />
-                            : <img key={i} src={src} alt="" loading="lazy" style={{ width: "100%", height: "100%", minHeight: 0, objectFit: "cover", borderRadius: 8 }} />;
-                        })}
+                      <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 3}, minmax(0, 1fr))`, gridTemplateRows: "1fr 1fr", gap: 6 }}>
+                        {thumbs.map((src, i) => isVideoUrl(src)
+                          ? <video key={i} src={src} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", minHeight: 0, objectFit: "contain", borderRadius: 6 }} />
+                          : <img key={i} src={src} alt="" loading="lazy" style={{ width: "100%", height: "100%", minHeight: 0, objectFit: "contain", borderRadius: 6 }} />)}
                       </div>
                     ) : <div style={sub}>No photos yet</div>,
                   },
                   {
                     id: "activity", emoji: "📋", title: "Activity",
-                    meta: loadingLogs ? "Loading…" : `${realDays.length} day${realDays.length === 1 ? "" : "s"} logged`,
-                    preview: latest ? (
+                    meta: latest ? (isMobile ? `${mStats.monthLabel} · Last: ${latest.label}` : `Last: ${latest.label}${latest.workout?.type ? " · " + latest.workout.type : ""}`) : (loadingLogs ? "Loading…" : "Nothing logged yet"),
+                    preview: (
                       <div>
-                        <div style={{ fontSize: 11, color: C.purple, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8 }}>{latest.label}</div>
-                        <div style={{ fontSize: 17, fontWeight: 900, color: C.text, marginTop: 4, lineHeight: 1.2, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any }}>
-                          {latest.workout?.type || (latest.nutrition ? "Nutrition" : "Wellness")}
-                        </div>
-                        <div style={{ fontSize: 16, marginTop: 6 }}>
-                          {latest.workout ? "💪" : ""}{latest.nutrition ? "🥗" : ""}{latest.wellness ? "🧘" : ""}
+                        {!isMobile && <div style={{ fontSize: 11, color: C.purple, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>{mStats.monthLabel}</div>}
+                        <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))`, gap: 6 }}>
+                          {[
+                            { l: "💪 Lifts", v: mStats.lifts, c: "#F5C451" },
+                            { l: "🏃 Cardio", v: mStats.cardio, c: "#5BC8E0" },
+                            { l: "Muscle grps", v: mStats.muscleGroups || "—", c: C.purple },
+                            { l: "Avg/wk", v: mStats.avgPerWeek, c: "#86CFAE" },
+                          ].map(x => (
+                            <div key={x.l} style={{ background: "#0E1311", border: "1px solid #243329", borderRadius: 10, padding: isMobile ? "4px 2px" : "8px 6px", textAlign: "center", minWidth: 0 }}>
+                              <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 900, color: x.c, lineHeight: 1.1 }}>{x.v}</div>
+                              <div style={{ fontSize: isMobile ? 8 : 9, color: C.sub, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.l}</div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ) : <div style={sub}>{loadingLogs ? "" : "Nothing logged yet"}</div>,
+                    ),
                   },
                   {
                     id: "badges", emoji: "🏆", title: "Badges",
-                    meta: "Tap to see all",
-                    preview: <div><div style={big}>{badgeCount}</div><div style={sub}>earned</div></div>,
+                    meta: `${badgeCount} earned`,
+                    // Real badge tiles, shrunk with CSS zoom so their proportions stay intact.
+                    preview: badgeFams.length ? (
+                      <div style={{ zoom: isMobile ? 0.33 : 0.6, display: "grid", gridTemplateColumns: `repeat(${isMobile ? 3 : 6}, minmax(0, 1fr))`, gap: 10, pointerEvents: "none", width: isMobile ? undefined : "100%" } as any}>
+                        {badgeFams.slice(0, 6).map(g => badgeFamilyTile(g))}
+                      </div>
+                    ) : <div><div style={big}>{badgeCount}</div><div style={sub}>earned</div></div>,
                   },
                   {
                     id: "goals", emoji: "🎯", title: "Goals",
@@ -5369,91 +5470,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 return (
                   <>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
-                      {previewSlice.map(g => {
-                        // ── CREDENTIAL: holographic prestige look (compact) ──
-                        if (g.renderType === "credential") {
-                          return (
-                            <div key={g.key} style={{
-                              borderRadius:14,
-                              padding:"12px 6px",
-                              textAlign:"center",
-                              position:"relative",
-                              overflow:"hidden",
-                              border:"2px solid transparent",
-                              // Match BadgeTile compact sizing so all three tile
-                              // types line up evenly in the sidebar grid.
-                              minHeight:132,
-                              display:"flex",
-                              flexDirection:"column",
-                              alignItems:"center",
-                              justifyContent:"center",
-                              background: `
-                                linear-gradient(#0A0A14, #0A0A14) padding-box,
-                                linear-gradient(135deg, #ff6ec4, #7873f5, #4ade80, #facc15, #ff6ec4) border-box
-                              `,
-                              boxShadow:"0 0 12px rgba(120, 115, 245, 0.3)",
-                            }}>
-                              <div style={{
-                                position:"absolute",inset:0,pointerEvents:"none",
-                                background:"linear-gradient(125deg, rgba(255,110,196,0.08), rgba(120,115,245,0.12), rgba(74,222,128,0.08), rgba(250,204,21,0.1))",
-                                backgroundSize:"200% 200%",
-                                animation:"holoShimmer 5s ease infinite",
-                              }} />
-                              <div style={{position:"relative"}}>
-                                <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
-                                <div style={{fontWeight:800,fontSize:10,color:"#F0F0F0",lineHeight:1.2}}>{g.label}</div>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // ── YEARLY: year-stamped (compact) ──
-                        if (g.renderType === "yearly") {
-                          return (
-                            <div key={g.key} style={{
-                              borderRadius:14,
-                              padding:"12px 6px",
-                              textAlign:"center",
-                              position:"relative",
-                              overflow:"hidden",
-                              border:"2px solid #F472B6",
-                              minHeight:132,
-                              display:"flex",
-                              flexDirection:"column",
-                              alignItems:"center",
-                              justifyContent:"center",
-                              background:"linear-gradient(135deg, #12291D, #0E1F17, #183B4E)",
-                              animation:"birthdayPulse 3s ease-in-out infinite",
-                            }}>
-                              {g.year && (
-                                <div style={{position:"absolute",top:3,right:5,
-                                  fontSize:8,fontWeight:900,
-                                  color:"#FFD1E6",letterSpacing:0.5,
-                                  textShadow:"0 0 6px rgba(244,114,182,0.6)"}}>
-                                  {g.year}
-                                </div>
-                              )}
-                              <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
-                              <div style={{fontWeight:900,fontSize:10,color:"#FFE5F1",lineHeight:1.2}}>{g.label}</div>
-                            </div>
-                          );
-                        }
-
-                        // ── PROGRESSION: BadgeTile component (proper sigils, tier rings, shimmer) ──
-                        return (
-                          <BadgeTile
-                            key={g.key}
-                            tier={g.tier ?? 1}
-                            emoji={g.emoji}
-                            label={g.label}
-                            desc={g.desc}
-                            category={g.category}
-                            earnedCount={g.earnedCount}
-                            maxTier={g.maxTier}
-                            compact
-                          />
-                        );
-                      })}
+                      {previewSlice.map(g => badgeFamilyTile(g))}
                     </div>
                     {totalBadges > 6 && (
                       <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:"#1B231E",color:"#86CFAE",fontWeight:700,fontSize:13,cursor:"pointer"}}>
