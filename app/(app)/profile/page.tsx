@@ -4793,11 +4793,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         </div>
 
         {/* 3-column (desktop) / boxes (mobile — see components/ProfileTiles) */}
-        <TileProvider mobile={isMobile} open={openTile} onClose={() => setOpenTile(null)}>
-        <div className="profile-layout" style={{display:"grid",gridTemplateColumns:"minmax(200px,240px) 1fr minmax(200px,240px)",gap:16,alignItems:"start"}}>
+        <TileProvider mobile={true} wide={!isMobile} open={openTile} onClose={() => setOpenTile(null)}>
+        {/* Boxes layout on every screen size now: one centered column. */}
+        <div className="profile-layout" style={{display:"flex",flexDirection:"column"}}>
 
-          {/* LEFT — Highlights + Level Progress */}
-          <div style={{paddingTop:44}}>
+          {/* LEFT — Level, Customizations, boxes */}
+          <div style={{paddingTop:isMobile?44:0}}>
             {/* Level progress card — v2 (6-level system) */}
             <button onClick={()=>setShowLevelModal(true)} style={{
               width:"100%",marginBottom:12,
@@ -4875,14 +4876,14 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             )}
 
             {/* Mobile: the 2×2 boxes. Each opens its section full-screen. */}
-            {isMobile && (() => {
+            {(() => {
               const thumbs = (highlights.length ? highlights : feedPhotos).slice(0, 4);
               const latest: any = realDays[0];
               const badgeCount = groupBadgesIntoFamilies(earnedBadges, badgeCounters).length + rivalryBadges.length;
               const big = { fontSize: 40, fontWeight: 900, color: C.purple, lineHeight: 1, letterSpacing: -1 } as const;
               const sub = { fontSize: 12, color: C.sub, fontWeight: 600, marginTop: 4 } as const;
               return (
-                <TileGrid onOpen={setOpenTile} tiles={[
+                <TileGrid wide={!isMobile} onOpen={setOpenTile} tiles={[
                   {
                     id: "photos", emoji: "📸", title: "Highlights",
                     meta: `${highlights.length} favorite${highlights.length === 1 ? "" : "s"}`,
@@ -5329,7 +5330,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           </div>
 
           {/* RIGHT */}
-          <div style={{paddingTop:isMobile?0:44}}>
+          <div>
             {/* Streak section — three strict-math streaks. Sits above
                 Badges since streaks reflect current behavior and badges
                 reflect lifetime achievements; current state should be more
