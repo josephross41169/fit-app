@@ -34,7 +34,7 @@ import TaggedPostsModal from "@/components/TaggedPostsModal";
 import StreakSection from "@/components/StreakSection";
 import MicrosSection from "@/components/MicrosSection";
 import CoachNotes from "@/components/CoachNotes";
-import { TileProvider, InTile, TileGrid, type TileId } from "@/components/ProfileTiles";
+import { TileProvider, InTile, TileGrid, JustifiedThumbs, type TileId } from "@/components/ProfileTiles";
 import { currentMonthWorkoutStats } from "@/lib/workoutStats";
 
 const C = {
@@ -4967,8 +4967,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             {/* Mobile: the 2×2 boxes. Each opens its section full-screen. */}
             {(() => {
               // Highlights: favorites first, topped up from post photos; never cropped.
-              const thumbCount = isMobile ? 4 : 6;
-              const thumbs = Array.from(new Set([...highlights, ...feedPhotos])).slice(0, thumbCount);
+              const thumbs = Array.from(new Set([...highlights, ...feedPhotos])).slice(0, 16);
               const latest: any = realDays[0];
               const badgeFams = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
               const badgeCount = badgeFams.length + rivalryBadges.length;
@@ -4981,19 +4980,14 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     id: "photos", emoji: "📸", title: "Highlights",
                     meta: highlights.length ? `${highlights.length} favorite${highlights.length === 1 ? "" : "s"}` : `${feedPhotos.length} photo${feedPhotos.length === 1 ? "" : "s"}`,
                     preview: thumbs.length ? (
-                      <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 3}, minmax(0, 1fr))`, gridTemplateRows: "1fr 1fr", gap: 6 }}>
-                        {thumbs.map((src, i) => isVideoUrl(src)
-                          ? <video key={i} src={src} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", minHeight: 0, objectFit: "contain", borderRadius: 6 }} />
-                          : <img key={i} src={src} alt="" loading="lazy" style={{ width: "100%", height: "100%", minHeight: 0, objectFit: "contain", borderRadius: 6 }} />)}
-                      </div>
+                      <JustifiedThumbs urls={thumbs} rows={2} gap={isMobile ? 4 : 8} isVideo={isVideoUrl} />
                     ) : <div style={sub}>No photos yet</div>,
                   },
                   {
                     id: "activity", emoji: "📋", title: "Activity",
                     meta: latest ? (isMobile ? `${mStats.monthLabel} · Last: ${latest.label}` : `Last: ${latest.label}${latest.workout?.type ? " · " + latest.workout.type : ""}`) : (loadingLogs ? "Loading…" : "Nothing logged yet"),
-                    preview: (
-                      <div>
-                        {!isMobile && <div style={{ fontSize: 11, color: C.purple, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>{mStats.monthLabel}</div>}
+                    preview: (() => {
+                      const statCells = (
                         <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))`, gap: 6 }}>
                           {[
                             { l: "💪 Lifts", v: mStats.lifts, c: "#F5C451" },
@@ -5001,22 +4995,73 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             { l: "Muscle grps", v: mStats.muscleGroups || "—", c: C.purple },
                             { l: "Avg/wk", v: mStats.avgPerWeek, c: "#86CFAE" },
                           ].map(x => (
-                            <div key={x.l} style={{ background: "#0E1311", border: "1px solid #243329", borderRadius: 10, padding: isMobile ? "4px 2px" : "8px 6px", textAlign: "center", minWidth: 0 }}>
-                              <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 900, color: x.c, lineHeight: 1.1 }}>{x.v}</div>
+                            <div key={x.l} style={{ background: "#0E1311", border: "1px solid #243329", borderRadius: 10, padding: isMobile ? "4px 2px" : "6px 6px", textAlign: "center", minWidth: 0 }}>
+                              <div style={{ fontSize: isMobile ? 15 : 19, fontWeight: 900, color: x.c, lineHeight: 1.1 }}>{x.v}</div>
                               <div style={{ fontSize: isMobile ? 8 : 9, color: C.sub, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.l}</div>
                             </div>
                           ))}
                         </div>
-                      </div>
-                    ),
+                      );
+                      if (isMobile) return statCells;
+                      const maxDay = Math.max(1, ...mStats.daily);
+                      const maxGrp = Math.max(1, ...mStats.topGroups.map(g => g.count));
+                      const chartLabel = { fontSize: 10, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 } as const;
+                      return (
+                        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ fontSize: 11, color: C.purple, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: -4 }}>{mStats.monthLabel}</div>
+                          {statCells}
+                          <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14 }}>
+                            {/* Chart 1: workouts per day this month */}
+                            <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+                              <div style={chartLabel}>Workouts per day</div>
+                              <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "flex-end", gap: 2, borderBottom: "1px solid #243329" }}>
+                                {mStats.daily.map((n, i) => {
+                                  const future = i + 1 > mStats.today;
+                                  return (
+                                    <div key={i} title={`${mStats.monthLabel} ${i + 1}: ${n} workout${n === 1 ? "" : "s"}`}
+                                      style={{ flex: 1, minWidth: 0, borderRadius: "3px 3px 0 0",
+                                        height: n ? `${Math.max(12, (n / maxDay) * 100)}%` : 3,
+                                        background: n ? (i + 1 === mStats.today ? "#86CFAE" : C.purple) : (future ? "#151D19" : "#243329") }} />
+                                  );
+                                })}
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: C.sub, marginTop: 3 }}>
+                                <span>1</span><span>{Math.ceil(mStats.daily.length / 2)}</span><span>{mStats.daily.length}</span>
+                              </div>
+                            </div>
+                            {/* Chart 2: muscle groups trained this month */}
+                            <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+                              <div style={chartLabel}>Muscle groups</div>
+                              {mStats.topGroups.length ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                  {mStats.topGroups.slice(0, 4).map(g => (
+                                    <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: C.text, fontWeight: 700 }}>
+                                      <span style={{ width: 54, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
+                                      <div style={{ flex: 1, height: 8, background: "#0E1311", borderRadius: 99, overflow: "hidden" }}>
+                                        <div style={{ height: "100%", width: `${(g.count / maxGrp) * 100}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
+                                      </div>
+                                      <span style={{ width: 14, textAlign: "right", color: C.sub }}>{g.count}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", border: "1px dashed #243329", borderRadius: 10, fontSize: 11, color: C.sub, textAlign: "center", padding: 8 }}>
+                                  No lifts logged yet this month
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })(),
                   },
                   {
                     id: "badges", emoji: "🏆", title: "Badges",
                     meta: `${badgeCount} earned`,
                     // Real badge tiles, shrunk with CSS zoom so their proportions stay intact.
                     preview: badgeFams.length ? (
-                      <div style={{ zoom: isMobile ? 0.33 : 0.6, display: "grid", gridTemplateColumns: `repeat(${isMobile ? 3 : 6}, minmax(0, 1fr))`, gap: 10, pointerEvents: "none", width: isMobile ? undefined : "100%" } as any}>
-                        {badgeFams.slice(0, 6).map(g => badgeFamilyTile(g))}
+                      <div style={{ flex: 1, minHeight: 0, zoom: isMobile ? 0.33 : 0.74, display: "grid", gridTemplateColumns: `repeat(${isMobile ? 3 : 5}, minmax(0, 1fr))`, alignContent: "start", gap: 10, pointerEvents: "none", width: "100%" } as any}>
+                        {badgeFams.slice(0, isMobile ? 6 : 10).map(g => badgeFamilyTile(g))}
                       </div>
                     ) : <div><div style={big}>{badgeCount}</div><div style={sub}>earned</div></div>,
                   },
@@ -5025,7 +5070,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     meta: `${profileGoals.length} active`,
                     preview: profileGoals.length ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {profileGoals.slice(0, 2).map((g: any) => {
+                        {profileGoals.slice(0, isMobile ? 2 : 4).map((g: any) => {
                           const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
                           return (
                             <div key={g.id}>
@@ -5037,7 +5082,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                           );
                         })}
                       </div>
-                    ) : <div style={sub}>{isOwn ? "Set your first goal" : "No active goals"}</div>,
+                    ) : (
+                      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, border: `1.5px dashed ${C.purpleMid}`, borderRadius: 14, background: "rgba(91,190,147,0.05)", textAlign: "center", padding: 10 }}>
+                        <div style={{ fontSize: isMobile ? 22 : 30 }}>🎯</div>
+                        <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 800, color: C.text }}>{isOwn ? "Set your first goal" : "No active goals"}</div>
+                        {!isMobile && <div style={{ fontSize: 11, color: C.sub }}>{isOwn ? "Track a target and watch the progress bar fill up" : ""}{profilePastGoals.length ? ` · ${profilePastGoals.length} past` : ""}</div>}
+                      </div>
+                    ),
                   },
                 ]} />
               );
