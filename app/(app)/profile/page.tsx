@@ -5688,14 +5688,6 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             </InTile>
 
             <CoachNotes isOwn={isOwn} />
-            <EditableList title="Favorite Brands" items={brands} onSave={saveBrands} canEdit={isOwn} emptyItem={{emoji:"👟",name:"New Brand"}}
-              renderItem={(item,i,setList)=>(
-                <div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <input style={{width:48,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 4px",textAlign:"center",fontSize:18,outline:"none",background:"#0E1311"}} value={item.emoji} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,emoji:e.target.value}:x))}/>
-                  <input style={{flex:1,borderRadius:10,border:`1.5px solid ${C.purpleMid}`,padding:"8px 12px",fontSize:14,color:C.text,outline:"none",background:"#0E1311"}} value={item.name} onChange={e=>setList(l=>l.map((x:any,j:number)=>j===i?{...x,name:e.target.value}:x))}/>
-                  <button onClick={()=>setList(l=>l.filter((_:any,j:number)=>j!==i))} style={{width:28,height:28,borderRadius:"50%",border:"none",background:"#FFE8E8",color:"#FF4444",fontSize:16,cursor:"pointer"}}>×</button>
-                </div>
-              )}/>
           </div>
         </div>
         </TileProvider>
