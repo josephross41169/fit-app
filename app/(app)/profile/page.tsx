@@ -35,7 +35,7 @@ import StreakSection from "@/components/StreakSection";
 import MicrosSection from "@/components/MicrosSection";
 import CoachNotes from "@/components/CoachNotes";
 import { TileProvider, InTile, TileGrid, JustifiedThumbs, type TileId } from "@/components/ProfileTiles";
-import { currentMonthWorkoutStats } from "@/lib/workoutStats";
+import { monthActivitySummary, fmtMinutes } from "@/lib/workoutStats";
 import HighlightBoxEditor from "@/components/HighlightBoxEditor";
 
 const C = {
@@ -2135,6 +2135,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // (not aggregated by day). Used by WorkoutProgressGraphs so multi-workout
   // days count correctly. Each entry is the full activity_logs row.
   const [rawWorkoutLogs, setRawWorkoutLogs] = useState<any[]>([]);
+  // This month's workout + wellness logs for the Activity box (own query so a
+  // busy month of meal logs can't push workouts out of the 50-row page).
+  const [monthLogs, setMonthLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   // Lazy-load state. The page initially fetches a small slice (≈7 most
   // recent days, capped at 50 rows) so it paints fast. When the user
@@ -2343,6 +2346,26 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     setLoadingLogs(true);
     loadActivityLogs(50).finally(() => setLoadingLogs(false));
   }, [user, loadActivityLogs]);
+
+  const loadMonthLogs = useCallback(async () => {
+    if (!viewUserId) return;
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    try {
+      const { data } = await supabase
+        .from('activity_logs')
+        .select('id, log_type, logged_at, created_at, exercises, cardio, workout_category, workout_duration_min, wellness_type, wellness_duration_min')
+        .eq('user_id', viewUserId)
+        .in('log_type', ['workout', 'wellness'])
+        .gte('logged_at', start.toISOString())
+        .order('logged_at', { ascending: false })
+        .limit(1000);
+      setMonthLogs(data || []);
+    } catch (e) {
+      console.warn('Failed to load month logs:', e);
+    }
+  }, [viewUserId]);
+  useEffect(() => { if (user) loadMonthLogs(); }, [user, loadMonthLogs, realDays]);
 
   // Handler for the "Load older entries" button at the bottom of the
   // activity log. Re-fetches with the full window and flips the
@@ -4992,7 +5015,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               const latest: any = realDays[0];
               const badgeFams = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
               const badgeCount = badgeFams.length + rivalryBadges.length;
-              const mStats = currentMonthWorkoutStats(rawWorkoutLogs);
+              const mStats = monthActivitySummary(monthLogs);
               const big = { fontSize: 40, fontWeight: 900, color: C.purple, lineHeight: 1, letterSpacing: -1 } as const;
               const sub = { fontSize: 12, color: C.sub, fontWeight: 600, marginTop: 4 } as const;
               return (
@@ -5010,12 +5033,17 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     preview: (() => {
                       const statCells = (
                         <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))`, gap: 6 }}>
-                          {[
-                            { l: "💪 Lifts", v: mStats.lifts, c: "#F5C451" },
-                            { l: "🏃 Cardio", v: mStats.cardio, c: "#5BC8E0" },
-                            { l: "Muscle grps", v: mStats.muscleGroups || "—", c: C.purple },
-                            { l: "Avg/wk", v: mStats.avgPerWeek, c: "#86CFAE" },
-                          ].map(x => (
+                          {(isMobile ? [
+                            { l: "💪 Workouts", v: mStats.workouts || "0", c: "#F5C451" },
+                            { l: "📅 Active days", v: mStats.activeDays || "0", c: "#86CFAE" },
+                            { l: "🏃 Cardio", v: mStats.cardioSessions || "0", c: "#5BC8E0" },
+                            { l: "🧘 Wellness", v: mStats.wellnessSessions || "0", c: C.purple },
+                          ] : [
+                            { l: "💪 Workouts", v: mStats.workouts || "0", c: "#F5C451" },
+                            { l: "📅 Active days", v: mStats.activeDays || "0", c: "#86CFAE" },
+                            { l: "⏱ Time trained", v: fmtMinutes(mStats.minutes), c: "#5BC8E0" },
+                            { l: "Avg / week", v: mStats.avgPerWeek, c: C.purple },
+                          ]).map(x => (
                             <div key={x.l} style={{ background: "#0E1311", border: "1px solid #243329", borderRadius: 10, padding: isMobile ? "4px 2px" : "6px 6px", textAlign: "center", minWidth: 0 }}>
                               <div style={{ fontSize: isMobile ? 15 : 19, fontWeight: 900, color: x.c, lineHeight: 1.1 }}>{x.v}</div>
                               <div style={{ fontSize: isMobile ? 8 : 9, color: C.sub, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.l}</div>
@@ -5024,52 +5052,60 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         </div>
                       );
                       if (isMobile) return statCells;
-                      const maxDay = Math.max(1, ...mStats.daily);
-                      const maxGrp = Math.max(1, ...mStats.topGroups.map(g => g.count));
-                      const chartLabel = { fontSize: 10, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 } as const;
+                      const panel = { background: "#0E1311", border: "1px solid #243329", borderRadius: 12, padding: "8px 10px", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden" } as const;
+                      const head = { fontSize: 10, color: C.sub, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 6 } as const;
+                      const row = { display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.text, fontWeight: 700, minWidth: 0 } as const;
+                      const name = { flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
+                      const val = { color: C.sub, fontWeight: 700, flexShrink: 0, fontSize: 10 } as const;
+                      const empty = (t: string) => <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, color: C.sub, textAlign: "center" }}>{t}</div>;
                       return (
                         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                           <div style={{ fontSize: 11, color: C.purple, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: -4 }}>{mStats.monthLabel}</div>
                           {statCells}
-                          <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14 }}>
-                            {/* Chart 1: workouts per day this month */}
-                            <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-                              <div style={chartLabel}>Workouts per day</div>
-                              <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "flex-end", gap: 2, borderBottom: "1px solid #243329" }}>
-                                {mStats.daily.map((n, i) => {
-                                  const future = i + 1 > mStats.today;
-                                  return (
-                                    <div key={i} title={`${mStats.monthLabel} ${i + 1}: ${n} workout${n === 1 ? "" : "s"}`}
-                                      style={{ flex: 1, minWidth: 0, borderRadius: "3px 3px 0 0",
-                                        height: n ? `${Math.max(12, (n / maxDay) * 100)}%` : 3,
-                                        background: n ? (i + 1 === mStats.today ? "#86CFAE" : C.purple) : (future ? "#151D19" : "#243329") }} />
-                                  );
-                                })}
-                              </div>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: C.sub, marginTop: 3 }}>
-                                <span>1</span><span>{Math.ceil(mStats.daily.length / 2)}</span><span>{mStats.daily.length}</span>
-                              </div>
+                          <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                            {/* Lifting: sessions + muscle groups trained */}
+                            <div style={panel}>
+                              <div style={head}><span>💪 Lifting</span><span style={{ color: "#F5C451" }}>{mStats.liftSessions}×</span></div>
+                              {mStats.muscleGroups.length ? (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignContent: "flex-start" }}>
+                                  {mStats.muscleGroups.slice(0, 6).map(g => (
+                                    <span key={g.name} style={{ fontSize: 10, fontWeight: 800, color: C.text, background: "#1A241F", border: "1px solid #2A3A2F", borderRadius: 99, padding: "2px 7px", whiteSpace: "nowrap" }}>
+                                      {g.name} <span style={{ color: C.sub }}>{g.count}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : empty("No lifts yet")}
+                              {mStats.sets > 0 && <div style={{ marginTop: "auto", paddingTop: 4, fontSize: 10, color: C.sub, fontWeight: 700 }}>{mStats.sets} sets total</div>}
                             </div>
-                            {/* Chart 2: muscle groups trained this month */}
-                            <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-                              <div style={chartLabel}>Muscle groups</div>
-                              {mStats.topGroups.length ? (
+                            {/* Cardio by type */}
+                            <div style={panel}>
+                              <div style={head}><span>🏃 Cardio</span><span style={{ color: "#5BC8E0" }}>{mStats.cardioSessions}×</span></div>
+                              {mStats.cardio.length ? (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                  {mStats.topGroups.slice(0, 4).map(g => (
-                                    <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: C.text, fontWeight: 700 }}>
-                                      <span style={{ width: 54, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
-                                      <div style={{ flex: 1, height: 8, background: "#0E1311", borderRadius: 99, overflow: "hidden" }}>
-                                        <div style={{ height: "100%", width: `${(g.count / maxGrp) * 100}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
-                                      </div>
-                                      <span style={{ width: 14, textAlign: "right", color: C.sub }}>{g.count}</span>
+                                  {mStats.cardio.slice(0, 4).map(c => (
+                                    <div key={c.name} style={row}>
+                                      <span style={{ flexShrink: 0 }}>{c.emoji}</span>
+                                      <span style={name}>{c.name}</span>
+                                      <span style={val}>{c.count}×{c.miles ? ` · ${Math.round(c.miles * 10) / 10} mi` : c.minutes ? ` · ${fmtMinutes(c.minutes)}` : ""}</span>
                                     </div>
                                   ))}
                                 </div>
-                              ) : (
-                                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", border: "1px dashed #243329", borderRadius: 10, fontSize: 11, color: C.sub, textAlign: "center", padding: 8 }}>
-                                  No lifts logged yet this month
+                              ) : empty("No cardio yet")}
+                            </div>
+                            {/* Wellness at a glance */}
+                            <div style={panel}>
+                              <div style={head}><span>🧘 Wellness</span><span style={{ color: C.purple }}>{mStats.wellnessSessions}×</span></div>
+                              {mStats.wellness.length ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                  {mStats.wellness.slice(0, 4).map(w => (
+                                    <div key={w.name} style={row}>
+                                      <span style={{ flexShrink: 0 }}>{getWellnessStyle(w.name).emoji}</span>
+                                      <span style={name}>{w.name}</span>
+                                      <span style={val}>{w.count}×</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
+                              ) : empty("No wellness yet")}
                             </div>
                           </div>
                         </div>
