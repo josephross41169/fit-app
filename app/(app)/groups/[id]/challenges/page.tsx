@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
@@ -78,7 +79,7 @@ function ScoreBar({ a, b, labelA, labelB, unit }:
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function GroupChallengesPage() {
-  const { id: groupId } = useParams<{ id:string }>();
+  const { id: groupId } = useShellParams<{ id:string }>();
   const { user } = useAuth();
   const router = useRouter();
 
