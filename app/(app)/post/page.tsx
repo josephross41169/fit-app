@@ -286,7 +286,13 @@ type Exercise = { name: string; sets: string; reps: string; weight: string; weig
   // `circuitMoves` optionally lists the individual exercises in the circuit for
   // users who want to record them.
   isCircuit?: boolean; circuitMinutes?: string; circuitMoves?: string[];
+  // Which box on the new-workout screen this exercise belongs to.
+  group?: ExGroup;
 };
+type ExGroup = "lifting" | "abs" | "calisthenics";
+type WoSection = "lifting" | "cardio" | "abs" | "calisthenics" | "tag" | "save";
+type Funnel = "home" | "workoutChoice" | "form";
+const exGroup = (ex: Exercise): ExGroup => ex.group || (ex.isCircuit ? "abs" : "lifting");
 
 function newCircuit(): Exercise {
   return { name: "Ab circuit", sets: "", reps: "", weight: "", weights: [], isCircuit: true, circuitMinutes: "", circuitMoves: [] };
@@ -606,11 +612,18 @@ const WELLNESS_TYPES = WELLNESS_GROUPS.flatMap(g => g.types);
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
 
-export default function PostPage() {
+function PostPageInner({ onDone }: { onDone: () => void }) {
   const { user } = useAuth();
   const router = useRouter();
   const [mainMode, setMainMode] = useState<MainMode>("log");
   const [logTab, setLogTab] = useState<LogTab>("workout");
+  // ── Box-funnel navigation ──
+  // home → (Workout → workoutChoice → hub/sections) | Meal | Wellness | Post.
+  const [funnel, setFunnel] = useState<Funnel>("home");
+  const [woSection, setWoSection] = useState<WoSection | null>(null);
+  const [addPickOpen, setAddPickOpen] = useState(false);
+  const [resumedLabel, setResumedLabel] = useState<string | null>(null);
+  const [recentWorkouts, setRecentWorkouts] = useState<{ today: { id: string; type: string } | null; yesterday: { id: string; type: string } | null } | null>(null);
   const [saved, setSaved] = useState(false);
   const [posted, setPosted] = useState(false);
   // Newly-awarded badge IDs from the auto-award engine. Set after a successful
@@ -620,7 +633,8 @@ export default function PostPage() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const submittingRef = useRef(false); // hard lock · prevents double-submit even with rapid clicks
+  const submittingRef = useRef(false);
+  const doneTimerRef = useRef<any>(null); // hard lock · prevents double-submit even with rapid clicks
 
   // Workout state
   const [woCategory, setWoCategory] = useState("lifting"); // primary category; drives stats/badges/rivalries
@@ -1174,16 +1188,25 @@ export default function PostPage() {
   }, [user, todayLog]);
 
   // Resume today's workout · pre-loads all existing data into the form
-  async function resumeTodayWorkout() {
-    if (!user || !todayLog) return;
+  async function resumeTodayWorkout(logId?: string) {
+    const id = logId || todayLog?.id;
+    if (!user || !id) return;
     try {
       const { data } = await supabase
         .from('activity_logs')
-        .select('id, workout_category, workout_type, exercises, workout_duration_min, notes, cardio')
-        .eq('id', todayLog.id)
+        .select('id, workout_category, workout_type, exercises, workout_duration_min, notes, cardio, logged_at')
+        .eq('id', id)
         .single();
       if (!data) return;
       setTodayLogId(data.id);
+      // Keep the workout on its ORIGINAL date/time when it's re-saved
+      // (otherwise adding to yesterday's workout would move it to now).
+      if ((data as any).logged_at) {
+        const d = new Date((data as any).logged_at);
+        const p2 = (n: number) => String(n).padStart(2, '0');
+        setWoDate(`${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`);
+        setWoTime(`${p2(d.getHours())}:${p2(d.getMinutes())}`);
+      }
       setWoCategory(data.workout_category || 'lifting');
       setWoType(data.workout_type || '');
       // Route the stored duration into the correct field. For "other type"
@@ -1217,6 +1240,7 @@ export default function PostPage() {
             isCircuit: true,
             circuitMinutes: ex.circuitMinutes != null ? String(ex.circuitMinutes) : '',
             circuitMoves: Array.isArray(ex.circuitMoves) ? ex.circuitMoves.map((m: any) => String(m)) : [],
+            group: ex.group || 'abs',
           };
         }
         const setCount = parseInt(String(ex.sets)) || 3;
@@ -1232,6 +1256,9 @@ export default function PostPage() {
             ? ex.repsArr
             : Array(setCount).fill(String(ex.reps || '')),
           notes: ex.notes || '',
+          bodyweight: !!ex.bodyweight,
+          timed: !!ex.timed,
+          group: ex.group || undefined,
         };
       });
       setExercises(exs);
@@ -1290,6 +1317,14 @@ export default function PostPage() {
     } catch {}
   }
 
+  // Box UX: the Cardio / Lifting "toggles" now just reflect what's filled in.
+  useEffect(() => {
+    const isOther = !["running","walking","biking","swimming","rowing","lifting"].includes(woCategory);
+    const cardioHas = cardios.some(c => c.durMin || c.durSec || c.distance || c.laps);
+    setIncludeCardio(!isOther && cardioHas);
+    setIncludeLifting(exercises.length > 0 || !!(woDuration || woDurationSec));
+  }, [exercises, cardios, woCategory, woDuration, woDurationSec]);
+
   useEffect(() => {
     if (user) fetchTodayWorkout();
   }, [user, fetchTodayWorkout]);
@@ -1340,7 +1375,7 @@ export default function PostPage() {
         .select('*')
         .eq('id', pick.templateId!)
         .maybeSingle();
-      if (data) loadTemplate(data as WorkoutTemplate, pick.dayIndex ?? 0);
+      if (data) { loadTemplate(data as WorkoutTemplate, pick.dayIndex ?? 0); setMainMode('log'); setLogTab('workout'); setFunnel('form'); setWoSection('lifting'); }
     })();
     // We intentionally only run this on mount — re-running would re-load
     // the template if the user navigates within the page.
@@ -1619,7 +1654,8 @@ export default function PostPage() {
         // and per-set reps (repsArr) is persisted alongside per-set weights.
         // The legacy `reps` field is kept set to repsArr[0] so older code paths
         // (PR detection, badge engines, exports) still see a meaningful value.
-        const normalizedExercises = exercises.map(ex => {
+        // Skip blank rows (an "+ Add Exercise" the user never filled in).
+        const normalizedExercises = exercises.filter(ex => ex.isCircuit || (ex.name || '').trim()).map(ex => {
           // Ab/finisher circuit: store as a circuit entry (name + minutes +
           // optional moves) rather than forcing it into the sets/reps/weight
           // shape. Display code checks `isCircuit` to render it as one block.
@@ -1630,6 +1666,7 @@ export default function PostPage() {
               isCircuit: true,
               circuitMinutes: ex.circuitMinutes || '',
               circuitMoves: moves,
+              group: exGroup(ex),
               // Keep these so older readers that expect them don't choke.
               sets: '', reps: '', weight: '', weights: [], repsArr: [],
             };
@@ -1651,6 +1688,7 @@ export default function PostPage() {
             notes: ex.notes || undefined,
             bodyweight: ex.bodyweight || false,
             timed: ex.timed || false,
+            group: exGroup(ex),
           };
         });
 
@@ -1744,6 +1782,8 @@ export default function PostPage() {
         ]));
         const insertWorkoutRow: any = { ...base, log_type: 'workout', ...workoutPayload };
         if (taggedIds.length > 0) insertWorkoutRow.tagged_user_ids = taggedIds;
+        // Adding to an existing workout without a new photo: keep its old photo.
+        if (todayLogId && !woPhotoUrl) delete insertWorkoutRow.photo_url;
         let res;
         if (todayLogId) {
           // Resuming today's workout — UPDATE the existing row instead of
@@ -2716,7 +2756,7 @@ export default function PostPage() {
     // Give user time to see badge unlocks before auto-redirect. PR screen
     // already requires manual dismiss, but badge-only unlocks need extra time.
     const redirectDelay = hasNewBadges ? 4500 : 1500;
-    if (!hasPRs) setTimeout(() => router.push("/profile"), redirectDelay);
+    if (!hasPRs && !doneTimerRef.current) doneTimerRef.current = setTimeout(onDone, redirectDelay + 600);
     const firstPR = newPRs[0];
     // Look up badge metadata for the awarded IDs (emoji + label)
     const awardedBadgeMeta = newBadges
@@ -2781,8 +2821,23 @@ export default function PostPage() {
               View Profile →
             </button>
           </div>
-        ) : (
-          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to your profile...</div>
+        ) : null}
+        {hasPRs && (
+          <button onClick={onDone} style={{ marginTop: 6, padding: "10px 18px", borderRadius: 14, border: "1.5px dashed #2A3A2A", background: "transparent", color: "#86CFAE", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+            ＋ Log something else
+          </button>
+        )}
+        {!hasPRs && (
+          <div style={{ display: "flex", gap: 10, marginTop: 10, width: "100%", maxWidth: 380 }}>
+            <button onClick={() => { if (doneTimerRef.current) clearTimeout(doneTimerRef.current); onDone(); }}
+              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+              ＋ Log something else
+            </button>
+            <button onClick={() => { if (doneTimerRef.current) clearTimeout(doneTimerRef.current); router.push("/profile"); }}
+              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #1B231E", background: "#111811", color: "#9CA3AF", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              View Profile →
+            </button>
+          </div>
         )}
       </div>
     );
@@ -2800,11 +2855,68 @@ export default function PostPage() {
     );
   }
 
+  // ── Box-funnel helpers ─────────────────────────────────────────────────
+  function openFunnelTab(t: "workout" | "nutrition" | "wellness" | "feed") {
+    if (t === "feed") { setMainMode("feed"); setFunnel("form"); }
+    else if (t === "workout") { setMainMode("log"); setLogTab("workout"); setFunnel("workoutChoice"); }
+    else { setMainMode("log"); setLogTab(t); setFunnel("form"); }
+    setWoSection(null);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+  function openWoSection(s: WoSection) {
+    if (s === "cardio" && cardios.length === 0) setCardios([newCardioEntry()]);
+    setWoSection(s);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+  function startNewWorkout() {
+    setTodayLogId(null); setResumedLabel(null);
+    setExercises([]); setCardios([newCardioEntry()]);
+    setWoType(""); setWoNotes(""); setWoDate(""); setWoTime("");
+    setWoDuration(""); setWoDurationSec(""); setWoCategory("lifting");
+    setOtherTypeDuration(""); setOtherTypeDurationSec("");
+    setWoPhoto(null); setWorkoutTaggedUsers([]); setTaggedBusinesses([]);
+    setLoadedPlanLabel(null);
+    setMainMode("log"); setLogTab("workout"); setWoSection(null); setFunnel("form");
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+  async function openAddPicker() {
+    setAddPickOpen(true);
+    if (!user) return;
+    try {
+      const now = new Date();
+      const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const tStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      const { data } = await supabase.from('activity_logs')
+        .select('id, workout_type, workout_category, logged_at')
+        .eq('user_id', user.id).eq('log_type', 'workout')
+        .gte('logged_at', yStart.toISOString()).lt('logged_at', tEnd.toISOString())
+        .order('logged_at', { ascending: false });
+      const rows: any[] = data || [];
+      const pick = (r: any) => r ? { id: r.id, type: r.workout_type || (WORKOUT_CATEGORIES.find(c => c.id === r.workout_category)?.label ?? 'Workout') } : null;
+      setRecentWorkouts({
+        today: pick(rows.find(r => new Date(r.logged_at) >= tStart)),
+        yesterday: pick(rows.find(r => new Date(r.logged_at) < tStart)),
+      });
+    } catch { setRecentWorkouts({ today: null, yesterday: null }); }
+  }
+  async function addToWorkout(which: "today" | "yesterday") {
+    const w = recentWorkouts?.[which];
+    if (!w) return;
+    setAddPickOpen(false);
+    startNewWorkout();
+    await resumeTodayWorkout(w.id);
+    setResumedLabel(which === "today" ? "today's" : "yesterday's");
+    setFunnel("form"); setWoSection(null);
+  }
+
   const TAB_DEFS = [
     { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#5BBE93" },
     { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#5BBE93" },
     { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#5BBE93" },
   ];
+
+  const secExercises = exercises.filter(ex => exGroup(ex) === woSection);
 
   function renderSuppCard(fav: any) {
                         const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
@@ -2929,9 +3041,17 @@ export default function PostPage() {
       )}
 
       <style jsx global>{`
-        .post-layout { display: flex; min-height: 100vh; }
-        .post-sidebar { display: none; }
-        .post-main { flex: 1; }
+        .post-layout { display: flex; min-height: 100vh; justify-content: center; }
+        .post-sidebar { display: none !important; }
+        .post-mobile-header { display: none !important; }
+        .post-main { flex: 1; max-width: 760px; }
+        .funnel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .funnel-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+          text-align: center; border-radius: 20px; padding: 18px 12px; cursor: pointer; min-height: 132px; width: 100%;
+          transition: transform 0.12s ease, box-shadow 0.12s ease; -webkit-tap-highlight-color: transparent; }
+        .funnel-box:active { transform: scale(0.98); }
+        .funnel-box:hover { box-shadow: 0 6px 22px rgba(91,190,147,0.18); }
+        .funnel-wide { min-height: 96px; }
         @media (min-width: 768px) {
           .post-sidebar {
             display: flex;
@@ -3038,67 +3158,138 @@ export default function PostPage() {
         </div>
 
         {/* -- Main content -- */}
-        <div className="post-main" style={{ padding: "24px 20px" }}>
+        <div className="post-main" style={{ padding: "calc(env(safe-area-inset-top, 0px) + 18px) 18px 24px" }}>
+        {funnel === "home" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontWeight: 900, fontSize: 24, color: C.text, margin: "4px 2px 6px" }}>What are you logging?</div>
+            {([
+              { k: "workout", e: "💪", t: "Workout", s: "Lifting, cardio, abs & calisthenics" },
+              { k: "nutrition", e: "🥗", t: "Meal", s: "Food, macros, water & supplements" },
+              { k: "wellness", e: "🧘", t: "Wellness", s: "Sleep, recovery, mindfulness & more" },
+              { k: "feed", e: "📢", t: "Post to feed", s: "Share photos & videos with followers" },
+            ] as const).map(b => (
+              <button key={b.k} onClick={() => openFunnelTab(b.k)} className="funnel-box"
+                style={{ border: `2px solid ${C.greenMid}`, background: C.white, flexDirection: "row", justifyContent: "flex-start", gap: 16, padding: "22px 20px", minHeight: 104, textAlign: "left" }}>
+                <span style={{ fontSize: 34, width: 44, textAlign: "center" }}>{b.e}</span>
+                <span style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 900, fontSize: 19, color: C.text }}>{b.t}</span>
+                  <span style={{ fontSize: 13, color: C.sub, fontWeight: 600 }}>{b.s}</span>
+                </span>
+                <span style={{ color: C.blue, fontSize: 26, fontWeight: 300 }}>›</span>
+              </button>
+            ))}
+          </div>
+        ) : funnel === "workoutChoice" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <button onClick={() => setFunnel("home")} style={{ alignSelf: "flex-start", background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>‹ Back</button>
+            <div style={{ fontWeight: 900, fontSize: 24, color: C.text, margin: "0 2px 6px" }}>💪 Workout</div>
+            <div className="funnel-grid">
+              <button onClick={openAddPicker} className="funnel-box" style={{ border: `2px solid ${C.greenMid}`, background: C.white, minHeight: 170 }}>
+                <span style={{ fontSize: 34 }}>➕</span>
+                <span style={{ fontWeight: 900, fontSize: 17, color: C.text }}>Add to workout</span>
+                <span style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>Today's or yesterday's</span>
+              </button>
+              <button onClick={startNewWorkout} className="funnel-box" style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)`, minHeight: 170 }}>
+                <span style={{ fontSize: 34 }}>🆕</span>
+                <span style={{ fontWeight: 900, fontSize: 17, color: "#fff" }}>New workout</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>Start fresh</span>
+              </button>
+            </div>
+            {addPickOpen && (
+              <div onClick={() => setAddPickOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: "#111811", borderRadius: 22, padding: 20, width: "100%", maxWidth: 400, border: `2px solid ${C.greenMid}` }}>
+                  <div style={{ fontWeight: 900, fontSize: 18, color: C.text, marginBottom: 4 }}>Add to which workout?</div>
+                  <div style={{ fontSize: 13, color: C.sub, marginBottom: 16 }}>Pick the workout you want to add onto.</div>
+                  {!recentWorkouts ? (
+                    <div style={{ padding: "20px 0", textAlign: "center", color: C.sub, fontSize: 13 }}>Loading…</div>
+                  ) : (["today", "yesterday"] as const).map(w => {
+                    const r = recentWorkouts[w];
+                    return (
+                      <button key={w} disabled={!r} onClick={() => addToWorkout(w)}
+                        style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "14px 16px", borderRadius: 14, border: `2px solid ${r ? C.blue : C.greenMid}`, background: r ? "rgba(91,190,147,0.10)" : "transparent", cursor: r ? "pointer" : "not-allowed", opacity: r ? 1 : 0.55 }}>
+                        <div style={{ fontWeight: 900, fontSize: 15, color: C.text }}>{w === "today" ? "Today's workout" : "Yesterday's workout"}</div>
+                        <div style={{ fontSize: 12, color: r ? "#86CFAE" : C.sub, fontWeight: 700, marginTop: 2 }}>{r ? r.type : "Nothing logged"}</div>
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => setAddPickOpen(false)} style={{ width: "100%", marginTop: 4, padding: "11px 0", borderRadius: 12, border: "none", background: "transparent", color: C.sub, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (<>
+        {/* Back bar — workout sections go back to the workout boxes; everything else to the home boxes. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <button onClick={() => {
+              if (mainMode === "log" && logTab === "workout" && woSection) setWoSection(null);
+              else if (mainMode === "log" && logTab === "workout") setFunnel("workoutChoice");
+              else setFunnel("home");
+              if (typeof window !== "undefined") window.scrollTo(0, 0);
+            }}
+            style={{ background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>
+            ‹ {mainMode === "log" && logTab === "workout" && woSection ? "Workout" : "Back"}
+          </button>
+          <div style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 18, color: C.text, marginRight: 60 }}>
+            {mainMode === "feed" ? "📢 Post to feed"
+              : logTab === "nutrition" ? "🥗 Meal"
+              : logTab === "wellness" ? "🧘 Wellness"
+              : woSection === "lifting" ? "🏋️ Weight lifting"
+              : woSection === "cardio" ? "🏃 Cardio"
+              : woSection === "abs" ? "🔥 Ab work"
+              : woSection === "calisthenics" ? "🤸 Calisthenics"
+              : woSection === "tag" ? "📍 Tag location / partner"
+              : woSection === "save" ? "💾 Save workout"
+              : todayLogId ? "✏️ Add to workout" : "🆕 New workout"}
+          </div>
+        </div>
         {mainMode === "log" ? (<>
 
           {/* --- WORKOUT TAB --- */}
           {logTab === "workout" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-              {/* -- Fitbit Connect -- */}
-              <FitbitConnect />
-
-              {/* -- Resume / continue today's workout --
-                  If the user already logged a workout today, offer to add
-                  onto it instead of starting a fresh one. Tapping pre-loads
-                  the existing workout's data into the form; saving then
-                  UPDATES that log rather than creating a second one. Hidden
-                  once resumed (todayLogId set) or if none exists today. */}
-              {todayLog && !todayLogId && (
-                <div style={{
-                  background: "linear-gradient(135deg, rgba(91,190,147,0.18), rgba(134,207,174,0.08))",
-                  borderRadius: 14, padding: "12px 14px",
-                  border: "1.5px solid rgba(91,190,147,0.4)",
-                  display: "flex", alignItems: "center", gap: 12,
-                }}>
-                  <div style={{ fontSize: 22 }}>🔁</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: "#F0F0F0", fontWeight: 800 }}>Continue today's workout?</div>
-                    <div style={{ fontSize: 11, color: "#86CFAE", fontWeight: 600, marginTop: 1 }}>
-                      You already logged {todayLog.type} today — add onto it instead of starting new.
-                    </div>
+            {woSection === null ? (() => {
+              // ── NEW-WORKOUT HUB — the "boxes" screen. Each box opens its own
+              // logging panel; "Save workout" opens the final details + save.
+              const lift = exercises.filter(e => exGroup(e) === "lifting");
+              const abs = exercises.filter(e => exGroup(e) === "abs");
+              const cali = exercises.filter(e => exGroup(e) === "calisthenics");
+              const cardioDone = cardios.filter(c => c.durMin || c.durSec || c.distance || c.laps);
+              const cardioMin = cardioDone.reduce((s, c) => s + (parseInt(c.durMin || "0") || 0), 0);
+              const isOther = !["running","walking","biking","swimming","rowing","lifting"].includes(woCategory);
+              const otherCat = isOther ? WORKOUT_CATEGORIES.find(c => c.id === woCategory) : null;
+              const named = (n: number, w: string) => n === 0 ? "Tap to log" : `${n} ${w}${n === 1 ? "" : "s"}`;
+              const tagCount = workoutTaggedUsers.length + taggedBusinesses.length;
+              const box = (key: WoSection, emoji: string, title: string, sub: string, filled: boolean, wide = false) => (
+                <button key={key} onClick={() => openWoSection(key)} className={"funnel-box" + (wide ? " funnel-wide" : "")}
+                  style={{ border: `2px solid ${filled ? C.blue : C.greenMid}`, background: filled ? "rgba(91,190,147,0.10)" : C.white }}>
+                  <span style={{ fontSize: wide ? 24 : 30 }}>{emoji}</span>
+                  <span style={{ fontWeight: 900, fontSize: 16, color: C.text }}>{title}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: filled ? "#86CFAE" : C.sub }}>{sub}</span>
+                </button>
+              );
+              return (<>
+                {todayLogId && (
+                  <div style={{ background: "rgba(91,190,147,0.12)", borderRadius: 14, padding: "10px 14px", border: "1.5px solid rgba(91,190,147,0.4)", fontSize: 13, color: "#86CFAE", fontWeight: 700 }}>
+                    ✏️ Adding to {resumedLabel || "today's"} workout — saving updates that workout.
                   </div>
-                  <button onClick={resumeTodayWorkout}
-                    style={{ flexShrink: 0, padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#5BBE93,#86CFAE)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                    Continue
-                  </button>
+                )}
+                <div className="funnel-grid">
+                  {box("lifting", "🏋️", "Weight lifting", named(lift.length, "exercise"), lift.length > 0)}
+                  {box("cardio", "🏃", "Cardio", otherCat ? `${otherCat.emoji} ${otherCat.label}` : cardioDone.length ? `${cardioDone.length} logged${cardioMin ? ` · ${cardioMin} min` : ""}` : "Tap to log", cardioDone.length > 0 || !!otherCat)}
+                  {box("abs", "🔥", "Ab work", named(abs.length, "exercise"), abs.length > 0)}
+                  {box("calisthenics", "🤸", "Calisthenics", named(cali.length, "exercise"), cali.length > 0)}
                 </div>
-              )}
+                {box("tag", "📍", "Tag location / partner", tagCount ? [...workoutTaggedUsers.map(u => (u as any).username ? "@" + (u as any).username : ((u as any).full_name || "")), ...taggedBusinesses.map(b => (b as any).full_name || (b as any).username || "")].filter(Boolean).join(", ") : "Gym, studio or workout partners", tagCount > 0, true)}
+                <button onClick={() => openWoSection("save")} className="funnel-box funnel-wide"
+                  style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)` }}>
+                  <span style={{ fontSize: 24 }}>💾</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, color: "#fff" }}>Save workout</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>Add a name, notes & photo, then save</span>
+                </button>
+              </>);
+            })() : (<>
 
-              {/* Resumed indicator — confirms the form is now editing the
-                  existing log, and lets the user bail back to a fresh entry. */}
-              {todayLogId && (
-                <div style={{
-                  background: "rgba(91,190,147,0.12)",
-                  borderRadius: 14, padding: "10px 14px",
-                  border: "1.5px solid rgba(91,190,147,0.4)",
-                  display: "flex", alignItems: "center", gap: 10,
-                }}>
-                  <div style={{ fontSize: 18 }}>✏️</div>
-                  <div style={{ flex: 1, fontSize: 12, color: "#86CFAE", fontWeight: 700 }}>
-                    Adding to today's workout — saving will update your existing post.
-                  </div>
-                  <button onClick={() => setTodayLogId(null)}
-                    style={{ background: "none", border: "none", color: "#9CA3AF", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}
-                    title="Start a fresh workout instead">
-                    ×
-                  </button>
-                </div>
-              )}
-
-              {/* AI Plan import banner — shown after user picks a day from
-                  their saved plan. Reminds them what plan they're logging
-                  against. Tappable × dismisses without clearing exercises. */}
+              {woSection === "lifting" && (<>
               {loadedPlanLabel && (
                 <div style={{
                   background: "linear-gradient(135deg, rgba(91,190,147,0.18), rgba(74,222,128,0.10))",
@@ -3117,10 +3308,8 @@ export default function PostPage() {
                   </button>
                 </div>
               )}
-
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8, flexWrap: "wrap" }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>💪 Workout Details</div>
+                {aiPlan && (
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   {/* "Use AI Plan" button — only shown if a plan was generated.
                       Opens a picker so the user can choose which training day
                       to import as a starting point. */}
@@ -3137,410 +3326,31 @@ export default function PostPage() {
                       📋 Use AI Plan
                     </button>
                   )}
-                </div>
-
-                {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
-                  </label>
-                  <input style={iStyle} placeholder={`e.g. ${includeLifting ? 'Push Day A' : includeCardio ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
-                </div>
-
-                {/* Date — optional. Defaults to today. Bounded to the last 3
-                    calendar days so users can backfill recent missed workouts
-                    without being able to retroactively edit ancient history. */}
-                {(() => {
-                  const today = new Date();
-                  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  const todayStr = ymd(today);
-                  const min = new Date(today); min.setDate(today.getDate() - 3);
-                  const minStr = ymd(min);
-                  // Friendly chip — what does the chosen date look like in plain English?
-                  let chip = "";
-                  if (woDate) {
-                    const [y, mo, d] = woDate.split('-').map(Number);
-                    const picked = new Date(y, mo - 1, d);
-                    const yest = new Date(today); yest.setDate(today.getDate() - 1);
-                    if (woDate === todayStr) chip = "Today";
-                    else if (woDate === ymd(yest)) chip = "Yesterday";
-                    else {
-                      const days = Math.round((today.getTime() - picked.getTime()) / 86400000);
-                      chip = `${days} days ago · ${picked.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
-                    }
-                  }
-                  return (
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                        Date <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · log a late workout up to 3 days back)</span>
-                      </label>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <input
-                          type="date"
-                          min={minStr}
-                          max={todayStr}
-                          style={{ ...iStyle, flex: 1, minWidth: 160 }}
-                          value={woDate}
-                          onChange={e => setWoDate(e.target.value)}
-                        />
-                        {chip && (
-                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#5BBE9333", color: woDate === todayStr ? C.green : "#86CFAE", fontWeight: 800, fontSize: 12 }}>
-                            {chip}
-                          </span>
-                        )}
-                        {woDate && (
-                          <button
-                            onClick={() => setWoDate("")}
-                            style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
-                            type="button"
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Workout time — optional. If set, uses today's date at this
-                    time. Defaults to "now" when blank. Lets users log after
-                    the fact and still show the correct time on their card. */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    Time <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · defaults to now)</span>
-                  </label>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      type="time"
-                      style={{ ...iStyle, flex: 1 }}
-                      value={woTime}
-                      onChange={e => setWoTime(e.target.value)}
-                    />
-                    {woTime && (
-                      <button
-                        onClick={() => setWoTime("")}
-                        style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
-                        type="button"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* What did you do? — toggle Cardio + Lifting independently
-                    or fall back to "Other type" for hiit/yoga/pilates/etc. */}
-                <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                  What did you do?
-                </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-                  <button
-                    onClick={() => {
-                      setIncludeCardio(c => !c);
-                      // If turning ON cardio while in single-mode (hiit/yoga), reset to combined-mode
-                      if (!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory)) {
-                        setWoCategory("lifting");
-                      }
-                    }}
-                    style={{
-                      flex: "1 1 130px", padding: "11px 14px", borderRadius: 12,
-                      background: includeCardio ? "rgba(91,190,147,0.18)" : C.white,
-                      border: `2px solid ${includeCardio ? C.blue : C.greenMid}`,
-                      color: includeCardio ? "#86CFAE" : C.sub,
-                      fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left",
-                    }}>
-                    {includeCardio ? "✓" : "+"} 🏃 Cardio
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIncludeLifting(l => !l);
-                      if (!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory)) {
-                        setWoCategory("lifting");
-                      }
-                    }}
-                    style={{
-                      flex: "1 1 130px", padding: "11px 14px", borderRadius: 12,
-                      background: includeLifting ? "rgba(91,190,147,0.18)" : C.white,
-                      border: `2px solid ${includeLifting ? C.blue : C.greenMid}`,
-                      color: includeLifting ? "#86CFAE" : C.sub,
-                      fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left",
-                    }}>
-                    {includeLifting ? "✓" : "+"} 🏋️ Lifting
-                  </button>
-                </div>
-
-                {/* "Or pick a different workout type" — for hiit/yoga/pilates/boxing/sports/other.
-                    Picking one of these turns OFF the cardio toggle (because cardio's
-                    cardio-specific dropdown is for running/walking/biking/swimming/rowing).
-                    Lifting stays on its own track — you CAN do "sports + lifting" or
-                    "HIIT + lifting" in one log. The cardio toggle only conflicts with
-                    these because both occupy the "primary cardio activity" slot. */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    Or a different type
-                  </label>
-                  <select style={iStyle}
-                    value={["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) ? "" : woCategory}
-                    onChange={e => {
-                      if (!e.target.value) return;
-                      setWoCategory(e.target.value);
-                      // Turn off cardio block since this is a different
-                      // (non-running/walking/etc.) primary activity.
-                      // KEEP lifting toggle as-is so users can combine
-                      // e.g. "Sports + Lifting" or "HIIT + Lifting".
-                      setIncludeCardio(false);
-                    }}>
-                    <option value="">— Pick one (Yoga, Pilates, etc.) —</option>
-                    {WORKOUT_CATEGORIES.filter(c => !["running","walking","biking","swimming","rowing","lifting","hiit"].includes(c.id)).map(c => (
-                      <option key={c.id} value={c.id}>{c.emoji}  {c.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* ── CARDIO BLOCK — only when toggle on ─────────────────── */}
-                {includeCardio && (
-                  <>
-                    {cardios.map((c, i) => (
-                      <CardioForm
-                        key={i}
-                        entry={c}
-                        index={i}
-                        onChange={(patch) => patchCardio(i, patch)}
-                        onRemove={cardios.length > 1 ? () => removeCardio(i) : undefined}
-                        bodyMetrics={bodyMetrics}
-                        swimDistanceFn={swimDistance}
-                        estCaloriesFn={estimateCardioCalories}
-                      />
-                    ))}
-                    <button
-                      onClick={addCardio}
-                      style={{
-                        width: "100%", marginBottom: 14, padding: "11px",
-                        borderRadius: 10, border: `1.5px dashed ${C.blue}`,
-                        background: "transparent", color: "#86CFAE",
-                        fontWeight: 800, fontSize: 13, cursor: "pointer",
-                      }}
-                    >
-                      + Add another cardio
-                    </button>
-                  </>
-                )}
-
-
-                {/* ── LIFTING DURATION (only when lifting toggled on) ── */}
-                {includeLifting && (
-                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>🏋️ Lifting</div>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
-                      <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={woDuration} onChange={e => setWoDuration(e.target.value.replace(/[^0-9]/g, ""))} />
-                      <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
-                      <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={woDurationSec} onChange={e => setWoDurationSec(clampSecInput(e.target.value))} />
-                    </div>
-                    <div style={{ fontSize: 11, color: C.sub, marginTop: 8 }}>Add your exercises in the section below ↓</div>
                   </div>
                 )}
+              </>)}
 
-                {/* ── "OTHER TYPE" DURATION BLOCK ──
-                    Shown whenever the user picked HIIT/yoga/pilates/boxing/sports/other
-                    from the dropdown above. Renders alongside the lifting block
-                    when both are wanted (e.g. "Sports + Lifting" combo log). */}
-                {!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) && (() => {
-                  const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
-                  if (!cat) return null;
-                  return (
-                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
-                        <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value.replace(/[^0-9]/g, ""))} />
-                        <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
-                        <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={otherTypeDurationSec} onChange={e => setOtherTypeDurationSec(clampSecInput(e.target.value))} />
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Workout Templates */}
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>📋 Templates</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {/* Load template dropdown */}
-                  <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
-                    <button
-                      onClick={() => { fetchTemplates(); setTemplateDropdownOpen(o => !o); }}
-                      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                    >
-                      <span>📋 Load Template</span>
-                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
-                    </button>
-                    {templateDropdownOpen && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#111811", border: "1.5px solid #5BBE93", borderRadius: 12, boxShadow: "0 8px 32px rgba(91,190,147,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
-                        {templates.length === 0 ? (
-                          <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Tap "🔨 Build Template" to create one.</div>
-                        ) : templates.map((tpl, i) => {
-                          // V2 templates carry `days` (multi-day) + `cover_emoji`
-                          // + `description`. Legacy templates only have
-                          // `exercises`. Surface whichever is richer so a
-                          // user upgrading mid-flight gets a sensible label.
-                          const dayCount = Array.isArray(tpl.days) ? tpl.days.length : 0;
-                          const totalExs = Array.isArray(tpl.days) && dayCount > 0
-                            ? tpl.days.reduce((sum: number, d: any) => sum + (d.exercises?.length || 0), 0)
-                            : tpl.exercises.length;
-                          const subtitle = dayCount > 1
-                            ? `${dayCount} days · ${totalExs} exercises`
-                            : `${totalExs} exercise${totalExs !== 1 ? "s" : ""}`;
-                          // Multi-day templates expand inline to show
-                          // Day 1 / Day 2 / Day 3 buttons. Single-day
-                          // ones tap-to-load (no extra step).
-                          const isMultiDay = dayCount > 1;
-                          const isExpanded = expandedTemplateId === tpl.id;
-                          return (
-                            <div key={tpl.id} style={{ borderBottom: i < templates.length - 1 ? "1px solid #1B231E" : "none" }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", gap: 10 }}>
-                                <button
-                                  onMouseDown={() => {
-                                    if (isMultiDay) {
-                                      // Toggle the inline day picker. Don't
-                                      // load anything yet — the user picks
-                                      // which day they want.
-                                      setExpandedTemplateId(isExpanded ? null : tpl.id);
-                                    } else {
-                                      loadTemplate(tpl);
-                                    }
-                                  }}
-                                  style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}
-                                >
-                                  <div style={{
-                                    width: 32, height: 32, borderRadius: 8,
-                                    background: "rgba(91,190,147,0.18)",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    fontSize: 16, flexShrink: 0,
-                                  }}>
-                                    {tpl.cover_emoji || "📋"}
-                                  </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tpl.name}</div>
-                                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                      {subtitle}
-                                      {tpl.description ? ` · ${tpl.description.slice(0, 40)}${tpl.description.length > 40 ? "…" : ""}` : ""}
-                                    </div>
-                                  </div>
-                                  {isMultiDay && (
-                                    <span style={{ color: "#86CFAE", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                                      {isExpanded ? "▲" : "Pick day ▼"}
-                                    </span>
-                                  )}
-                                </button>
-                                <button
-                                  onMouseDown={() => deleteTemplate(tpl.id)}
-                                  title="Delete template"
-                                  style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(255,68,68,0.15)", color: "#FF6666", fontSize: 14, fontWeight: 800, cursor: "pointer", flexShrink: 0, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                                >×</button>
-                              </div>
-                              {isMultiDay && isExpanded && (
-                                // Inline day picker. Each button shows
-                                // the day's name + exercise count and
-                                // calls loadTemplate with the right
-                                // index. Clicking closes the dropdown.
-                                <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-                                  {(tpl.days || []).map((day: any, di: number) => (
-                                    <button
-                                      key={di}
-                                      onMouseDown={() => loadTemplate(tpl, di)}
-                                      style={{
-                                        textAlign: "left", padding: "10px 12px",
-                                        borderRadius: 10,
-                                        background: "rgba(91,190,147,0.12)",
-                                        border: "1px solid rgba(91,190,147,0.4)",
-                                        color: "#F0F0F0", cursor: "pointer",
-                                        display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-                                      }}
-                                    >
-                                      <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontSize: 12, fontWeight: 800 }}>
-                                          {day.day_name || `Day ${di + 1}`}
-                                        </div>
-                                        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                          {(day.exercises || []).length} exercise{(day.exercises || []).length !== 1 ? "s" : ""}
-                                          {(day.exercises || []).slice(0, 3).length > 0 && ` · ${(day.exercises || []).slice(0, 3).map((e: any) => e.name).filter(Boolean).join(", ")}${(day.exercises || []).length > 3 ? "…" : ""}`}
-                                        </div>
-                                      </div>
-                                      <span style={{ fontSize: 11, color: "#86CFAE", fontWeight: 700, flexShrink: 0 }}>Use →</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  {/* "Build a Template" — opens an empty Builder modal so
-                      the user can construct a multi-day template from
-                      scratch (Push/Pull/Legs etc.). The richer flow
-                      Joey asked for, with name + description + cover
-                      emoji + multi-day. */}
-                  <button
-                    onClick={() => { setBuilderInitialDay1(undefined); setBuilderOpen(true); }}
-                    style={{ padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.blue, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
-                  >🔨 Build Template</button>
-                  {/* "Save current as Template" — pre-fills Day 1 with the
-                      exercises in the current workout form. Convenience
-                      shortcut so users don't have to retype. */}
-                  <button
-                    onClick={() => {
-                      // Snapshot current form exercises into the Builder's
-                      // initial Day 1. The Builder treats them as editable
-                      // — user can rename, add days, set description.
-                      const seed: TemplateExercise[] = exercises.map(ex => ({
-                        name: ex.name,
-                        sets: ex.sets,
-                        reps: ex.reps,
-                        ...(ex.weight ? { weight: ex.weight } : {}),
-                        ...(ex.notes ? { notes: ex.notes } : {}),
-                      }));
-                      setBuilderInitialDay1(seed.length > 0 ? seed : undefined);
-                      setBuilderOpen(true);
-                    }}
-                    disabled={exercises.length === 0}
-                    style={{
-                      padding: "10px 14px", borderRadius: 12,
-                      border: `1.5px solid ${C.greenMid}`,
-                      background: C.greenLight, color: C.sub,
-                      fontWeight: 700, fontSize: 13,
-                      cursor: exercises.length === 0 ? "not-allowed" : "pointer",
-                      opacity: exercises.length === 0 ? 0.5 : 1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >💾 Save Current</button>
-                </div>
-              </div>
-
-              {/* Exercises table · with search autocomplete, increment buttons, prev session */}
-              {/* Only shown when lifting is toggled on (combined-mode workouts) */}
-              {includeLifting && (
+              {(woSection === "lifting" || woSection === "abs" || woSection === "calisthenics") && (
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Exercises</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{woSection === "abs" ? "🔥 Ab work" : woSection === "calisthenics" ? "🤸 Calisthenics" : "🏋️ Exercises"}</div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setExercises(ex => [...ex, newCircuit()])}
+                    {woSection === "abs" && (<button onClick={() => setExercises(ex => [...ex, { ...newCircuit(), group: "abs" as ExGroup }])}
                       style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
                       + Ab Circuit
-                    </button>
-                    <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"] }])}
+                    </button>)}
+                    <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"], group: woSection as ExGroup, bodyweight: woSection !== "lifting" }])}
                       style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
                       + Add Exercise
                     </button>
                   </div>
                 </div>
-                {exercises.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>No exercises yet · click + Add Exercise</div>
+                {secExercises.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>Nothing here yet · tap + Add Exercise</div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {exercises.map((ex, i) => {
+                    if (exGroup(ex) !== woSection) return null;
                     const numSets = parseInt(ex.sets) || 1;
                     const prev = prevSessions[ex.name];
                     // Ab/finisher circuit: a compact card with an editable name, a
@@ -3753,8 +3563,8 @@ export default function PostPage() {
                     can add the next exercise right where you just finished —
                     no scrolling back up to the header button. Only shown once
                     there's at least one exercise (empty state prompts above). */}
-                {exercises.length > 0 && (
-                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"] }])}
+                {secExercises.length > 0 && (
+                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"], group: woSection as ExGroup, bodyweight: woSection !== "lifting" }])}
                     style={{ width: "100%", marginTop: 14, fontSize: 13, fontWeight: 800, padding: "12px 0", borderRadius: 14, border: `1.5px dashed ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
                     + Add Exercise
                   </button>
@@ -3762,10 +3572,249 @@ export default function PostPage() {
               </div>
               )}
 
-              {/* Tag Workout Partners — separate from Notes & Photo so it
-                  reads as its own section. Tagged users get notified, and
-                  workouts with at least one tagged user count toward the
-                  Workout Partner badge ladder (8-tier easyLadder). */}
+              {woSection === "lifting" && (<>
+                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>🏋️ Lifting</div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
+                      <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={woDuration} onChange={e => setWoDuration(e.target.value.replace(/[^0-9]/g, ""))} />
+                      <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
+                      <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={woDurationSec} onChange={e => setWoDurationSec(clampSecInput(e.target.value))} />
+                    </div>
+                    <div style={{ fontSize: 11, color: C.sub, marginTop: 8 }}>Total time for your lifting session</div>
+                  </div>
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>📋 Templates</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {/* Load template dropdown */}
+                  <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
+                    <button
+                      onClick={() => { fetchTemplates(); setTemplateDropdownOpen(o => !o); }}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                    >
+                      <span>📋 Load Template</span>
+                      <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
+                    </button>
+                    {templateDropdownOpen && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#111811", border: "1.5px solid #5BBE93", borderRadius: 12, boxShadow: "0 8px 32px rgba(91,190,147,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
+                        {templates.length === 0 ? (
+                          <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Tap "🔨 Build Template" to create one.</div>
+                        ) : templates.map((tpl, i) => {
+                          // V2 templates carry `days` (multi-day) + `cover_emoji`
+                          // + `description`. Legacy templates only have
+                          // `exercises`. Surface whichever is richer so a
+                          // user upgrading mid-flight gets a sensible label.
+                          const dayCount = Array.isArray(tpl.days) ? tpl.days.length : 0;
+                          const totalExs = Array.isArray(tpl.days) && dayCount > 0
+                            ? tpl.days.reduce((sum: number, d: any) => sum + (d.exercises?.length || 0), 0)
+                            : tpl.exercises.length;
+                          const subtitle = dayCount > 1
+                            ? `${dayCount} days · ${totalExs} exercises`
+                            : `${totalExs} exercise${totalExs !== 1 ? "s" : ""}`;
+                          // Multi-day templates expand inline to show
+                          // Day 1 / Day 2 / Day 3 buttons. Single-day
+                          // ones tap-to-load (no extra step).
+                          const isMultiDay = dayCount > 1;
+                          const isExpanded = expandedTemplateId === tpl.id;
+                          return (
+                            <div key={tpl.id} style={{ borderBottom: i < templates.length - 1 ? "1px solid #1B231E" : "none" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", gap: 10 }}>
+                                <button
+                                  onMouseDown={() => {
+                                    if (isMultiDay) {
+                                      // Toggle the inline day picker. Don't
+                                      // load anything yet — the user picks
+                                      // which day they want.
+                                      setExpandedTemplateId(isExpanded ? null : tpl.id);
+                                    } else {
+                                      loadTemplate(tpl);
+                                    }
+                                  }}
+                                  style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}
+                                >
+                                  <div style={{
+                                    width: 32, height: 32, borderRadius: 8,
+                                    background: "rgba(91,190,147,0.18)",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: 16, flexShrink: 0,
+                                  }}>
+                                    {tpl.cover_emoji || "📋"}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 13, color: "#F0F0F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tpl.name}</div>
+                                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {subtitle}
+                                      {tpl.description ? ` · ${tpl.description.slice(0, 40)}${tpl.description.length > 40 ? "…" : ""}` : ""}
+                                    </div>
+                                  </div>
+                                  {isMultiDay && (
+                                    <span style={{ color: "#86CFAE", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                      {isExpanded ? "▲" : "Pick day ▼"}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  onMouseDown={() => deleteTemplate(tpl.id)}
+                                  title="Delete template"
+                                  style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(255,68,68,0.15)", color: "#FF6666", fontSize: 14, fontWeight: 800, cursor: "pointer", flexShrink: 0, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >×</button>
+                              </div>
+                              {isMultiDay && isExpanded && (
+                                // Inline day picker. Each button shows
+                                // the day's name + exercise count and
+                                // calls loadTemplate with the right
+                                // index. Clicking closes the dropdown.
+                                <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {(tpl.days || []).map((day: any, di: number) => (
+                                    <button
+                                      key={di}
+                                      onMouseDown={() => loadTemplate(tpl, di)}
+                                      style={{
+                                        textAlign: "left", padding: "10px 12px",
+                                        borderRadius: 10,
+                                        background: "rgba(91,190,147,0.12)",
+                                        border: "1px solid rgba(91,190,147,0.4)",
+                                        color: "#F0F0F0", cursor: "pointer",
+                                        display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+                                      }}
+                                    >
+                                      <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 800 }}>
+                                          {day.day_name || `Day ${di + 1}`}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                          {(day.exercises || []).length} exercise{(day.exercises || []).length !== 1 ? "s" : ""}
+                                          {(day.exercises || []).slice(0, 3).length > 0 && ` · ${(day.exercises || []).slice(0, 3).map((e: any) => e.name).filter(Boolean).join(", ")}${(day.exercises || []).length > 3 ? "…" : ""}`}
+                                        </div>
+                                      </div>
+                                      <span style={{ fontSize: 11, color: "#86CFAE", fontWeight: 700, flexShrink: 0 }}>Use →</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {/* "Build a Template" — opens an empty Builder modal so
+                      the user can construct a multi-day template from
+                      scratch (Push/Pull/Legs etc.). The richer flow
+                      Joey asked for, with name + description + cover
+                      emoji + multi-day. */}
+                  <button
+                    onClick={() => { setBuilderInitialDay1(undefined); setBuilderOpen(true); }}
+                    style={{ padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.blue, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >🔨 Build Template</button>
+                  {/* "Save current as Template" — pre-fills Day 1 with the
+                      exercises in the current workout form. Convenience
+                      shortcut so users don't have to retype. */}
+                  <button
+                    onClick={() => {
+                      // Snapshot current form exercises into the Builder's
+                      // initial Day 1. The Builder treats them as editable
+                      // — user can rename, add days, set description.
+                      const seed: TemplateExercise[] = exercises.map(ex => ({
+                        name: ex.name,
+                        sets: ex.sets,
+                        reps: ex.reps,
+                        ...(ex.weight ? { weight: ex.weight } : {}),
+                        ...(ex.notes ? { notes: ex.notes } : {}),
+                      }));
+                      setBuilderInitialDay1(seed.length > 0 ? seed : undefined);
+                      setBuilderOpen(true);
+                    }}
+                    disabled={exercises.length === 0}
+                    style={{
+                      padding: "10px 14px", borderRadius: 12,
+                      border: `1.5px solid ${C.greenMid}`,
+                      background: C.greenLight, color: C.sub,
+                      fontWeight: 700, fontSize: 13,
+                      cursor: exercises.length === 0 ? "not-allowed" : "pointer",
+                      opacity: exercises.length === 0 ? 0.5 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >💾 Save Current</button>
+                </div>
+              </div>
+              </>)}
+
+              {woSection === "cardio" && (<>
+              <FitbitConnect />
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                {["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) ? (
+                  <>
+                    {cardios.map((c, i) => (
+                      <CardioForm
+                        key={i}
+                        entry={c}
+                        index={i}
+                        onChange={(patch) => patchCardio(i, patch)}
+                        onRemove={cardios.length > 1 ? () => removeCardio(i) : undefined}
+                        bodyMetrics={bodyMetrics}
+                        swimDistanceFn={swimDistance}
+                        estCaloriesFn={estimateCardioCalories}
+                      />
+                    ))}
+                    <button
+                      onClick={addCardio}
+                      style={{
+                        width: "100%", marginBottom: 14, padding: "11px",
+                        borderRadius: 10, border: `1.5px dashed ${C.blue}`,
+                        background: "transparent", color: "#86CFAE",
+                        fontWeight: 800, fontSize: 13, cursor: "pointer",
+                      }}
+                    >
+                      + Add another cardio
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => { setWoCategory("lifting"); setOtherTypeDuration(""); setOtherTypeDurationSec(""); }}
+                    style={{ width: "100%", marginBottom: 14, padding: "11px", borderRadius: 10, border: `1.5px dashed ${C.blue}`, background: "transparent", color: "#86CFAE", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    ↩ Log running / biking / swimming instead
+                  </button>
+                )}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Or a different type
+                  </label>
+                  <select style={iStyle}
+                    value={["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) ? "" : woCategory}
+                    onChange={e => {
+                      if (!e.target.value) return;
+                      setWoCategory(e.target.value);
+                      // Turn off cardio block since this is a different
+                      // (non-running/walking/etc.) primary activity.
+                      // KEEP lifting toggle as-is so users can combine
+                      // e.g. "Sports + Lifting" or "HIIT + Lifting".
+                      setIncludeCardio(false);
+                    }}>
+                    <option value="">— Pick one (Yoga, Pilates, etc.) —</option>
+                    {WORKOUT_CATEGORIES.filter(c => !["running","walking","biking","swimming","rowing","lifting","hiit"].includes(c.id)).map(c => (
+                      <option key={c.id} value={c.id}>{c.emoji}  {c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {!["running","walking","biking","swimming","rowing","lifting"].includes(woCategory) && (() => {
+                  const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
+                  if (!cat) return null;
+                  return (
+                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
+                        <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value.replace(/[^0-9]/g, ""))} />
+                        <span style={{ color: C.sub, fontWeight: 800, fontSize: 16 }}>:</span>
+                        <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="sec" value={otherTypeDurationSec} onChange={e => setOtherTypeDurationSec(clampSecInput(e.target.value))} />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              </>)}
+
+              {woSection === "tag" && (<>
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🤜 Tag Workout Partners</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>Logging with friends? Tag them to count toward the Workout Partner badge.</div>
@@ -3776,16 +3825,109 @@ export default function PostPage() {
                   placeholder="Search by name or @username…"
                 />
               </div>
-
-              {/* Notes & Photo */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes & Photo</div>
-                <textarea rows={3} style={{ ...iStyle, resize: "none", marginBottom: 14 }} placeholder="How did it feel? Any PRs?" value={woNotes} onChange={e => setWoNotes(e.target.value)} />
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🏢 Tag a business</div>
                   <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>Tag a gym, studio, or brand on Livelee — your post shows on their page.</div>
                   <TagPicker businessOnly value={taggedBusinesses} onChange={setTaggedBusinesses} placeholder="Search businesses on Livelee…" max={3} />
                 </div>
+              </div>
+              </>)}
+
+              {woSection === "save" && (<>
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💾 Workout details</div>
+                {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                  </label>
+                  <input style={iStyle} placeholder={`e.g. ${includeLifting ? 'Push Day A' : includeCardio ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
+                </div>
+                {/* Date — optional. Defaults to today. Bounded to the last 3
+                    calendar days so users can backfill recent missed workouts
+                    without being able to retroactively edit ancient history. */}
+                {(() => {
+                  const today = new Date();
+                  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                  const todayStr = ymd(today);
+                  const min = new Date(today); min.setDate(today.getDate() - 3);
+                  const minStr = ymd(min);
+                  // Friendly chip — what does the chosen date look like in plain English?
+                  let chip = "";
+                  if (woDate) {
+                    const [y, mo, d] = woDate.split('-').map(Number);
+                    const picked = new Date(y, mo - 1, d);
+                    const yest = new Date(today); yest.setDate(today.getDate() - 1);
+                    if (woDate === todayStr) chip = "Today";
+                    else if (woDate === ymd(yest)) chip = "Yesterday";
+                    else {
+                      const days = Math.round((today.getTime() - picked.getTime()) / 86400000);
+                      chip = `${days} days ago · ${picked.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+                    }
+                  }
+                  return (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                        Date <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · log a late workout up to 3 days back)</span>
+                      </label>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <input
+                          type="date"
+                          min={minStr}
+                          max={todayStr}
+                          style={{ ...iStyle, flex: 1, minWidth: 160 }}
+                          value={woDate}
+                          onChange={e => setWoDate(e.target.value)}
+                        />
+                        {chip && (
+                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#5BBE9333", color: woDate === todayStr ? C.green : "#86CFAE", fontWeight: 800, fontSize: 12 }}>
+                            {chip}
+                          </span>
+                        )}
+                        {woDate && (
+                          <button
+                            onClick={() => setWoDate("")}
+                            style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
+                            type="button"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Workout time — optional. If set, uses today's date at this
+                    time. Defaults to "now" when blank. Lets users log after
+                    the fact and still show the correct time on their card. */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                    Time <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · defaults to now)</span>
+                  </label>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="time"
+                      style={{ ...iStyle, flex: 1 }}
+                      value={woTime}
+                      onChange={e => setWoTime(e.target.value)}
+                    />
+                    {woTime && (
+                      <button
+                        onClick={() => setWoTime("")}
+                        style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
+                        type="button"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>📝 Notes</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>Shows on your activity card when you open this workout.</div>
+                <textarea rows={3} style={{ ...iStyle, resize: "none", marginBottom: 14 }} placeholder="How did it feel? Any PRs?" value={woNotes} onChange={e => setWoNotes(e.target.value)} />
                 <label style={{ display: "block", cursor: "pointer" }}>
                   {woPhoto ? (
                     <img src={woPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
@@ -3799,14 +3941,23 @@ export default function PostPage() {
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setWoPhoto)} />
                 </label>
               </div>
-
               <SaveErrorBanner />
               <PrivacyToggle />
               <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save to Log"}
+                {loading ? "Saving..." : "💾 Save workout"}
               </button>
+              </>)}
+
+              {woSection !== "save" && (
+                <button onClick={() => setWoSection(null)}
+                  style={{ width: "100%", padding: "15px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+                  ✓ Done — back to workout
+                </button>
+              )}
+            </>)}
             </div>
           )}
+
 
           {/* --- NUTRITION TAB --- */}
           {logTab === "nutrition" && (() => {
@@ -4821,6 +4972,7 @@ export default function PostPage() {
             </button>
           </div>
         )}
+        </>)}
         </div>{/* end post-main */}
       </div>{/* end post-layout */}
 
@@ -4887,4 +5039,10 @@ export default function PostPage() {
       )}
     </div>
   );
+}
+
+// Each save remounts the page with fresh state, landing back on the boxes.
+export default function PostPage() {
+  const [k, setK] = useState(0);
+  return <PostPageInner key={k} onDone={() => { setK(x => x + 1); if (typeof window !== "undefined") window.scrollTo(0, 0); }} />;
 }
