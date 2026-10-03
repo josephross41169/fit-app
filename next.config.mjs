@@ -13,6 +13,8 @@ const nextConfig = {
     output: 'export',
     images: { unoptimized: true },
     trailingSlash: true,
+    // Lets the app rewrite dynamic routes to their static shells (lib/shellRoutes.ts).
+    env: { NEXT_PUBLIC_STATIC_SHELL: '1' },
   }),
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
