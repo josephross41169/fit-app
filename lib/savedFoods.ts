@@ -119,6 +119,7 @@ export async function saveMeal(
   name: string,
   items: SavedFoodItem[],
   mealType?: string,
+  photoUrl?: string | null,
 ): Promise<SavedFood | null> {
   if (!name?.trim() || !items || items.length === 0) return null;
   try {
@@ -145,6 +146,7 @@ export async function saveMeal(
       serving_size: null,
       default_meal_type: mealType || null,
       is_meal: true,
+      photo_url: photoUrl || items.find((it) => it.photoUrl)?.photoUrl || null,
       items: items.map((it) => ({
         name: it.name,
         calories: num(it.calories),
