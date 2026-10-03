@@ -1067,10 +1067,8 @@ export default function GroupPage() {
     // contribution numbers from before the fix shipped. Firing the sync
     // here recomputes every member's contribution from full history.
     // Idempotent — safe to call on every tab switch.
-    if ((dbGroup as any)?.id && (tab === "war" || tab === "challenges")) {
-      loadWarChallenges();
-      if (currentUser?.id) forceSyncAllProgress(currentUser.id);
-    }
+    if ((dbGroup as any)?.id) loadWarChallenges();
+    if ((dbGroup as any)?.id && tab === "war" && currentUser?.id) forceSyncAllProgress(currentUser.id);
   }, [dbGroup, tab, loadWarChallenges, currentUser?.id]);
 
   // ── Group Goals hook (must be before early returns) ─────────────────────────
@@ -1288,9 +1286,7 @@ export default function GroupPage() {
       setShowGoalModal(false);
       setGoalForm({ title:"", metric:"miles_run", target:0, duration_days:7, category:"fitness" });
       await loadGroupGoals();
-      // Force switch to challenges tab and reload
-      setTab("challenges");
-      setChallengeViewTab("active");
+      // Goals live on the main group page now — stay there.
     } catch(e:any) { console.error(e); alert("Error: " + e.message); }
     setGoalSaving(false);
   };
@@ -2676,7 +2672,7 @@ export default function GroupPage() {
               const t = new Date(p.created_at).getTime();
               return !isNaN(t) && t >= monthAgo;
             }).length;
-            const activeChallenges = (dbChallenges || []).filter((c: any) => c.is_active).length;
+            const liveWarCount = (warChallenges || []).filter((c: any) => c.status === "active" && (!c.end_date || new Date(c.end_date).getTime() > Date.now())).length;
             const upcomingEvents = (dbEvents || []).length; // already filtered upstream
             const founded = (dbGroup as any)?.created_at
               ? new Date((dbGroup as any).created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
@@ -2743,7 +2739,7 @@ export default function GroupPage() {
                   {[
                     { v: group.members ?? 0,        label: 'Members',    icon: '👥' },
                     { v: postsThisMonth,            label: 'Posts/mo',   icon: '💬' },
-                    { v: activeChallenges,          label: 'Challenges', icon: '🏆' },
+                    { v: liveWarCount,              label: 'Wars',       icon: '⚔️' },
                     { v: upcomingEvents,            label: 'Events',     icon: '📅' },
                   ].map((s, i) => (
                     <div key={i} onClick={s.label === 'Members' ? () => setShowMembers(true) : undefined}
@@ -2983,13 +2979,13 @@ export default function GroupPage() {
           })()}
 
           {/* Challenges & Wars — its own box that opens a separate screen. */}
-          <button onClick={() => { setTab("challenges"); if (typeof window !== "undefined") window.scrollTo(0, 0); }}
+          <button onClick={() => { setTab("war"); if (typeof window !== "undefined") window.scrollTo(0, 0); }}
             style={{ width:"100%", display:"flex", alignItems:"center", gap:14, textAlign:"left", background:C.white, border:`2px solid ${C.blueMid}`, borderRadius:20, padding:"16px 18px", marginBottom:20, cursor:"pointer", color:C.text }}>
             <span style={{ width:48, height:48, borderRadius:14, background:`${catColor}22`, border:`1px solid ${catColor}55`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>⚔️</span>
             <span style={{ flex:1, minWidth:0 }}>
-              <span style={{ display:"block", fontWeight:900, fontSize:16 }}>Challenges & Wars</span>
+              <span style={{ display:"block", fontWeight:900, fontSize:16 }}>Group Wars</span>
               <span style={{ display:"block", fontSize:12, color:C.sub, marginTop:2 }}>
-                {(() => { const n = (dbChallenges || []).filter((c: any) => c.is_active).length; return n ? `${n} active challenge${n === 1 ? "" : "s"}` : "Member challenges and group-vs-group wars"; })()}
+                {(() => { const n = (warChallenges || []).filter((c: any) => c.status === "active" && (!c.end_date || new Date(c.end_date).getTime() > Date.now())).length; return n ? `${n} live war${n === 1 ? "" : "s"}` : "Take on other groups"; })()}
               </span>
             </span>
             <span style={{ color:catColor, fontSize:26, fontWeight:300 }}>›</span>
@@ -3024,20 +3020,7 @@ export default function GroupPage() {
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
                 <button onClick={() => { setTab("activity"); if (typeof window !== "undefined") window.scrollTo(0, 0); }}
                   style={{ background:"none", border:"none", color:catColor, fontWeight:800, fontSize:15, cursor:"pointer", padding:"6px 0" }}>‹ {group.name || "Group"}</button>
-                <div style={{ flex:1, textAlign:"center", fontWeight:900, fontSize:18, color:C.text, marginRight:60 }}>⚔️ Challenges & Wars</div>
-              </div>
-              <div className="groups-subtabs" style={{ display:"flex", gap:4, marginBottom:20, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}` }}>
-                {([
-                  { key:"challenges", label:"⚡ Challenges" },
-                  { key:"war",        label:"⚔️ Wars" },
-                ] as const).map(t => (
-                  <button key={t.key} onClick={() => setTab(t.key)} style={{
-                    flex:1, padding:"10px 4px", borderRadius:10, border:"none",
-                    background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
-                    color: tab===t.key ? "#fff" : C.sub,
-                    fontWeight:800, fontSize:13, cursor:"pointer", whiteSpace:"nowrap",
-                  }}>{t.label}</button>
-                ))}
+                <div style={{ flex:1, textAlign:"center", fontWeight:900, fontSize:18, color:C.text, marginRight:60 }}>⚔️ Group Wars</div>
               </div>
             </>
           )}
@@ -3294,7 +3277,7 @@ export default function GroupPage() {
           )}
 
           {/* ── CHALLENGES ── */}
-          {tab==="challenges" && (
+          {false && tab==="challenges" && (
             <div>
               {/* Active / Completed sub-tabs + action buttons */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10}}>
@@ -3584,15 +3567,16 @@ export default function GroupPage() {
               weight_lost:{label:"Weight Lost",icon:"⚖️",unit:"lbs"},
             };
             const LIFT_TYPES = [{key:"bench_press",label:"Bench Press"},{key:"squat",label:"Squat"},{key:"deadlift",label:"Deadlift"},{key:"dumbbell_curl",label:"Dumbbell Curl"}];
-            const active = warChallenges.filter(c => c.status === "active");
-            const open   = warChallenges.filter(c => c.status === "open");
+            const warLive = (c: any) => !c.end_date || new Date(c.end_date).getTime() > Date.now();
+            const active = warChallenges.filter(c => c.status === "active" && warLive(c));
+            const open   = warChallenges.filter(c => c.status === "open" && warLive(c));
             const done   = warChallenges.filter(c => ["completed","cancelled"].includes(c.status));
 
             return (
               <div>
                 {/* Header */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                  <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>⚔️ Group Wars</div>
+                  <div style={{fontSize:13,color:"#9CA3AF",fontWeight:600}}>Your group vs other groups</div>
                   {isOwnerOrMod && (
                     <button onClick={()=>setShowCreateWar(true)} style={{
                       padding:"8px 14px",borderRadius:12,border:"none",
@@ -3605,7 +3589,7 @@ export default function GroupPage() {
                 {/* Sub-tabs: Our Wars vs Find Opponents */}
                 <div style={{display:"flex",gap:6,marginBottom:16,background:"#161D19",borderRadius:12,padding:4}}>
                   {([
-                    {key:"ours",label:`⚔️ Our Wars (${warChallenges.length})`},
+                    {key:"ours",label:`⚔️ Our Wars (${active.length + open.length})`},
                     {key:"discover",label:`🔍 Find Opponents (${openBoardChallenges.length})`},
                   ] as const).map(t=>(
                     <button key={t.key} onClick={()=>setOpenBoardTab(t.key)} style={{
@@ -3722,22 +3706,6 @@ export default function GroupPage() {
                   </div>
                 ) : (
                   <div>
-                    {/* Active/Past toggle — wars filter. Active = ongoing
-                        + open invitations; Past = completed/cancelled. */}
-                    <div style={{display:"flex",gap:6,marginBottom:14,background:"#161D19",borderRadius:10,padding:3}}>
-                      {([
-                        {key:"active",label:`⚡ Active (${active.length + open.length})`},
-                        {key:"past",  label:`🏁 Past (${done.length})`},
-                      ] as const).map(t=>(
-                        <button key={t.key} onClick={()=>setWarHistoryTab(t.key)} style={{
-                          flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
-                          fontWeight:700,fontSize:11,
-                          background:warHistoryTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
-                          color:warHistoryTab===t.key?"#fff":"#6B7280",
-                        }}>{t.label}</button>
-                      ))}
-                    </div>
-
                     {warHistoryTab === "active" ? (<>
                     {/* Active challenges */}
                     {active.map(chal => {
@@ -4156,7 +4124,7 @@ export default function GroupPage() {
                     </>
                     )}
 
-                    {warHistoryTab === "active" && warChallenges.length===0 && !warLoading && (
+                    {warHistoryTab === "active" && active.length + open.length===0 && !warLoading && (
                       <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
                         <div style={{fontSize:40,marginBottom:12}}>⚔️</div>
                         <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>No wars yet</div>
