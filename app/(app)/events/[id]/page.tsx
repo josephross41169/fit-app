@@ -9,7 +9,8 @@
 // Owner sees a "Delete" option. Comments support threaded replies.
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -50,7 +51,7 @@ interface Comment {
 type RsvpStatus = "going" | "interested" | null;
 
 export default function EventDetailPage() {
-  const params = useParams();
+  const params = useShellParams();
   const router = useRouter();
   const { user } = useAuth();
   const eventId = params?.id as string;
