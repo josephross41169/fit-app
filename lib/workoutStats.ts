@@ -31,9 +31,30 @@ export function categoryForExercise(name: string): string | null {
   EXERCISE_CATEGORY_MAP.forEach((_, k) => {
     if (key.includes(k) || k.includes(key)) candidates.push(k);
   });
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return categoryByKeyword(key);
   candidates.sort((a, b) => b.length - a.length);
   return EXERCISE_CATEGORY_MAP.get(candidates[0]) || null;
+}
+
+// Last resort for names that aren't in the exercise library ("MTS high row",
+// "Diverging lat pull downs", machine brand names…): bucket by keywords.
+// Order matters — "leg raise" is core, "leg curl" is legs, "shoulder press"
+// is shoulders, a plain "curl" is biceps.
+const KEYWORD_CATEGORIES: [RegExp, string][] = [
+  [/\b(leg raise|knee raise|crunch|plank|sit ?-?ups?|abs?|oblique|russian twist|ab wheel|hollow|v-?ups?|core)\b/, "Core"],
+  [/\b(leg curl|leg extension|leg press|squat|lunge|calf|calves|hamstring|quad|step ?-?ups?|split squat|legs?)\b/, "Legs"],
+  [/\b(hip thrust|glute|bridge|kickback|abduct)/, "Glutes"],
+  [/\b(rows?|pull ?-?downs?|pull ?-?ups?|chin ?-?ups?|lats?|deadlifts?|back extension|pullover)\b/, "Back"],
+  [/\b(shoulders?|overhead press|ohp|military|lateral raise|lat raise|front raise|rear delts?|delts?|face pulls?|arnold|shrugs?|upright row)\b/, "Shoulders"],
+  [/\b(bench|chest|fly|flyes?|flys|pec|push ?-?ups?|incline press|decline press)\b/, "Chest"],
+  [/\b(curls?|biceps?|preacher|hammer)\b/, "Biceps"],
+  [/\b(triceps?|skull ?crushers?|push ?-?downs?|dips?|kickbacks?|close ?-?grip)\b/, "Triceps"],
+];
+function categoryByKeyword(key: string): string | null {
+  // Shoulder / upright-row style names win over the generic "row" → Back rule.
+  if (/\b(shoulder|overhead|military|lateral raise|upright row|rear delt|face pull)/.test(key)) return "Shoulders";
+  for (const [re, cat] of KEYWORD_CATEGORIES) if (re.test(key)) return cat;
+  return null;
 }
 
 // Bucket a cardio entry's freeform type string (which can be anything the
@@ -133,4 +154,95 @@ export function currentMonthWorkoutStats(workouts: any[], now: Date = new Date()
     topGroups: Array.from(groupCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count })),
     avgPerWeek: inMonth.length ? (inMonth.length / weeks).toFixed(1) : "—",
   };
+}
+
+
+const CARDIO_EMOJI: Record<string, string> = {
+  Running: "🏃", "Outdoor Run": "🏃", "Treadmill Run": "🏃", "Trail Run": "🏃", Cycling: "🚴", Swimming: "🏊",
+  Rowing: "🚣", Walking: "🚶", Hiking: "🥾", HIIT: "⚡", Elliptical: "🔁", "Stair Climber": "🪜",
+  Yoga: "🧘", Pilates: "🧘", Boxing: "🥊", Basketball: "🏀", Soccer: "⚽", Tennis: "🎾", Pickleball: "🏓", Golf: "⛳", Climbing: "🧗",
+};
+const prettyCat = (c: string) => c.replace(/[_-]+/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
+
+/**
+ * One-glance summary of the current month for the profile Activity box:
+ * how much you trained, what cardio you did, and your wellness sessions.
+ * `logs` = workout + wellness activity_logs rows (any order).
+ */
+export function monthActivitySummary(logs: any[], now: Date = new Date()) {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const inMonth = (logs || []).filter((l: any) => {
+    const d = new Date(l.logged_at || l.created_at || 0);
+    return !isNaN(d.getTime()) && d >= start && d <= end;
+  });
+  const workouts = inMonth.filter((l: any) => l.log_type === "workout");
+  const wellnessLogs = inMonth.filter((l: any) => l.log_type === "wellness");
+  const days = new Set<string>();
+  inMonth.forEach((l: any) => { if (l.log_type === "workout" || l.log_type === "wellness") days.add(new Date(l.logged_at || l.created_at).toDateString()); });
+
+  let liftSessions = 0, cardioSessions = 0, minutes = 0, sets = 0;
+  const groupCounts = new Map<string, number>();
+  const cardio = new Map<string, { count: number; minutes: number; miles: number }>();
+  const addCardio = (label: string, mins: number, miles: number) => {
+    const cur = cardio.get(label) || { count: 0, minutes: 0, miles: 0 };
+    cur.count += 1; cur.minutes += mins; cur.miles += miles; cardio.set(label, cur);
+  };
+  workouts.forEach((w: any) => {
+    const exs = (w.exercises || []).filter((e: any) => e?.name);
+    if (exs.length) {
+      liftSessions += 1;
+      const hit = new Set<string>();
+      exs.forEach((e: any) => {
+        sets += parseInt(e.sets) || 0;
+        const c = categoryForExercise(e.name);
+        if (c && c !== "Cardio") hit.add(c);
+      });
+      hit.forEach(c => groupCounts.set(c, (groupCounts.get(c) || 0) + 1));
+    }
+    minutes += Number(w.workout_duration_min) || 0;
+    const cs = (w.cardio || []).filter(Boolean);
+    if (cs.length) {
+      cardioSessions += 1;
+      cs.forEach((c: any) => {
+        const label = cardioChipLabel(c) || "Cardio";
+        const miles = c.miles != null ? Number(c.miles) || 0 : (/swim/i.test(c.type || "") ? 0 : parseFloat(c.distance) || 0);
+        addCardio(label, Number(c.duration) || 0, miles);
+      });
+    } else if (!exs.length && w.workout_category && w.workout_category !== "lifting") {
+      // "Other" workouts (HIIT, yoga, sports…) with no cardio entries.
+      cardioSessions += 1;
+      addCardio(prettyCat(String(w.workout_category)), Number(w.workout_duration_min) || 0, 0);
+    }
+  });
+
+  const wellness = new Map<string, { count: number; minutes: number }>();
+  wellnessLogs.forEach((l: any) => {
+    const t = (l.wellness_type || "Wellness").toString();
+    const cur = wellness.get(t) || { count: 0, minutes: 0 };
+    cur.count += 1; cur.minutes += Number(l.wellness_duration_min) || 0; wellness.set(t, cur);
+  });
+
+  const refEnd = end > now ? now : end;
+  const weeks = Math.max(1, (refEnd.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const byCount = <T extends { count: number }>(m: Map<string, T>) =>
+    Array.from(m.entries()).sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0])).map(([name, v]) => ({ name, ...v }));
+  return {
+    monthLabel: now.toLocaleString("en-US", { month: "long" }),
+    workouts: workouts.length,
+    activeDays: days.size,
+    liftSessions, cardioSessions, sets, minutes,
+    wellnessSessions: wellnessLogs.length,
+    avgPerWeek: workouts.length ? (workouts.length / weeks).toFixed(1) : "—",
+    muscleGroups: byCount(new Map(Array.from(groupCounts.entries()).map(([k, v]) => [k, { count: v }]))),
+    cardio: byCount(cardio).map(c => ({ ...c, emoji: CARDIO_EMOJI[c.name] || "🔥" })),
+    wellness: byCount(wellness),
+  };
+}
+
+/** "95 min" → "1h 35m"; 0 → "—". */
+export function fmtMinutes(m: number): string {
+  if (!m) return "—";
+  const h = Math.floor(m / 60), r = Math.round(m % 60);
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
 }
