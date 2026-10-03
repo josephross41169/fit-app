@@ -13,12 +13,12 @@
 // As of v2 (Spotify-Wrapped redesign), renders the fullscreen swipeable
 // carousel rather than a scrolling dashboard.
 
-import { useParams } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import RecapCarousel from "@/components/recap/RecapCarousel";
 import { parseIsoDateLocal, getSundayOfWeek } from "@/lib/recap";
 
 export default function RecapWeekPage() {
-  const params = useParams<{ week: string }>();
+  const params = useShellParams<{ week: string }>();
   const weekParam = params?.week;
 
   let weekStart: Date | undefined = undefined;
