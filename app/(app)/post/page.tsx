@@ -610,6 +610,8 @@ const WELLNESS_GROUPS: { label: string; types: string[] }[] = [
 ];
 const WELLNESS_TYPES = WELLNESS_GROUPS.flatMap(g => g.types);
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
+const MEAL_BOXES = ["Breakfast", "Lunch", "Dinner", "Snack"];
+const MEAL_EMOJI: Record<string, string> = { Breakfast: "🍳", Lunch: "🥪", Dinner: "🍝", Snack: "🍎" };
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
 
 function PostPageInner({ onDone }: { onDone: () => void }) {
@@ -850,6 +852,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
   // Nutrition state
   const [mealType, setMealType] = useState("Breakfast");
+  // Nutrition funnel: null = Meals/Supplements boxes; "meals" → meal boxes → a meal page.
+  const [nutSection, setNutSection] = useState<null | "meals" | "supplements">(null);
+  const [nutMeal, setNutMeal] = useState<string | null>(null);
+  // Unsaved per-meal drafts, so hopping between Breakfast/Lunch/… doesn't mix foods.
+  const mealDraftsRef = useRef<Record<string, { items: FoodItem[]; notes: string }>>({});
+  const [favMealName, setFavMealName] = useState("");
+  const [favMealMsg, setFavMealMsg] = useState<string | null>(null);
+  const [favMealBusy, setFavMealBusy] = useState(false);
   // Supplements logged with this nutrition entry. Each is { name, photo_url }
   // (photo_url is a data: URL until save, when it's uploaded). favId, when
   // present, links this back to the saved favorite it came from so we can
@@ -1599,6 +1609,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
       return;
     }
     if (submittingRef.current || loading || saved) return;
+    if (mainMode === "log" && logTab === "nutrition") {
+      if (nutSection === "supplements" && supplements.length === 0) { setSaveError(suppName.trim() ? "Tap “+ Add” to add the supplement first." : "Add at least one supplement."); return; }
+      if (nutSection === "meals" && !foodItems.some(f => f.name.trim()) && !mealPhotos[mealType] && !nutNotes.trim()) { setSaveError("Add what you ate — a food, a photo, or a note."); return; }
+    }
     submittingRef.current = true;
     setLoading(true);
     setSaveError(null);
@@ -1816,7 +1830,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
       } else if (logTab === 'nutrition') {
         // Upload per-meal photos
         const uploadedMealPhotos: Record<string, string> = {};
-        for (const [meal, dataUrl] of Object.entries(mealPhotos)) {
+        // Only this meal's photo (other meals may have unsaved drafts).
+        for (const [meal, dataUrl] of Object.entries(mealPhotos).filter(([m]) => nutSection !== "supplements" && m === mealType)) {
           if (dataUrl) {
             const url = await uploadPhoto(await compressImage(dataUrl), 'activity', `${user.id}/nutrition-${meal.toLowerCase()}-${Date.now()}.jpg`);
             if (url) uploadedMealPhotos[meal] = url;
@@ -1833,7 +1848,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         // are food names; the activity card renders them with their name as the
         // label. uploadedMealPhotos (manual per-meal photos) take precedence on
         // key collision.
-        const combinedPhotos = { ...foodItemPhotos, ...uploadedMealPhotos };
+        const foodNames = new Set(foodItems.map(f => f.name));
+        const combinedPhotos = { ...Object.fromEntries(Object.entries(foodItemPhotos).filter(([k]) => foodNames.has(k))), ...uploadedMealPhotos };
         const photoUrlToStore = Object.keys(combinedPhotos).length > 0
           ? JSON.stringify(combinedPhotos)
           : nutPhotoUrl;
@@ -1867,8 +1883,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         const res = await supabase.from('activity_logs').insert({
           ...base,
           log_type: 'nutrition',
-          meal_type: mealType,
-          food_items: foodItems.length > 0 ? foodItems : null,
+          meal_type: nutSection === "supplements" ? "Supplements" : mealType,
+          food_items: foodItems.filter(f => f.name.trim()).length > 0 ? foodItems.filter(f => f.name.trim()) : null,
           supplements: supplementsToStore,
           calories_total: finalCalories,
           protein_g: finalProtein,
@@ -2870,7 +2886,46 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
     else if (t === "workout") { setMainMode("log"); setLogTab("workout"); setFunnel("workoutChoice"); }
     else { setMainMode("log"); setLogTab(t); setFunnel("form"); }
     setWoSection(null);
+    setNutSection(null); setNutMeal(null);
     if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+  function openMeal(m: string) {
+    const d = mealDraftsRef.current[m];
+    setMealType(m);
+    setFoodItems(d?.items || []);
+    setNutNotes(d?.notes || "");
+    setFavMealName(""); setFavMealMsg(null);
+    setNutMeal(m);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+  function closeMeal() {
+    if (nutMeal) mealDraftsRef.current[nutMeal] = { items: foodItems, notes: nutNotes };
+    setFoodItems([]); setNutNotes("");
+    setNutMeal(null);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+  // Save what's on the meal page as a favorite for THIS meal (photo included).
+  async function saveMealFavorite() {
+    if (!user?.id || favMealBusy) return;
+    const items = foodItems.filter(f => f.name.trim());
+    if (items.length === 0) { setFavMealMsg("Add a food first."); return; }
+    setFavMealBusy(true); setFavMealMsg(null);
+    try {
+      let photo: string | null = mealPhotos[mealType] || null;
+      if (photo && photo.startsWith("data:")) {
+        try { photo = await uploadPhoto(await compressImage(photo), "posts", `${user.id}/fav-${Date.now()}.jpg`); } catch { photo = null; }
+        if (photo) setMealPhotos(p => ({ ...p, [mealType]: photo! }));
+      }
+      const name = favMealName.trim();
+      let ok: any = null;
+      if (items.length === 1 && !name) {
+        ok = await saveFood(user.id, { ...(items[0] as SavedFoodItem), photoUrl: items[0].photoUrl || photo || undefined }, mealType);
+      } else {
+        ok = await saveMeal(user.id, name || `My ${mealType.toLowerCase()}`, items as SavedFoodItem[], mealType, photo);
+      }
+      if (ok) { setFavMealMsg(`⭐ Saved to your ${mealType.toLowerCase()} favorites`); setFavoritesRefreshKey(k => k + 1); }
+      else setFavMealMsg("Couldn't save — it may already be saved.");
+    } finally { setFavMealBusy(false); }
   }
   function openWoSection(s: WoSection) {
     if (s === "cardio" && cardios.length === 0) setCardios([newCardioEntry()]);
@@ -3219,7 +3274,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             <div style={{ fontWeight: 900, fontSize: 24, color: C.text, margin: "4px 2px 6px" }}>What are you logging?</div>
             {([
               { k: "workout", e: "💪", t: "Workout", s: "Lifting, cardio, abs & calisthenics" },
-              { k: "nutrition", e: "🥗", t: "Meal", s: "Food, macros, water & supplements" },
+              { k: "nutrition", e: "🥗", t: "Meal", s: "Meals & supplements" },
               { k: "wellness", e: "🧘", t: "Wellness", s: "Sleep, recovery, mindfulness & more" },
               { k: "feed", e: "📢", t: "Post to feed", s: "Share photos & videos with followers" },
             ] as const).map(b => (
@@ -3279,15 +3334,19 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               if (mainMode === "log" && logTab === "workout" && woSection && openEx !== null) { closeExercise(); return; }
               if (mainMode === "log" && logTab === "workout" && woSection) setWoSection(null);
               else if (mainMode === "log" && logTab === "workout") setFunnel("workoutChoice");
+              else if (mainMode === "log" && logTab === "nutrition" && nutMeal) closeMeal();
+              else if (mainMode === "log" && logTab === "nutrition" && nutSection) setNutSection(null);
               else setFunnel("home");
               if (typeof window !== "undefined") window.scrollTo(0, 0);
             }}
             style={{ background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>
-            ‹ {mainMode === "log" && logTab === "workout" && woSection ? (openEx !== null ? "Exercises" : "Workout") : "Back"}
+            ‹ {mainMode === "log" && logTab === "workout" && woSection ? (openEx !== null ? "Exercises" : "Workout")
+              : mainMode === "log" && logTab === "nutrition" && nutMeal ? "Meals"
+              : mainMode === "log" && logTab === "nutrition" && nutSection ? "Meal" : "Back"}
           </button>
           <div style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 18, color: C.text, marginRight: 60 }}>
             {mainMode === "feed" ? "📢 Post to feed"
-              : logTab === "nutrition" ? "🥗 Meal"
+              : logTab === "nutrition" ? (nutMeal ? `${MEAL_EMOJI[nutMeal] || "🍽️"} ${nutMeal}` : nutSection === "meals" ? "🍽️ Meals" : nutSection === "supplements" ? "💊 Supplements" : "🥗 Meal")
               : logTab === "wellness" ? "🧘 Wellness"
               : woSection === "lifting" ? "🏋️ Weight lifting"
               : woSection === "cardio" ? "🏃 Cardio"
@@ -4054,118 +4113,41 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             return (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-              {/* Daily Progress (shown when goals exist) */}
-              {macroGoals && (
-                <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>📊 Today's Progress</div>
-                    <button onClick={() => setShowGoalsEditor(s => !s)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 20, border: `1.5px solid ${C.greenMid}`, background: 'transparent', color: C.sub, cursor: 'pointer', fontWeight: 700 }}>
-                      {showGoalsEditor ? '✕ Cancel' : '⚙️ Edit Goals'}
-                    </button>
-                  </div>
-                  {showGoalsEditor ? (
-                    <div>
-                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>🎯 Daily Macro Goals:</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                        {([
-                          { l: 'Calories', k: 'calories' as keyof NutritionGoals, unit: 'kcal' },
-                          { l: 'Protein', k: 'protein' as keyof NutritionGoals, unit: 'g' },
-                          { l: 'Carbs', k: 'carbs' as keyof NutritionGoals, unit: 'g' },
-                          { l: 'Fat', k: 'fat' as keyof NutritionGoals, unit: 'g' },
-                          { l: 'Water', k: 'water_oz' as keyof NutritionGoals, unit: 'oz' },
-                        ] as { l: string; k: keyof NutritionGoals; unit: string }[]).map(f => (
-                          <div key={f.k}>
-                            <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{f.l} ({f.unit})</label>
-                            <input
-                              style={iStyle}
-                              type="text" inputMode="numeric"
-                              value={String(editGoals[f.k])}
-                              onChange={e => setEditGoals(g => ({ ...g, [f.k]: parseFloat(e.target.value) || 0 }))}
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${C.greenMid}` }}>📅 Monthly Macro Goals (optional):</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                        {([
-                          { l: 'Total Calories', k: 'monthly_calories' as keyof NutritionGoals, unit: 'kcal' },
-                          { l: 'Total Protein', k: 'monthly_protein' as keyof NutritionGoals, unit: 'g' },
-                          { l: 'Total Carbs', k: 'monthly_carbs' as keyof NutritionGoals, unit: 'g' },
-                          { l: 'Total Fat', k: 'monthly_fat' as keyof NutritionGoals, unit: 'g' },
-                        ] as { l: string; k: keyof NutritionGoals; unit: string }[]).map(f => (
-                          <div key={f.k}>
-                            <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{f.l} ({f.unit})</label>
-                            <input
-                              style={iStyle}
-                              type="text" inputMode="numeric"
-                              value={String(editGoals[f.k] || '')}
-                              onChange={e => setEditGoals(g => ({ ...g, [f.k]: parseFloat(e.target.value) || 0 }))}
-                              placeholder="optional"
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      <button onClick={saveMacroGoals} style={{ width: '100%', padding: '10px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg,#5BBE93,#86CFAE)`, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
-                        Save Goals
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      {/* Calories progress */}
-                      {(() => {
-                        const todayCal = (dailyTotals?.calories || 0) + autoCalories;
-                        const goalCal = macroGoals.calories;
-                        const pct = goalCal > 0 ? Math.min(100, Math.round((todayCal / goalCal) * 100)) : 0;
-                        const barColor = todayCal > goalCal * 1.1 ? '#EF4444' : todayCal >= goalCal * 0.8 ? '#86CFAE' : '#F59E0B';
-                        return (
-                          <div style={{ marginBottom: 14 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0' }}>🔥 Calories</span>
-                              <span style={{ fontSize: 13, color: barColor, fontWeight: 800 }}>{Math.round(todayCal)} / {goalCal} kcal</span>
-                            </div>
-                            <div style={{ background: '#1B231E', borderRadius: 8, height: 12, overflow: 'hidden' }}>
-                              <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${barColor}, ${barColor}cc)`, borderRadius: 8, transition: 'width 0.4s ease' }} />
-                            </div>
-                          </div>
-                        );
-                      })()}
-                      <MacroBar label="🥩 Protein" current={Math.round((dailyTotals?.protein || 0) + autoProtein)} goal={macroGoals.protein} color="#5BBE93" />
-                      <MacroBar label="🍞 Carbs" current={Math.round((dailyTotals?.carbs || 0) + autoCarbs)} goal={macroGoals.carbs} color="#F59E0B" />
-                      <MacroBar label="🥑 Fat" current={Math.round((dailyTotals?.fat || 0) + autoFat)} goal={macroGoals.fat} color="#86CFAE" />
-                      {/* Water progress */}
-                      {(() => {
-                        const todayWater = (dailyTotals?.water_oz || 0) + (parseFloat(water) || 0);
-                        const goalWater = macroGoals.water_oz;
-                        const pct = goalWater > 0 ? Math.min(100, Math.round((todayWater / goalWater) * 100)) : 0;
-                        return (
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: '#F0F0F0' }}>💧 Water</span>
-                              <span style={{ fontSize: 12, color: '#38BDF8', fontWeight: 700 }}>{Math.round(todayWater)}oz / {goalWater}oz</span>
-                            </div>
-                            <div style={{ background: '#1B231E', borderRadius: 6, height: 8, overflow: 'hidden' }}>
-                              <div style={{ width: `${pct}%`, height: '100%', background: '#38BDF8', borderRadius: 6 }} />
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+              {/* Meals / Supplements boxes */}
+              {nutSection === null && (
+                <div className="funnel-grid">
+                  <button onClick={() => { setNutSection("meals"); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="funnel-box" style={{ border: `2px solid ${C.greenMid}`, background: C.white, minHeight: 190 }}>
+                    <span style={{ fontSize: 40 }}>🍽️</span>
+                    <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>Meals</span>
+                    <span style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>Breakfast · Lunch · Dinner · Snack</span>
+                  </button>
+                  <button onClick={() => { setNutSection("supplements"); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="funnel-box" style={{ border: `2px solid ${C.greenMid}`, background: C.white, minHeight: 190 }}>
+                    <span style={{ fontSize: 40 }}>💊</span>
+                    <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>Supplements</span>
+                    <span style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>{supplements.length ? `${supplements.length} added` : "Protein, creatine, vitamins…"}</span>
+                  </button>
                 </div>
               )}
 
-              {/* Set goals CTA (if no goals set) */}
-              {!macroGoals && (
-                <button
-                  onClick={() => { setShowGoalsEditor(true); setMacroGoals({ calories: 2500, protein: 180, carbs: 250, fat: 70, water_oz: 100 }); }}
-                  style={{ background: C.white, borderRadius: 22, padding: '14px 20px', border: `2px dashed ${C.blue}`, color: C.blue, fontWeight: 700, fontSize: 14, cursor: 'pointer', textAlign: 'left' as const, display: 'block', width: '100%' }}
-                >
-                  💡 Set daily macro goals · see progress bars
-                </button>
+              {/* Breakfast / Lunch / Dinner / Snack boxes */}
+              {nutSection === "meals" && !nutMeal && (
+                <div className="funnel-grid">
+                  {MEAL_BOXES.map(m => {
+                    const d = mealDraftsRef.current[m];
+                    const n = d ? d.items.filter(f => f.name.trim()).length : 0;
+                    return (
+                      <button key={m} onClick={() => openMeal(m)} className="funnel-box" style={{ border: `2px solid ${n ? C.blue : C.greenMid}`, background: C.white, minHeight: 150 }}>
+                        <span style={{ fontSize: 36 }}>{MEAL_EMOJI[m]}</span>
+                        <span style={{ fontWeight: 900, fontSize: 17, color: C.text }}>{m}</span>
+                        <span style={{ fontSize: 12, color: n ? C.blue : C.sub, fontWeight: 700 }}>{n ? `${n} item${n === 1 ? "" : "s"} · not saved yet` : "Tap to log"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
 
+              {/* Supplements page */}
+              {nutSection === "supplements" && (<>
               {/* ── Supplements ─────────────────────────────────────────────
                   Add supplements (name + optional photo), similar to the
                   favorites pattern. Stored on the nutrition log and shown on
@@ -4304,18 +4286,19 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 </div>
               </div>
 
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>🥗 Meal Details</div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Meal Type</label>
-                <select style={iStyle} value={mealType} onChange={e => setMealType(e.target.value)}>
-                  {MEAL_TYPES.map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
+              <SaveErrorBanner />
+              <PrivacyToggle />
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Saving..." : "💾 Save & close"}
+              </button>
+              </>)}
 
+              {/* A single meal page */}
+              {nutSection === "meals" && nutMeal && (<>
               {/* Food search + items */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Food Items</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>What did you eat?</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     {/* "Scan with AI" is only shown when the feature is enabled
                         via env flag. The scan calls /api/ai-food-scan which needs
@@ -4343,8 +4326,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   <FoodFavorites
                     userId={user.id}
                     currentMealType={mealType}
+                    lockedMeal={mealType}
                     refreshKey={favoritesRefreshKey}
-                    onSetMealType={(mt: string) => setMealType(mt)}
                     onAddFood={(food: SavedFoodItem) => {
                       addOrIncrementFood({
                         name: food.name,
@@ -4574,91 +4557,36 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         </div>
                       </div>
                     )}
-                    {/* Save the whole list as a reusable combo meal favorite */}
-                    {foodItems.length >= 2 && user?.id && (
-                      <button
-                        onClick={async () => {
-                          const name = window.prompt("Name this meal (e.g. \"My usual breakfast\")", mealType + " combo");
-                          if (!name?.trim()) return;
-                          const saved = await saveMeal(user.id, name.trim(), foodItems as SavedFoodItem[], mealType);
-                          if (saved) setFavoritesRefreshKey(k => k + 1);
-                        }}
-                        style={{ fontSize: 12, fontWeight: 800, padding: "9px 14px", borderRadius: 12, border: "1.5px solid #F5A623", background: "transparent", color: "#F5A623", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                        ⭐ Save these {foodItems.length} items as a meal favorite
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
 
-              {/* Macros (manual override / supplement) */}
+              {/* Photo of the meal */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>Total Macros</div>
-                <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>
-                  {autoCalories > 0 ? '? Auto-calculated from food items above · override below if needed' : 'Fill in manually or use food search above'}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-                  {[{ l: "Protein (g)", v: displayProtein, s: setProtein }, { l: "Carbs (g)", v: displayCarbs, s: setCarbs }, { l: "Fat (g)", v: displayFat, s: setFat }].map(f => (
-                    <div key={f.l}>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>{f.l}</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="0" value={f.v} onChange={e => f.s(e.target.value)} />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Water tracking */}
-                <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>💧 Water Intake</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                  <input style={{ ...iStyle, maxWidth: 100 }} placeholder="oz" value={water} onChange={e => setWater(e.target.value)} />
-                  {[8, 16, 32].map(oz => (
-                    <button key={oz}
-                      onClick={() => setWater(w => String((parseFloat(w) || 0) + oz))}
-                      style={{ padding: '7px 12px', borderRadius: 20, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: '#38BDF8', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                      +{oz}oz
-                    </button>
-                  ))}
-                  {water && <span style={{ fontSize: 12, color: '#38BDF8', fontWeight: 700 }}>{water} oz total</span>}
-                </div>
-              </div>
-
-              {/* Per-Meal Photos */}
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>📸 Meal Photos</div>
-                <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>Add a photo for the selected meal type ({mealType})</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 12 }}>📸 Photo</div>
                 <label style={{ display: "block", cursor: "pointer" }}>
                   {mealPhotos[mealType] ? (
                     <div style={{ position: "relative" }}>
-                      <img src={mealPhotos[mealType]} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
+                      <img src={mealPhotos[mealType]} style={{ width: "100%", maxHeight: 320, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
                       <button
-                        onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[mealType]; return n; }); }}
-                        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>×</button>
+                        onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = { ...p }; delete n[mealType]; return n; }); }}
+                        aria-label="Remove photo"
+                        style={{ position: "absolute", top: 8, right: 8, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 16, cursor: "pointer" }}>×</button>
                     </div>
                   ) : (
-                    <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "16px 0", textAlign: "center", background: C.greenLight }}>
-                      <div style={{ fontSize: 22, marginBottom: 4 }}>📸</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add {mealType} photo</div>
+                    <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "22px 0", textAlign: "center", background: C.greenLight }}>
+                      <div style={{ fontSize: 24, marginBottom: 4 }}>📸</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add a photo of your {mealType.toLowerCase()}</div>
                     </div>
                   )}
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, (url) => setMealPhotos(p => ({ ...p, [mealType]: url })))} />
                 </label>
-                {/* Show thumbnails of other meal photos already added */}
-                {Object.entries(mealPhotos).filter(([k]) => k !== mealType).length > 0 && (
-                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {Object.entries(mealPhotos).filter(([k]) => k !== mealType).map(([meal, src]) => (
-                      <div key={meal} style={{ position: "relative" }}>
-                        <img src={src} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10 }} alt={meal} />
-                        <div style={{ position: "absolute", bottom: 2, left: 2, right: 2, background: "rgba(0,0,0,0.5)", borderRadius: 4, textAlign: "center", fontSize: 9, color: "#fff", fontWeight: 700 }}>{meal.slice(0,4)}</div>
-                        <button onClick={e => { e.preventDefault(); setMealPhotos(p => { const n = {...p}; delete n[meal]; return n; }); }} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", padding: 0 }}>×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Notes */}
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>Notes</div>
-                <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="Meal notes..." value={nutNotes} onChange={e => setNutNotes(e.target.value)} />
+                <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How was it? Where from? Anything to remember…" value={nutNotes} onChange={e => setNutNotes(e.target.value)} />
                 <div style={{ marginTop: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🏢 Tag a business</div>
                   <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>Tag a restaurant, meal-prep, or brand on Livelee — your post shows on their page.</div>
@@ -4666,21 +4594,32 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 </div>
               </div>
 
+              {/* Save this meal as a favorite for next time */}
+              {foodItems.some(f => f.name.trim()) && user?.id && (
+                <div style={{ background: C.white, borderRadius: 22, padding: 20, border: "2px solid rgba(245,166,35,0.45)" }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>⭐ Save this meal</div>
+                  <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>It'll show at the top of {mealType} next time — one tap to log it again.</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input style={{ ...iStyle, flex: 1, marginBottom: 0 }} placeholder={foodItems.filter(f => f.name.trim()).length === 1 ? "Name (optional)" : `Name (e.g. My usual ${mealType.toLowerCase()})`}
+                      value={favMealName} onChange={e => { setFavMealName(e.target.value); setFavMealMsg(null); }} />
+                    <button onClick={saveMealFavorite} disabled={favMealBusy}
+                      style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "1.5px solid #F5A623", background: "transparent", color: "#F5A623", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                      {favMealBusy ? "Saving…" : "⭐ Save"}
+                    </button>
+                  </div>
+                  {favMealMsg && <div style={{ fontSize: 12, fontWeight: 700, color: favMealMsg.startsWith("⭐") ? "#F5A623" : "#FF6B6B", marginTop: 8 }}>{favMealMsg}</div>}
+                </div>
+              )}
+
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={() => {
-                // Sync auto-calculated macros to state before saving
-                if (autoProtein > 0) setProtein(String(Math.round(autoProtein)));
-                if (autoCarbs > 0) setCarbs(String(Math.round(autoCarbs)));
-                if (autoFat > 0) setFat(String(Math.round(autoFat)));
-                handleSave();
-              }} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save to Log"}
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Saving..." : `💾 Save ${mealType.toLowerCase()} & close`}
               </button>
+              </>)}
             </div>
             );
           })()}
-
           {/* --- WELLNESS TAB --- */}
           {logTab === "wellness" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
