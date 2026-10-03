@@ -1,5 +1,5 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
 
 const C = {
@@ -17,7 +17,7 @@ const BRANDS: Record<string, { name:string; emoji:string; category:string; follo
 };
 
 export default function BrandPage() {
-  const { name } = useParams<{ name: string }>();
+  const { name } = useShellParams<{ name: string }>();
   const brand = BRANDS[name.toLowerCase()];
   const display = brand?.name ?? name.replace(/-/g," ").replace(/\b\w/g,l=>l.toUpperCase());
 
