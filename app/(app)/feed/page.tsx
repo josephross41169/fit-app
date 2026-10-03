@@ -1162,7 +1162,7 @@ async function fireMentionNotifications(
   } catch { /* best-effort */ }
 }
 
-const PostCard = memo(function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
+const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onReport, currentUser, onCommentsRefresh }: { post: Post; onUpdate: (p: Post) => void; onDelete?: () => void; onReport?: () => void; currentUser?: { id: string; profile?: { username?: string }; user_metadata?: { username?: string } }; onCommentsRefresh?: (postId: string | number, comments: any[]) => void }) {
   const router = useRouter();
   // Determine ownership. Prefer comparing user IDs (reliable) over username
   // (which can be stale or fall back to "User" if profile data didn't load).
@@ -1938,6 +1938,13 @@ interface Member {
   city?: string;
   created_at: string;
   avatar_url?: string;
+}
+
+// Auto-generated PR "achievement" posts are retired — hide them everywhere
+// the feed renders posts (old ones are still in the DB, just not shown).
+function PostCard(props: React.ComponentProps<typeof PostCardInner>) {
+  if (props.post?.post_type === 'achievement') return null;
+  return <PostCardInner {...props} />;
 }
 
 function NewMembersPanel({ members, currentUser }: { members: Member[]; currentUser: { profile?: { city?: string }; id: string } }) {
