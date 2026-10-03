@@ -8,7 +8,8 @@
 // (since RLS blocks nested SELECTs from the client).
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -60,7 +61,7 @@ interface Post {
 }
 
 export default function PostDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useShellParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
 
