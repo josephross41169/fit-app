@@ -19,7 +19,8 @@
 // live inside the group page.
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import { useAuth } from "@/lib/auth";
 
 const C = {
@@ -70,7 +71,7 @@ const METRIC_LABELS: Record<string, { label: string; unit: string; icon: string 
 
 export default function ChallengeInvitePage() {
   const router = useRouter();
-  const params = useParams<{ token: string }>();
+  const params = useShellParams<{ token: string }>();
   const { user, loading: authLoading } = useAuth();
 
   const [challenge, setChallenge] = useState<Challenge | null>(null);
