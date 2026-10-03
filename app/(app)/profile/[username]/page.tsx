@@ -10,13 +10,13 @@
 // Follow button in place of Edit. One page, no more drift.
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import { supabase } from "@/lib/supabase";
 import ProfilePage from "../page";
 import { ProfileHeaderSkeleton, SkeletonStyles } from "@/components/Skeleton";
 
 export default function PublicProfilePage() {
-  const params = useParams();
+  const params = useShellParams();
   const username = (params?.username as string) || "";
   const [profileRow, setProfileRow] = useState<any | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
