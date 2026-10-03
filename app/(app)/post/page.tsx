@@ -611,6 +611,8 @@ const WELLNESS_GROUPS: { label: string; types: string[] }[] = [
 const WELLNESS_TYPES = WELLNESS_GROUPS.flatMap(g => g.types);
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const MEAL_BOXES = ["Breakfast", "Lunch", "Dinner", "Snack"];
+// PRs no longer auto-post to the feed (the in-app PR celebration still shows).
+const POST_PRS_TO_FEED = false;
 const MEAL_EMOJI: Record<string, string> = { Breakfast: "🍳", Lunch: "🥪", Dinner: "🍝", Snack: "🍎" };
 const POST_TYPES: PostType[] = ["Workout", "Nutrition", "Wellness", "Achievement", "Other"];
 
@@ -2153,8 +2155,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 .eq('user_id', user.id)
                 .eq('post_type', 'achievement')
                 .gte('created_at', dayStart.toISOString());
-              if (prPostsToday && prPostsToday > 0) {
-                // Already posted a PR today — skip the feed post.
+              if (!POST_PRS_TO_FEED || (prPostsToday && prPostsToday > 0)) {
+                // PR feed posts are turned off (and capped at one per day).
               } else {
               const lines = detectedPRs.map(pr => {
                 const head = `${pr.exercise} ${pr.weight}×${pr.reps}`;
