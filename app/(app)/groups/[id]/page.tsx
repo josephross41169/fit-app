@@ -12,6 +12,7 @@ import { shareWithToast } from "@/lib/share";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
 import GroupHighlights from "@/components/GroupHighlights";
 import GroupBadges from "@/components/GroupBadges";
+import GroupActivityFeed from "@/components/GroupActivityFeed";
 import PostDeleteMenu from "@/components/PostDeleteMenu";
 
 // ── UserAvatar ─────────────────────────────────────────────────────────────
@@ -692,7 +693,10 @@ export default function GroupPage() {
   //   board      → leaderboard (no sub-tabs, just shown directly)
   //   challenges → challenges  (also: war, goals)
   const [section, setSection] = useState<"social"|"board"|"challenges">("social");
-  const [tab, setTab] = useState<"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members"|"war"|"goals">("posts");
+  const [tab, setTab] = useState<"activity"|"posts"|"leaderboard"|"challenges"|"notes"|"events"|"members"|"war"|"goals">("activity");
+  // "All members" sheet (search + full list), opened from the sidebar / Members stat.
+  const [showMembers, setShowMembers] = useState(false);
+  const [memberQuery, setMemberQuery] = useState("");
   // Past/Active toggle for Wars + Challenges sub-tabs. Goals already had
   // its own. This unifies the pattern across all three challenge types.
   const [warHistoryTab, setWarHistoryTab] = useState<"active"|"past">("active");
@@ -1101,7 +1105,7 @@ export default function GroupPage() {
   }, [dbGroup]);
 
   useEffect(() => {
-    if ((tab === "challenges" || tab === "goals") && (dbGroup as any)?.id) loadGroupGoals();
+    if ((dbGroup as any)?.id) loadGroupGoals();
   }, [tab, dbGroup, loadGroupGoals]);
 
   if (!loading && !group) {
@@ -2492,6 +2496,89 @@ export default function GroupPage() {
         </div>
       )}
 
+      {/* ── All members sheet (search + scroll) ── */}
+      {showMembers && (() => {
+        const q = memberQuery.trim().toLowerCase();
+        const filteredMembers = q ? displayMembers.filter((m:any) => (m.name||"").toLowerCase().includes(q) || (m.username||"").toLowerCase().includes(q)) : displayMembers;
+        return (
+          <div onClick={() => { setShowMembers(false); setMemberQuery(""); }} style={{ position:"fixed", inset:0, zIndex:9000, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+            <div onClick={e => e.stopPropagation()} role="dialog" aria-label="All members" style={{ background:C.bg, border:`1px solid ${C.darkBorder}`, borderRadius:22, width:"100%", maxWidth:520, maxHeight:"90vh", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+              <div style={{ padding:"14px 16px 10px", borderBottom:`1px solid ${C.darkBorder}`, flexShrink:0 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontWeight:900, fontSize:17, color:C.text }}>👥 Members</div>
+                    <div style={{ fontSize:12, color:C.sub }}>{displayMembers.length} total{isOwnerOrMod ? " · tap ⋯ to manage" : ""}</div>
+                  </div>
+                  <button onClick={() => { setShowMembers(false); setMemberQuery(""); }} aria-label="Close" style={{ width:36, height:36, borderRadius:"50%", border:"none", background:"#232C27", color:C.text, fontSize:18, cursor:"pointer" }}>×</button>
+                </div>
+                <input autoFocus value={memberQuery} onChange={e => setMemberQuery(e.target.value)} placeholder="Search members…"
+                  style={{ width:"100%", boxSizing:"border-box", padding:"11px 14px", borderRadius:12, border:`1.5px solid ${C.darkBorder}`, background:C.white, color:C.text, fontSize:14, outline:"none" }} />
+              </div>
+              <div style={{ overflowY:"auto", padding:"12px 14px" }}>
+                {filteredMembers.length === 0 && <div style={{ textAlign:"center", color:C.sub, fontSize:13, padding:"24px 0" }}>No members match “{memberQuery}”</div>}
+              {filteredMembers.map((m:any, i:number) => {
+                // Show the action kebab only when the current user is owner/mod
+                // AND the target row isn't (a) themselves or (b) the group owner.
+                const canManageThis = isOwnerOrMod && !m.isYou && m.roleRaw !== 'owner';
+                const menuOpen = memberActionsFor === m.userId;
+                return (
+                  <div key={i} style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"relative" }}>
+                    {/* Tapping the body navigates to profile */}
+                    <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
+                      onMouseEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
+                      onPointerEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
+                      style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0, cursor:"pointer" }}>
+                      <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
+                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : m.avatar}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
+                        <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
+                      </div>
+                      {m.points > 0 && <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
+                    </div>
+                    {/* Owner/mod-only kebab button. Sits at the row's right edge. */}
+                    {canManageThis && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMemberActionsFor(menuOpen ? null : m.userId); }}
+                        aria-label="Member actions"
+                        style={{ width:32, height:32, borderRadius:8, border:`1px solid ${C.blueMid}`, background:"transparent", color:C.text, fontWeight:900, fontSize:16, cursor:"pointer", flexShrink:0, lineHeight:1 }}
+                      >⋯</button>
+                    )}
+                    {/* Floating action menu — promote/demote/kick. Renders to the
+                        right edge below the button. Click-away backdrop closes it. */}
+                    {menuOpen && (
+                      <>
+                        <div onClick={() => setMemberActionsFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
+                        <div style={{ position:"absolute", right:8, top:60, zIndex:41, background:"#161D19", border:`1px solid #232C27`, borderRadius:12, padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
+                          {m.roleRaw === 'member' && (
+                            <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'moderator'); }}
+                              style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                              ⬆️ Promote to moderator
+                            </button>
+                          )}
+                          {m.roleRaw === 'moderator' && (
+                            <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'member'); }}
+                              style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                              ⬇️ Demote to member
+                            </button>
+                          )}
+                          <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); kickMember(m.userId, m.name); }}
+                            style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#FCA5A5", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
+                            🚫 Remove from group
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Hero Banner ── */}
       {/* Constrained to maxWidth 1200 to match the rest of the page layout —
           this prevents the banner image from being upscaled past its native
@@ -2541,6 +2628,7 @@ export default function GroupPage() {
         {/* ══ LEFT: Main content ══ */}
         <div className="groups-left" style={{ flex:1, minWidth:0 }}>
 
+          {!(tab === "challenges" || tab === "war") && (<>
           {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
             <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#5BBE93,#86CFAE)", color:joined?"#86CFAE":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(124,58,237,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
@@ -2658,7 +2746,8 @@ export default function GroupPage() {
                     { v: activeChallenges,          label: 'Challenges', icon: '🏆' },
                     { v: upcomingEvents,            label: 'Events',     icon: '📅' },
                   ].map((s, i) => (
-                    <div key={i} style={{ background: C.white, padding: '12px 6px', textAlign: 'center' }}>
+                    <div key={i} onClick={s.label === 'Members' ? () => setShowMembers(true) : undefined}
+                      style={{ background: C.white, padding: '12px 6px', textAlign: 'center', cursor: s.label === 'Members' ? 'pointer' : 'default' }}>
                       <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
                       <div style={{ fontWeight: 900, fontSize: 18, color: C.text, lineHeight: 1 }}>{s.v}</div>
                       <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>{s.label}</div>
@@ -2712,63 +2801,245 @@ export default function GroupPage() {
             </div>
           )}
 
-          {/* Tabs — two-tier. Parent sections collapse the previous flat
-              7-tab strip into 3 manageable groups. Sub-tabs render
-              below the parent strip and only show when the relevant
-              section is selected. */}
-          <div className="groups-tabs" style={{ display:"flex", gap:4, marginBottom:10, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}` }}>
+          {/* ── GOALS (sub-tab inside Challenges section) ──
+              Standalone view of group goals with Active/Past toggle.
+              Reuses the same `groupGoals` state and modal as the embedded
+              version inside the Challenges tab — it's just presented on
+              its own here for users who want to drill into goals without
+              the Member Challenges noise. */}
+          {dbGroup?.id && (() => {
+            const GMETRICS: Record<string,{label:string;icon:string;unit:string}> = {
+              miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},
+              miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
+              miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},
+              miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
+              runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},
+              workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
+              lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},
+              yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
+              total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
+              meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},
+              cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
+              sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},
+              wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
+              nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
+            };
+            // A goal counts as "ended" once its status is no longer active OR its
+            // end date has passed. Previously the split looked at status only, so a
+            // goal whose deadline passed stayed in the Active tab forever (nothing
+            // flips its status when the date rolls by). Now it moves to Past
+            // automatically the moment its end_date is in the past. (FIT-57)
+            const now = new Date();
+            const goalEnded = (g: any) => g.status !== "active" || (!!g.end_date && new Date(g.end_date) <= now);
+            const activeGoals = groupGoals.filter(g => !goalEnded(g));
+            const pastGoals   = groupGoals.filter(g => goalEnded(g));
+
+            return (
+              <div style={{ background:C.white, borderRadius:20, border:`2px solid ${C.blueMid}`, padding:"16px 18px", marginBottom:20 }}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10}}>
+                  <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>🎯 Group Goals</div>
+                  {isOwnerOrMod && (
+                    <button onClick={() => setShowGoalModal(true)} style={{
+                      padding:"8px 14px",borderRadius:12,border:"none",
+                      background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
+                      color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
+                    }}>+ Set Goal</button>
+                  )}
+                </div>
+
+                {/* Active/Past toggle */}
+                <div style={{display:"flex",gap:6,marginBottom:14,background:"#161D19",borderRadius:10,padding:3}}>
+                  {([
+                    {key:"active",label:`⚡ Active (${activeGoals.length})`},
+                    {key:"past",  label:`🏁 Past (${pastGoals.length})`},
+                  ] as const).map(t=>(
+                    <button key={t.key} onClick={()=>setGoalsHistoryTab(t.key)} style={{
+                      flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
+                      fontWeight:700,fontSize:11,
+                      background:goalsHistoryTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
+                      color:goalsHistoryTab===t.key?"#fff":"#6B7280",
+                    }}>{t.label}</button>
+                  ))}
+                </div>
+
+                {(goalsHistoryTab === "active" ? activeGoals : pastGoals).length === 0 ? (
+                  <div style={{textAlign:"center",padding:"14px 16px 6px",color:"#6B7280"}}>
+                    <div style={{fontSize:28,marginBottom:6}}>🎯</div>
+                    <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>
+                      {goalsHistoryTab === "active" ? "No active goals" : "No past goals"}
+                    </div>
+                    {goalsHistoryTab === "active" && (
+                      isOwnerOrMod
+                        ? <div style={{fontSize:13}}>Tap + Set Goal to start one for the group.</div>
+                        : <div style={{fontSize:13}}>Owners can set goals here.</div>
+                    )}
+                  </div>
+                ) : (
+                  (goalsHistoryTab === "active" ? activeGoals : pastGoals).map((goal: any) => {
+                    const meta = GMETRICS[goal.metric] || GMETRICS.workouts;
+                    const target = goal.goal || 0;
+                    // Compute current progress by summing all members' contributions
+                    // (same source the Challenges/Active tab uses). The legacy
+                    // `creator_score` field only tracked the goal-creator's solo
+                    // progress and ignored everyone else, which is why this tab
+                    // used to show 0 even when contributions existed.
+                    const members = goal.group_challenge_members || [];
+                    const current = members.reduce((s: number, m: any) => s + (m.contribution || 0), 0);
+                    const top3 = [...members]
+                      .sort((a: any, b: any) => (b.contribution || 0) - (a.contribution || 0))
+                      .slice(0, 3);
+                    const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+                    const isComplete = goalEnded(goal);
+                    return (
+                      <div key={goal.id} style={{
+                        background: isComplete ? "rgba(124,58,237,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
+                        borderRadius:16, padding:"14px 16px",
+                        border:`1px solid ${isComplete ? "#86CFAE" : "#5BBE93"}`,
+                        marginBottom:10,
+                      }}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{goal.title}</div>
+                            <div style={{fontSize:11,color:"#9CA3AF",marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+                              <span>{meta.icon} {meta.label}</span>
+                              {goal.end_date && (
+                                <span>· {isComplete ? "Ended" : "Ends"} {new Date(goal.end_date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#86CFAE":"#86CFAE",flexShrink:0,textAlign:"right" as const}}>
+                            <div>{Math.round(current * 100) / 100}/{target} {meta.unit}</div>
+                            {target > 0 && (
+                              <div style={{fontSize:10,color:"#6B7280",fontWeight:600,marginTop:1}}>{Math.round(pct)}%</div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{height:6,background:"#0E1311",borderRadius:99,overflow:"hidden"}}>
+                          <div style={{
+                            height:"100%", width:`${pct}%`,
+                            background: isComplete ? "#86CFAE" : "linear-gradient(90deg,#5BBE93,#86CFAE)",
+                            borderRadius:99,
+                          }}/>
+                        </div>
+
+                        {/* Top contributors — surfaces who's actually doing the work
+                            so the goal feels social rather than abstract. Only
+                            renders when at least one person has logged toward it. */}
+                        {top3.length > 0 && top3.some((m: any) => (m.contribution || 0) > 0) && (
+                          <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                            <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
+                              🏅 Top Contributors
+                            </div>
+                            {top3.map((m: any, i: number) => {
+                              const u = m.users;
+                              const contrib = m.contribution || 0;
+                              if (contrib <= 0) return null;
+                              const maxContrib = top3[0]?.contribution || 1;
+                              return (
+                                <div key={m.user_id || i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                                  <span style={{fontSize:14,width:20,textAlign:"center" as const,flexShrink:0}}>
+                                    {i===0?"🥇":i===1?"🥈":"🥉"}
+                                  </span>
+                                  <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
+                                    background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
+                                    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
+                                    {u?.avatar_url
+                                      ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                                      : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
+                                  </div>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontWeight:700,fontSize:12,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                      {u?.full_name||u?.username||"Member"}
+                                    </div>
+                                    <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:2,overflow:"hidden"}}>
+                                      <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
+                                        background:i===0?"#F5A623":"#5BBE93",borderRadius:99}}/>
+                                    </div>
+                                  </div>
+                                  <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#86CFAE",flexShrink:0}}>
+                                    {Math.round(contrib * 100) / 100} {meta.unit}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {isOwnerOrMod && goal.status === "active" && (
+                          <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+                            <button onClick={() => deleteGroupGoal(goal.id)} style={{
+                              padding:"5px 10px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",
+                              background:"rgba(239,68,68,0.08)",color:"#EF4444",
+                              fontWeight:700,fontSize:11,cursor:"pointer",
+                            }}>🗑 Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Challenges & Wars — its own box that opens a separate screen. */}
+          <button onClick={() => { setTab("challenges"); if (typeof window !== "undefined") window.scrollTo(0, 0); }}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:14, textAlign:"left", background:C.white, border:`2px solid ${C.blueMid}`, borderRadius:20, padding:"16px 18px", marginBottom:20, cursor:"pointer", color:C.text }}>
+            <span style={{ width:48, height:48, borderRadius:14, background:`${catColor}22`, border:`1px solid ${catColor}55`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>⚔️</span>
+            <span style={{ flex:1, minWidth:0 }}>
+              <span style={{ display:"block", fontWeight:900, fontSize:16 }}>Challenges & Wars</span>
+              <span style={{ display:"block", fontSize:12, color:C.sub, marginTop:2 }}>
+                {(() => { const n = (dbChallenges || []).filter((c: any) => c.is_active).length; return n ? `${n} active challenge${n === 1 ? "" : "s"}` : "Member challenges and group-vs-group wars"; })()}
+              </span>
+            </span>
+            <span style={{ color:catColor, fontSize:26, fontWeight:300 }}>›</span>
+          </button>
+
+          {/* Main tabs */}
+          <div className="groups-tabs" style={{ display:"flex", gap:4, marginBottom:20, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}` }}>
             {([
-              { key:"social",     label:"🤝 Social",      defaultSub:"posts" },
-              { key:"board",      label:"🏆 Board",       defaultSub:"leaderboard" },
-              { key:"challenges", label:"⚔️ Challenges", defaultSub:"challenges" },
-            ] as const).map(s => (
-              <button
-                key={s.key}
-                onClick={() => { setSection(s.key); setTab(s.defaultSub as any); }}
-                style={{
-                  flex:1, padding:"11px 4px", borderRadius:10, border:"none",
-                  background: section===s.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
-                  color: section===s.key ? "#fff" : C.sub,
-                  fontWeight:800, fontSize:13, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap",
-                }}
-              >{s.label}</button>
+              { key:"activity",    label:"📋 Activity" },
+              { key:"posts",       label:"📸 Posts" },
+              { key:"leaderboard", label:"🏆 Board" },
+            ] as const).map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                flex:1, padding:"11px 4px", borderRadius:10, border:"none",
+                background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
+                color: tab===t.key ? "#fff" : C.sub,
+                fontWeight:800, fontSize:13, cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap",
+              }}>{t.label}</button>
             ))}
           </div>
 
-          {/* Sub-tabs — only shown for sections that have multiple kids.
-              Board has none (just renders the leaderboard directly). */}
-          {section === "social" && (
-            <div className="groups-subtabs" style={{ display:"flex", gap:3, flexWrap:"wrap", rowGap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}` }}>
-              {([
-                { key:"posts",   label:"📸 Posts"   },
-                { key:"notes",   label:"💬 Notes"   },
-                { key:"members", label:"👥 Members" },
-              ] as const).map(t => (
-                <button key={t.key} onClick={() => setTab(t.key)} style={{
-                  flex:1, padding:"8px 4px", borderRadius:8, border:"none",
-                  background: tab===t.key ? "#FFFFFF18" : "transparent",
-                  color: tab===t.key ? "#fff" : C.sub,
-                  fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
-                }}>{t.label}</button>
-              ))}
-            </div>
+          {/* ── ACTIVITY (members' daily activity cards) ── */}
+          {tab === "activity" && (
+            <GroupActivityFeed accent={catColor} members={displayMembers.map((m: any) => ({ userId: m.userId, name: m.name, username: m.username, avatarUrl: m.avatarUrl, avatar: m.avatar }))} />
           )}
 
-          {section === "challenges" && (
-            <div className="groups-subtabs" style={{ display:"flex", gap:3, flexWrap:"wrap", rowGap:3, marginBottom:20, background:C.blueLight, borderRadius:12, padding:4, border:`1px solid ${C.blueMid}` }}>
-              {([
-                { key:"challenges", label:"⚡ Challenges" },
-                { key:"war",        label:"⚔️ Wars"      },
-                { key:"goals",      label:"🎯 Goals"     },
-              ] as const).map(t => (
-                <button key={t.key} onClick={() => setTab(t.key)} style={{
-                  flex:1, padding:"8px 4px", borderRadius:8, border:"none",
-                  background: tab===t.key ? "#FFFFFF18" : "transparent",
-                  color: tab===t.key ? "#fff" : C.sub,
-                  fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
-                }}>{t.label}</button>
-              ))}
-            </div>
+          </>)}
+
+          {/* ── CHALLENGES & WARS screen ── */}
+          {(tab === "challenges" || tab === "war") && (
+            <>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                <button onClick={() => { setTab("activity"); if (typeof window !== "undefined") window.scrollTo(0, 0); }}
+                  style={{ background:"none", border:"none", color:catColor, fontWeight:800, fontSize:15, cursor:"pointer", padding:"6px 0" }}>‹ {group.name || "Group"}</button>
+                <div style={{ flex:1, textAlign:"center", fontWeight:900, fontSize:18, color:C.text, marginRight:60 }}>⚔️ Challenges & Wars</div>
+              </div>
+              <div className="groups-subtabs" style={{ display:"flex", gap:4, marginBottom:20, background:C.white, borderRadius:14, padding:4, border:`2px solid ${C.blueMid}` }}>
+                {([
+                  { key:"challenges", label:"⚡ Challenges" },
+                  { key:"war",        label:"⚔️ Wars" },
+                ] as const).map(t => (
+                  <button key={t.key} onClick={() => setTab(t.key)} style={{
+                    flex:1, padding:"10px 4px", borderRadius:10, border:"none",
+                    background: tab===t.key ? `linear-gradient(135deg,${catColor},${catColor}CC)` : "transparent",
+                    color: tab===t.key ? "#fff" : C.sub,
+                    fontWeight:800, fontSize:13, cursor:"pointer", whiteSpace:"nowrap",
+                  }}>{t.label}</button>
+                ))}
+              </div>
+            </>
           )}
 
           {/* ── POSTS ── */}
@@ -3040,13 +3311,6 @@ export default function GroupPage() {
                     }}>{t.label}</button>
                   ))}
                 </div>
-                {isOwnerOrMod && challengeViewTab==="active" && (
-                  <button onClick={()=>setShowGoalModal(true)} style={{
-                    padding:"8px 14px",borderRadius:12,border:"none",flexShrink:0,
-                    background:`linear-gradient(135deg,${catColor},${catColor}CC)`,
-                    color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
-                  }}>+ Set Goal</button>
-                )}
                 {/* Challenges are open to ALL group members (not just admins).
                     Owners get goals + wars + challenges; members get challenges. */}
                 {group._dbId && isMemberDB && challengeViewTab==="active" && (
@@ -3255,150 +3519,6 @@ export default function GroupPage() {
             </div>
           )}
 
-          {/* ── COMMUNITY NOTES ── */}
-          {tab==="notes" && (
-            <div>
-              <div style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:18 }}>
-                <div style={{ fontWeight:800, fontSize:14, color:C.text, marginBottom:12 }}>Share something with the group</div>
-                <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
-                  {["Workout","Recipe","Mindset","General","Tip"].map(cat => (
-                    <button key={cat} onClick={() => setNoteCategory(cat)} style={{ padding:"6px 14px", borderRadius:99, border:`1.5px solid ${noteCategory===cat?NOTE_CATEGORY_COLORS[cat]:C.blueMid}`, background:noteCategory===cat?`${NOTE_CATEGORY_COLORS[cat]}18`:"transparent", color:noteCategory===cat?NOTE_CATEGORY_COLORS[cat]:C.sub, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-                      {cat==="Workout"?"💪":cat==="Recipe"?"🥗":cat==="Mindset"?"🧠":cat==="Tip"?"💡":"💬"} {cat}
-                    </button>
-                  ))}
-                </div>
-                <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Share a workout routine, recipe, mindset tip, or anything that might help the group..."
-                  style={{ width:"100%", background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text, resize:"vertical", minHeight:90, fontFamily:"inherit", outline:"none" }} />
-
-                {/* Photo preview */}
-                {notePhotoDataUrl && (
-                  <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}` }}>
-                    <img src={ImagePresets.feed(notePhotoDataUrl)} loading="lazy" decoding="async" alt="Note preview" style={{ width:"100%", maxHeight:320, objectFit:"cover", display:"block" }} />
-                    <button
-                      onClick={() => { setNotePhotoDataUrl(null); if (noteMediaInputRef.current) noteMediaInputRef.current.value = ""; }}
-                      style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
-                      ✕ Remove
-                    </button>
-                  </div>
-                )}
-                {/* Video preview */}
-                {noteVideoPreviewUrl && (
-                  <div style={{ marginTop:10, position:"relative", borderRadius:12, overflow:"hidden", border:`1.5px solid ${C.blueMid}`, background:"#000" }}>
-                    <video src={noteVideoPreviewUrl} controls style={{ width:"100%", maxHeight:320, display:"block" }} />
-                    <button
-                      onClick={() => {
-                        if (noteVideoPreviewUrl) URL.revokeObjectURL(noteVideoPreviewUrl);
-                        setNoteVideoFile(null);
-                        setNoteVideoPreviewUrl(null);
-                        if (noteMediaInputRef.current) noteMediaInputRef.current.value = "";
-                      }}
-                      style={{ position:"absolute", top:8, right:8, padding:"6px 12px", borderRadius:999, border:"none", background:"rgba(0,0,0,0.7)", color:"#fff", fontWeight:800, fontSize:11, cursor:"pointer" }}>
-                      ✕ Remove
-                    </button>
-                  </div>
-                )}
-
-                {/* Hidden file input — accepts both images and videos */}
-                <input
-                  ref={noteMediaInputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  onChange={onPickNoteMedia}
-                  style={{ display:"none" }}
-                />
-
-                <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10 }}>
-                  <button
-                    onClick={() => noteMediaInputRef.current?.click()}
-                    disabled={noteSubmitting}
-                    style={{ padding:"9px 14px", borderRadius:12, border:`1.5px solid ${C.blueMid}`, background:C.blueLight, color:C.text, fontWeight:800, fontSize:13, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
-                    📷 {(notePhotoDataUrl || noteVideoPreviewUrl) ? "Change" : "Add photo / video"}
-                  </button>
-                  <button
-                    onClick={submitNote}
-                    disabled={(!noteText.trim() && !notePhotoDataUrl && !noteVideoFile) || noteSubmitting}
-                    style={{ marginLeft:"auto", padding:"10px 24px", borderRadius:12, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", opacity:((!noteText.trim()&&!notePhotoDataUrl&&!noteVideoFile)||noteSubmitting)?0.6:1 }}>
-                    {noteSubmitting ? "Posting..." : "Post Note"}
-                  </button>
-                </div>
-              </div>
-
-              {allNotes.length === 0 && (
-                <div style={{ textAlign:"center", padding:"24px", background:C.white, borderRadius:18, border:`2px dashed ${C.blueMid}` }}>
-                  <div style={{ fontSize:24, marginBottom:6 }}>💬</div>
-                  <div style={{ fontWeight:700, fontSize:13, color:C.blue, marginBottom:3 }}>No community notes yet</div>
-                  <div style={{ fontSize:12, color:C.sub }}>Share a tip, recipe, or mindset note!</div>
-                </div>
-              )}
-              {allNotes.map((note:any) => (
-                <div key={note.id} style={{ background:C.white, borderRadius:18, border:`2px solid ${C.blueMid}`, padding:"16px 20px", marginBottom:14 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                    <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
-                      {note.avatarUrl ? <img src={note.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : note.avatar}
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:800, fontSize:13, color:C.text }}>{note.user}</div>
-                      <div style={{ fontSize:10, color:C.sub }}>{note.time}</div>
-                    </div>
-                    <span style={{ background:`${NOTE_CATEGORY_COLORS[note.category]||C.blue}18`, color:NOTE_CATEGORY_COLORS[note.category]||C.blue, fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:99, border:`1px solid ${NOTE_CATEGORY_COLORS[note.category]||C.blue}33` }}>
-                      {note.category==="Workout"?"💪":note.category==="Recipe"?"🥗":note.category==="Mindset"?"🧠":note.category==="Tip"?"💡":"💬"} {note.category}
-                    </span>
-                  </div>
-                  {/* Note media — photo or video. Same fallback detection as
-                      posts so legacy DB rows render too. */}
-                  {note.media_url && note.media_type === 'video' ? (
-                    <div style={{ marginBottom:10, borderRadius:12, overflow:"hidden", background:"#000" }}>
-                      <video src={note.media_url} controls preload="metadata" playsInline
-                        style={{ width:"100%", maxHeight:420, display:"block" }} />
-                    </div>
-                  ) : note.media_url ? (
-                    <div style={{ marginBottom:10, borderRadius:12, overflow:"hidden" }}>
-                      <img src={ImagePresets.feed(note.media_url)} loading="lazy" decoding="async" alt="" style={{ width:"100%", maxHeight:420, objectFit:"cover", display:"block" }} />
-                    </div>
-                  ) : null}
-                  <p style={{ fontSize:14, color:C.text, lineHeight:1.7, margin:"0 0 10px" }}>{note.content}</p>
-                  <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-                    <button onClick={() => setNoteLikes(p=>({...p,[note.id]:(p[note.id]??note.likes)+1}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:18,height:18 }}>
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                      </svg>
-                      <span style={{ fontSize:12, color:C.sub }}>{(noteLikes[note.id]??note.likes).toLocaleString()}</span>
-                    </button>
-                    <button onClick={() => setExpandedNoteReplies(p => ({...p,[note.id]:!p[note.id]}))} style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" style={{ width:18,height:18 }}>
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
-                      <span style={{ fontSize:12, color:C.sub }}>{(noteReplies[note.id]||[]).length}</span>
-                    </button>
-                  </div>
-                  {expandedNoteReplies[note.id] && (
-                    <div style={{ marginTop:10, borderTop:`1px solid ${C.blueMid}`, paddingTop:10 }}>
-                      {(noteReplies[note.id]||[]).map((r,i) => (
-                        <div key={i} style={{ display:"flex", gap:8, marginBottom:8 }}>
-                          <div style={{ width:26, height:26, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:900, color:"#fff", flexShrink:0 }}>{r.avatar}</div>
-                          <div style={{ flex:1, background:C.blueLight, borderRadius:12, padding:"6px 10px" }}>
-                            <span style={{ fontSize:11, fontWeight:800, color:C.text }}>{r.user} </span>
-                            <span style={{ fontSize:12, color:C.sub }}>{r.text}</span>
-                          </div>
-                        </div>
-                      ))}
-                      <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                        <input
-                          value={noteReplyInputs[note.id]||''}
-                          onChange={e => setNoteReplyInputs(p => ({...p,[note.id]:e.target.value}))}
-                          onKeyDown={e => e.key==='Enter' && submitNoteReply(note.id)}
-                          placeholder="Write a reply..."
-                          style={{ flex:1, background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:20, padding:"7px 14px", fontSize:12, color:C.text, outline:"none", fontFamily:"inherit" }}
-                        />
-                        <button onClick={() => submitNoteReply(note.id)} style={{ padding:"7px 14px", borderRadius:20, border:"none", background:`linear-gradient(135deg,${catColor},${catColor}CC)`, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>Reply</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* ── MOBILE: Events tab ── */}
           {tab === "events" && (
             <div className="groups-mobile-tab-content">
@@ -3450,253 +3570,6 @@ export default function GroupPage() {
                   eventComments={eventComments} addEventComment={addEventComment}
                   onRSVP={handleRSVP} rsvped={rsvpedEvents.has(event.id)} />
               ))}
-            </div>
-          )}
-
-          {/* ── GOALS (sub-tab inside Challenges section) ──
-              Standalone view of group goals with Active/Past toggle.
-              Reuses the same `groupGoals` state and modal as the embedded
-              version inside the Challenges tab — it's just presented on
-              its own here for users who want to drill into goals without
-              the Member Challenges noise. */}
-          {tab === "goals" && (() => {
-            const GMETRICS: Record<string,{label:string;icon:string;unit:string}> = {
-              miles_run:{label:"Miles Run",icon:"🏃",unit:"mi"},
-              miles_walked:{label:"Miles Walked",icon:"🚶",unit:"mi"},
-              miles_biked:{label:"Miles Biked",icon:"🚴",unit:"mi"},
-              miles_swum:{label:"Miles Swum",icon:"🏊",unit:"mi"},
-              runs:{label:"Runs",icon:"🏃‍♂️",unit:"runs"},
-              workouts:{label:"Workouts",icon:"💪",unit:"workouts"},
-              lift_sessions:{label:"Lift Sessions",icon:"🏋️",unit:"sessions"},
-              yoga_sessions:{label:"Yoga Sessions",icon:"🧘‍♀️",unit:"sessions"},
-              total_minutes:{label:"Total Minutes",icon:"⏱️",unit:"min"},
-              meditation_sessions:{label:"Meditations",icon:"🧘",unit:"sessions"},
-              cold_plunges:{label:"Cold Plunges",icon:"❄️",unit:"sessions"},
-              sauna_sessions:{label:"Sauna Sessions",icon:"🔥",unit:"sessions"},
-              wellness_sessions:{label:"Wellness Sessions",icon:"🌿",unit:"sessions"},
-              nutrition_logs:{label:"Meals Logged",icon:"🥗",unit:"meals"},
-            };
-            // A goal counts as "ended" once its status is no longer active OR its
-            // end date has passed. Previously the split looked at status only, so a
-            // goal whose deadline passed stayed in the Active tab forever (nothing
-            // flips its status when the date rolls by). Now it moves to Past
-            // automatically the moment its end_date is in the past. (FIT-57)
-            const now = new Date();
-            const goalEnded = (g: any) => g.status !== "active" || (!!g.end_date && new Date(g.end_date) <= now);
-            const activeGoals = groupGoals.filter(g => !goalEnded(g));
-            const pastGoals   = groupGoals.filter(g => goalEnded(g));
-
-            return (
-              <div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10}}>
-                  <div style={{fontWeight:900,fontSize:18,color:"#F0F0F0"}}>🎯 Group Goals</div>
-                  {isOwnerOrMod && (
-                    <button onClick={() => setShowGoalModal(true)} style={{
-                      padding:"8px 14px",borderRadius:12,border:"none",
-                      background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
-                      color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",
-                    }}>+ Set Goal</button>
-                  )}
-                </div>
-
-                {/* Active/Past toggle */}
-                <div style={{display:"flex",gap:6,marginBottom:14,background:"#161D19",borderRadius:10,padding:3}}>
-                  {([
-                    {key:"active",label:`⚡ Active (${activeGoals.length})`},
-                    {key:"past",  label:`🏁 Past (${pastGoals.length})`},
-                  ] as const).map(t=>(
-                    <button key={t.key} onClick={()=>setGoalsHistoryTab(t.key)} style={{
-                      flex:1,padding:"7px 6px",borderRadius:7,border:"none",cursor:"pointer",
-                      fontWeight:700,fontSize:11,
-                      background:goalsHistoryTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
-                      color:goalsHistoryTab===t.key?"#fff":"#6B7280",
-                    }}>{t.label}</button>
-                  ))}
-                </div>
-
-                {(goalsHistoryTab === "active" ? activeGoals : pastGoals).length === 0 ? (
-                  <div style={{textAlign:"center",padding:"40px 20px",color:"#6B7280"}}>
-                    <div style={{fontSize:40,marginBottom:12}}>🎯</div>
-                    <div style={{fontWeight:700,fontSize:16,color:"#F0F0F0",marginBottom:8}}>
-                      {goalsHistoryTab === "active" ? "No active goals" : "No past goals"}
-                    </div>
-                    {goalsHistoryTab === "active" && (
-                      isOwnerOrMod
-                        ? <div style={{fontSize:13}}>Tap + Set Goal to start one for the group.</div>
-                        : <div style={{fontSize:13}}>Owners can set goals here.</div>
-                    )}
-                  </div>
-                ) : (
-                  (goalsHistoryTab === "active" ? activeGoals : pastGoals).map((goal: any) => {
-                    const meta = GMETRICS[goal.metric] || GMETRICS.workouts;
-                    const target = goal.goal || 0;
-                    // Compute current progress by summing all members' contributions
-                    // (same source the Challenges/Active tab uses). The legacy
-                    // `creator_score` field only tracked the goal-creator's solo
-                    // progress and ignored everyone else, which is why this tab
-                    // used to show 0 even when contributions existed.
-                    const members = goal.group_challenge_members || [];
-                    const current = members.reduce((s: number, m: any) => s + (m.contribution || 0), 0);
-                    const top3 = [...members]
-                      .sort((a: any, b: any) => (b.contribution || 0) - (a.contribution || 0))
-                      .slice(0, 3);
-                    const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
-                    const isComplete = goalEnded(goal);
-                    return (
-                      <div key={goal.id} style={{
-                        background: isComplete ? "rgba(124,58,237,0.08)" : "linear-gradient(135deg,rgba(124,58,237,0.18),rgba(167,139,250,0.06))",
-                        borderRadius:16, padding:"14px 16px",
-                        border:`1px solid ${isComplete ? "#86CFAE" : "#5BBE93"}`,
-                        marginBottom:10,
-                      }}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontWeight:900,fontSize:15,color:"#F0F0F0"}}>{goal.title}</div>
-                            <div style={{fontSize:11,color:"#9CA3AF",marginTop:2,display:"flex",alignItems:"center",gap:6}}>
-                              <span>{meta.icon} {meta.label}</span>
-                              {goal.end_date && (
-                                <span>· {isComplete ? "Ended" : "Ends"} {new Date(goal.end_date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{fontSize:13,fontWeight:900,color:isComplete?"#86CFAE":"#86CFAE",flexShrink:0,textAlign:"right" as const}}>
-                            <div>{Math.round(current * 100) / 100}/{target} {meta.unit}</div>
-                            {target > 0 && (
-                              <div style={{fontSize:10,color:"#6B7280",fontWeight:600,marginTop:1}}>{Math.round(pct)}%</div>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{height:6,background:"#0E1311",borderRadius:99,overflow:"hidden"}}>
-                          <div style={{
-                            height:"100%", width:`${pct}%`,
-                            background: isComplete ? "#86CFAE" : "linear-gradient(90deg,#5BBE93,#86CFAE)",
-                            borderRadius:99,
-                          }}/>
-                        </div>
-
-                        {/* Top contributors — surfaces who's actually doing the work
-                            so the goal feels social rather than abstract. Only
-                            renders when at least one person has logged toward it. */}
-                        {top3.length > 0 && top3.some((m: any) => (m.contribution || 0) > 0) && (
-                          <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-                            <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
-                              🏅 Top Contributors
-                            </div>
-                            {top3.map((m: any, i: number) => {
-                              const u = m.users;
-                              const contrib = m.contribution || 0;
-                              if (contrib <= 0) return null;
-                              const maxContrib = top3[0]?.contribution || 1;
-                              return (
-                                <div key={m.user_id || i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                                  <span style={{fontSize:14,width:20,textAlign:"center" as const,flexShrink:0}}>
-                                    {i===0?"🥇":i===1?"🥈":"🥉"}
-                                  </span>
-                                  <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
-                                    background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
-                                    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
-                                    {u?.avatar_url
-                                      ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-                                      : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
-                                  </div>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{fontWeight:700,fontSize:12,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                      {u?.full_name||u?.username||"Member"}
-                                    </div>
-                                    <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:2,overflow:"hidden"}}>
-                                      <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
-                                        background:i===0?"#F5A623":"#5BBE93",borderRadius:99}}/>
-                                    </div>
-                                  </div>
-                                  <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#86CFAE",flexShrink:0}}>
-                                    {Math.round(contrib * 100) / 100} {meta.unit}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {isOwnerOrMod && goal.status === "active" && (
-                          <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
-                            <button onClick={() => deleteGroupGoal(goal.id)} style={{
-                              padding:"5px 10px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",
-                              background:"rgba(239,68,68,0.08)",color:"#EF4444",
-                              fontWeight:700,fontSize:11,cursor:"pointer",
-                            }}>🗑 Delete</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            );
-          })()}
-
-          {/* ── MOBILE: Members tab ── */}
-          {tab === "members" && (
-            <div className="groups-mobile-tab-content">
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>👥 Members</div>
-                <div style={{ fontSize:12, color:C.sub }}>{displayMembers.length} members</div>
-              </div>
-              {displayMembers.map((m:any, i:number) => {
-                // Show the action kebab only when the current user is owner/mod
-                // AND the target row isn't (a) themselves or (b) the group owner.
-                const canManageThis = isOwnerOrMod && !m.isYou && m.roleRaw !== 'owner';
-                const menuOpen = memberActionsFor === m.userId;
-                return (
-                  <div key={i} style={{ background:C.white, borderRadius:14, border:`2px solid ${C.blueMid}`, marginBottom:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"relative" }}>
-                    {/* Tapping the body navigates to profile */}
-                    <div onClick={() => router.push(m.username ? `/profile/${m.username}` : '/profile')}
-                      onMouseEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
-                      onPointerEnter={() => m.username && router.prefetch(`/profile/${m.username}`)}
-                      style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0, cursor:"pointer" }}>
-                      <div style={{ width:14, fontSize:11, fontWeight:900, color:C.sub, flexShrink:0, textAlign:"center" }}>#{m.rank}</div>
-                      <div style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${catColor},${catColor}AA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>{m.avatarUrl ? <img src={m.avatarUrl} loading="lazy" decoding="async" alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : m.avatar}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:800, fontSize:14, color:C.text }}>{m.name}</div>
-                        <div style={{ fontSize:11, color:m.role==="Organizer"||m.role==="Moderator"?catColor:C.sub, fontWeight:m.role==="Organizer"?700:400 }}>{m.role}</div>
-                      </div>
-                      {m.points > 0 && <div style={{ fontSize:13, fontWeight:800, color:catColor, flexShrink:0 }}>{m.points?.toLocaleString()} pts</div>}
-                    </div>
-                    {/* Owner/mod-only kebab button. Sits at the row's right edge. */}
-                    {canManageThis && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMemberActionsFor(menuOpen ? null : m.userId); }}
-                        aria-label="Member actions"
-                        style={{ width:32, height:32, borderRadius:8, border:`1px solid ${C.blueMid}`, background:"transparent", color:C.text, fontWeight:900, fontSize:16, cursor:"pointer", flexShrink:0, lineHeight:1 }}
-                      >⋯</button>
-                    )}
-                    {/* Floating action menu — promote/demote/kick. Renders to the
-                        right edge below the button. Click-away backdrop closes it. */}
-                    {menuOpen && (
-                      <>
-                        <div onClick={() => setMemberActionsFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }}/>
-                        <div style={{ position:"absolute", right:8, top:60, zIndex:41, background:"#161D19", border:`1px solid #232C27`, borderRadius:12, padding:6, minWidth:180, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" }}>
-                          {m.roleRaw === 'member' && (
-                            <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'moderator'); }}
-                              style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
-                              ⬆️ Promote to moderator
-                            </button>
-                          )}
-                          {m.roleRaw === 'moderator' && (
-                            <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); setMemberRole(m.userId, 'member'); }}
-                              style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#E2E8F0", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
-                              ⬇️ Demote to member
-                            </button>
-                          )}
-                          <button disabled={memberActionBusy} onClick={(e) => { e.stopPropagation(); kickMember(m.userId, m.name); }}
-                            style={{ display:"block", width:"100%", padding:"9px 12px", background:"transparent", border:"none", borderRadius:8, color:"#FCA5A5", fontSize:13, fontWeight:600, textAlign:"left", cursor: memberActionBusy ? "wait" : "pointer" }}>
-                            🚫 Remove from group
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           )}
 
@@ -4499,10 +4372,13 @@ export default function GroupPage() {
           {/* Members sidebar */}
           <div>
             <div style={{ marginBottom:12, paddingBottom:10, borderBottom:`1px solid ${C.darkBorder}` }}>
-              <div style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👥 All Members</div>
+              <button onClick={() => setShowMembers(true)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", padding:0, cursor:"pointer", textAlign:"left" }}>
+                <span style={{ fontWeight:900, fontSize:15, color:"#E2E8F0" }}>👥 All Members</span>
+                <span style={{ fontSize:12, color:catColor, fontWeight:800 }}>Search / see all ›</span>
+              </button>
               <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{displayMembers.length} total{isOwnerOrMod ? " · tap ⋯ to manage" : ""}</div>
             </div>
-            {displayMembers.map((m:any, i:number) => {
+            {displayMembers.slice(0, 5).map((m:any, i:number) => {
               const canManageThis = isOwnerOrMod && !m.isYou && m.roleRaw !== 'owner';
               const menuOpen = memberActionsFor === m.userId;
               return (
@@ -4558,6 +4434,12 @@ export default function GroupPage() {
               );
             })}
           </div>
+
+          {displayMembers.length > 5 && (
+            <button onClick={() => setShowMembers(true)} style={{ width:"100%", padding:"10px 0", borderRadius:12, border:`1px solid ${C.darkBorder}`, background:"transparent", color:"#E2E8F0", fontWeight:800, fontSize:13, cursor:"pointer" }}>
+              See all {displayMembers.length} members
+            </button>
+          )}
 
           {/* Group Badges — under All Members in the right sidebar. Compact,
               shows a few then expands. Loads its own totals; contributor
