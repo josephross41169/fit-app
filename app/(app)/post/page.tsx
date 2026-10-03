@@ -691,6 +691,15 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   }
   const [woDistance, setWoDistance] = useState("");         // distance for cardio categories
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  // Which exercise box is open for editing (index into `exercises`); null = the box grid.
+  const [openEx, setOpenEx] = useState<number | null>(null);
+  const exCountRef = useRef(0);
+  useEffect(() => { setOpenEx(null); }, [woSection]);
+  // If the open exercise gets removed (× button), go back to the grid.
+  useEffect(() => {
+    if (openEx !== null && exercises.length < exCountRef.current) setOpenEx(null);
+    exCountRef.current = exercises.length;
+  }, [exercises.length, openEx]);
   const [prevSessions, setPrevSessions] = useState<Record<string, PrevSession | null>>({});
   // Cache of the user's previously-logged exercises (most recent set data per
   // name) — powers autocomplete suggestions and one-tap autofill of last
@@ -2917,6 +2926,42 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   ];
 
   const secExercises = exercises.filter(ex => exGroup(ex) === woSection);
+  const addExercise = (circuit = false) => {
+    const idx = exercises.length;
+    exCountRef.current = idx + 1;
+    setExercises(ex => [...ex, circuit
+      ? { ...newCircuit(), group: "abs" as ExGroup }
+      : { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"], group: woSection as ExGroup, bodyweight: woSection !== "lifting" }]);
+    setOpenEx(idx);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  };
+  // Leave the exercise editor; drop it if it was never filled in.
+  const closeExercise = () => {
+    const i = openEx;
+    setOpenEx(null);
+    if (i !== null) setExercises(exs => {
+      const x = exs[i];
+      if (x && !x.isCircuit && !x.name.trim()) { exCountRef.current = exs.length - 1; return exs.filter((_, j) => j !== i); }
+      return exs;
+    });
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  };
+  const exSummary = (ex: Exercise): { top: string; bottom: string } => {
+    if (ex.isCircuit) {
+      const moves = (ex.circuitMoves || []).filter(m => m.trim()).length;
+      return { top: ex.circuitMinutes ? `${ex.circuitMinutes} min` : "Circuit", bottom: moves ? `${moves} move${moves === 1 ? "" : "s"}` : "Tap to log" };
+    }
+    const n = parseInt(ex.sets) || 0;
+    const reps = ex.repsArr && ex.repsArr.length ? ex.repsArr : Array(n).fill(ex.reps);
+    const parts = Array.from({ length: n }, (_, k) => {
+      const r = (reps[k] || ex.reps || "").trim();
+      const w = ((ex.weights && ex.weights.length ? ex.weights[k] : ex.weight) || "").trim();
+      if (!r) return "";
+      if (ex.timed) return `${r}s`;
+      return ex.bodyweight || !w ? r : `${r}×${w}`;
+    }).filter(Boolean);
+    return { top: `${n} set${n === 1 ? "" : "s"}`, bottom: parts.join(" · ") || "Tap to log" };
+  };
 
   function renderSuppCard(fav: any) {
                         const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
@@ -3052,6 +3097,16 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         .funnel-box:active { transform: scale(0.98); }
         .funnel-box:hover { box-shadow: 0 6px 22px rgba(91,190,147,0.18); }
         .funnel-wide { min-height: 96px; }
+        .ex-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        @media (max-width: 640px) { .ex-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .ex-box { aspect-ratio: 1 / 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px;
+          padding: 12px; border-radius: 16px; border: 1.5px solid ${C.greenMid}; background: #0D0D0D; color: ${C.text}; text-align: left; cursor: pointer;
+          overflow: hidden; transition: transform .12s ease, border-color .15s ease; -webkit-tap-highlight-color: transparent; }
+        .ex-box:hover { border-color: ${C.blue}; }
+        .ex-box:active { transform: scale(0.97); }
+        .ex-box-name { font-weight: 800; font-size: 14px; line-height: 1.25; width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; }
+        .ex-box-sub { font-size: 11.5px; color: ${C.sub}; line-height: 1.35; width: 100%; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: auto; }
+        .ex-box-add { align-items: center; justify-content: center; border-style: dashed; border-color: ${C.blue}; background: ${C.greenLight}; color: ${C.blue}; }
         @media (min-width: 768px) {
           .post-sidebar {
             display: flex;
@@ -3221,13 +3276,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         {/* Back bar — workout sections go back to the workout boxes; everything else to the home boxes. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <button onClick={() => {
+              if (mainMode === "log" && logTab === "workout" && woSection && openEx !== null) { closeExercise(); return; }
               if (mainMode === "log" && logTab === "workout" && woSection) setWoSection(null);
               else if (mainMode === "log" && logTab === "workout") setFunnel("workoutChoice");
               else setFunnel("home");
               if (typeof window !== "undefined") window.scrollTo(0, 0);
             }}
             style={{ background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>
-            ‹ {mainMode === "log" && logTab === "workout" && woSection ? "Workout" : "Back"}
+            ‹ {mainMode === "log" && logTab === "workout" && woSection ? (openEx !== null ? "Exercises" : "Workout") : "Back"}
           </button>
           <div style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 18, color: C.text, marginRight: 60 }}>
             {mainMode === "feed" ? "📢 Post to feed"
@@ -3289,7 +3345,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               </>);
             })() : (<>
 
-              {woSection === "lifting" && (<>
+              {woSection === "lifting" && openEx === null && (<>
               {loadedPlanLabel && (
                 <div style={{
                   background: "linear-gradient(135deg, rgba(91,190,147,0.18), rgba(74,222,128,0.10))",
@@ -3332,25 +3388,39 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
               {(woSection === "lifting" || woSection === "abs" || woSection === "calisthenics") && (
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                {openEx === null ? (<>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{woSection === "abs" ? "🔥 Ab work" : woSection === "calisthenics" ? "🤸 Calisthenics" : "🏋️ Exercises"}</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {woSection === "abs" && (<button onClick={() => setExercises(ex => [...ex, { ...newCircuit(), group: "abs" as ExGroup }])}
-                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
-                      + Ab Circuit
-                    </button>)}
-                    <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"], group: woSection as ExGroup, bodyweight: woSection !== "lifting" }])}
-                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
-                      + Add Exercise
-                    </button>
-                  </div>
+                  {secExercises.length > 0 && <div style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>Tap a box to edit</div>}
                 </div>
-                {secExercises.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: C.sub, fontSize: 13 }}>Nothing here yet · tap + Add Exercise</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="ex-grid">
                   {exercises.map((ex, i) => {
                     if (exGroup(ex) !== woSection) return null;
+                    const sm = exSummary(ex);
+                    return (
+                      <button key={i} onClick={() => { setOpenEx(i); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="ex-box">
+                        <span style={{ fontSize: 20 }} aria-hidden="true">{ex.isCircuit ? "🔥" : woSection === "calisthenics" ? "🤸" : woSection === "abs" ? "💪" : "🏋️"}</span>
+                        <span className="ex-box-name">{ex.name.trim() || "New exercise"}</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: C.blue }}>{sm.top}</span>
+                        <span className="ex-box-sub">{sm.bottom}</span>
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => addExercise(false)} className="ex-box ex-box-add">
+                    <span style={{ fontSize: 26, lineHeight: 1 }}>＋</span>
+                    <span style={{ fontWeight: 800, fontSize: 13 }}>Add exercise</span>
+                  </button>
+                  {woSection === "abs" && (
+                    <button onClick={() => addExercise(true)} className="ex-box ex-box-add">
+                      <span style={{ fontSize: 24, lineHeight: 1 }}>🔥</span>
+                      <span style={{ fontWeight: 800, fontSize: 13 }}>Add ab circuit</span>
+                    </button>
+                  )}
+                </div>
+                </>) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {exercises.map((ex, i) => {
+                    if (i !== openEx) return null;
                     const numSets = parseInt(ex.sets) || 1;
                     const prev = prevSessions[ex.name];
                     // Ab/finisher circuit: a compact card with an editable name, a
@@ -3559,20 +3629,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   })}
                   </div>
                 )}
-                {/* Second "Add exercise" button at the BOTTOM of the list so you
-                    can add the next exercise right where you just finished —
-                    no scrolling back up to the header button. Only shown once
-                    there's at least one exercise (empty state prompts above). */}
-                {secExercises.length > 0 && (
-                  <button onClick={() => setExercises(ex => [...ex, { name: "", sets: "3", reps: "10", weight: "", weights: ["", "", ""], repsArr: ["10", "10", "10"], group: woSection as ExGroup, bodyweight: woSection !== "lifting" }])}
-                    style={{ width: "100%", marginTop: 14, fontSize: 13, fontWeight: 800, padding: "12px 0", borderRadius: 14, border: `1.5px dashed ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
-                    + Add Exercise
-                  </button>
-                )}
               </div>
               )}
 
-              {woSection === "lifting" && (<>
+              {woSection === "lifting" && openEx === null && (<>
                   <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>🏋️ Lifting</div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
@@ -3949,9 +4009,9 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               </>)}
 
               {woSection !== "save" && (
-                <button onClick={() => setWoSection(null)}
+                <button onClick={() => { if (openEx !== null) closeExercise(); else setWoSection(null); }}
                   style={{ width: "100%", padding: "15px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
-                  ✓ Done — back to workout
+                  {openEx !== null ? "✓ Done — back to exercises" : "✓ Done — back to workout"}
                 </button>
               )}
             </>)}
