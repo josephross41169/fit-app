@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
@@ -654,7 +655,7 @@ function GroupSkeleton() {
 }
 
 export default function GroupPage() {
-  const { id } = useParams<{ id:string }>();
+  const { id } = useShellParams<{ id:string }>();
   const router = useRouter();
 
   // ── DB State ──
