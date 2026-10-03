@@ -37,6 +37,8 @@ interface Props {
   onAddCombo: (items: SavedFoodItem[]) => void;
   onSetMealType?: (mealType: string) => void;
   refreshKey?: number;
+  /** Meal page mode: only this meal's saved items, no tabs, nothing shown when empty. */
+  lockedMeal?: string;
 }
 
 const C = {
@@ -59,7 +61,10 @@ const iStyle: React.CSSProperties = {
   outline: "none",
 };
 
-export default function FoodFavorites({ userId, currentMealType, onAddFood, onAddCombo, onSetMealType, refreshKey = 0 }: Props) {
+// "Snack" (post page) and "Snacks" (older favorites tab) are the same meal.
+const normMeal = (m?: string | null) => (m === "Snacks" ? "Snack" : m || "");
+
+export default function FoodFavorites({ userId, currentMealType, onAddFood, onAddCombo, onSetMealType, refreshKey = 0, lockedMeal }: Props) {
   const [favorites, setFavorites] = useState<SavedFood[]>([]);
   const [loading, setLoading] = useState(true);
   const [manageMode, setManageMode] = useState(false);
@@ -211,23 +216,27 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
     if (ok) setFavorites(prev => prev.filter(f => f.id !== id));
   }
 
-  const visible = favorites.filter(
-    f => f.default_meal_type === activeTab || !f.default_meal_type,
-  );
+  const visible = lockedMeal
+    ? favorites.filter(f => normMeal(f.default_meal_type) === normMeal(lockedMeal))
+    : favorites.filter(f => f.default_meal_type === activeTab || !f.default_meal_type);
+
+  // Meal page: nothing saved for this meal → show nothing at all.
+  if (lockedMeal && !loading && visible.length === 0 && !showForm) return null;
+  if (lockedMeal && loading) return null;
 
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, display: "flex", alignItems: "center", gap: 5 }}>
-          ⭐ Favorites
+          {lockedMeal ? `⭐ Your saved ${normMeal(lockedMeal).toLowerCase()}s` : "⭐ Favorites"}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
+          {!lockedMeal && <button
             onClick={() => (showForm && !editingId ? (setShowForm(false), resetForm()) : openCreate())}
             style={{ fontSize: 11, fontWeight: 800, color: C.gold, background: "none", border: "none", cursor: "pointer" }}
           >
             {showForm && !editingId ? "✕ Cancel" : "+ Add Favorite"}
-          </button>
+          </button>}
           {favorites.length > 0 ? (
             <button
               onClick={() => { setManageMode(m => !m); setShowForm(false); resetForm(); }}
@@ -240,7 +249,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
       </div>
 
       {/* Meal-type tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+      {!lockedMeal && <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {MEAL_TABS.map(tab => {
           const active = tab === activeTab;
           const count = favorites.filter(f => f.default_meal_type === tab).length;
@@ -259,7 +268,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* Create / Edit form */}
       {showForm ? (
