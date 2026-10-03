@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import PWARegister from "@/components/PWARegister";
+import ShellRouterPatch from "@/components/ShellRouterPatch";
 import { AuthProvider } from "@/lib/auth";
 import PostHogProvider from "@/components/PostHogProvider";
 
@@ -42,6 +43,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <PostHogProvider>
             <AuthProvider>
+              <ShellRouterPatch />
               {children}
             </AuthProvider>
           </PostHogProvider>

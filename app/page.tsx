@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { toShellHref } from "@/lib/shellRoutes";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -35,7 +36,8 @@ export default function LandingPage() {
         // running as a safety net — it waits a beat to give restoration
         // first shot, then routes the user somewhere real.
         restoring = true;
-        router.replace(path + window.location.search);
+        // Dynamic routes have no file in the app bundle → open their shell.
+        router.replace(toShellHref(path + window.location.search, true));
       }
     }
 
