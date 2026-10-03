@@ -2489,12 +2489,14 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
   const reloadProfileGoals = useCallback(() => {
     if (!user) return;
-    supabase.from('goals').select('*').eq('user_id', viewUserId).eq('is_completed', false)
-      .order('created_at', { ascending: false }).limit(8)
+    supabase.from('goals').select('*').eq('user_id', viewUserId)
+      .order('created_at', { ascending: false }).limit(30)
       .then(({ data }) => {
         if (data) {
           const now = Date.now();
-          setProfileGoals(data.filter((g: any) => !g.window_end || new Date(g.window_end).getTime() > now));
+          const ended = (g: any) => g.window_end && new Date(g.window_end).getTime() <= now;
+          setProfileGoals(data.filter((g: any) => !g.is_completed && !ended(g)).slice(0, 8));
+          setProfilePastGoals(data.filter((g: any) => g.is_completed === true || ended(g)).slice(0, 20));
         }
       });
   }, [user]);
@@ -5124,22 +5126,95 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   },
                   {
                     id: "goals", emoji: "🎯", title: "Goals",
-                    meta: `${profileGoals.length} active`,
-                    preview: profileGoals.length ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {profileGoals.slice(0, isMobile ? 2 : 4).map((g: any) => {
-                          const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
-                          return (
-                            <div key={g.id}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.emoji || "🎯"} {g.title}</div>
-                              <div style={{ height: 5, background: "#0E1311", borderRadius: 99, overflow: "hidden", marginTop: 4 }}>
-                                <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
+                    meta: `${profileGoals.length} active${profilePastGoals.length ? ` · ${profilePastGoals.length} past` : ""}`,
+                    preview: profileGoals.length ? ((() => {
+                      const DAY = 86400000;
+                      const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—";
+                      const num = (v: any) => { const n = Number(v) || 0; return Math.round(n * 10) / 10; };
+                      const unitS = (u: string) => (u === "miles" ? "mi" : u || "");
+                      const info = (g: any) => {
+                        const cur = num(g.current), tgt = num(g.target);
+                        const pct = tgt > 0 ? Math.min(100, (cur / tgt) * 100) : 0;
+                        const start = new Date(g.window_start || g.created_at).getTime();
+                        const end = g.window_end ? new Date(g.window_end).getTime() : null;
+                        const now = Date.now();
+                        const daysLeft = end ? Math.max(0, Math.ceil((end - now) / DAY)) : null;
+                        let pace: { t: string; c: string } | null = null;
+                        if (tgt > 0 && cur >= tgt) pace = { t: "🎉 Goal hit!", c: "#86CFAE" };
+                        else if (end && end > start) {
+                          const expected = tgt * Math.min(1, Math.max(0, (now - start) / (end - start)));
+                          const perDay = daysLeft ? (tgt - cur) / daysLeft : tgt - cur;
+                          pace = cur >= expected
+                            ? { t: "✅ On pace", c: "#86CFAE" }
+                            : { t: `Need ${num(perDay)} ${unitS(g.unit)}/day`, c: "#F5C451" };
+                        }
+                        return { cur, tgt, pct, daysLeft, pace };
+                      };
+                      if (isMobile) return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {profileGoals.slice(0, 2).map((g: any) => {
+                            const x = info(g);
+                            return (
+                              <div key={g.id}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.emoji || "🎯"} {g.title}</div>
+                                <div style={{ height: 6, background: "#243329", borderRadius: 99, overflow: "hidden", marginTop: 4 }}>
+                                  <div style={{ height: "100%", width: `${Math.max(x.pct, 2)}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
+                                </div>
+                                <div style={{ fontSize: 9.5, color: C.sub, fontWeight: 700, marginTop: 3 }}>{x.cur}/{x.tgt} {unitS(g.unit)}{x.daysLeft != null ? ` · ${x.daysLeft}d left` : ""}</div>
                               </div>
+                            );
+                          })}
+                        </div>
+                      );
+                      const shown = profileGoals.slice(0, 2);
+                      const past = shown.length === 1 ? profilePastGoals.slice(0, 3) : [];
+                      return (
+                        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+                          {shown.map((g: any) => {
+                            const x = info(g);
+                            return (
+                              <div key={g.id} style={{ background: "#0E1311", border: "1px solid #243329", borderRadius: 12, padding: "10px 12px" }}>
+                                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                                  <span style={{ fontSize: 14, fontWeight: 800, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.emoji || "🎯"} {g.title}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 900, color: C.purple, flexShrink: 0 }}>{x.cur} <span style={{ color: C.sub, fontWeight: 700 }}>/ {x.tgt} {unitS(g.unit)}</span></span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0 7px" }}>
+                                  <div style={{ flex: 1, height: 8, background: "#243329", borderRadius: 99, overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${Math.max(x.pct, 1.5)}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 800, color: C.text, width: 34, textAlign: "right" }}>{Math.round(x.pct)}%</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 10.5, color: C.sub, fontWeight: 700, flexWrap: "wrap" }}>
+                                  <span>📅 {fmtD(g.window_start || g.created_at)} → {g.window_end ? fmtD(g.window_end) : "no end date"}</span>
+                                  {x.daysLeft != null && <span style={{ color: C.text }}>⏳ {x.daysLeft === 0 ? "Ends today" : `${x.daysLeft} day${x.daysLeft === 1 ? "" : "s"} left`}</span>}
+                                  {x.pace && <span style={{ marginLeft: "auto", color: x.pace.c }}>{x.pace.t}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {profileGoals.length > 2 && <div style={{ fontSize: 11, color: C.purple, fontWeight: 800 }}>+{profileGoals.length - 2} more active goal{profileGoals.length - 2 === 1 ? "" : "s"}</div>}
+                          {past.length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 2 }}>
+                              <div style={{ fontSize: 10, color: C.sub, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6 }}>Past goals</div>
+                              {past.map((g: any) => {
+                                const x = info(g);
+                                const done = g.is_completed || x.pct >= 100;
+                                return (
+                                  <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 700, color: C.text }}>
+                                    <span style={{ flexShrink: 0 }}>{done ? "🏆" : (g.emoji || "🎯")}</span>
+                                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.title} <span style={{ color: C.sub }}>· {x.cur}/{x.tgt} {unitS(g.unit)}</span></span>
+                                    <div style={{ width: 60, height: 5, background: "#243329", borderRadius: 99, overflow: "hidden", flexShrink: 0 }}>
+                                      <div style={{ height: "100%", width: `${x.pct}%`, background: done ? "#86CFAE" : "#4B5E54", borderRadius: 99 }} />
+                                    </div>
+                                    <span style={{ width: 86, textAlign: "right", color: done ? "#86CFAE" : C.sub, flexShrink: 0, fontSize: 10, whiteSpace: "nowrap" }}>{done ? "✓ Done" : `${Math.round(x.pct)}% · ${fmtD(g.completed_at || g.window_end)}`}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
+                          )}
+                        </div>
+                      );
+                    })()                    ) : (
                       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, border: `1.5px dashed ${C.purpleMid}`, borderRadius: 14, background: "rgba(91,190,147,0.05)", textAlign: "center", padding: 10 }}>
                         <div style={{ fontSize: isMobile ? 22 : 30 }}>🎯</div>
                         <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 800, color: C.text }}>{isOwn ? "Set your first goal" : "No active goals"}</div>
