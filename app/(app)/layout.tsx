@@ -9,6 +9,10 @@ import { isBusinessAccount } from "@/lib/businessTypes";
 // Routes business accounts should never visit. Centralized here so the
 // same list powers both the redirect guard and BottomNav's tab filter.
 // Keep in sync with BottomNav.tsx businessHiddenHrefs.
+// Pages that already push their own header below the notch / Dynamic Island.
+// Every other page gets the top safe-area spacing from this layout.
+const SELF_SAFE_TOP = ["/feed", "/post", "/stats", "/discover"];
+
 const BUSINESS_BLOCKED_ROUTES = [
   "/post",
   "/stats",
@@ -65,13 +69,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
+  const selfSafe = SELF_SAFE_TOP.some(r => pathname === r || pathname?.startsWith(r + "/"));
+
   return (
     <div style={{ minHeight: "100vh", background: "#0E1311" }}>
+      {/* Status-bar shield: keeps scrolled content from sliding under the
+          iPhone status bar / Dynamic Island. 0px tall on desktop. */}
+      <div aria-hidden style={{ position: "fixed", top: 0, left: 0, right: 0, height: "var(--safe-top)", background: "#0E1311", zIndex: 150, pointerEvents: "none" }} />
       <BottomNav />
       <MessagesFAB />
       <main
         style={{
           paddingBottom: 80,
+          paddingTop: selfSafe ? 0 : "var(--safe-top)",
           // On desktop: offset by sidebar width with smooth transition
           transition: "padding-left 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
