@@ -11,6 +11,7 @@ import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 import { ImagePresets } from "@/lib/imageUrls";
 import { shareWithToast } from "@/lib/share";
 import { forceSyncAllProgress } from "@/lib/syncProgress";
+import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 import GroupHighlights from "@/components/GroupHighlights";
 import GroupBadges from "@/components/GroupBadges";
 import GroupActivityFeed from "@/components/GroupActivityFeed";
@@ -702,6 +703,8 @@ export default function GroupPage() {
   // its own. This unifies the pattern across all three challenge types.
   const [warHistoryTab, setWarHistoryTab] = useState<"active"|"past">("active");
   const [goalsHistoryTab, setGoalsHistoryTab] = useState<"active"|"past">("active");
+  const [openGoalId, setOpenGoalId] = useState<string | null>(null);
+  const goalSyncedFor = useRef<string | null>(null);
   const [postLikes, setPostLikes] = useState<Record<string,number>>({});
   const [likedPosts, setLikedPosts] = useState<Record<string,boolean>>({});
   const [noteText, setNoteText] = useState("");
@@ -1106,6 +1109,16 @@ export default function GroupPage() {
   useEffect(() => {
     if ((dbGroup as any)?.id) loadGroupGoals();
   }, [tab, dbGroup, loadGroupGoals]);
+
+  // Once per visit, recompute *your* contribution to this group's goals from
+  // your logs (catches anything logged before the goal existed in the
+  // window, edits, Apple Health imports), then reload the goal list.
+  useEffect(() => {
+    const gid = (dbGroup as any)?.id; const uid = currentUser?.id;
+    if (!gid || !uid || goalSyncedFor.current === gid) return;
+    goalSyncedFor.current = gid;
+    syncGroupChallengeProgressFor(uid).then(() => loadGroupGoals()).catch(() => {});
+  }, [dbGroup, currentUser?.id, loadGroupGoals]);
 
   if (!loading && !group) {
     return (
@@ -2919,48 +2932,63 @@ export default function GroupPage() {
                           }}/>
                         </div>
 
-                        {/* Top contributors — surfaces who's actually doing the work
-                            so the goal feels social rather than abstract. Only
-                            renders when at least one person has logged toward it. */}
-                        {top3.length > 0 && top3.some((m: any) => (m.contribution || 0) > 0) && (
-                          <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-                            <div style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>
-                              🏅 Top Contributors
-                            </div>
-                            {top3.map((m: any, i: number) => {
-                              const u = m.users;
-                              const contrib = m.contribution || 0;
-                              if (contrib <= 0) return null;
-                              const maxContrib = top3[0]?.contribution || 1;
-                              return (
-                                <div key={m.user_id || i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                                  <span style={{fontSize:14,width:20,textAlign:"center" as const,flexShrink:0}}>
-                                    {i===0?"🥇":i===1?"🥈":"🥉"}
-                                  </span>
-                                  <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
-                                    background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
-                                    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
-                                    {u?.avatar_url
-                                      ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-                                      : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
-                                  </div>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{fontWeight:700,fontSize:12,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                      {u?.full_name||u?.username||"Member"}
-                                    </div>
-                                    <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:2,overflow:"hidden"}}>
-                                      <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
-                                        background:i===0?"#F5A623":"#5BBE93",borderRadius:99}}/>
-                                    </div>
-                                  </div>
-                                  <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#86CFAE",flexShrink:0}}>
-                                    {Math.round(contrib * 100) / 100} {meta.unit}
-                                  </span>
+                        {/* Contributors — like the group badges: a short preview,
+                            tap to see everyone ranked most → least. */}
+                        {(() => {
+                          const ranked = [...members].filter((m: any) => (m.contribution || 0) > 0)
+                            .sort((a: any, b: any) => (b.contribution || 0) - (a.contribution || 0));
+                          const isOpen = openGoalId === goal.id;
+                          const shown = isOpen ? ranked : ranked.slice(0, 3);
+                          const maxContrib = ranked[0]?.contribution || 1;
+                          const since = new Date(goal.start_date || goal.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                          return (
+                            <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                              <button onClick={() => setOpenGoalId(isOpen ? null : goal.id)}
+                                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"none",border:"none",padding:0,marginBottom:ranked.length ? 8 : 0,cursor:"pointer"}}>
+                                <span style={{fontSize:10,fontWeight:700,color:"#6B7280",textTransform:"uppercase" as const,letterSpacing:1}}>
+                                  🏅 {isOpen ? "Who contributed" : "Top Contributors"}{ranked.length ? ` · ${ranked.length}` : ""}
+                                </span>
+                                <span style={{fontSize:11,fontWeight:800,color:"#86CFAE"}}>{isOpen ? "Hide" : ranked.length > 3 ? `See all ${ranked.length} ›` : ranked.length ? "Details ›" : ""}</span>
+                              </button>
+                              {ranked.length === 0 ? (
+                                <div style={{fontSize:12,color:"#9CA3AF",marginTop:4}}>
+                                  No one has logged toward this yet — {meta.label.toLowerCase()} logged since {since} count.
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                              ) : shown.map((m: any, i: number) => {
+                                const u = m.users;
+                                const contrib = m.contribution || 0;
+                                return (
+                                  <div key={m.user_id || i} onClick={() => u?.username && router.push(`/profile/${u.username}`)}
+                                    style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,cursor:u?.username?"pointer":"default"}}>
+                                    <span style={{fontSize:i<3?14:12,fontWeight:900,width:20,textAlign:"center" as const,flexShrink:0,color:"#9CA3AF"}}>
+                                      {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
+                                    </span>
+                                    <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,overflow:"hidden",
+                                      background:"linear-gradient(135deg,#5BBE93,#86CFAE)",
+                                      display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#fff"}}>
+                                      {u?.avatar_url
+                                        ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                                        : (u?.full_name||u?.username||"?")[0]?.toUpperCase()}
+                                    </div>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <div style={{fontWeight:700,fontSize:12,color:"#F0F0F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                        {u?.full_name||u?.username||"Member"}
+                                      </div>
+                                      <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,marginTop:2,overflow:"hidden"}}>
+                                        <div style={{height:"100%",width:`${Math.round((contrib/maxContrib)*100)}%`,
+                                          background:i===0?"#F5A623":"#5BBE93",borderRadius:99}}/>
+                                      </div>
+                                    </div>
+                                    <span style={{fontSize:11,fontWeight:800,color:i===0?"#F5A623":"#86CFAE",flexShrink:0,textAlign:"right" as const}}>
+                                      {Math.round(contrib * 100) / 100} {meta.unit}
+                                      {isOpen && current > 0 && <span style={{display:"block",fontSize:9,color:"#6B7280",fontWeight:700}}>{Math.round((contrib/current)*100)}% of total</span>}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
 
                         {isOwnerOrMod && goal.status === "active" && (
                           <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
