@@ -1838,7 +1838,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // Photos the owner hand-picked for the Highlights box (users.highlight_box).
   // null = automatic (favorites first, then newest post photos).
   const [boxPhotos, setBoxPhotos] = useState<string[] | null>(null);
-  const avatarSize = isMobile ? 220 : 280;
+  const avatarSize = isMobile ? 220 : 340;
 
   const [profile,setProfile] = useState({
     name: "",
@@ -4660,13 +4660,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         )}
 
         {/* Profile header */}
-        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:24,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
+        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:32,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
           {/* Desktop-only nudge: shifted left/down to improve visual balance
               with the banner. Mobile centering is unchanged.
               Children stack with alignItems: "center" so name/handle/city
               text sits centered under the round profile photo. */}
-          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:isMobile?0:-60,marginTop:isMobile?0:96}}>
+          <div className="profile-avatar-col" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,width:avatarSize,marginLeft:0,marginTop:0}}>
             {/* Silver halo wrap — slow rotating conic-gradient ring around the
                 avatar at Level 3+. Adds the "moving picture" magic without
                 requiring video uploads. Wrap is conditional so lower-level
@@ -4811,7 +4811,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           <div className="profile-banner-block" style={{flex:1,minWidth:220}}>
             <div
               className="profile-banner-label"
-              style={{width:"100%",height:320,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#C9E8D8)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
+              style={{width:"100%",height:isMobile?320:avatarSize,borderRadius:26,overflow:"hidden",position:"relative",marginBottom:14,background:bannerImg?"transparent":`linear-gradient(135deg,${C.purple},#C9E8D8)`,border:`2px solid ${repositionMode?"#F5A623":C.purpleMid}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:repositionMode?"ns-resize":"default",userSelect:"none"}}
               onMouseEnter={()=>setBannerHovered(true)}
               onMouseLeave={()=>{ setBannerHovered(false); setDragState(null); }}
               onMouseDown={handleBannerMouseDown}
