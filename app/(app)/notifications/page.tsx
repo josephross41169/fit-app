@@ -167,7 +167,7 @@ export default function NotificationsPage() {
       {/* Header */}
       <div style={{
         background: C.bg, borderBottom: `1px solid ${C.border}`,
-        padding: "20px 20px 0", position: "sticky", top: 0, zIndex: 10,
+        padding: "20px 20px 0", position: "sticky", top: "var(--safe-top)", zIndex: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
