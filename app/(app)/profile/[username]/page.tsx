@@ -24,7 +24,7 @@ export default function PublicProfilePage() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (!username) { setStatus("notfound"); return; }
+      if (!username || username === "_") return; // wait for the real username (app shell)
       setStatus("loading");
       try {
         const { data } = await supabase
