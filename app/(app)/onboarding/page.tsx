@@ -302,7 +302,7 @@ export default function OnboardingPage() {
       <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onPickFile(e, "banner")} />
 
       {/* top bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 12px", background: C.bg, position: "sticky", top: 0, zIndex: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 12px", background: C.bg, position: "sticky", top: "var(--safe-top)", zIndex: 10 }}>
         <button onClick={goBack} aria-label="Back" style={{ width: 34, height: 34, borderRadius: "50%", border: `1px solid ${C.border2}`, background: C.card2, color: C.text, fontSize: 18, cursor: "pointer", visibility: cfg.back ? "visible" : "hidden", flex: "0 0 auto" }}>‹</button>
         <div style={{ flex: 1, height: 6, borderRadius: 99, background: "#211E2C", overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${progressPct}%`, borderRadius: 99, background: `linear-gradient(90deg, ${C.purple}, ${C.purpleSoft})`, transition: "width 0.4s ease" }} />
