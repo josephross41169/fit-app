@@ -9,6 +9,7 @@ import { compressImage } from "@/lib/compressImage";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
+import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
 import HighlightAlbums from "@/components/HighlightAlbums";
 import TemplateGallery from "@/components/TemplateGallery";
@@ -290,7 +291,7 @@ const WELLNESS_STYLES: Record<string, WellnessStyle> = {
   "fasting":              { emoji: "⏳", accent: "#86CFAE" },
 };
 function getWellnessStyle(activity: string): WellnessStyle {
-  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#86CFAE" };
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || autoWellnessStyle(activity) || { emoji: "🌿", accent: "#86CFAE" };
 }
 
 // Format an ISO datetime as a friendly local time, e.g. "8:42 AM".
@@ -308,6 +309,8 @@ type WellnessEntry = {
   notes: string;
   duration?: number | null;     // minutes (from wellness_duration_min)
   loggedAt?: string | null;     // ISO string (from logged_at) for time-of-day display
+  source?: string | null;       // 'healthkit' when Apple Health imported it
+  externalId?: string | null;
 };
 type Workout    = {type:string;duration:string;calories:number;exercises:Exercise[];cardio:CardioEntry[];notes?:string};
 type Nutrition  = {calories:number;protein:number;carbs:number;fat:number;sugar:number;meals:Meal[];notes?:string};
@@ -779,6 +782,9 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         wellness_duration_min: typeof e.duration === 'number' ? e.duration : null,
         notes: e.notes || null,
         photo_url: e.photo_url || null,
+        // Keep Apple Health rows tagged so they stay labeled and the next
+        // sync replaces them instead of duplicating.
+        ...(e.source === 'healthkit' && e.externalId ? { external_source: 'healthkit', external_id: e.externalId } : {}),
       }));
       await supabase.from('activity_logs').insert(rows);
     } catch (err) {
@@ -1605,7 +1611,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 <div style={{flex:1,minWidth:0,fontWeight:900,fontSize:17,color:C.text}}>Wellness</div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
-                <div style={{flex:1,minWidth:0,fontSize:13,color:C.sub}}>{wellness.entries.map(e=>e.activity).join("  ·  ")}</div>
+                <div style={{flex:1,minWidth:0,fontSize:13,color:C.sub}}>{wellness.entries.map(e=>wellnessLabel(e.activity)).join("  ·  ")}{wellness.entries.length>0 && wellness.entries.every(e=>isAppleHealth(e)) && <span style={{display:"block",marginTop:3,fontSize:11,fontWeight:700,color:"#F472B6"}}>❤️ {APPLE_HEALTH_LABEL}</span>}</div>
                 {editable && <span onClick={e=>{e.stopPropagation();setWellBuf({...wellness});setEditWell(true);}} style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:20,background:tierInner.chip,color:tierInner.chipText,border:`1px solid ${tierInner.chipBorder}`,cursor:"pointer"}}>✏️ Edit</span>}
                 <div style={{width:26,height:26,borderRadius:"50%",background:tierInner.chevBg,border:`1px solid ${tierInner.chevBorder}`,display:"flex",alignItems:"center",justifyContent:"center",transform:wellOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2.5" style={{width:13,height:13}}><path d="M6 9l6 6 6-6"/></svg>
@@ -1618,7 +1624,9 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 // WELLNESS_STYLES lookup. Falls back gracefully if the activity
                 // isn't in the table (returns generic leaf + soft purple).
                 const style = getWellnessStyle(e.activity);
-                const time = formatTimeOfDay((e as any).loggedAt);
+                const fromHealth = isAppleHealth(e);
+                // Apple Health daily totals carry a placeholder time — hide it.
+                const time = fromHealth ? "" : formatTimeOfDay((e as any).loggedAt);
                 const dur = (e as any).duration as number | null | undefined;
                 return (
                   <div key={i} style={{
@@ -1640,7 +1648,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           Pills use the activity's accent color so each card
                           has a coordinated palette. */}
                       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontWeight:800,fontSize:15,color:C.text}}>{e.activity}</span>
+                        <span style={{fontWeight:800,fontSize:15,color:C.text}}>{wellnessLabel(e.activity)}</span>
                         {dur != null && dur > 0 && (
                           <span style={{
                             fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
@@ -1652,6 +1660,12 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           <span style={{
                             fontSize:11,fontWeight:600,color:C.sub,
                           }}>{time}</span>
+                        )}
+                        {fromHealth && (
+                          <span style={{
+                            fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:999,
+                            background:"#F472B622",color:"#F472B6",
+                          }}>❤️ {APPLE_HEALTH_LABEL}</span>
                         )}
                       </div>
                       {e.notes && <div style={{fontSize:13,color:C.sub,marginTop:4,lineHeight:1.4}}>{e.notes}</div>}
@@ -2288,6 +2302,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           photo_url: l.photo_url || null,
           duration: l.wellness_duration_min ?? null,
           loggedAt: l.logged_at || l.created_at || null,
+          source: l.external_source || null,
+          externalId: l.external_id || null,
         })),
       } : null;
 
@@ -4719,12 +4735,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 />
               ) : profileImg
                 ? <img src={ImagePresets.full(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,transform:`scale(${avatarScale/100})`,transformOrigin:"center center",display:"block",pointerEvents:"none",transition:avatarDragState?"none":"transform 0.1s, object-position 0.1s"}} alt="Profile"/>
-                : <div style={{width:avatarSize-32,height:avatarSize-32,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                : <div style={{width:avatarSize,height:avatarSize,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label. accept now
                   includes video so users can upload a Live Photo /MOV/
                   short MP4 directly. */}
-              {!profileImg && !avatarVideoUrl && !avatarRepositionMode && (
+              {isOwn && !profileImg && !avatarVideoUrl && !avatarRepositionMode && (
                 <label style={{position:"absolute",inset:0,borderRadius:"50%",cursor:"pointer",zIndex:5,display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <input type="file" accept="image/*,video/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                   <span style={{fontSize:13}}>📷</span>
@@ -4946,11 +4962,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   ✏️ Edit Profile
                 </button>
               ) : (
-                viewUserId && (
-                  <div style={{flex:1}}>
-                    <FollowButton targetUserId={viewUserId} />
-                  </div>
-                )
+                viewUserId && <FollowButton targetUserId={viewUserId} style={{borderRadius:14,padding:"11px 22px"}} />
               )}
               <button onClick={shareProfile} aria-label="Share profile" style={{
                 padding:"11px 14px", borderRadius:14, border:`1.5px solid ${C.purple}`,
@@ -5140,7 +5152,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                                   {mStats.wellness.slice(0, 4).map(w => (
                                     <div key={w.name} style={row}>
                                       <span style={{ flexShrink: 0 }}>{getWellnessStyle(w.name).emoji}</span>
-                                      <span style={name}>{w.name}</span>
+                                      <span style={name}>{wellnessLabel(w.name)}</span>
                                       <span style={val}>{w.count}×</span>
                                     </div>
                                   ))}
