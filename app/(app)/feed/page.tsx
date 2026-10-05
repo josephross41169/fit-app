@@ -1277,7 +1277,9 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
     const isDbPost = typeof post.id === 'string' && post.id.includes('-');
     const displayName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "You";
     const avatarInitials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
-    const fullText = replyTo ? `@${replyTo.user.split(' ')[0]} ${commentText.trim()}` : commentText.trim();
+    // The Reply button already puts "@Name " in the box — don't add it twice.
+    const fullText = commentText.trim();
+    const parentId = replyTo && typeof replyTo.id === 'string' && replyTo.id.includes('-') ? replyTo.id : null;
     setReplyTo(null);
 
     if (isDbPost && currentUser) {
@@ -1296,6 +1298,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
               commenterId: currentUser.id,
               content: fullText,
               postOwnerId: (post as any)._ownerId || null,
+              parentId,
             },
           }),
         });
