@@ -333,7 +333,7 @@ export default function PostDetailPage() {
         </div>
 
         {/* Comments */}
-        <div style={{ marginBottom: 100 }}>
+        <div className="post-comments" style={{ marginBottom: 100 }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 12 }}>
             Comments {(post.comments?.length ?? 0) > 0 && <span style={{ color: C.sub, fontWeight: 600 }}>({post.comments?.length})</span>}
           </div>
@@ -413,7 +413,9 @@ export default function PostDetailPage() {
       </div>
 
       {/* Compose bar - sticky bottom */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(13,13,13,0.96)", backdropFilter: "blur(10px)", borderTop: `1px solid ${C.border}`, padding: "12px 16px", zIndex: 20 }}>
+      {/* On phones the bottom tab bar (71px + safe area) sits at bottom:0, so lift the box above it. */}
+      <style>{`@media (max-width: 767px){ .post-compose{ bottom: calc(71px + var(--safe-bottom, 0px)) !important; } .post-comments{ margin-bottom: 190px !important; } }`}</style>
+      <div className="post-compose" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(13,13,13,0.96)", backdropFilter: "blur(10px)", borderTop: `1px solid ${C.border}`, padding: "12px 16px", zIndex: 20 }}>
        <div style={{ maxWidth: 600, margin: "0 auto" }}>
         {replyTo && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, marginBottom: 8, paddingLeft: 6 }}>
