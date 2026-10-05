@@ -112,11 +112,14 @@ function GroupCard({ group, onJoin }: { group: DisplayGroup; onJoin?: (id: strin
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && group.db_id) {
-        await fetch('/api/db', {
+        const res = await fetch('/api/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'join_group', payload: { userId: user.id, groupId: group.db_id } }),
         });
+        const json = await res.json().catch(() => ({}));
+        // Private group → open it so they can send a join request.
+        if (json?.requires_request) { router.push(`/groups/${group.id}`); return; }
       }
       setJoined(true);
       onJoin?.(group.id);
