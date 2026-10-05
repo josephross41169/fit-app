@@ -710,6 +710,7 @@ async function handlePOST(req: NextRequest) {
           .select(`*, users (id, username, full_name, avatar_url,avatar_video_url, logs_last_28_days), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url,avatar_video_url))`)
           .eq('is_public', true)
           .in('user_id', followingIds)
+          .or('post_type.is.null,post_type.neq.achievement')
           .order('created_at', { ascending: false })
           .range(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE - 1);
 
@@ -762,6 +763,8 @@ async function handlePOST(req: NextRequest) {
         .from('posts')
         .select(`*, users (id, username, full_name, avatar_url,avatar_video_url, logs_last_28_days, city), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url,avatar_video_url))`)
         .eq('is_public', true)
+        // Auto-generated PR posts are retired — leave them out so real posts show.
+        .or('post_type.is.null,post_type.neq.achievement')
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
 
