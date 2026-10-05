@@ -89,7 +89,7 @@ export default function OpenChallengeBoardPage() {
     <div style={{ minHeight:"100vh", background:C.bg, color:C.text, paddingBottom:100 }}>
 
       {/* Header */}
-      <div style={{ position:"sticky", top:0, zIndex:50, background:"rgba(10,10,15,0.97)",
+      <div style={{ position:"sticky", top:"var(--safe-top)", zIndex:50, background:"rgba(10,10,15,0.97)",
         backdropFilter:"blur(14px)", borderBottom:`1px solid ${C.border}`, padding:"14px 16px" }}>
         <div style={{ fontWeight:900, fontSize:22, marginBottom:4 }}>⚔️ Open Challenges</div>
         <div style={{ fontSize:12, color:C.sub, marginBottom:12 }}>
