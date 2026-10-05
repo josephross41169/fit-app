@@ -1792,9 +1792,6 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
               <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
             </label>
             <span style={{ fontSize:12,color:C.sub }}>{post.photos.length} photo{post.photos.length!==1?"s":""}</span>
-            <button onClick={() => onUpdate({ ...post, photos: post.photos.filter((_,i) => i !== currentPhoto) })} style={{ marginLeft:"auto",fontSize:12,fontWeight:700,color:"#EF4444",background:"#FEE2E2",border:"none",cursor:"pointer",padding:"5px 14px",borderRadius:20 }}>
-              🗑️ Remove Photo
-            </button>
           </div>
         )}
 
