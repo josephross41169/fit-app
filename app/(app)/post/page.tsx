@@ -609,6 +609,34 @@ const WELLNESS_GROUPS: { label: string; types: string[] }[] = [
   { label: "Other", types: ["Other"] },
 ];
 const WELLNESS_TYPES = WELLNESS_GROUPS.flatMap(g => g.types);
+// Boxed wellness flow: four categories, each a grid of activity boxes.
+// (Naps, sunlight, grounding, etc. were dropped to keep this focused.)
+type WlCat = "recovery" | "mind" | "body" | "fasting";
+const WL_CATS: { key: WlCat; label: string; emoji: string; sub: string; types: string[] }[] = [
+  { key: "recovery", label: "Recovery", emoji: "🧊", sub: "Sauna, cold plunge, red light…", types: [
+    "Sauna", "Cold Plunge", "Infrared Sauna", "Steam Room", "Red Light Therapy", "Cryotherapy",
+    "Hyperbaric Oxygen", "Compression Therapy", "Float Tank",
+  ]},
+  { key: "mind", label: "Mind & stress", emoji: "🧠", sub: "Meditation, breathwork, journaling…", types: [
+    "Meditation", "Breathwork", "Journaling", "Yoga Nidra", "Sound Bath", "Therapy",
+  ]},
+  { key: "body", label: "Body work", emoji: "💆", sub: "Massage, stretching, mobility…", types: [
+    "Massage", "Stretching", "Foam Rolling", "Mobility Work", "Chiropractic", "Acupuncture", "Cupping",
+  ]},
+  { key: "fasting", label: "Fasting", emoji: "⏳", sub: "12+ hour fasts", types: ["Fasting"] },
+];
+const WL_EMOJI: Record<string, string> = {
+  "Sauna": "🔥", "Cold Plunge": "🧊", "Infrared Sauna": "🌅", "Steam Room": "♨️", "Red Light Therapy": "🔴",
+  "Cryotherapy": "❄️", "Hyperbaric Oxygen": "💎", "Compression Therapy": "🦿", "Float Tank": "🌊",
+  "Meditation": "🧘", "Breathwork": "🌬️", "Journaling": "📓", "Yoga Nidra": "🕉️", "Sound Bath": "🎵", "Therapy": "💬",
+  "Massage": "💆", "Stretching": "🤸", "Foam Rolling": "🌀", "Mobility Work": "🦵", "Chiropractic": "🦴",
+  "Acupuncture": "📍", "Cupping": "🟣", "Fasting": "⏳",
+};
+const wlCatOf = (t: string): WlCat | null => {
+  const k = t.toLowerCase();
+  for (const c of WL_CATS) if (c.types.some(x => x.toLowerCase() === k)) return c.key;
+  return null;
+};
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout", "Post-workout"];
 const MEAL_BOXES = ["Breakfast", "Lunch", "Dinner", "Snack"];
 // PRs no longer auto-post to the feed (the in-app PR celebration still shows).
@@ -936,9 +964,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   // an activity instead of accidentally saving the default. The empty string
   // renders the placeholder option in the select; save handler validates
   // that every row has a real type before submitting.
-  const [wellnessActivities, setWellnessActivities] = useState<WellnessEntry[]>([
-    { id: `w-${Date.now()}`, type: "", duration: "" }
-  ]);
+  const [wellnessActivities, setWellnessActivities] = useState<WellnessEntry[]>([]);
+  // Boxed flow: which category page is open (null = the four category boxes,
+  // "extras" = photo / tag a friend / notes).
+  const [wlSection, setWlSection] = useState<null | WlCat | "extras">(null);
+  const [wlCustom, setWlCustom] = useState("");
+  // How often you've logged each wellness type — most-logged go first.
+  const [wlCounts, setWlCounts] = useState<Record<string, number>>({});
+  const [wellnessTaggedUsers, setWellnessTaggedUsers] = useState<TaggedUser[]>([]);
   const [wellnessNotes, setWellnessNotes] = useState("");
   const [wellnessPhotoUrl, setWellnessPhotoUrl] = useState<string | null>(null);
   // Extended wellness tracking fields — only relevant when a Sleep or
@@ -957,6 +990,26 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   // the Sleep and Fasting detail panels.
   const hasSleep = wellnessActivities.some(a => a.type === 'Sleep');
   const hasFasting = wellnessActivities.some(a => a.type === 'Fasting');
+
+  useEffect(() => {
+    if (!user?.id || logTab !== "wellness") return;
+    let alive = true;
+    supabase.from("activity_logs").select("wellness_type").eq("user_id", user.id).eq("log_type", "wellness")
+      .order("logged_at", { ascending: false }).limit(1000)
+      .then(({ data }) => {
+        if (!alive) return;
+        const m: Record<string, number> = {};
+        (data || []).forEach((r: any) => { const k = String(r.wellness_type || "").toLowerCase().trim(); if (k) m[k] = (m[k] || 0) + 1; });
+        setWlCounts(m);
+      });
+    return () => { alive = false; };
+  }, [user?.id, logTab]);
+  const wlCount = (t: string) => wlCounts[t.toLowerCase()] || 0;
+  const toggleWellness = (t: string) => {
+    setWellnessActivities(prev => prev.some(a => a.type.toLowerCase() === t.toLowerCase())
+      ? prev.filter(a => a.type.toLowerCase() !== t.toLowerCase())
+      : [...prev, { id: `w-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: t, duration: "" }]);
+  };
 
   // Feed state
   const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
@@ -1908,16 +1961,9 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         // used to silently drop empty rows, but that masked a UX bug where
         // the form defaulted to "Meditation" and users saved it by accident.
         // Now empty rows block save with a clear error.
-        const blankRow = wellnessActivities.find(a => !a.type || !a.type.trim());
-        if (blankRow) {
-          setSaveError("Pick an activity for every row before saving (or remove the blank row).");
-          setLoading(false);
-          submittingRef.current = false;
-          return;
-        }
-        const validActivities = wellnessActivities;
+        const validActivities = wellnessActivities.filter(a => a.type && a.type.trim());
         if (validActivities.length === 0) {
-          setSaveError("Add at least one wellness activity before saving.");
+          setSaveError("Pick at least one activity — open Recovery, Mind & stress, Body work or Fasting.");
           setLoading(false);
           submittingRef.current = false;
           return;
@@ -1957,6 +2003,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             notes: wellnessNotes || null,
             photo_url: wellnessUploadedUrl || null,
           };
+          const wlTagged = Array.from(new Set([...wellnessTaggedUsers.map(u => u.id), ...taggedBusinesses.map(b => b.id)]));
+          if (wlTagged.length > 0) row.tagged_user_ids = wlTagged;
           if (act.type === 'Fasting' && fastingHours) {
             row.wellness_duration_min = Math.round(parseFloat(fastingHours) * 60);
           } else if (act.duration && act.duration.trim()) {
@@ -2124,6 +2172,15 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               },
             }),
           }).catch(() => { /* best-effort; UI doesn't block on this */ });
+        }
+      }
+      if (logTab === 'wellness' && wellnessTaggedUsers.length > 0 && user) {
+        const senderName = (user as any)?.profile?.full_name || (user as any)?.profile?.username || "Someone";
+        const what = wellnessActivities.map(a => a.type).filter(Boolean).slice(0, 2).join(" + ").toLowerCase() || "a wellness session";
+        for (const tagged of wellnessTaggedUsers) {
+          fetch('/api/db', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'create_notification', payload: { userId: tagged.id, fromUserId: user.id, type: 'tag', referenceId: null, body: `${senderName} tagged you in ${what}` } }),
+          }).catch(() => {});
         }
       }
       // -- PR Detection (workout only) ---------------------------------------
@@ -2889,6 +2946,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
     else { setMainMode("log"); setLogTab(t); setFunnel("form"); }
     setWoSection(null);
     setNutSection(null); setNutMeal(null);
+    setWlSection(null);
     if (typeof window !== "undefined") window.scrollTo(0, 0);
   }
   function openMeal(m: string) {
@@ -3277,7 +3335,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             {([
               { k: "workout", e: "💪", t: "Workout", s: "Lifting, cardio, abs & calisthenics" },
               { k: "nutrition", e: "🥗", t: "Meal", s: "Meals & supplements" },
-              { k: "wellness", e: "🧘", t: "Wellness", s: "Sleep, recovery, mindfulness & more" },
+              { k: "wellness", e: "🧘", t: "Wellness", s: "Recovery, mind & stress, body work, fasting" },
               { k: "feed", e: "📢", t: "Post to feed", s: "Share photos & videos with followers" },
             ] as const).map(b => (
               <button key={b.k} onClick={() => openFunnelTab(b.k)} className="funnel-box"
@@ -3338,18 +3396,20 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               else if (mainMode === "log" && logTab === "workout") setFunnel("workoutChoice");
               else if (mainMode === "log" && logTab === "nutrition" && nutMeal) closeMeal();
               else if (mainMode === "log" && logTab === "nutrition" && nutSection) setNutSection(null);
+              else if (mainMode === "log" && logTab === "wellness" && wlSection) setWlSection(null);
               else setFunnel("home");
               if (typeof window !== "undefined") window.scrollTo(0, 0);
             }}
             style={{ background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>
             ‹ {mainMode === "log" && logTab === "workout" && woSection ? (openEx !== null ? "Exercises" : "Workout")
               : mainMode === "log" && logTab === "nutrition" && nutMeal ? "Meals"
-              : mainMode === "log" && logTab === "nutrition" && nutSection ? "Meal" : "Back"}
+              : mainMode === "log" && logTab === "nutrition" && nutSection ? "Meal"
+              : mainMode === "log" && logTab === "wellness" && wlSection ? "Wellness" : "Back"}
           </button>
           <div style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 18, color: C.text, marginRight: 60 }}>
             {mainMode === "feed" ? "📢 Post to feed"
               : logTab === "nutrition" ? (nutMeal ? `${MEAL_EMOJI[nutMeal] || "🍽️"} ${nutMeal}` : nutSection === "meals" ? "🍽️ Meals" : nutSection === "supplements" ? "💊 Supplements" : "🥗 Meal")
-              : logTab === "wellness" ? "🧘 Wellness"
+              : logTab === "wellness" ? (wlSection === "extras" ? "📸 Photo & friends" : wlSection ? (() => { const c = WL_CATS.find(x => x.key === wlSection); return c ? `${c.emoji} ${c.label}` : "🧘 Wellness"; })() : "🧘 Wellness")
               : woSection === "lifting" ? "🏋️ Weight lifting"
               : woSection === "cardio" ? "🏃 Cardio"
               : woSection === "abs" ? "🔥 Ab work"
@@ -4622,228 +4682,172 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             </div>
             );
           })()}
-          {/* --- WELLNESS TAB --- */}
-          {logTab === "wellness" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>🧘 Wellness Activities</div>
-                <div style={{ fontSize: 12, color: C.sub, marginBottom: 14, lineHeight: 1.4 }}>
-                  Stack as many as you want. Sauna + cold plunge + meditation? Add all three.
-                </div>
+          {/* --- WELLNESS TAB (boxed) --- */}
+          {logTab === "wellness" && (() => {
+            const picked = (t: string) => wellnessActivities.some(a => a.type.toLowerCase() === t.toLowerCase());
+            const setDur = (t: string, v: string) => setWellnessActivities(prev => prev.map(a => a.type.toLowerCase() === t.toLowerCase() ? { ...a, duration: v.replace(/[^0-9]/g, "").slice(0, 4) } : a));
+            const back = () => { setWlSection(null); if (typeof window !== "undefined") window.scrollTo(0, 0); };
+            const extrasCount = (wellnessPhotoUrl ? 1 : 0) + wellnessTaggedUsers.length + taggedBusinesses.length + (wellnessNotes.trim() ? 1 : 0);
+            const doneBtn = (
+              <button onClick={back} style={{ width: "100%", padding: "14px 0", borderRadius: 16, border: `2px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+                ✓ Done
+              </button>
+            );
 
-                {/* List of activity rows. Each one is its own card with
-                    a type dropdown, duration input, and remove button. */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-                  {wellnessActivities.map((act, idx) => {
-                    const isFasting = act.type === 'Fasting';
-                    return (
-                      <div key={act.id} style={{ background: '#0D0D0D', borderRadius: 14, padding: 12, border: '1px solid #1B231E', position: 'relative' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: isFasting ? '1fr auto' : '1.4fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                          <div>
-                            <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Activity</label>
-                            <select
-                              style={iStyle}
-                              value={act.type}
-                              onChange={e => {
-                                const newType = e.target.value;
-                                setWellnessActivities(prev => prev.map((a, i) => i === idx ? { ...a, type: newType } : a));
-                              }}>
-                              {/* Placeholder — disabled so user must pick a real activity.
-                                  Without this, empty strings would render as a confusing blank row. */}
-                              <option value="" disabled>Pick an activity…</option>
-                              {WELLNESS_GROUPS.map(group => (
-                                <optgroup key={group.label} label={group.label}>
-                                  {group.types.map(t => {
-                                    // Sleep / Fasting can each only appear once per save —
-                                    // hide them in OTHER rows' dropdowns if already chosen.
-                                    const alreadyUsedElsewhere = (t === 'Sleep' || t === 'Fasting')
-                                      && wellnessActivities.some((a, i) => i !== idx && a.type === t);
-                                    if (alreadyUsedElsewhere) return null;
-                                    return <option key={t} value={t}>{t}</option>;
-                                  })}
-                                </optgroup>
-                              ))}
-                            </select>
+            // ── Category page: activity boxes, most-logged first ──
+            if (wlSection && wlSection !== "extras") {
+              const cat = WL_CATS.find(c => c.key === wlSection)!;
+              const customs = wlSection === "mind" || wlSection === "recovery" || wlSection === "body"
+                ? wellnessActivities.filter(a => !wlCatOf(a.type) && (a as any).cat === wlSection) : [];
+              const types = [...cat.types].sort((x, y) => wlCount(y) - wlCount(x) || cat.types.indexOf(x) - cat.types.indexOf(y));
+              const pickedHere = wellnessActivities.filter(a => wlCatOf(a.type) === wlSection || customs.includes(a));
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {wlSection !== "fasting" && (
+                    <div className="ex-grid">
+                      {types.map(t => {
+                        const on = picked(t); const n = wlCount(t);
+                        return (
+                          <button key={t} onClick={() => toggleWellness(t)} className="funnel-box"
+                            style={{ position: "relative", minHeight: 118, padding: "14px 8px", border: `2px solid ${on ? C.blue : C.greenMid}`, background: on ? "rgba(91,190,147,0.12)" : C.white }}>
+                            {on && <span style={{ position: "absolute", top: 8, right: 10, fontSize: 14, color: C.blue, fontWeight: 900 }}>✓</span>}
+                            <span style={{ fontSize: 30 }}>{WL_EMOJI[t] || "🌿"}</span>
+                            <span style={{ fontWeight: 900, fontSize: 14, color: C.text, textAlign: "center", lineHeight: 1.2 }}>{t}</span>
+                            <span style={{ fontSize: 11, color: n ? C.blue : C.sub, fontWeight: 700 }}>{n ? `Logged ${n}×` : "Tap to add"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Durations for what you picked here */}
+                  {wlSection !== "fasting" && pickedHere.length > 0 && (
+                    <div style={{ background: C.white, borderRadius: 22, padding: 18, border: `2px solid ${C.greenMid}` }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 10 }}>How long? <span style={{ color: C.sub, fontWeight: 600, fontSize: 12 }}>(minutes, optional)</span></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {pickedHere.map(a => (
+                          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: 20, width: 26, textAlign: "center" }}>{WL_EMOJI[a.type] || "🌿"}</span>
+                            <span style={{ flex: 1, minWidth: 0, fontWeight: 800, fontSize: 14, color: C.text }}>{a.type}</span>
+                            <input style={{ ...iStyle, width: 90, marginBottom: 0, textAlign: "center" }} inputMode="numeric" placeholder="min" value={a.duration} onChange={e => setDur(a.type, e.target.value)} />
+                            <button onClick={() => setWellnessActivities(prev => prev.filter(x => x.id !== a.id))} aria-label={`Remove ${a.type}`}
+                              style={{ width: 34, height: 34, borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: "#EF4444", fontSize: 15, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>✕</button>
                           </div>
-                          {!isFasting && (
-                            <div>
-                              <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration (min)</label>
-                              <input
-                                style={iStyle}
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="e.g. 20"
-                                value={act.duration}
-                                onChange={e => {
-                                  const v = e.target.value;
-                                  setWellnessActivities(prev => prev.map((a, i) => i === idx ? { ...a, duration: v } : a));
-                                }}
-                              />
-                            </div>
-                          )}
-                          {wellnessActivities.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => setWellnessActivities(prev => prev.filter((_, i) => i !== idx))}
-                              aria-label="Remove activity"
-                              style={{
-                                width: 38, height: 38, borderRadius: 10,
-                                border: `1.5px solid ${C.greenMid}`, background: 'transparent',
-                                color: '#EF4444', fontSize: 18, fontWeight: 800, cursor: 'pointer',
-                              }}>
-                              ✕
-                            </button>
-                          )}
-                        </div>
+                        ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Something not on the list */}
+                  {wlSection !== "fasting" && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input style={{ ...iStyle, flex: 1, marginBottom: 0 }} placeholder="Something else? Type it here" value={wlCustom} maxLength={40}
+                        onChange={e => setWlCustom(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && wlCustom.trim()) { const t = wlCustom.trim(); setWellnessActivities(p => [...p, { id: `w-${Date.now()}`, type: t, duration: "", cat: wlSection } as any]); setWlCustom(""); } }} />
+                      <button disabled={!wlCustom.trim()} onClick={() => { const t = wlCustom.trim(); if (!t) return; setWellnessActivities(p => [...p, { id: `w-${Date.now()}`, type: t, duration: "", cat: wlSection } as any]); setWlCustom(""); }}
+                        style={{ flexShrink: 0, padding: "0 16px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>+ Add</button>
+                    </div>
+                  )}
+
+                  {/* Fasting page */}
+                  {wlSection === "fasting" && (
+                    <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${hasFasting ? C.blue : C.greenMid}` }}>
+                      <div style={{ fontWeight: 900, fontSize: 16, color: C.text, marginBottom: 4 }}>⏳ How long did you fast?</div>
+                      <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, lineHeight: 1.4 }}>Fasts of <strong style={{ color: C.text }}>12 hours or more</strong> count.{wlCount("Fasting") ? ` You've logged ${wlCount("Fasting")} fast${wlCount("Fasting") === 1 ? "" : "s"}.` : ""}</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                        {["12", "14", "16", "18", "20", "24"].map(h => (
+                          <button key={h} onClick={() => { setFastingHours(h); if (!hasFasting) toggleWellness("Fasting"); }}
+                            style={{ padding: "10px 16px", borderRadius: 12, border: `2px solid ${hasFasting && fastingHours === h ? C.blue : C.greenMid}`, background: hasFasting && fastingHours === h ? "rgba(91,190,147,0.15)" : "transparent", color: C.text, fontWeight: 900, fontSize: 15, cursor: "pointer" }}>{h}h</button>
+                        ))}
+                      </div>
+                      <input style={iStyle} inputMode="numeric" placeholder="Or type hours, e.g. 17" value={fastingHours}
+                        onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, "").slice(0, 4); setFastingHours(v); if (v && !hasFasting) toggleWellness("Fasting"); }} />
+                      {hasFasting && (
+                        <button onClick={() => { toggleWellness("Fasting"); setFastingHours(""); }} style={{ marginTop: 10, background: "none", border: "none", color: "#EF4444", fontWeight: 700, fontSize: 12, cursor: "pointer", padding: 0 }}>Remove fast</button>
+                      )}
+                    </div>
+                  )}
+                  {doneBtn}
+                </div>
+              );
+            }
+
+            // ── Photo & tag a friend ──
+            if (wlSection === "extras") {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 10 }}>📸 Photo</div>
+                    {wellnessPhotoUrl ? (
+                      <div style={{ position: "relative", display: "inline-block" }}>
+                        <img src={wellnessPhotoUrl} style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 14, border: `2px solid #2A3A2A` }} alt="" />
+                        <button onClick={() => setWellnessPhotoUrl(null)} aria-label="Remove photo" style={{ position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", fontSize: 13, cursor: "pointer" }}>×</button>
+                      </div>
+                    ) : (
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 18px", borderRadius: 14, border: `1.5px dashed #2A3A2A`, background: "#111", cursor: "pointer" }}>
+                        <span style={{ fontSize: 18 }}>➕</span>
+                        <span style={{ fontSize: 14, color: C.sub, fontWeight: 700 }}>Add a photo</span>
+                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => setWellnessPhotoUrl(ev.target!.result as string);
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🤝 Tag a friend</div>
+                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>Did this with someone? They'll get a notification.</div>
+                    <TagPicker value={wellnessTaggedUsers} onChange={setWellnessTaggedUsers} excludeSelfId={user?.id} placeholder="Search by name or @username…" />
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, margin: "16px 0 4px" }}>🏢 Tag a business</div>
+                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>A spa, studio or wellness brand on Livelee — your log shows on their page.</div>
+                    <TagPicker businessOnly value={taggedBusinesses} onChange={setTaggedBusinesses} placeholder="Search businesses on Livelee…" max={3} />
+                  </div>
+                  <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</label>
+                    <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How was it? How do you feel?" value={wellnessNotes} onChange={e => setWellnessNotes(e.target.value)} />
+                  </div>
+                  {doneBtn}
+                </div>
+              );
+            }
+
+            // ── Wellness home: four category boxes, photo & friends, save ──
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="funnel-grid">
+                  {WL_CATS.map(c => {
+                    const here = wellnessActivities.filter(a => wlCatOf(a.type) === c.key || (!wlCatOf(a.type) && (a as any).cat === c.key));
+                    const on = here.length > 0;
+                    return (
+                      <button key={c.key} onClick={() => { setWlSection(c.key); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="funnel-box"
+                        style={{ border: `2px solid ${on ? C.blue : C.greenMid}`, background: on ? "rgba(91,190,147,0.08)" : C.white, minHeight: 160 }}>
+                        <span style={{ fontSize: 38 }}>{c.emoji}</span>
+                        <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>{c.label}</span>
+                        <span style={{ fontSize: 12, color: on ? C.blue : C.sub, fontWeight: 700, textAlign: "center", padding: "0 6px" }}>
+                          {c.key === "fasting" && hasFasting ? `${fastingHours || "?"}h fast` : on ? here.map(a => a.type).join(" · ") : c.sub}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
-
-                {/* Add another activity button. Disabled when 10+ entries
-                    to keep things manageable — a typical day shouldn't
-                    realistically have more than that. */}
-                {wellnessActivities.length < 10 && (
-                  <button
-                    type="button"
-                    onClick={() => setWellnessActivities(prev => [...prev, { id: `w-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, type: '', duration: '' }])}
-                    style={{
-                      width: '100%', padding: '12px 14px', borderRadius: 12,
-                      border: `2px dashed ${C.greenMid}`, background: 'transparent',
-                      color: C.blue, fontWeight: 800, fontSize: 13, cursor: 'pointer',
-                      marginBottom: 12,
-                    }}>
-                    + Add another activity
-                  </button>
-                )}
-
-                {/* Fasting-specific block — minimum 12 hours enforced on save.
-                    Only shown when Fasting is in the activities list. */}
-                {hasFasting && (
-                  <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>⏳ Fasting Details</div>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Hours fasted</label>
-                    <input
-                      style={iStyle}
-                      type="text" inputMode="numeric"
-                      placeholder="e.g. 16"
-                      value={fastingHours}
-                      onChange={e => setFastingHours(e.target.value)}
-                    />
-                    <div style={{ fontSize: 11, color: C.sub, marginTop: 8, lineHeight: 1.4 }}>
-                      Minimum <strong style={{ color: C.text }}>12 hours</strong> to count as a fast — anything shorter is just regular eating habits.
-                      Beyond that, hours don't change badge progress — every 12+ hour fast counts as one toward the ladder.
-                    </div>
-                  </div>
-                )}
-
-                {/* Sleep-specific fields. Only shown when Sleep is in the list. */}
-                {hasSleep && (
-                  <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #1B231E', marginBottom: 12 }}>
-                    <div style={{ fontWeight: 800, fontSize: 13, color: '#86CFAE', marginBottom: 12 }}>😴 Sleep Details</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                      <div>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Hours Slept</label>
-                        <input style={iStyle} type="text" inputMode="decimal" placeholder="e.g. 7.5" value={sleepHours} onChange={e => setSleepHours(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sleep Quality (1-5)</label>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                          {[1, 2, 3, 4, 5].map(q => (
-                            <button key={q} onClick={() => setSleepQuality(sleepQuality === q ? null : q)} style={{
-                              flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                              background: sleepQuality === q ? '#5BBE93' : '#111811',
-                              color: sleepQuality === q ? '#fff' : '#9CA3AF',
-                              fontWeight: 800, fontSize: 13, transition: 'all 0.15s',
-                            }}>{q}</button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Bedtime</label>
-                        <input style={iStyle} type="time" value={sleepBedtime} onChange={e => setSleepBedtime(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Wake Time</label>
-                        <input style={iStyle} type="time" value={sleepWakeTime} onChange={e => setSleepWakeTime(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Steps, HRV, Resting HR — shared across all activities for the day */}
-                <div style={{ background: '#0D0D0D', borderRadius: 14, padding: 14, border: '1px solid #1B231E', marginBottom: 12 }}>
-                  <div style={{ fontWeight: 800, fontSize: 13, color: '#86CFAE', marginBottom: 12 }}>📊 Body Stats (optional)</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Steps</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 8500" value={steps} onChange={e => setSteps(e.target.value)} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>HRV (ms)</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 62" value={hrv} onChange={e => setHrv(e.target.value)} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>Resting HR</label>
-                      <input style={iStyle} type="text" inputMode="numeric" placeholder="e.g. 58" value={restingHR} onChange={e => setRestingHR(e.target.value)} />
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280' }}>Wearable sync (Apple Health, WHOOP) coming in v2</div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</label>
-                  <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How was it? How do you feel?" value={wellnessNotes} onChange={e => setWellnessNotes(e.target.value)} />
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>🏢 Tag a business</div>
-                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>Tag a spa, studio, or wellness brand on Livelee — your post shows on their page.</div>
-                    <TagPicker businessOnly value={taggedBusinesses} onChange={setTaggedBusinesses} placeholder="Search businesses on Livelee…" max={3} />
-                  </div>
-                </div>
+                <button onClick={() => { setWlSection("extras"); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="funnel-box"
+                  style={{ border: `2px solid ${extrasCount ? C.blue : C.greenMid}`, background: C.white, minHeight: 110 }}>
+                  <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>📸 Add a photo & tag a friend</span>
+                  <span style={{ fontSize: 12, color: extrasCount ? C.blue : C.sub, fontWeight: 700 }}>
+                    {extrasCount ? [wellnessPhotoUrl ? "Photo added" : "", wellnessTaggedUsers.length ? `${wellnessTaggedUsers.length} friend${wellnessTaggedUsers.length === 1 ? "" : "s"} tagged` : "", taggedBusinesses.length ? "Business tagged" : "", wellnessNotes.trim() ? "Notes" : ""].filter(Boolean).join(" · ") : "Photo, friends, a business, notes"}
+                  </span>
+                </button>
+                <SaveErrorBanner />
+                <PrivacyToggle />
+                <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "18px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 17, cursor: loading ? "not-allowed" : "pointer" }}>
+                  {loading ? "Saving..." : wellnessActivities.length ? `💾 Save ${wellnessActivities.length} activit${wellnessActivities.length === 1 ? "y" : "ies"} & close` : "💾 Save and close"}
+                </button>
               </div>
-
-              {/* Wellness photo upload */}
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ marginTop:0 }}>
-                  <label style={{ fontSize:11, fontWeight:700, color:C.sub, display:"block", marginBottom:6, textTransform:"uppercase", letterSpacing:0.8 }}>Photo (optional)</label>
-                  {wellnessPhotoUrl ? (
-                    <div style={{ position:"relative", display:"inline-block" }}>
-                      <img src={wellnessPhotoUrl} style={{ width:100, height:100, objectFit:"cover", borderRadius:12, border:`2px solid #2A3A2A` }} alt=""/>
-                      <button onClick={() => setWellnessPhotoUrl(null)} style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.7)", border:"none", color:"#fff", fontSize:12, cursor:"pointer" }}>×</button>
-                    </div>
-                  ) : (
-                    <label style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 16px", borderRadius:12, border:`1.5px dashed #2A3A2A`, background:"#111", cursor:"pointer" }}>
-                      <span style={{ fontSize:16 }}>➕</span>
-                      <span style={{ fontSize:13, color:C.sub }}>Add photo</span>
-                      <input type="file" accept="image/*" style={{ display:"none" }} onChange={async (e) => {
-                        const file = e.target.files?.[0]; if (!file) return;
-                        const { uploadPhoto } = await import('@/lib/uploadPhoto');
-                        const { compressImage } = await import('@/lib/compressImage');
-                        const reader = new FileReader();
-                        reader.onload = async (ev) => {
-                          const dataUrl = ev.target!.result as string;
-                          const path = `wellness/${Date.now()}.jpg`;
-                          const compressed = await compressImage(dataUrl);
-                          const url = await uploadPhoto(compressed, 'activity', path);
-                          if (url) setWellnessPhotoUrl(url);
-                        };
-                        reader.readAsDataURL(file);
-                        e.target.value = "";
-                      }}/>
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              <SaveErrorBanner />
-              <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save to Log"}
-              </button>
-            </div>
-          )}
+            );
+          })()}
 
           {/* --- GOAL TAB (REMOVED) ---
               Goals now live exclusively on the profile page (personal
