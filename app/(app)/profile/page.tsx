@@ -2455,6 +2455,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // FIT-61: tapping a goal opens a detail panel showing full progress and how
   // much time is left until its deadline (window_end).
   const [goalDetail, setGoalDetail] = useState<any | null>(null);
+  // Inline bio editing (owner only): click the bio to edit it in place.
+  const [bioEditing, setBioEditing] = useState(false);
+  const [bioDraft, setBioDraft] = useState("");
+  const [bioSaving, setBioSaving] = useState(false);
   // Controls the create-goal modal mounted at the bottom of this page.
   // Lives on profile so the +New button doesn't have to navigate to /post
   // (which no longer has a goal tab anyway).
@@ -3484,6 +3488,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     <div style={{background:C.bg,minHeight:"100vh",paddingBottom:80}}>
 
       <style jsx global>{`
+        .own-bio { transition: box-shadow .15s; }
+        .own-bio:hover { box-shadow: 0 0 0 1.5px rgba(91,190,147,0.55); }
+        .own-bio:hover::after { content: '✏️ Edit'; position: absolute; top: 8px; right: 10px; font-size: 11px; font-style: normal; color: #86CFAE; font-weight: 700; }
         /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
            Activated by adding the tier class to elements based on user level.
            Each tier's effects layer on top of the previous (Diamond gets
@@ -4869,22 +4876,52 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             </div>
 
             <div className="profile-stats-bio">
-            {profile.bio && (
-              <div style={{
-                position:"relative",
-                fontSize:16,
-                fontWeight:500,
-                color:C.text,
-                lineHeight:1.55,
-                marginBottom:18,
-                padding:"14px 16px 14px 20px",
-                background:"#161D19",
-                borderRadius:14,
-                borderLeft:`3px solid ${C.purple}`,
-              }}>
-                {profile.bio}
+            {/* Bio — owners click it to edit in place; visitors just see the text. */}
+            {bioEditing && isOwn ? (
+              <div style={{ marginBottom:18, padding:"12px 14px", background:"#161D19", borderRadius:14, border:`1.5px solid ${C.purple}` }}>
+                <textarea autoFocus value={bioDraft} maxLength={300} rows={3}
+                  onChange={e=>setBioDraft(e.target.value)}
+                  onKeyDown={e=>{ if (e.key === "Escape") setBioEditing(false); }}
+                  placeholder="Say something about yourself…"
+                  style={{ width:"100%", boxSizing:"border-box", resize:"vertical", background:"transparent", border:"none", outline:"none", color:C.text, fontSize:16, fontWeight:500, lineHeight:1.55, fontFamily:"inherit" }} />
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:6 }}>
+                  <span style={{ flex:1, fontSize:11, color:C.sub }}>{bioDraft.length}/300</span>
+                  <button onClick={()=>setBioEditing(false)} style={{ padding:"7px 14px", borderRadius:10, border:`1px solid #2A3A2A`, background:"transparent", color:C.sub, fontWeight:700, fontSize:13, cursor:"pointer" }}>Cancel</button>
+                  <button disabled={bioSaving} onClick={async()=>{
+                    if (!user) return;
+                    setBioSaving(true);
+                    const bio = bioDraft.trim();
+                    const { error } = await (supabase as any).from('users').update({ bio }).eq('id', user.id);
+                    setBioSaving(false);
+                    if (error) { alert("Couldn't save your bio — please try again."); return; }
+                    setProfile(p=>({...p, bio}));
+                    setBioEditing(false);
+                    refreshProfile?.();
+                  }} style={{ padding:"7px 16px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.purple},#86CFAE)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>{bioSaving ? "Saving…" : "Save"}</button>
+                </div>
               </div>
-            )}
+            ) : (profile.bio || isOwn) ? (
+              <div
+                className={isOwn ? "own-bio" : undefined}
+                onClick={isOwn ? ()=>{ setBioDraft(profile.bio || ""); setBioEditing(true); } : undefined}
+                title={isOwn ? "Click to edit your bio" : undefined}
+                style={{
+                  position:"relative",
+                  fontSize:16,
+                  fontWeight:500,
+                  color: profile.bio ? C.text : C.sub,
+                  fontStyle: profile.bio ? "normal" : "italic",
+                  lineHeight:1.55,
+                  marginBottom:18,
+                  padding:"14px 16px 14px 20px",
+                  background:"#161D19",
+                  borderRadius:14,
+                  borderLeft:`3px solid ${C.purple}`,
+                  cursor: isOwn ? "text" : "default",
+                }}>
+                {profile.bio || "Add a bio — tap to write something about yourself"}
+              </div>
+            ) : null}
 
             <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:14,borderRadius:16,overflow:"hidden",border:"1px solid #2A3A2A"}}>
               {[
@@ -4904,8 +4941,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             <div style={{display:"flex", gap:8, width:"100%"}}>
               {isOwn ? (
                 <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
-                  onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="#C9E8D8"}}
-                  onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent"}}>
+                  onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.filter="brightness(1.08)"}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.filter="none"}}>
                   ✏️ Edit Profile
                 </button>
               ) : (
