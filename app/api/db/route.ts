@@ -3320,6 +3320,44 @@ async function handlePOST(req: NextRequest) {
       return NextResponse.json({ success: true, comment: { user: userName, text, time: 'Just now' } });
     }
 
+    // ── Edit group details (owner / moderator only) ────────────────────────
+    // Verifies the caller from their access token, not from the payload.
+    if (action === 'update_group') {
+      const { groupId, fields } = payload || {};
+      if (!groupId || !fields) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      const cid = await callerId(req);
+      if (!cid) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+      const { data: g } = await admin.from('groups').select('id, created_by, creator_id').eq('id', groupId).maybeSingle();
+      if (!g) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+      let allowed = g.created_by === cid || g.creator_id === cid;
+      if (!allowed) {
+        const { data: m } = await admin.from('group_members').select('role').eq('group_id', groupId).eq('user_id', cid).maybeSingle();
+        allowed = ['owner', 'admin', 'moderator'].includes(String(m?.role || ''));
+      }
+      if (!allowed) return NextResponse.json({ error: 'Only the group owner or a moderator can edit this group.' }, { status: 403 });
+
+      const str = (v: any, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
+      const upd: Record<string, any> = {};
+      if (fields.name !== undefined) {
+        const name = str(fields.name, 60);
+        if (!name) return NextResponse.json({ error: 'Group name can’t be empty.' }, { status: 400 });
+        upd.name = name;
+      }
+      if (fields.description !== undefined) upd.description = str(fields.description, 1000) ?? '';
+      if (fields.category !== undefined) upd.category = str(fields.category, 30) || 'General';
+      if (fields.emoji !== undefined) upd.emoji = str(fields.emoji, 8) || '💪';
+      if (fields.location !== undefined) upd.location = str(fields.location, 120) ?? '';
+      if (fields.meet_frequency !== undefined) upd.meet_frequency = str(fields.meet_frequency, 80) ?? '';
+      if (fields.is_online !== undefined) upd.is_online = !!fields.is_online;
+      if (Array.isArray(fields.tags)) {
+        upd.tags = fields.tags.map((t: any) => String(t || '').trim().replace(/^#*/, '#').slice(0, 30))
+          .filter((t: string) => t.length > 1).slice(0, 10);
+      }
+      const { data: updated, error } = await admin.from('groups').update(upd).eq('id', groupId).select('*').single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ group: updated });
+    }
+
     // ── Update group banner ────────────────────────────────────────────────
     if (action === 'update_group_banner') {
       const { groupId, bannerUrl, userId } = payload;
