@@ -20,6 +20,7 @@ import { FeedPostSkeleton, SkeletonStyles } from "@/components/Skeleton";
 import MentionInput, { parseMentions } from "@/components/MentionInput";
 import { getCached, setCached } from "@/lib/queryCache";
 import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
+import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 
 const C = {
   blue:"#5BBE93", greenLight:"#161D19", greenMid:"#1B231E",
@@ -186,7 +187,7 @@ type Post = {
   comments: Comment[];
   workout: { type: string; duration: string; calories: number; exercises: Exercise[]; cardio: {type:string;duration:string;distance:string;meters?:number|null;miles?:number|null;laps?:number|null;est_calories?:number|null}[]; photoUrls?: string[]; } | null;
   nutrition: { calories: number; protein: number; carbs: number; fat: number; sugar: number; meals: Meal[]; photoUrls?: string[]; } | null;
-  wellness: { entries: { emoji: string; activity: string; notes: string; duration?: number; loggedAt?: string; }[]; photoUrls?: string[]; } | null;
+  wellness: { entries: { emoji: string; activity: string; notes: string; duration?: number; loggedAt?: string; source?: string; }[]; photoUrls?: string[]; } | null;
   // 'achievement' posts get a distinct gold treatment in the feed (the
   // PR ticker drops these in automatically when a workout produces a
   // PR). Other values: 'general' (default), 'workout', 'nutrition',
@@ -471,7 +472,7 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "fasting":              { emoji: "⏳", accent: "#86CFAE" },
 };
 function getWellnessStyle(activity: string): { emoji: string; accent: string } {
-  return WELLNESS_STYLES[activity.toLowerCase().trim()] || { emoji: "🌿", accent: "#86CFAE" };
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || autoWellnessStyle(activity) || { emoji: "🌿", accent: "#86CFAE" };
 }
 
 // ── StreakCard ────────────────────────────────────────────────────────────
@@ -898,7 +899,8 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
           <span style={{ fontSize:18 }}>🌿</span>
           <div>
             <div style={{ fontWeight:800,fontSize:14,color:"#fff" }}>Wellness</div>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.85)" }}>{wellness.entries.map(e=>e.activity).join(" · ")}</div>
+            <div style={{ fontSize:11,color:"rgba(255,255,255,0.85)" }}>{wellness.entries.map(e=>wellnessLabel(e.activity)).join(" · ")}</div>
+            {wellness.entries.length > 0 && wellness.entries.every(e => isAppleHealth(e)) && <div style={{ fontSize:10,color:"#fff",fontWeight:700,marginTop:2 }}>❤️ {APPLE_HEALTH_LABEL}</div>}
           </div>
         </div>
         <div style={{ width:26,height:26,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.25s",flexShrink:0 }}>
@@ -929,7 +931,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
             return (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, padding:"4px 9px", borderRadius:99, background:`${s.accent}22`, border:`1px solid ${s.accent}55` }}>
                 <span style={{ fontSize:12 }}>{s.emoji}</span>
-                <span style={{ fontWeight:700, color:"#E2E8F0" }}>{e.activity}</span>
+                <span style={{ fontWeight:700, color:"#E2E8F0" }}>{wellnessLabel(e.activity)}</span>
                 {e.duration ? <span style={{ color:s.accent, fontWeight:800 }}>· {e.duration}m</span> : null}
               </div>
             );
@@ -947,11 +949,12 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
             // so respecting e.emoji first would force every activity to render
             // as a leaf even when WELLNESS_STYLES has the right per-activity icon.
             // Only fall back to e.emoji if the activity name isn't in our table.
-            const isMappedActivity = WELLNESS_STYLES[(e.activity || "").toLowerCase().trim()] !== undefined;
+            const isMappedActivity = WELLNESS_STYLES[(e.activity || "").toLowerCase().trim()] !== undefined || !!autoWellnessStyle(e.activity);
+            const fromHealth = isAppleHealth(e);
             const emoji = isMappedActivity ? s.emoji : (e.emoji || s.emoji);
             const accent = s.accent;
             // Time pill — formatted same as profile cards.
-            const timeStr = e.loggedAt ? (() => {
+            const timeStr = e.loggedAt && !fromHealth ? (() => {
               try { return new Date(e.loggedAt!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
             })() : "";
             const dur = e.duration ? `${e.duration} min` : null;
@@ -959,8 +962,9 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
               <div key={i} style={{ background:"#1B231E", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:11, border:`1.5px solid ${C.darkBorder}`, borderLeft:`4px solid ${accent}` }}>
                 <div style={{ width:38, height:38, borderRadius:11, background:`${accent}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, border:`1.5px solid ${accent}55` }}>{emoji}</div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0" }}>{e.activity}</div>
+                  <div style={{ fontWeight:800, fontSize:13, color:"#E2E8F0" }}>{wellnessLabel(e.activity)}</div>
                   {e.notes && <div style={{ fontSize:11, color:C.darkSub, marginTop:2 }}>{e.notes}</div>}
+                  {fromHealth && <div style={{ fontSize:10, color:"#F472B6", fontWeight:700, marginTop:3 }}>❤️ {APPLE_HEALTH_LABEL}</div>}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:3, alignItems:"flex-end", flexShrink:0 }}>
                   {dur && <span style={{ fontSize:10, fontWeight:800, color:accent, background:`${accent}22`, padding:"2px 7px", borderRadius:99 }}>{dur}</span>}
@@ -3072,6 +3076,7 @@ export default function FeedPage() {
           notes: l.notes || '',
           duration: typeof l.wellness_duration_min === 'number' ? l.wellness_duration_min : undefined,
           loggedAt: l.logged_at || l.created_at || undefined,
+          source: l.external_source || undefined,
         })),
         photoUrls: normalizePhotoUrls(...wels.flatMap((l: any) => [l.photo_url, l.media_url, l.media_urls])),
       } : null;
