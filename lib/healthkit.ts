@@ -25,6 +25,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Health, type HealthPermission } from 'capacitor-health';
 import { supabase } from './supabase';
+import { mapHealthWorkout, workoutSource } from './workoutSource';
 
 // localStorage keys, namespaced per user so account switching on the same
 // device doesn't cross-contaminate sync state.
@@ -87,22 +88,7 @@ function mapWorkoutType(hkType: string): {
   workout_type: string;
   workout_category: string;
 } {
-  const t = String(hkType || '').toLowerCase();
-  if (t.includes('run')) return { workout_type: 'Run', workout_category: 'running' };
-  if (t.includes('walk')) return { workout_type: 'Walk', workout_category: 'walking' };
-  if (t.includes('hik')) return { workout_type: 'Hike', workout_category: 'walking' };
-  if (t.includes('cycl') || t.includes('bik'))
-    return { workout_type: 'Bike', workout_category: 'biking' };
-  if (t.includes('swim')) return { workout_type: 'Swim', workout_category: 'swimming' };
-  if (t.includes('row')) return { workout_type: 'Row', workout_category: 'rowing' };
-  if (t.includes('yoga')) return { workout_type: 'Yoga', workout_category: 'yoga' };
-  if (t.includes('strength') || t.includes('lifting') || t.includes('functional'))
-    return { workout_type: 'Lifting', workout_category: 'lifting' };
-  if (t.includes('hiit') || t.includes('crosstraining'))
-    return { workout_type: 'HIIT', workout_category: 'hiit' };
-  if (t.includes('cardio'))
-    return { workout_type: 'Cardio', workout_category: 'cardio' };
-  return { workout_type: hkType || 'Workout', workout_category: 'lifting' };
+  return mapHealthWorkout(hkType);
 }
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
@@ -125,6 +111,8 @@ export interface SyncResult {
   sleep: number;     // ditto
   heartRate: number; // ditto
   mindful: number;
+  /** Labels of workouts newly imported this run, e.g. "HIIT · Orangetheory". */
+  newWorkouts?: string[];
   errors: string[];
 }
 
@@ -177,14 +165,21 @@ export function getLastSyncDate(userId: string): Date | null {
 }
 
 // ─── Main sync function ─────────────────────────────────────────────────────
-export async function runHealthKitSync(userId: string): Promise<SyncResult> {
+export async function runHealthKitSync(userId: string, opts?: { minDays?: number }): Promise<SyncResult> {
   const result: SyncResult = { ...EMPTY_RESULT, errors: [] };
   if (!isHealthKitAvailable()) {
     result.errors.push('HealthKit is not available on this device.');
     return result;
   }
 
-  const startDate = getSyncStartDate(userId);
+  let startDate = getSyncStartDate(userId);
+  // Manual sync always looks back at least `minDays`, so a workout that
+  // reached Apple Health late (e.g. a class app syncing hours later) still
+  // gets picked up.
+  if (opts?.minDays) {
+    const floor = new Date(Date.now() - opts.minDays * 86400 * 1000);
+    if (floor < startDate) startDate = floor;
+  }
   const endDate = new Date();
   const startISO = startDate.toISOString();
   const endISO = endDate.toISOString();
@@ -260,15 +255,22 @@ export async function runHealthKitSync(userId: string): Promise<SyncResult> {
       });
 
       if (deduped.length > 0) {
-        const { error, count } = await supabase
+        // ignoreDuplicates + select → only the rows actually inserted come back.
+        const { data: inserted, error } = await supabase
           .from('activity_logs')
           .upsert(deduped, {
             onConflict: 'user_id,external_source,external_id',
             ignoreDuplicates: true,
-            count: 'exact',
-          });
+          })
+          .select('workout_type, notes');
         if (error) result.errors.push(`workouts: ${error.message}`);
-        else result.workouts = count || 0;
+        else {
+          result.workouts = inserted?.length || 0;
+          result.newWorkouts = (inserted || []).map((r: any) => {
+            const src = workoutSource(r);
+            return src && src !== 'Apple Health' ? `${r.workout_type} from ${src}` : r.workout_type;
+          });
+        }
       }
     }
   } catch (err: any) {
