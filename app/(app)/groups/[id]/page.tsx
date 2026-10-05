@@ -786,6 +786,39 @@ export default function GroupPage() {
 
   // ── More menu / Delete group ──
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  // ── Edit mode (owner / moderator): one button turns every editable bit of
+  // the page into inputs; a bar at the bottom saves or cancels. ──────────────
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<any>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+  const startEditing = () => {
+    const g: any = dbGroup || {};
+    setDraft({
+      name: g.name || "", description: g.description || "", category: g.category || "General",
+      emoji: g.emoji || "💪", location: g.location || "", meet_frequency: g.meet_frequency || "",
+      is_online: !!g.is_online, tags: (g.tags || []).join(", "),
+    });
+    setEditError(""); setEditing(true); setShowMoreMenu(false);
+  };
+  const cancelEditing = () => { setEditing(false); setDraft(null); setEditError(""); };
+  const saveEditing = async () => {
+    if (!draft || !(dbGroup as any)?.id) return;
+    if (!draft.name.trim()) { setEditError("Group name can’t be empty."); return; }
+    setSavingEdit(true); setEditError("");
+    try {
+      const res = await fetch("/api/db", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_group", payload: { groupId: (dbGroup as any).id, fields: {
+          ...draft, tags: String(draft.tags || "").split(/[,\n]/).map((t: string) => t.trim()).filter(Boolean),
+        } } }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) { setEditError(json.error || "Couldn’t save — try again."); return; }
+      setDbGroup((g: any) => ({ ...g, ...json.group }));
+      setEditing(false); setDraft(null);
+    } catch (e: any) {
+      setEditError(e?.message || "Couldn’t save — try again.");
+    } finally { setSavingEdit(false); }
+  };
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -1136,7 +1169,9 @@ export default function GroupPage() {
     return <GroupSkeleton />;
   }
 
-  const catColor = CATEGORY_COLORS[group.category] ?? C.blue;
+  const catColor = CATEGORY_COLORS[(editing && draft ? draft.category : group.category)] ?? C.blue;
+  const editInput: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: "#0E1311", border: "1.5px dashed #5BBE93", borderRadius: 10, padding: "9px 12px", color: "#F0F0F0", fontSize: 14, outline: "none", fontFamily: "inherit", marginTop: 6 };
+  const editLabel: React.CSSProperties = { display: "flex", flexDirection: "column", fontSize: 12, fontWeight: 800, color: "#F0F0F0" };
   // Owner-or-moderator check. Both roles can:
   //   - Create/edit/delete challenges and goals
   //   - Approve pending events
@@ -2589,6 +2624,21 @@ export default function GroupPage() {
         );
       })()}
 
+      {/* Edit-mode save bar — stays at the bottom while you scroll the page */}
+      {editing && draft && (
+        <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:300, background:"rgba(14,19,17,0.97)", backdropFilter:"blur(8px)", borderTop:"1px solid #2A3A2A", padding:"12px 16px calc(12px + env(safe-area-inset-bottom))" }}>
+          <div style={{ maxWidth:760, margin:"0 auto", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+            <div style={{ flex:1, minWidth:180 }}>
+              <div style={{ fontWeight:900, fontSize:14, color:"#F0F0F0" }}>✏️ Editing group</div>
+              <div style={{ fontSize:12, color: editError ? "#FCA5A5" : "#9CA3AF" }}>{editError || "Change anything with a dashed outline, then save."}</div>
+            </div>
+            <button onClick={cancelEditing} disabled={savingEdit} style={{ padding:"10px 18px", borderRadius:12, background:"transparent", border:"1.5px solid #2A3A2A", color:"#9CA3AF", fontWeight:800, fontSize:14, cursor:"pointer" }}>Cancel</button>
+            <button onClick={saveEditing} disabled={savingEdit} style={{ padding:"10px 22px", borderRadius:12, background:"linear-gradient(135deg,#5BBE93,#86CFAE)", border:"none", color:"#fff", fontWeight:900, fontSize:14, cursor:savingEdit?"wait":"pointer", opacity:savingEdit?0.7:1 }}>{savingEdit ? "Saving…" : "Save changes"}</button>
+          </div>
+        </div>
+      )}
+      {editing && <style>{`body{padding-bottom:96px}`}</style>}
+
       {/* ── Hero Banner ── */}
       {/* Constrained to maxWidth 1200 to match the rest of the page layout —
           this prevents the banner image from being upscaled past its native
@@ -2604,17 +2654,29 @@ export default function GroupPage() {
         <button onClick={() => router.back()} style={{ position:"absolute", top:20, left:20, background:"rgba(0,0,0,0.4)", border:"1.5px solid rgba(255,255,255,0.3)", borderRadius:12, color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", cursor:"pointer", backdropFilter:"blur(6px)" }}>
           ← Back
         </button>
-        <div style={{ position:"absolute", top:20, right:20, background:catColor, borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:800, color:"#fff" }}>
-          {group.emoji} {group.category}
-        </div>
-        {(isOwnerDB || (dbGroup && currentUser)) && (
+        {editing && draft ? (
+          <select value={draft.category} onChange={e => setDraft((d: any) => ({ ...d, category: e.target.value }))} aria-label="Category"
+            style={{ position:"absolute", top:20, right:20, background:catColor, borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800, color:"#fff", border:"2px dashed rgba(255,255,255,0.7)", cursor:"pointer" }}>
+            {Object.keys(CATEGORY_COLORS).map(c => <option key={c} value={c} style={{ color:"#000" }}>{c}</option>)}
+          </select>
+        ) : (
+          <div style={{ position:"absolute", top:20, right:20, background:catColor, borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:800, color:"#fff" }}>
+            {group.emoji} {group.category}
+          </div>
+        )}
+        {isOwnerOrMod && (
           <button onClick={() => document.getElementById('banner-upload')?.click()} style={{ position:"absolute", bottom:24, right:20, background:"rgba(0,0,0,0.5)", border:"1.5px solid rgba(255,255,255,0.4)", borderRadius:10, color:"#fff", fontSize:12, fontWeight:700, padding:"7px 14px", cursor:"pointer", backdropFilter:"blur(4px)" }}>
             📷 Change Photo
           </button>
         )}
         <input id="banner-upload" type="file" accept="image/*" style={{ display:"none" }} onChange={handleBannerUpload} />
-        <div style={{ position:"absolute", bottom:24, left:28, right:(isOwnerDB || (dbGroup && currentUser))?160:28 }}>
-          <div style={{ fontWeight:900, fontSize:26, color:"#fff", textShadow:"0 2px 8px rgba(0,0,0,0.5)", marginBottom:8 }}>{group.name}</div>
+        <div style={{ position:"absolute", bottom:24, left:28, right:isOwnerOrMod?160:28 }}>
+          {editing && draft ? (
+            <input value={draft.name} maxLength={60} onChange={e => setDraft((d: any) => ({ ...d, name: e.target.value }))} aria-label="Group name" placeholder="Group name"
+              style={{ display:"block", width:"100%", maxWidth:520, fontWeight:900, fontSize:24, color:"#fff", background:"rgba(0,0,0,0.45)", border:"2px dashed rgba(255,255,255,0.7)", borderRadius:12, padding:"6px 12px", marginBottom:8, outline:"none" }} />
+          ) : (
+            <div style={{ fontWeight:900, fontSize:26, color:"#fff", textShadow:"0 2px 8px rgba(0,0,0,0.5)", marginBottom:8 }}>{group.name}</div>
+          )}
           <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
               👥 {(group.members || 0).toLocaleString()} members
@@ -2647,6 +2709,11 @@ export default function GroupPage() {
             <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(124,58,237,0.1)` : C.white, border:`2px solid ${shareCopied ? "#5BBE93" : C.blueMid}`, color:shareCopied ? "#86CFAE" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
             </button>
+            {isOwnerOrMod && dbGroup && !editing && (
+              <button onClick={startEditing} style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid #5BBE93`, color:"#86CFAE", fontWeight:800, fontSize:14, cursor:"pointer" }}>
+                ✏️ Edit Group
+              </button>
+            )}
             <div style={{ position:"relative" }}>
               <button onClick={() => setShowMoreMenu(p => !p)} style={{ padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:700, fontSize:14, cursor:"pointer" }}>···</button>
               {showMoreMenu && (
@@ -2715,7 +2782,7 @@ export default function GroupPage() {
                     background: `${catColor}22`, border: `1px solid ${catColor}55`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 28, flexShrink: 0,
-                  }}>{group.emoji || '💪'}</div>
+                  }}>{editing && draft ? draft.emoji : (group.emoji || '💪')}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 4 }}>
                       <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: catColor, background: `${catColor}18`, border: `1px solid ${catColor}33`, padding: '2px 8px', borderRadius: 99 }}>
@@ -2728,11 +2795,25 @@ export default function GroupPage() {
                       )}
                     </div>
                     <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>About this group</div>
+                    {editing && draft && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }} aria-label="Group icon">
+                        {["💪","🏃","🧘","🔥","🏋️","🥗","🌿","🤸","🏅","⚡","🌱","🦾","🏆","🚀","❤️","🧠"].map(em => (
+                          <button key={em} type="button" onClick={() => setDraft((d: any) => ({ ...d, emoji: em }))}
+                            style={{ width: 32, height: 32, borderRadius: 9, fontSize: 17, cursor: 'pointer', background: draft.emoji === em ? `${catColor}33` : 'transparent', border: `1.5px solid ${draft.emoji === em ? catColor : C.blueMid}` }}>{em}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Description prose */}
-                {group.description && (
+                {editing && draft ? (
+                  <div style={{ padding: '16px 22px 4px' }}>
+                    <textarea value={draft.description} maxLength={1000} rows={4} placeholder="What's this group about?"
+                      onChange={e => setDraft((d: any) => ({ ...d, description: e.target.value }))}
+                      style={{ ...editInput, resize: 'vertical', lineHeight: 1.6 }} />
+                  </div>
+                ) : group.description && (
                   <div style={{ padding: '16px 22px 4px' }}>
                     <p style={{ fontSize: 14, color: C.sub, lineHeight: 1.7, margin: 0 }}>{group.description}</p>
                   </div>
@@ -2768,7 +2849,26 @@ export default function GroupPage() {
                 {/* Meta info — only renders sections that have data so we
                     don't show "Meets: " with an empty value. The whole
                     block is hidden if NOTHING below has a value. */}
-                {(group.location || group.meetFrequency || (group.tags && group.tags.length > 0)) && (
+                {editing && draft ? (
+                  <div style={{ padding: '14px 22px 18px', display: 'grid', gap: 12 }}>
+                    <label style={editLabel}>🗓️ Meets
+                      <input value={draft.meet_frequency} maxLength={80} placeholder="e.g. Every Saturday 8AM"
+                        onChange={e => setDraft((d: any) => ({ ...d, meet_frequency: e.target.value }))} style={editInput} />
+                    </label>
+                    <label style={editLabel}>📍 Location
+                      <input value={draft.location} maxLength={120} placeholder={draft.is_online ? "Online" : "City or meeting spot"}
+                        onChange={e => setDraft((d: any) => ({ ...d, location: e.target.value }))} style={editInput} />
+                    </label>
+                    <label style={{ ...editLabel, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={draft.is_online} onChange={e => setDraft((d: any) => ({ ...d, is_online: e.target.checked }))} style={{ width: 18, height: 18, accentColor: '#5BBE93' }} />
+                      🌍 Online group (members anywhere)
+                    </label>
+                    <label style={editLabel}>🏷️ Tags <span style={{ fontWeight: 500, color: C.sub }}>(comma separated, up to 10)</span>
+                      <input value={draft.tags} placeholder="#Running, #LasVegas"
+                        onChange={e => setDraft((d: any) => ({ ...d, tags: e.target.value }))} style={editInput} />
+                    </label>
+                  </div>
+                ) : (group.location || group.meetFrequency || (group.tags && group.tags.length > 0)) && (
                   <div style={{ padding: '14px 22px 16px' }}>
                     {group.meetFrequency && (
                       <div style={{ display: 'flex', gap: 8, fontSize: 13, color: C.sub, marginBottom: 6 }}>
