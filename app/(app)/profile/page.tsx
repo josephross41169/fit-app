@@ -37,6 +37,7 @@ import CoachNotes from "@/components/CoachNotes";
 import { TileProvider, InTile, TileGrid, JustifiedThumbs, type TileId } from "@/components/ProfileTiles";
 import { monthActivitySummary, fmtMinutes } from "@/lib/workoutStats";
 import HighlightBoxEditor from "@/components/HighlightBoxEditor";
+import GoalHistory from "@/components/GoalHistory";
 
 const C = {
   purple:"#5BBE93", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
@@ -5738,7 +5739,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         const remaining = Math.max(0, target - current);
         return (
           <div onClick={() => setGoalDetail(null)} style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.78)", display:"flex", alignItems:"center", justifyContent:"center", padding:18 }}>
-            <div onClick={e => e.stopPropagation()} style={{ width:"100%", maxWidth:380, background:"#15101F", borderRadius:20, border:`1px solid #2A3A2A`, padding:20, boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width:"100%", maxWidth:460, maxHeight:"90vh", overflowY:"auto", background:"#15101F", borderRadius:20, border:`1px solid #2A3A2A`, padding:20, boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
               <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:16 }}>
                 <span style={{ fontSize:34, lineHeight:1 }}>{g.emoji || "🎯"}</span>
                 <div style={{ flex:1, minWidth:0 }}>
@@ -5782,6 +5783,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   <div style={{ fontSize:13, fontWeight:800, color:C.text }}>{g.window_end ? fmtDate(g.window_end) : "No deadline"}</div>
                 </div>
               </div>
+
+              {/* Everything that counted toward this goal, start → end. */}
+              <GoalHistory goal={g} accent={C.purple} />
             </div>
           </div>
         );
