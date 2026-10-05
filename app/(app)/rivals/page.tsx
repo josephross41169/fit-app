@@ -2568,7 +2568,7 @@ export default function RivalsPage() {
           }
         `}</style>
         {/* Sticky header bar */}
-        <div style={{ position: "sticky", top: 0, background: "#0E1311", padding: "16px 16px 0", zIndex: 10 }}>
+        <div style={{ position: "sticky", top: "var(--safe-top)", background: "#0E1311", padding: "16px 16px 0", zIndex: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ ...shimmer, width: 160, height: 28, borderRadius: 8 }} />
             <div style={{ ...shimmer, width: 70, height: 22, borderRadius: 11 }} />
@@ -2621,7 +2621,7 @@ export default function RivalsPage() {
           content area, which meant they disappeared as soon as the user
           scrolled into the active rivalry view. Pulling them up here keeps
           them reachable from anywhere on the page. */}
-      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #0E1311)", borderBottom: "1px solid #1E3D34", padding: "20px 24px 16px", position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ background: "linear-gradient(135deg, #1A0D3E, #0E1311)", borderBottom: "1px solid #1E3D34", padding: "20px 24px 16px", position: "sticky", top: "var(--safe-top)", zIndex: 100 }}>
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
             {/* Back button — uses real browser history so it returns to
