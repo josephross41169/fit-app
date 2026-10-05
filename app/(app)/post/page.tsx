@@ -3328,7 +3328,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         </div>
 
         {/* -- Main content -- */}
-        <div className="post-main" style={{ padding: "calc(env(safe-area-inset-top, 0px) + 18px) 18px 24px" }}>
+        <div className="post-main" style={{ padding: "calc(var(--safe-top) + 18px) 18px 24px" }}>
         {funnel === "home" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontWeight: 900, fontSize: 24, color: C.text, margin: "4px 2px 6px" }}>What are you logging?</div>
