@@ -933,6 +933,7 @@ export default function DiscoverPage() {
           .from("posts")
           .select("*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)")
           .eq("is_public", true)
+          .or("post_type.is.null,post_type.neq.achievement")
           .order("likes_count", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(20),
@@ -1117,6 +1118,7 @@ export default function DiscoverPage() {
         .from('posts')
         .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
         .eq('is_public', true)
+        .or('post_type.is.null,post_type.neq.achievement')
         .gte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
         .order('likes_count', { ascending: false })
         .order('created_at', { ascending: false })
