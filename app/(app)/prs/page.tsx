@@ -168,7 +168,7 @@ export default function PRsPage() {
       <div style={{
         background: C.card, borderBottom: `1px solid ${C.border}`,
         padding: "20px 20px 0",
-        position: "sticky", top: 0, zIndex: 10,
+        position: "sticky", top: "var(--safe-top)", zIndex: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
           <button
