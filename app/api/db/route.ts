@@ -220,6 +220,9 @@ async function handleGET(req: NextRequest) {
       if (!groupData) return NextResponse.json({ group: null });
 
       const gid = groupData.id;
+      // Private groups: only trust the verified caller (access token), never
+      // a userId in the URL, when deciding whether to show members' content.
+      const viewerId: string | null = groupData.is_private ? await callerId(req) : userId;
 
       // Single parallel fan-out for everything that depends on group id.
       // Previously this was split into two sequential blocks (5 queries
@@ -255,20 +258,20 @@ async function handleGET(req: NextRequest) {
           .order('joined_at', { ascending: true }),
         // Membership check — only relevant when we have a userId. When
         // unauthenticated, resolve immediately to a no-op shape.
-        userId
+        viewerId
           ? admin.from('group_members')
               .select('role')
               .eq('group_id', gid)
-              .eq('user_id', userId)
+              .eq('user_id', viewerId)
               .maybeSingle()
           : Promise.resolve({ data: null }),
         // User's joined challenges across the whole app — lets the client
         // mark "joined" state on each challenge. Independent of which
         // challenges this group has, so safe to run in parallel.
-        userId
+        viewerId
           ? admin.from('challenge_participants')
               .select('challenge_id')
-              .eq('user_id', userId)
+              .eq('user_id', viewerId)
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
@@ -296,14 +299,29 @@ async function handleGET(req: NextRequest) {
         expiredChallenges.forEach((ch: any) => { ch.is_active = false; });
       }
 
+      // Private group + not a member → only the public "cover" (name, photo,
+      // description, member count). Plus whether they already asked to join.
+      const isOwnerViewer = !!viewerId && (groupData.created_by === viewerId || groupData.creator_id === viewerId);
+      const locked = !!groupData.is_private && !isMember && !isOwnerViewer;
+      let joinRequest: string | null = null;
+      if (groupData.is_private && viewerId && !isMember) {
+        try {
+          const { data: jr } = await admin.from('group_join_requests').select('status')
+            .eq('group_id', gid).eq('user_id', viewerId).eq('status', 'pending').maybeSingle();
+          if (jr) joinRequest = 'pending';
+        } catch { /* table may not exist yet */ }
+      }
+
       return NextResponse.json({
         group: groupData,
-        posts: postsRes.data || [],
-        events: eventsRes.data || [],
-        challenges: challengesRes.data || [],
-        notes: notesRes.data || [],
-        members: membersRes.data || [],
+        posts: locked ? [] : postsRes.data || [],
+        events: locked ? [] : eventsRes.data || [],
+        challenges: locked ? [] : challengesRes.data || [],
+        notes: locked ? [] : notesRes.data || [],
+        members: locked ? [] : membersRes.data || [],
         is_member: isMember,
+        locked,
+        join_request: joinRequest,
         joined_challenge_ids: joinedChallengeIds,
       });
     }
@@ -427,6 +445,55 @@ async function callerId(req: NextRequest): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// ── Group helpers (private groups, join requests, group inbox) ─────────────
+type GroupRole = 'owner' | 'moderator' | 'member' | null;
+async function groupRoleOf(groupId: string, uid: string | null): Promise<GroupRole> {
+  if (!uid) return null;
+  const { data: g } = await admin.from('groups').select('created_by, creator_id').eq('id', groupId).maybeSingle();
+  if (g && (g.created_by === uid || g.creator_id === uid)) return 'owner';
+  const { data: m } = await admin.from('group_members').select('role').eq('group_id', groupId).eq('user_id', uid).maybeSingle();
+  if (!m) return null;
+  return m.role === 'owner' ? 'owner' : (m.role === 'moderator' || m.role === 'admin') ? 'moderator' : 'member';
+}
+const isGroupStaff = (r: GroupRole) => r === 'owner' || r === 'moderator';
+async function groupStaffIds(groupId: string): Promise<string[]> {
+  const ids = new Set<string>();
+  const { data: g } = await admin.from('groups').select('created_by, creator_id').eq('id', groupId).maybeSingle();
+  if (g?.created_by) ids.add(g.created_by);
+  if (g?.creator_id) ids.add(g.creator_id);
+  const { data: mods } = await admin.from('group_members').select('user_id, role').eq('group_id', groupId).in('role', ['owner', 'moderator', 'admin']);
+  (mods || []).forEach((m: any) => ids.add(m.user_id));
+  return Array.from(ids);
+}
+async function userName(uid: string | null): Promise<string> {
+  if (!uid) return 'Someone';
+  const { data } = await admin.from('users').select('full_name, username').eq('id', uid).maybeSingle();
+  return data?.full_name || data?.username || 'Someone';
+}
+/** Write an entry to the group's own notification feed (best-effort). */
+async function logGroupEvent(groupId: string, type: string, actorId: string | null, subjectId: string | null, body: string) {
+  try { await admin.from('group_notifications').insert({ group_id: groupId, type, actor_id: actorId, subject_id: subjectId, body }); } catch { /* table may not exist yet */ }
+}
+/** Add someone to a group as a member: row, first-group badge, member count. */
+async function addGroupMember(groupId: string, userId: string): Promise<{ ok: boolean; already?: boolean; error?: string }> {
+  const { data: existing } = await admin.from('group_members').select('user_id').eq('group_id', groupId).eq('user_id', userId).maybeSingle();
+  if (existing) return { ok: true, already: true };
+  const { error } = await admin.from('group_members').insert({ group_id: groupId, user_id: userId, role: 'member' });
+  if (error) return { ok: false, error: error.message };
+  try {
+    const { data: alreadyEarned } = await admin.from('badges').select('id').eq('user_id', userId).eq('badge_id', 'group-member').limit(1).maybeSingle();
+    if (!alreadyEarned) await admin.from('badges').insert({ user_id: userId, badge_id: 'group-member', note: 'auto' });
+  } catch (e) { console.error('[addGroupMember] badge award failed', e); }
+  try {
+    const { error: rpcErr } = await admin.rpc('increment_group_member_count', { gid: groupId });
+    if (rpcErr) throw rpcErr;
+  } catch {
+    const { data } = await admin.from('groups').select('member_count').eq('id', groupId).single();
+    if (data) await admin.from('groups').update({ member_count: (data.member_count || 0) + 1 }).eq('id', groupId);
+  }
+  return { ok: true };
 }
 
 // Actions that delete accounts or change other people's group membership must
@@ -2473,64 +2540,130 @@ async function handlePOST(req: NextRequest) {
       const { userId, groupId } = payload;
       if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-      // Check if already a member
-      const { data: existing } = await admin
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', groupId)
-        .eq('user_id', userId)
-        .single();
-
-      if (existing) return NextResponse.json({ ok: true, already: true });
-
-      const { error } = await admin.from('group_members').insert({
-        group_id: groupId,
-        user_id: userId,
-        role: 'member',
-      });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-      // ── Auto-award the "group-member" badge ───────────────────────────
-      // Single-shot: fires the first time the user joins ANY group. Idempotent
-      // by checking for an existing row before inserting (we don't have a
-      // unique constraint on (user_id, badge_id) since the user's other
-      // badges with the same badge_id can exist for ladder progress, but
-      // group-member isn't part of a ladder so a single row is enough).
-      // Best-effort — failures here don't block the join.
-      try {
-        const { data: alreadyEarned } = await admin
-          .from('badges')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('badge_id', 'group-member')
-          .limit(1)
-          .maybeSingle();
-        if (!alreadyEarned) {
-          await admin.from('badges').insert({
-            user_id: userId,
-            badge_id: 'group-member',
-            note: 'auto',
-          });
-        }
-      } catch (e) {
-        console.error('[join_group] group-member badge award failed', e);
+      // Private groups can't be joined directly — the person has to send a
+      // request (request_join_group) that an owner/moderator approves.
+      const { data: gRow } = await admin.from('groups').select('*').eq('id', groupId).maybeSingle();
+      if (gRow?.is_private) {
+        const { data: already } = await admin.from('group_members').select('user_id').eq('group_id', groupId).eq('user_id', userId).maybeSingle();
+        if (already) return NextResponse.json({ ok: true, already: true });
+        return NextResponse.json({ error: 'This group is private — send a request to join.', requires_request: true }, { status: 403 });
       }
 
-      // Increment member_count
-      await admin.rpc('increment_group_member_count', { gid: groupId }).catch(() => {
-        // Fallback: manual increment
-        admin.from('groups')
-          .select('member_count')
-          .eq('id', groupId)
-          .single()
-          .then(({ data }) => {
-            if (data) {
-              admin.from('groups').update({ member_count: (data.member_count || 0) + 1 }).eq('id', groupId);
-            }
-          });
-      });
+      const r = await addGroupMember(groupId, userId);
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
+      if (!r.already) await logGroupEvent(groupId, 'member_joined', userId, userId, `${await userName(userId)} joined the group`);
+      return NextResponse.json({ ok: true, ...(r.already ? { already: true } : {}) });
+    }
 
+    // ── Ask to join a private group ────────────────────────────────────────
+    if (action === 'request_join_group') {
+      const { groupId, message } = payload || {};
+      const cid = await callerId(req);
+      if (!cid) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+      if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 });
+      const { data: g } = await admin.from('groups').select('*').eq('id', groupId).maybeSingle();
+      if (!g) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+      if (await groupRoleOf(groupId, cid)) return NextResponse.json({ status: 'member' });
+      if (!g.is_private) {
+        const r = await addGroupMember(groupId, cid);
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
+        await logGroupEvent(groupId, 'member_joined', cid, cid, `${await userName(cid)} joined the group`);
+        return NextResponse.json({ status: 'member' });
+      }
+      const { data: pending } = await admin.from('group_join_requests').select('id')
+        .eq('group_id', groupId).eq('user_id', cid).eq('status', 'pending').maybeSingle();
+      if (pending) return NextResponse.json({ status: 'pending' });
+      const { error } = await admin.from('group_join_requests').insert({
+        group_id: groupId, user_id: cid,
+        message: typeof message === 'string' ? message.trim().slice(0, 300) || null : null,
+      });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const name = await userName(cid);
+      await logGroupEvent(groupId, 'join_request', cid, cid, `${name} asked to join`);
+      // Let the owner + moderators know (their normal bell + push).
+      try {
+        const staff = (await groupStaffIds(groupId)).filter(id => id !== cid);
+        if (staff.length) {
+          await admin.from('notifications').insert(staff.map(uid => ({
+            user_id: uid, from_user_id: cid, type: 'group_join_request', reference_id: groupId,
+            body: `${name} asked to join ${g.name}`, read: false,
+          })));
+          staff.forEach(uid => sendPushToUser(uid, { title: g.name, body: `${name} asked to join`, url: `/groups/${groupId}`, tag: `group-req:${groupId}` }));
+        }
+      } catch { /* non-fatal */ }
+      return NextResponse.json({ status: 'pending' });
+    }
+
+    // ── Withdraw your own pending request ──────────────────────────────────
+    if (action === 'cancel_join_request') {
+      const { groupId } = payload || {};
+      const cid = await callerId(req);
+      if (!cid || !groupId) return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
+      await admin.from('group_join_requests').delete().eq('group_id', groupId).eq('user_id', cid).eq('status', 'pending');
       return NextResponse.json({ ok: true });
+    }
+
+    // ── Group inbox (owner / moderators): pending requests + group activity ──
+    if (action === 'get_group_inbox') {
+      const { groupId } = payload || {};
+      const cid = await callerId(req);
+      if (!groupId || !isGroupStaff(await groupRoleOf(groupId, cid))) {
+        return NextResponse.json({ error: 'Only the owner or moderators can see the group inbox.' }, { status: 403 });
+      }
+      const [reqRes, notRes, seenRes] = await Promise.all([
+        admin.from('group_join_requests')
+          .select('id, user_id, message, created_at, user:users!group_join_requests_user_id_fkey(id,username,full_name,avatar_url)')
+          .eq('group_id', groupId).eq('status', 'pending').order('created_at', { ascending: true }),
+        admin.from('group_notifications')
+          .select('id, type, body, created_at, actor_id, subject_id, actor:users!group_notifications_actor_id_fkey(id,username,full_name,avatar_url)')
+          .eq('group_id', groupId).order('created_at', { ascending: false }).limit(60),
+        admin.from('group_members').select('notif_seen_at').eq('group_id', groupId).eq('user_id', cid).maybeSingle(),
+      ]);
+      if (reqRes.error) return NextResponse.json({ error: reqRes.error.message, setup_needed: true }, { status: 500 });
+      const seenAt = (seenRes as any).data?.notif_seen_at ? new Date((seenRes as any).data.notif_seen_at).getTime() : 0;
+      const notifs = (notRes.data || []) as any[];
+      const unread = notifs.filter(n => new Date(n.created_at).getTime() > seenAt).length;
+      return NextResponse.json({ requests: reqRes.data || [], notifications: notifs, unread });
+    }
+
+    if (action === 'mark_group_inbox_seen') {
+      const { groupId } = payload || {};
+      const cid = await callerId(req);
+      if (!groupId || !cid) return NextResponse.json({ ok: false });
+      await admin.from('group_members').update({ notif_seen_at: new Date().toISOString() }).eq('group_id', groupId).eq('user_id', cid);
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Approve / decline a join request (owner / moderators) ──────────────
+    if (action === 'decide_join_request') {
+      const { requestId, approve } = payload || {};
+      const cid = await callerId(req);
+      if (!requestId || !cid) return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
+      const { data: jr } = await admin.from('group_join_requests').select('*').eq('id', requestId).maybeSingle();
+      if (!jr) return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+      if (!isGroupStaff(await groupRoleOf(jr.group_id, cid))) {
+        return NextResponse.json({ error: 'Only the owner or moderators can approve requests.' }, { status: 403 });
+      }
+      if (jr.status !== 'pending') return NextResponse.json({ ok: true, status: jr.status });
+      const status = approve ? 'approved' : 'declined';
+      await admin.from('group_join_requests').update({ status, decided_by: cid, decided_at: new Date().toISOString() }).eq('id', requestId);
+      const [actor, subject] = await Promise.all([userName(cid), userName(jr.user_id)]);
+      const { data: g } = await admin.from('groups').select('name').eq('id', jr.group_id).maybeSingle();
+      if (approve) {
+        const r = await addGroupMember(jr.group_id, jr.user_id);
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
+        await logGroupEvent(jr.group_id, 'request_approved', cid, jr.user_id, `${actor} approved ${subject}`);
+        try {
+          await admin.from('notifications').insert({
+            user_id: jr.user_id, from_user_id: cid, type: 'group_approved', reference_id: jr.group_id,
+            body: `You're in! Your request to join ${g?.name || 'the group'} was approved`, read: false,
+          });
+          sendPushToUser(jr.user_id, { title: g?.name || 'Livelee', body: 'Your request to join was approved', url: `/groups/${jr.group_id}`, tag: `group-ok:${jr.group_id}` });
+        } catch { /* non-fatal */ }
+      } else {
+        await logGroupEvent(jr.group_id, 'request_declined', cid, jr.user_id, `${actor} declined ${subject}'s request`);
+      }
+      return NextResponse.json({ ok: true, status });
     }
 
     // ── Leave group ────────────────────────────────────────────────────────
@@ -2539,6 +2672,7 @@ async function handlePOST(req: NextRequest) {
       if (!userId || !groupId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
       await admin.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+      await logGroupEvent(groupId, 'member_left', userId, userId, `${await userName(userId)} left the group`);
 
       // Decrement member_count
       const { data: g } = await admin.from('groups').select('member_count').eq('id', groupId).single();
@@ -2650,6 +2784,7 @@ async function handlePOST(req: NextRequest) {
         .eq('group_id', groupId)
         .eq('user_id', targetUserId);
       if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+      await logGroupEvent(groupId, 'member_removed', actorId, targetUserId, `${await userName(actorId)} removed ${await userName(targetUserId)}`);
 
       // Decrement member_count to keep the displayed count honest.
       const { data: g } = await admin.from('groups').select('member_count').eq('id', groupId).single();
@@ -3349,6 +3484,7 @@ async function handlePOST(req: NextRequest) {
       if (fields.location !== undefined) upd.location = str(fields.location, 120) ?? '';
       if (fields.meet_frequency !== undefined) upd.meet_frequency = str(fields.meet_frequency, 80) ?? '';
       if (fields.is_online !== undefined) upd.is_online = !!fields.is_online;
+      if (fields.is_private !== undefined) upd.is_private = !!fields.is_private;
       if (Array.isArray(fields.tags)) {
         upd.tags = fields.tags.map((t: any) => String(t || '').trim().replace(/^#*/, '#').slice(0, 30))
           .filter((t: string) => t.length > 1).slice(0, 10);
