@@ -1,9 +1,5 @@
 "use client";
 import { useState, useMemo } from "react";
-import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
-} from "recharts";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Workout Progress Graphs
@@ -302,53 +298,56 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
     [cardioChips]
   );
 
-  // ── Sessions per week (lifting) ─────────────────────────────────────────
-  const liftingFreqData = useMemo(() => {
-    const buckets: Record<string, { count: number; startDate: Date }> = {};
+  // ── Week-by-week summaries (newest first) ───────────────────────────────
+  // One card per week instead of bar/line charts: how many sessions, and
+  // how much (distance + time for cardio; sets, volume, muscles for lifting).
+  const weeks = useMemo(() => {
+    type Wk = { start: Date; lift: number; sets: number; volume: number; groups: Record<string, number>;
+                cardio: number; miles: number; minutes: number; types: Record<string, number> };
+    const map: Record<string, Wk> = {};
+    const num = (v: any) => { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return isNaN(n) ? 0 : n; };
     filteredWorkouts.forEach((w: any) => {
       const d = new Date(w.logged_at || w.created_at || w.id || 0);
       if (isNaN(d.getTime())) return;
-      const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay()); weekStart.setHours(0,0,0,0);
-      const key = weekStart.toISOString();
-      if (!buckets[key]) buckets[key] = { count: 0, startDate: weekStart };
-      buckets[key].count++;
+      const ws = new Date(d); ws.setDate(d.getDate() - d.getDay()); ws.setHours(0, 0, 0, 0);
+      const key = ws.toISOString();
+      const wk = map[key] ||= { start: ws, lift: 0, sets: 0, volume: 0, groups: {}, cardio: 0, miles: 0, minutes: 0, types: {} };
+      const exs: any[] = (w.exercises || w.workout?.exercises || []).filter((e: any) => e?.name);
+      if (exs.length) {
+        wk.lift++;
+        const hit = new Set<string>();
+        exs.forEach((e: any) => {
+          const n = parseInt(e.sets) || 0; wk.sets += n;
+          const reps: any[] = Array.isArray(e.repsArr) && e.repsArr.length ? e.repsArr : Array(n).fill(e.reps);
+          const wts: any[] = Array.isArray(e.weights) && e.weights.length ? e.weights : Array(n).fill(e.weight);
+          if (!e.bodyweight && !e.timed) for (let k = 0; k < n; k++) wk.volume += num(wts[k]) * num(reps[k]);
+          const g = categoryForExercise(e.name); if (g && g !== "Cardio") hit.add(g);
+        });
+        hit.forEach(g => { wk.groups[g] = (wk.groups[g] || 0) + 1; });
+      }
+      const cs: any[] = (w.cardio || w.workout?.cardio || []).filter(Boolean);
+      if (cs.length) {
+        wk.cardio++;
+        cs.forEach((c: any) => {
+          if (!/swim/i.test(String(c.type || ""))) wk.miles += num(c.distance);
+          else if (c.miles) wk.miles += num(c.miles);
+          wk.minutes += num(c.duration);
+          const t = cardioChipLabel(c) || "Cardio"; wk.types[t] = (wk.types[t] || 0) + 1;
+        });
+      }
     });
-    return Object.values(buckets)
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-      .slice(-8)
-      .map(b => ({ week: fmtWeekRange(b.startDate), workouts: b.count }));
+    return Object.values(map).sort((a, b) => b.start.getTime() - a.start.getTime());
   }, [filteredWorkouts]);
-
-  // ── Sessions per week (cardio) ──────────────────────────────────────────
-  const cardioFreqData = useMemo(() => {
-    const buckets: Record<string, { count: number; startDate: Date; totalDist: number }> = {};
-    filteredWorkouts.forEach((w: any) => {
-      const d = new Date(w.logged_at || w.created_at || w.id || 0);
-      if (isNaN(d.getTime())) return;
-      const cardioList: any[] = w.cardio || w.workout?.cardio || [];
-      if (!cardioList.length) return;
-      const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay()); weekStart.setHours(0,0,0,0);
-      const key = weekStart.toISOString();
-      if (!buckets[key]) buckets[key] = { count: 0, startDate: weekStart, totalDist: 0 };
-      buckets[key].count++;
-      cardioList.forEach((c: any) => {
-        const dist = parseFloat(String(c.distance)) || 0;
-        buckets[key].totalDist += dist;
-      });
-    });
-    return Object.values(buckets)
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-      .slice(-8)
-      .map(b => ({ week: fmtWeekRange(b.startDate), sessions: b.count, distance: parseFloat(b.totalDist.toFixed(1)) }));
-  }, [filteredWorkouts]);
+  const liftWeeks = weeks.filter(w => w.lift > 0);
+  const cardioWeeks = weeks.filter(w => w.cardio > 0);
+  const thisWeekStart = (() => { const t = new Date(); t.setDate(t.getDate() - t.getDay()); t.setHours(0, 0, 0, 0); return t.getTime(); })();
+  const weekName = (d: Date) => d.getTime() === thisWeekStart ? "This week" : d.getTime() === thisWeekStart - 7 * 86400000 ? "Last week" : fmtWeekRange(d);
+  const fmtMin = (m: number) => { const h = Math.floor(m / 60), r = Math.round(m % 60); return h ? `${h}h${r ? ` ${r}m` : ""}` : `${r}m`; };
+  const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v));
 
   const hasLifting = liftingExercises.length > 0;
   const hasCardio = cardioExercises.length > 0;
 
-  const tooltipStyle = {
-    contentStyle: { background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 8, color: C.text },
-    labelStyle: { color: C.text },
-  };
 
   return (
     <div style={{ padding: "8px 0", color: C.text }}>
@@ -534,69 +533,77 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         ))}
       </div>
 
-      {/* LIFTING graph */}
-      {activeGraph === "lifting" && (<>
-        {liftingFreqData.length > 0 ? (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📅 Sessions per Week</div>
-            <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
-              <ResponsiveContainer width="100%" height={150}>
-                <BarChart data={liftingFreqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
-                  <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 9 }} interval={0} />
-                  <YAxis stroke={C.sub} tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip {...tooltipStyle} itemStyle={{ color: C.purple }} />
-                  <Bar dataKey="workouts" name="Sessions" fill={C.purple} radius={[6,6,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        ) : (
+      {/* Week-by-week cards (replaces the bar/line charts) */}
+      {(() => {
+        const isLift = activeGraph === "lifting";
+        const list = isLift ? liftWeeks : cardioWeeks;
+        const accent = isLift ? C.gold : C.cyan;
+        if (!list.length) return (
           <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13, marginBottom: 20 }}>
-            No lifting sessions logged in this period 💪
+            {isLift ? "No lifting sessions logged in this period 💪" : "No cardio logged in this period 🏃"}
           </div>
-        )}
-      </>)}
-
-      {/* CARDIO graph */}
-      {activeGraph === "cardio" && (<>
-        {cardioFreqData.length > 0 ? (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🏃 Cardio Sessions per Week</div>
-            <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
-              <ResponsiveContainer width="100%" height={150}>
-                <BarChart data={cardioFreqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
-                  <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 9 }} interval={0} />
-                  <YAxis stroke={C.sub} tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip {...tooltipStyle} itemStyle={{ color: C.cyan }} />
-                  <Bar dataKey="sessions" name="Sessions" fill={C.cyan} radius={[6,6,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            {cardioFreqData.some(d => d.distance > 0) && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: C.sub }}>📏 Distance per Week (miles)</div>
-                <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 4px 8px" }}>
-                  <ResponsiveContainer width="100%" height={120}>
-                    <LineChart data={cardioFreqData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.purpleMid} vertical={false} />
-                      <XAxis dataKey="week" stroke={C.sub} tick={{ fontSize: 9 }} interval={0} />
-                      <YAxis stroke={C.sub} tick={{ fontSize: 10 }} />
-                      <Tooltip {...tooltipStyle} itemStyle={{ color: C.green }} />
-                      <Line dataKey="distance" name="Distance (mi)" stroke={C.green} strokeWidth={2.5} dot={{ fill: C.green, r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
+        );
+        const tot = list.reduce((a, w) => ({ s: a.s + (isLift ? w.lift : w.cardio), x: a.x + (isLift ? w.sets : w.miles), y: a.y + (isLift ? w.volume : w.minutes) }), { s: 0, x: 0, y: 0 });
+        const best = Math.max(...list.map(w => isLift ? w.volume || w.sets : w.miles || w.minutes), 1);
+        const totals = isLift
+          ? [{ l: "Sessions", v: String(tot.s) }, { l: "Sets", v: String(tot.x) }, { l: "Volume", v: tot.y ? `${fmtVol(tot.y)} lbs` : "—" }]
+          : [{ l: "Sessions", v: String(tot.s) }, { l: "Distance", v: `${Math.round(tot.x * 10) / 10} mi` }, { l: "Time", v: tot.y ? fmtMin(tot.y) : "—" }];
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
+              {totals.map(t => (
+                <div key={t.l} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: 19, fontWeight: 900, color: accent }}>{t.v}</div>
+                  <div style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, marginTop: 2 }}>{t.l}</div>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Week by week</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {list.map(w => {
+                const count = isLift ? w.lift : w.cardio;
+                const size = isLift ? (w.volume || w.sets) : (w.miles || w.minutes);
+                const chips = Object.entries(isLift ? w.groups : w.types).sort((a, b) => b[1] - a[1]);
+                return (
+                  <div key={w.start.toISOString()} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 14, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{weekName(w.start)}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5 }}>
+                          {Array.from({ length: 7 }, (_, i) => (
+                            <span key={i} style={{ width: 9, height: 9, borderRadius: "50%", background: i < count ? accent : C.purpleMid, border: i < count ? "none" : `1px solid ${C.purpleBorder}` }} />
+                          ))}
+                          <span style={{ fontSize: 11, color: C.sub, fontWeight: 700, marginLeft: 6 }}>{count} session{count === 1 ? "" : "s"}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: accent, lineHeight: 1.1 }}>
+                          {isLift ? `${w.sets} sets` : w.miles ? `${Math.round(w.miles * 10) / 10} mi` : w.minutes ? fmtMin(w.minutes) : `${count}×`}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>
+                          {isLift ? (w.volume ? `${fmtVol(w.volume)} lbs moved` : "bodyweight") : (w.miles && w.minutes ? fmtMin(w.minutes) : "")}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ height: 6, background: C.purpleMid, borderRadius: 99, overflow: "hidden", margin: "10px 0 8px" }}>
+                      <div style={{ height: "100%", width: `${Math.max(4, (size / best) * 100)}%`, background: `linear-gradient(90deg, ${accent}, ${accent}99)`, borderRadius: 99 }} />
+                    </div>
+                    {chips.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {chips.map(([n, c]) => (
+                          <span key={n} style={{ fontSize: 11, fontWeight: 700, color: C.text, background: C.purpleMid, border: `1px solid ${C.purpleBorder}`, borderRadius: 99, padding: "2px 8px" }}>
+                            {n}{c > 1 ? <span style={{ color: C.sub }}> ×{c}</span> : null}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ) : (
-          <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13, marginBottom: 20 }}>
-            No cardio logged in this period 🏃
-          </div>
-        )}
-      </>)}
+        );
+      })()}
     </div>
   );
 }
