@@ -2166,6 +2166,7 @@ export default function FeedPage() {
         .from('posts')
         .select('id, user_id, caption, media_url, media_urls, media_type, media_types, media_positions, post_type, location, location_id, is_public, created_at, likes_count, users(id, username, full_name, avatar_url, avatar_video_url, city), locationData:locations(id, name, city, kind)')
         .eq('is_public', true)
+        .or('post_type.is.null,post_type.neq.achievement') // auto PR posts are retired — skip them so real posts fill the feed
         .order('created_at', { ascending: false })
         .limit(FETCH_LIMIT);
 
@@ -2520,6 +2521,7 @@ export default function FeedPage() {
           .select('*, users(id, username, full_name, avatar_url, avatar_video_url), comments (id, content, created_at, user_id, users (id, username, full_name, avatar_url, avatar_video_url))')
           .in('user_id', followingIds)
           .eq('is_public', true)
+          .or('post_type.is.null,post_type.neq.achievement') // auto PR posts are retired — skip them so real posts fill the feed
           .order('created_at', { ascending: false })
           .limit(20);
 
