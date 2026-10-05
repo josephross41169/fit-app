@@ -29,6 +29,7 @@ export async function notifHref(n: any, myId?: string | null): Promise<string | 
         return ref.includes("__") ? await cardOwnerHref(ref, myId) : "/profile";
       case "like":
       case "comment":
+      case "reply":
       case "mention":
       case "tag":
         if (ref.includes("__")) return await cardOwnerHref(ref, myId);
