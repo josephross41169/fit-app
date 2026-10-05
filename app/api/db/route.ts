@@ -735,27 +735,71 @@ async function handlePOST(req: NextRequest) {
     // the post so the client can refresh its UI authoritatively (avoids
     // optimistic-state drift bugs).
     if (action === 'post_feed_comment') {
-      const { postId, commenterId, content, postOwnerId } = payload || {};
+      const { postId, commenterId, content, postOwnerId, parentId } = payload || {};
       if (!postId || !commenterId || !content || !content.trim()) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
       }
-      const { data: inserted, error } = await admin.from('comments').insert({
+      // Replying to a comment: look up the comment being replied to (must be
+      // on the same post). Replies to a reply attach to the top-level comment
+      // so threads stay one level deep.
+      let parent: any = null;
+      if (parentId) {
+        const { data: pc } = await admin.from('comments')
+          .select('*, users:user_id (username, full_name)').eq('id', parentId).maybeSingle();
+        if (pc && pc.post_id === postId) parent = pc;
+      }
+      const threadRootId = parent ? (parent.parent_id || parent.id) : null;
+      let { data: inserted, error } = await admin.from('comments').insert({
         post_id: postId,
         user_id: commenterId,
         content: content.trim(),
-      }).select('id, content, created_at, user_id').single();
+        ...(threadRootId ? { parent_id: threadRootId } : {}),
+      }).select('*').single();
+      // Before the comments.parent_id column exists, fall back to a plain
+      // comment that @mentions the person being replied to.
+      if (error && threadRootId && /parent_id/i.test(error.message || '')) {
+        const handle = parent?.users?.username ? `@${parent.users.username} ` : '';
+        ({ data: inserted, error } = await admin.from('comments').insert({
+          post_id: postId, user_id: commenterId, content: `${handle}${content.trim()}`,
+        }).select('*').single());
+      }
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
       // Fetch full updated comments list for this post (with users joined),
       // using the admin client so RLS doesn't filter rows.
       const { data: comments } = await admin.from('comments')
-        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url,avatar_video_url)')
+        .select('*, users:user_id (id, username, full_name, avatar_url,avatar_video_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
-      // Notify the post owner (best-effort)
-      if (postOwnerId && postOwnerId !== commenterId) {
+      // Notify the person being replied to (best-effort)
+      const replyToUserId: string | null = parent?.user_id || null;
+      if (replyToUserId && replyToUserId !== commenterId) {
+        try {
+          const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
+          const name = commenter?.full_name || commenter?.username || 'Someone';
+          const snippet = `${content.trim().slice(0, 60)}${content.trim().length > 60 ? '...' : ''}`;
+          await admin.from('notifications').insert({
+            user_id: replyToUserId,
+            from_user_id: commenterId,
+            type: 'reply',
+            reference_id: postId,
+            body: `${name} replied to your comment: "${snippet}"`,
+            read: false,
+          });
+          sendPushToUser(replyToUserId, {
+            title: name,
+            body: `Replied: "${snippet}"`,
+            url: `/post/${postId}`,
+            tag: `post:${postId}`,
+          });
+        } catch { /* non-fatal */ }
+      }
+
+      // Notify the post owner (best-effort) — unless they already got the
+      // "replied to your comment" notification above.
+      if (postOwnerId && postOwnerId !== commenterId && postOwnerId !== replyToUserId) {
         try {
           const { data: commenter } = await admin.from('users').select('full_name,username').eq('id', commenterId).single();
           const name = commenter?.full_name || commenter?.username || 'Someone';
@@ -788,7 +832,7 @@ async function handlePOST(req: NextRequest) {
       const { postId } = payload || {};
       if (!postId) return NextResponse.json({ error: 'Missing postId' }, { status: 400 });
       const { data: comments, error } = await admin.from('comments')
-        .select('id, content, created_at, user_id, users:user_id (id, username, full_name, avatar_url,avatar_video_url)')
+        .select('*, users:user_id (id, username, full_name, avatar_url,avatar_video_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
