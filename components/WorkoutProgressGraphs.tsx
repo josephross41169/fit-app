@@ -302,8 +302,10 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   // One card per week instead of bar/line charts: how many sessions, and
   // how much (distance + time for cardio; sets, volume, muscles for lifting).
   const weeks = useMemo(() => {
+    type DayItem = { date: Date; title: string; detail: string };
     type Wk = { start: Date; lift: number; sets: number; volume: number; groups: Record<string, number>;
-                cardio: number; miles: number; minutes: number; types: Record<string, number> };
+                cardio: number; miles: number; minutes: number; types: Record<string, number>;
+                liftDays: DayItem[]; cardioDays: DayItem[] };
     const map: Record<string, Wk> = {};
     const num = (v: any) => { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return isNaN(n) ? 0 : n; };
     filteredWorkouts.forEach((w: any) => {
@@ -311,19 +313,23 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
       if (isNaN(d.getTime())) return;
       const ws = new Date(d); ws.setDate(d.getDate() - d.getDay()); ws.setHours(0, 0, 0, 0);
       const key = ws.toISOString();
-      const wk = map[key] ||= { start: ws, lift: 0, sets: 0, volume: 0, groups: {}, cardio: 0, miles: 0, minutes: 0, types: {} };
+      const wk = map[key] ||= { start: ws, lift: 0, sets: 0, volume: 0, groups: {}, cardio: 0, miles: 0, minutes: 0, types: {}, liftDays: [], cardioDays: [] };
       const exs: any[] = (w.exercises || w.workout?.exercises || []).filter((e: any) => e?.name);
       if (exs.length) {
         wk.lift++;
         const hit = new Set<string>();
+        let daySets = 0, dayVol = 0;
         exs.forEach((e: any) => {
-          const n = parseInt(e.sets) || 0; wk.sets += n;
+          const n = parseInt(e.sets) || 0; wk.sets += n; daySets += n;
           const reps: any[] = Array.isArray(e.repsArr) && e.repsArr.length ? e.repsArr : Array(n).fill(e.reps);
           const wts: any[] = Array.isArray(e.weights) && e.weights.length ? e.weights : Array(n).fill(e.weight);
-          if (!e.bodyweight && !e.timed) for (let k = 0; k < n; k++) wk.volume += num(wts[k]) * num(reps[k]);
+          if (!e.bodyweight && !e.timed) for (let k = 0; k < n; k++) { const v = num(wts[k]) * num(reps[k]); wk.volume += v; dayVol += v; }
           const g = categoryForExercise(e.name); if (g && g !== "Cardio") hit.add(g);
         });
         hit.forEach(g => { wk.groups[g] = (wk.groups[g] || 0) + 1; });
+        const named = w.workout_type && !/^workout$/i.test(w.workout_type) ? w.workout_type : "";
+        wk.liftDays.push({ date: d, title: hit.size ? Array.from(hit).join(", ") : (named || "Lifting"),
+          detail: [`${exs.length} exercise${exs.length === 1 ? "" : "s"}`, `${daySets} sets`, dayVol ? `${dayVol >= 1000 ? (dayVol / 1000).toFixed(1) + "k" : Math.round(dayVol)} lbs` : ""].filter(Boolean).join(" · ") });
       }
       const cs: any[] = (w.cardio || w.workout?.cardio || []).filter(Boolean);
       if (cs.length) {
@@ -333,6 +339,9 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
           else if (c.miles) wk.miles += num(c.miles);
           wk.minutes += num(c.duration);
           const t = cardioChipLabel(c) || "Cardio"; wk.types[t] = (wk.types[t] || 0) + 1;
+          const mi = /swim/i.test(String(c.type || "")) ? num(c.miles) : num(c.distance);
+          const dur = num(c.duration);
+          wk.cardioDays.push({ date: d, title: t, detail: [mi ? `${Math.round(mi * 100) / 100} mi` : "", dur ? `${Math.round(dur)} min` : "", mi && dur ? (/bik|cycl|spin/i.test(String(c.type || "")) ? `${Math.round(mi / (dur / 60) * 10) / 10} mph` : `${Math.floor(dur / mi)}:${String(Math.round((dur / mi % 1) * 60)).padStart(2, "0")} /mi`) : ""].filter(Boolean).join(" · ") || "Logged" });
         });
       }
     });
@@ -569,12 +578,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{weekName(w.start)}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5 }}>
-                          {Array.from({ length: 7 }, (_, i) => (
-                            <span key={i} style={{ width: 9, height: 9, borderRadius: "50%", background: i < count ? accent : C.purpleMid, border: i < count ? "none" : `1px solid ${C.purpleBorder}` }} />
-                          ))}
-                          <span style={{ fontSize: 11, color: C.sub, fontWeight: 700, marginLeft: 6 }}>{count} session{count === 1 ? "" : "s"}</span>
-                        </div>
+                        <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, marginTop: 2 }}>{count} session{count === 1 ? "" : "s"} · {new Set((isLift ? w.liftDays : w.cardioDays).map(x => x.date.getDay())).size} day{new Set((isLift ? w.liftDays : w.cardioDays).map(x => x.date.getDay())).size === 1 ? "" : "s"}</div>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
                         <div style={{ fontSize: 20, fontWeight: 900, color: accent, lineHeight: 1.1 }}>
@@ -584,6 +588,36 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
                           {isLift ? (w.volume ? `${fmtVol(w.volume)} lbs moved` : "bodyweight") : (w.miles && w.minutes ? fmtMin(w.minutes) : "")}
                         </div>
                       </div>
+                    </div>
+                    {/* Sun → Sat strip: which days you trained */}
+                    {(() => {
+                      const items = isLift ? w.liftDays : w.cardioDays;
+                      const active = new Set(items.map(x => x.date.getDay()));
+                      const today = new Date(); today.setHours(0, 0, 0, 0);
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 5, marginTop: 10 }}>
+                          {["S", "M", "T", "W", "T", "F", "S"].map((L, i) => {
+                            const day = new Date(w.start); day.setDate(w.start.getDate() + i);
+                            const on = active.has(i); const future = day.getTime() > today.getTime();
+                            return (
+                              <div key={i} style={{ textAlign: "center", borderRadius: 10, padding: "5px 0", background: on ? accent : "transparent", border: `1px solid ${on ? accent : C.purpleBorder}`, opacity: future ? 0.35 : 1 }}>
+                                <div style={{ fontSize: 9.5, fontWeight: 800, color: on ? "#0E1311" : C.sub }}>{L}</div>
+                                <div style={{ fontSize: 13, fontWeight: 900, color: on ? "#0E1311" : C.text }}>{day.getDate()}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                    {/* What you did each day */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>
+                      {[...(isLift ? w.liftDays : w.cardioDays)].sort((a, b) => a.date.getTime() - b.date.getTime()).map((it, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12, minWidth: 0 }}>
+                          <span style={{ width: 54, flexShrink: 0, color: accent, fontWeight: 800 }}>{it.date.toLocaleDateString("en-US", { weekday: "short" })} {it.date.getDate()}</span>
+                          <span style={{ color: C.text, fontWeight: 700, flexShrink: 0, maxWidth: "45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</span>
+                          <span style={{ color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.detail}</span>
+                        </div>
+                      ))}
                     </div>
                     <div style={{ height: 6, background: C.purpleMid, borderRadius: 99, overflow: "hidden", margin: "10px 0 8px" }}>
                       <div style={{ height: "100%", width: `${Math.max(4, (size / best) * 100)}%`, background: `linear-gradient(90deg, ${accent}, ${accent}99)`, borderRadius: 99 }} />
