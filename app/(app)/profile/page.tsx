@@ -2965,7 +2965,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       setUserTier(info.tier);
       // Persist tier back to DB for feed to pick up — only for your own profile.
       if (isOwn && user) {
-        supabase.from('users').update({ tier: info.tier, logs_last_28_days: logsCount } as any).eq('id', user.id).catch(() => {});
+        supabase.from('users').update({ tier: info.tier, logs_last_28_days: logsCount } as any).eq('id', user.id).then(() => {}, () => {});
       }
     }
     loadTier();
