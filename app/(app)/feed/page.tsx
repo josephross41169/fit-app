@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, useMemo, memo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -20,6 +20,7 @@ import { FeedPostSkeleton, SkeletonStyles } from "@/components/Skeleton";
 import MentionInput, { parseMentions } from "@/components/MentionInput";
 import { getCached, setCached } from "@/lib/queryCache";
 import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
+import { notifHref } from "@/lib/notifLinks";
 import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 
 const C = {
@@ -2109,6 +2110,11 @@ export default function FeedPage() {
   // Notifications
   const [notifications, setNotifications] = useState<any[]>([]);
   const unreadCount = notifications.filter(n => !n.read).length;
+  // Tap a notification → go to whatever it's about (post, profile, chat, event…).
+  const openNotif = useCallback(async (n: any) => {
+    const href = await notifHref(n, user?.id);
+    if (href) router.push(href);
+  }, [user?.id, router]);
   const [newMembers, setNewMembers] = useState<any[]>([]);
 
   const PAGE_SIZE = 10;
@@ -3353,7 +3359,7 @@ export default function FeedPage() {
           <div style={{ height:1,background:"#1B231E",marginBottom:20 }}/>
           {feedTab === "notifications" ? (
             <div style={{ padding:"16px 20px", maxWidth:600 }}>
-              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
+              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div><style>{`.notif-row{transition:border-color .15s,filter .15s}.notif-row:hover{border-color:#5BBE93 !important;filter:brightness(1.12)}`}</style>
               {notifications.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
                   <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
@@ -3361,7 +3367,7 @@ export default function FeedPage() {
                   <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
                 </div>
               ) : notifications.map(n => (
-                <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}` }}>
+                <div key={n.id} role="button" tabIndex={0} className="notif-row" onClick={() => openNotif(n)} onKeyDown={e => { if (e.key === "Enter") openNotif(n); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}`, cursor:"pointer" }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                     {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
@@ -3624,7 +3630,7 @@ export default function FeedPage() {
         <div style={{ height:1,background:"#1B231E",margin:"12px 0 16px" }}/>
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
-            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div>
+            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div><style>{`.notif-row{transition:border-color .15s,filter .15s}.notif-row:hover{border-color:#5BBE93 !important;filter:brightness(1.12)}`}</style>
             {notifications.length === 0 ? (
               <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
@@ -3632,7 +3638,7 @@ export default function FeedPage() {
                 <div style={{ fontSize:13, marginTop:6 }}>Likes, comments and follows will show up here</div>
               </div>
             ) : notifications.map(n => (
-              <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}` }}>
+              <div key={n.id} role="button" tabIndex={0} className="notif-row" onClick={() => openNotif(n)} onKeyDown={e => { if (e.key === "Enter") openNotif(n); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}`, cursor:"pointer" }}>
                 <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                   {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
