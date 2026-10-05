@@ -861,6 +861,7 @@ export default function GroupPage() {
     // supabase.auth.getUser(). Calling it a second time here was firing
     // a duplicate auth check on every page mount. We instead set
     // currentUser from inside loadGroupData itself.
+    if (!id || id === "_") return; // wait for the real id (app shell)
     loadGroupData();
   }, [id]);
 
@@ -1189,7 +1190,7 @@ export default function GroupPage() {
       .catch(() => {});
   }, [(dbGroup as any)?.id, isOwnerDB, isModDB]);
 
-  if (!loading && !group) {
+  if (!loading && !group && id && id !== "_") {
     return (
       <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
         <div style={{ background:C.white, borderRadius:24, border:`2px solid ${C.blueMid}`, padding:"48px 40px", maxWidth:440, width:"100%", textAlign:"center" }}>
