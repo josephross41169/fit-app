@@ -74,8 +74,9 @@ export default function EventDetailPage() {
   const [attendees, setAttendees] = useState<any[]>([]);
 
   const loadEvent = useCallback(async () => {
-    if (!eventId) return;
+    if (!eventId || eventId === "_") return;
     setLoading(true);
+    setNotFound(false);
     const { data, error } = await supabase
       .from("events_with_counts")
       .select("*")
