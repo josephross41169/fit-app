@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { track } from "@/components/PostHogProvider";
 
-export default function FollowButton({ targetUserId, size = "md" }: { targetUserId: string; size?: "sm" | "md" }) {
+export default function FollowButton({ targetUserId, size = "md", style }: { targetUserId: string; size?: "sm" | "md"; style?: React.CSSProperties }) {
   const { user } = useAuth();
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -87,6 +87,7 @@ export default function FollowButton({ targetUserId, size = "md" }: { targetUser
         color: following ? "#5BBE93" : "#fff",
         border: following ? "2px solid #C9E8D8" : "2px solid transparent",
         opacity: loading ? 0.7 : 1,
+        ...style,
       }}
     >
       {loading ? "..." : following ? "Following ✓" : "+ Follow"}

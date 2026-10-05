@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 
 export type FeedMember = { userId: string | null; name: string; username?: string | null; avatarUrl?: string | null; avatar?: string };
 
@@ -18,7 +19,7 @@ const WELL_EMOJI: [RegExp, string][] = [
   [/cold|ice|cryo/i, "❄️"], [/infrared/i, "🌅"], [/sauna|steam/i, "🔥"], [/medit|breath/i, "🧘"], [/yoga|stretch|mobility/i, "🤸"],
   [/sleep|nap/i, "😴"], [/massage|recovery|foam/i, "💆"], [/red light/i, "🔴"], [/walk/i, "🚶"], [/fast/i, "⏳"], [/journal|gratitude/i, "📓"],
 ];
-const wellEmoji = (t: string) => (WELL_EMOJI.find(([re]) => re.test(t)) || [null, "🌿"])[1] as string;
+const wellEmoji = (t: string) => autoWellnessStyle(t)?.emoji || (WELL_EMOJI.find(([re]) => re.test(t)) || [null, "🌿"])[1] as string;
 const CARDIO_EMOJI: Record<string, string> = { running: "🏃", walking: "🚶", biking: "🚴", cycling: "🚴", swimming: "🏊", rowing: "🚣", hiking: "🥾", hiit: "⚡", elliptical: "🔁" };
 const cap = (s: string) => (s || "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -68,7 +69,7 @@ function summarize(card: DayCard): { e: string; t: string }[] {
     if (other) out.push({ e: "⚡", t: `${cap(other.workout_category)}${other.workout_duration_min ? ` · ${other.workout_duration_min} min` : ""}` });
   }
   const well = card.logs.filter(l => l.log_type === "wellness");
-  if (well.length) out.push({ e: wellEmoji(well[0].wellness_type || ""), t: well.map(w => w.wellness_type || "Wellness").slice(0, 2).join(", ") + (well.length > 2 ? ` +${well.length - 2}` : "") });
+  if (well.length) out.push({ e: wellEmoji(well[0].wellness_type || ""), t: well.map(w => wellnessLabel(w.wellness_type)).slice(0, 2).join(", ") + (well.length > 2 ? ` +${well.length - 2}` : "") });
   const meals = card.logs.filter(l => l.log_type === "nutrition");
   if (meals.length) {
     const cal = meals.reduce((s, m) => s + (Number(m.calories_total) || 0), 0);
@@ -99,7 +100,7 @@ export default function GroupActivityFeed({ members, accent = C.green }: { membe
     let cancelled = false;
     const since = new Date(); since.setDate(since.getDate() - DAYS_BACK); since.setHours(0, 0, 0, 0);
     supabase.from("activity_logs")
-      .select("id, user_id, log_type, logged_at, workout_type, workout_category, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, meal_type, food_items, calories_total, protein_g, notes, photo_url, supplements")
+      .select("id, user_id, log_type, logged_at, workout_type, workout_category, workout_duration_min, exercises, cardio, wellness_type, wellness_duration_min, external_source, meal_type, food_items, calories_total, protein_g, notes, photo_url, supplements")
       .in("user_id", ids).eq("is_public", true).gte("logged_at", since.toISOString())
       .order("logged_at", { ascending: false }).limit(400)
       .then(({ data }) => { if (!cancelled) setLogs(data || []); });
@@ -202,7 +203,7 @@ function DayDetail({ card, accent, onClose, onProfile }: { card: DayCard; accent
   const others = workouts.filter(w => !(w.exercises || []).length && !(w.cardio || []).length && w.workout_category);
   const well = card.logs.filter(l => l.log_type === "wellness");
   const meals = card.logs.filter(l => l.log_type === "nutrition");
-  const notes = card.logs.map(l => (l.notes || "").trim()).filter(Boolean).filter(n => !well.some(w => w.wellness_type === n));
+  const notes = card.logs.filter(l => !isAppleHealth(l)).map(l => (l.notes || "").trim()).filter(Boolean).filter(n => !well.some(w => w.wellness_type === n));
   const pics = Array.from(new Set(card.logs.flatMap(photosOf)));
   const sec = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: 14 } as const;
   const h = { fontWeight: 900, fontSize: 14, color: C.text, marginBottom: 10 } as const;
@@ -260,8 +261,8 @@ function DayDetail({ card, accent, onClose, onProfile }: { card: DayCard; accent
               <div style={h}>🧘 Wellness</div>
               {well.map((w: any) => (
                 <div key={w.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.text, padding: "4px 0" }}>
-                  <span>{wellEmoji(w.wellness_type || "")} {w.wellness_type || "Wellness"}</span>
-                  <span style={{ color: C.soft }}>{w.wellness_duration_min ? `${w.wellness_duration_min} min` : ""}</span>
+                  <span>{wellEmoji(w.wellness_type || "")} {wellnessLabel(w.wellness_type)}{isAppleHealth(w) && <span style={{ display: "block", fontSize: 11, color: "#F472B6", fontWeight: 700, marginTop: 2 }}>❤️ {APPLE_HEALTH_LABEL}</span>}</span>
+                  <span style={{ color: C.soft }}>{w.wellness_duration_min ? `${w.wellness_duration_min} min` : isAppleHealth(w) ? (w.notes || "") : ""}</span>
                 </div>
               ))}
             </div>
