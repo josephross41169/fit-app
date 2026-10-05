@@ -100,6 +100,21 @@ const C = {
   dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
 
+// Send the signed-in user's token with our own API calls so the server can
+// verify who's asking (needed for private groups and the group inbox).
+async function authHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  } catch { return {}; }
+}
+async function groupApi(action: string, payload: any): Promise<any> {
+  const res = await fetch("/api/db", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ action, payload }) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok && !json.error) json.error = "Something went wrong — try again.";
+  return json;
+}
+
 const CATEGORY_COLORS: Record<string,string> = {
   "Running":"#5BBE93","Strength":"#5BBE93","Yoga":"#5BBE93","HIIT":"#EF4444",
   "Bodybuilding":"#F5A623","Nutrition":"#5BBE93","Wellness":"#5BBE93","Calisthenics":"#5BBE93",
@@ -671,6 +686,13 @@ export default function GroupPage() {
   const [dbMembers, setDbMembers] = useState<any[]>([]);
   const [dbLeaderboard, setDbLeaderboard] = useState<any[]>([]);
   const [isMemberDB, setIsMemberDB] = useState(false);
+  // Private groups
+  const [serverLocked, setServerLocked] = useState(false);
+  const [joinRequest, setJoinRequest] = useState<string | null>(null);
+  // Group inbox (owner / moderators)
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inbox, setInbox] = useState<{ requests: any[]; notifications: any[]; unread: number; error?: string } | null>(null);
+  const [inboxBusy, setInboxBusy] = useState<string | null>(null);
   const [isOwnerDB, setIsOwnerDB] = useState(false);
   // True when the current user has role='moderator' in this group.
   // Mirrors isOwnerDB pattern. Used everywhere isOwnerOrMod is checked.
@@ -797,7 +819,7 @@ export default function GroupPage() {
     setDraft({
       name: g.name || "", description: g.description || "", category: g.category || "General",
       emoji: g.emoji || "💪", location: g.location || "", meet_frequency: g.meet_frequency || "",
-      is_online: !!g.is_online, tags: (g.tags || []).join(", "),
+      is_online: !!g.is_online, tags: (g.tags || []).join(", "), is_private: !!g.is_private,
     });
     setEditError(""); setEditing(true); setShowMoreMenu(false);
   };
@@ -808,9 +830,12 @@ export default function GroupPage() {
     setSavingEdit(true); setEditError("");
     try {
       const res = await fetch("/api/db", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_group", payload: { groupId: (dbGroup as any).id, fields: {
-          ...draft, tags: String(draft.tags || "").split(/[,\n]/).map((t: string) => t.trim()).filter(Boolean),
-        } } }) });
+        body: JSON.stringify({ action: "update_group", payload: { groupId: (dbGroup as any).id, fields: (() => {
+          const f: any = { ...draft, tags: String(draft.tags || "").split(/[,\n]/).map((t: string) => t.trim()).filter(Boolean) };
+          // Only send privacy when it actually changed.
+          if (!!draft.is_private === !!(dbGroup as any)?.is_private) delete f.is_private;
+          return f;
+        })() } }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json.error) { setEditError(json.error || "Couldn’t save — try again."); return; }
       setDbGroup((g: any) => ({ ...g, ...json.group }));
@@ -850,10 +875,12 @@ export default function GroupPage() {
       setCurrentUser(user);
       const params = new URLSearchParams({ action: 'get_group', groupId: id as string });
       if (user) params.append('userId', user.id);
-      const res = await fetch(`/api/db?${params}`);
+      const res = await fetch(`/api/db?${params}`, { headers: await authHeaders() });
       const data = await res.json();
 
       if (data.group) {
+        setServerLocked(!!data.locked);
+        setJoinRequest(data.join_request || null);
         setDbGroup(data.group);
         setDbPosts(data.posts || []);
         // Hydrate highlights array. Newer schemas have a `highlights` jsonb
@@ -1153,6 +1180,15 @@ export default function GroupPage() {
     syncGroupChallengeProgressFor(uid).then(() => loadGroupGoals()).catch(() => {});
   }, [dbGroup, currentUser?.id, loadGroupGoals]);
 
+  // Owner / moderators: load the group inbox once so the button can show a count.
+  useEffect(() => {
+    const gid = (dbGroup as any)?.id;
+    if (!gid || !(isOwnerDB || isModDB)) return;
+    groupApi("get_group_inbox", { groupId: gid })
+      .then(r => setInbox({ requests: r.requests || [], notifications: r.notifications || [], unread: r.unread || 0, error: r.error }))
+      .catch(() => {});
+  }, [(dbGroup as any)?.id, isOwnerDB, isModDB]);
+
   if (!loading && !group) {
     return (
       <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
@@ -1182,6 +1218,29 @@ export default function GroupPage() {
   // The previous version of this var ignored the actual moderator role from the
   // DB and only checked owner — that's why mods couldn't perform admin actions.
   const isOwnerOrMod = group._isOwner || isOwnerDB || isModDB;
+  const isPrivateGroup = !!(dbGroup as any)?.is_private;
+  // Private + not a member (and not staff) → only the cover and About show.
+  const locked = isPrivateGroup && !isMemberDB && !isOwnerOrMod && (serverLocked || !joined);
+  const loadInbox = async () => {
+    if (!(dbGroup as any)?.id) return;
+    const r = await groupApi("get_group_inbox", { groupId: (dbGroup as any).id });
+    setInbox({ requests: r.requests || [], notifications: r.notifications || [], unread: r.unread || 0, error: r.error });
+  };
+  const openInbox = async () => {
+    setInboxOpen(true); setShowMoreMenu(false);
+    await loadInbox();
+    groupApi("mark_group_inbox_seen", { groupId: (dbGroup as any)?.id }).catch(() => {});
+    setInbox(i => i ? { ...i, unread: 0 } : i);
+  };
+  const decideRequest = async (reqId: string, approve: boolean) => {
+    setInboxBusy(reqId);
+    try {
+      const r = await groupApi("decide_join_request", { requestId: reqId, approve });
+      if (r.error) { alert(r.error); return; }
+      await loadInbox();
+      if (approve) loadGroupData();
+    } finally { setInboxBusy(null); }
+  };
 
   // Approve a pending event submission. Flips approved=true so it shows up
   // in the public events list. Pulls the approved row out of the pending
@@ -1705,6 +1764,25 @@ export default function GroupPage() {
       } finally {
         setJoining(false);
       }
+      return;
+    }
+
+    // Private group → send (or withdraw) a request instead of joining.
+    if ((dbGroup as any)?.is_private && currentUser && group._dbId) {
+      if (joinRequest === "pending") {
+        if (!confirm("Withdraw your request to join?")) return;
+        setJoining(true);
+        try { await groupApi("cancel_join_request", { groupId: group._dbId }); setJoinRequest(null); }
+        finally { setJoining(false); }
+        return;
+      }
+      setJoining(true);
+      try {
+        const r = await groupApi("request_join_group", { groupId: group._dbId });
+        if (r.error) { alert(r.error); return; }
+        if (r.status === "member") { await loadGroupData(); return; }
+        setJoinRequest("pending");
+      } finally { setJoining(false); }
       return;
     }
 
@@ -2624,6 +2702,67 @@ export default function GroupPage() {
         );
       })()}
 
+      {/* ── Group inbox (owner / moderators) ── */}
+      {inboxOpen && (
+        <div onClick={() => setInboxOpen(false)} style={{ position:"fixed", inset:0, zIndex:9500, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div onClick={e => e.stopPropagation()} role="dialog" aria-label="Group inbox"
+            style={{ background:"#161D19", border:"1px solid #232C27", borderRadius:22, width:"100%", maxWidth:520, maxHeight:"88vh", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 16px", borderBottom:"1px solid #232C27" }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:900, fontSize:17, color:"#F0F0F0" }}>🔔 Group inbox</div>
+                <div style={{ fontSize:12, color:"#9CA3AF" }}>{group.name} · only owners and moderators see this</div>
+              </div>
+              <button onClick={() => setInboxOpen(false)} aria-label="Close" style={{ width:36, height:36, borderRadius:"50%", border:"none", background:"#232C27", color:"#F0F0F0", fontSize:18, cursor:"pointer" }}>×</button>
+            </div>
+            <div style={{ overflowY:"auto", padding:16, display:"flex", flexDirection:"column", gap:16 }}>
+              {!inbox ? (
+                <div style={{ color:"#9CA3AF", fontSize:13, textAlign:"center", padding:20 }}>Loading…</div>
+              ) : inbox.error ? (
+                <div style={{ color:"#FCA5A5", fontSize:13, textAlign:"center", padding:20 }}>Couldn’t load the inbox: {inbox.error}</div>
+              ) : (<>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:800, color:"#9CA3AF", letterSpacing:0.6, textTransform:"uppercase", marginBottom:8 }}>
+                    Join requests {inbox.requests.length > 0 && <span style={{ color:"#EF4444" }}>· {inbox.requests.length}</span>}
+                  </div>
+                  {inbox.requests.length === 0 ? (
+                    <div style={{ fontSize:13, color:"#6B7280", padding:"10px 12px", border:"1px dashed #2A3A2A", borderRadius:12 }}>
+                      {isPrivateGroup ? "No one is waiting right now." : "Your group is public, so people join without asking. Make it private in ✏️ Edit Group to approve members first."}
+                    </div>
+                  ) : inbox.requests.map((r: any) => (
+                    <div key={r.id} style={{ display:"flex", alignItems:"center", gap:10, background:"#0E1311", border:"1px solid #232C27", borderRadius:14, padding:"10px 12px", marginBottom:8 }}>
+                      <div onClick={() => r.user?.username && router.push(`/profile/${r.user.username}`)} style={{ width:40, height:40, borderRadius:"50%", overflow:"hidden", flexShrink:0, background:"linear-gradient(135deg,#5BBE93,#86CFAE)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, cursor:"pointer" }}>
+                        {r.user?.avatar_url ? <img src={r.user.avatar_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : (r.user?.full_name || r.user?.username || "?")[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:800, fontSize:14, color:"#F0F0F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.user?.full_name || r.user?.username || "Someone"}</div>
+                        <div style={{ fontSize:11, color:"#9CA3AF" }}>@{r.user?.username || "user"} · {new Date(r.created_at).toLocaleDateString(undefined, { month:"short", day:"numeric" })}</div>
+                        {r.message && <div style={{ fontSize:12, color:"#C7D2CC", marginTop:3 }}>“{r.message}”</div>}
+                      </div>
+                      <button disabled={inboxBusy === r.id} onClick={() => decideRequest(r.id, false)} style={{ padding:"7px 12px", borderRadius:10, border:"1px solid #3A2A2A", background:"transparent", color:"#FCA5A5", fontWeight:800, fontSize:12, cursor:"pointer" }}>Decline</button>
+                      <button disabled={inboxBusy === r.id} onClick={() => decideRequest(r.id, true)} style={{ padding:"7px 12px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#5BBE93,#86CFAE)", color:"#fff", fontWeight:900, fontSize:12, cursor:"pointer" }}>{inboxBusy === r.id ? "…" : "Approve"}</button>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:800, color:"#9CA3AF", letterSpacing:0.6, textTransform:"uppercase", marginBottom:8 }}>Group activity</div>
+                  {inbox.notifications.length === 0 ? (
+                    <div style={{ fontSize:13, color:"#6B7280", padding:"10px 12px", border:"1px dashed #2A3A2A", borderRadius:12 }}>Joins, leaves and approvals will show up here.</div>
+                  ) : inbox.notifications.map((n: any) => (
+                    <div key={n.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 4px", borderBottom:"1px solid #1B231E" }}>
+                      <span style={{ fontSize:16, width:22, textAlign:"center", flexShrink:0 }}>
+                        {({ join_request:"🙋", request_approved:"✅", request_declined:"🚫", member_joined:"👋", member_left:"🚪", member_removed:"⛔" } as Record<string,string>)[n.type] || "🔔"}
+                      </span>
+                      <div style={{ flex:1, minWidth:0, fontSize:13, color:"#E2E8F0" }}>{n.body}</div>
+                      <span style={{ fontSize:11, color:"#6B7280", flexShrink:0 }}>{new Date(n.created_at).toLocaleDateString(undefined, { month:"short", day:"numeric" })}</span>
+                    </div>
+                  ))}
+                </div>
+              </>)}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit-mode save bar — stays at the bottom while you scroll the page */}
       {editing && draft && (
         <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:300, background:"rgba(14,19,17,0.97)", backdropFilter:"blur(8px)", borderTop:"1px solid #2A3A2A", padding:"12px 16px calc(12px + env(safe-area-inset-bottom))" }}>
@@ -2681,6 +2820,11 @@ export default function GroupPage() {
             <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
               👥 {(group.members || 0).toLocaleString()} members
             </span>
+            {isPrivateGroup && (
+              <span style={{ background:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"#fff", fontSize:12, fontWeight:800 }}>
+                🔒 Private
+              </span>
+            )}
             {group.isLocal ? (
               <span style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(4px)", borderRadius:99, padding:"4px 12px", color:"rgba(255,255,255,0.95)", fontSize:12, fontWeight:700 }}>
                 📍 {group.city}
@@ -2704,7 +2848,7 @@ export default function GroupPage() {
           {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
             <button onClick={handleJoinGroup} disabled={joining} title={joined ? (isOwnerDB ? "Owner of this group" : "Click to leave") : "Click to join"} style={{ padding:"12px 32px", borderRadius:13, border:"none", background:joined?"rgba(124,58,237,0.12)":"linear-gradient(135deg,#5BBE93,#86CFAE)", color:joined?"#86CFAE":"#fff", fontWeight:800, fontSize:15, cursor:joining?"not-allowed":"pointer", boxShadow:joined?"none":"0 4px 16px rgba(124,58,237,0.35)", transition:"all 0.15s", opacity:joining?0.7:1 }}>
-              {joining ? "Working..." : joined ? (isOwnerDB ? "✓ Owner" : "✓ Joined") : "Join Group"}
+              {joining ? "Working..." : joined ? (isOwnerDB ? "✓ Owner" : "✓ Joined") : isPrivateGroup ? (joinRequest === "pending" ? "⏳ Requested" : "🔒 Request to Join") : "Join Group"}
             </button>
             <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(124,58,237,0.1)` : C.white, border:`2px solid ${shareCopied ? "#5BBE93" : C.blueMid}`, color:shareCopied ? "#86CFAE" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
@@ -2712,6 +2856,16 @@ export default function GroupPage() {
             {isOwnerOrMod && dbGroup && !editing && (
               <button onClick={startEditing} style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid #5BBE93`, color:"#86CFAE", fontWeight:800, fontSize:14, cursor:"pointer" }}>
                 ✏️ Edit Group
+              </button>
+            )}
+            {isOwnerOrMod && dbGroup && (
+              <button onClick={openInbox} aria-label="Group inbox" style={{ position:"relative", padding:"12px 18px", borderRadius:13, background:C.white, border:`2px solid ${C.blueMid}`, color:C.sub, fontWeight:800, fontSize:14, cursor:"pointer" }}>
+                🔔 Inbox
+                {inbox && (inbox.requests.length + inbox.unread) > 0 && (
+                  <span style={{ position:"absolute", top:-7, right:-7, minWidth:20, height:20, padding:"0 5px", borderRadius:99, background:"#EF4444", color:"#fff", fontSize:11, fontWeight:900, display:"flex", alignItems:"center", justifyContent:"center", boxSizing:"border-box" }}>
+                    {Math.min(99, inbox.requests.length + inbox.unread)}
+                  </span>
+                )}
               </button>
             )}
             <div style={{ position:"relative" }}>
@@ -2837,7 +2991,7 @@ export default function GroupPage() {
                     { v: liveWarCount,              label: 'Wars',       icon: '⚔️' },
                     { v: upcomingEvents,            label: 'Events',     icon: '📅' },
                   ].map((s, i) => (
-                    <div key={i} onClick={s.label === 'Members' ? () => setShowMembers(true) : undefined}
+                    <div key={i} onClick={s.label === 'Members' && !locked ? () => setShowMembers(true) : undefined}
                       style={{ background: C.white, padding: '12px 6px', textAlign: 'center', cursor: s.label === 'Members' ? 'pointer' : 'default' }}>
                       <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
                       <div style={{ fontWeight: 900, fontSize: 18, color: C.text, lineHeight: 1 }}>{s.v}</div>
@@ -2862,6 +3016,12 @@ export default function GroupPage() {
                     <label style={{ ...editLabel, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                       <input type="checkbox" checked={draft.is_online} onChange={e => setDraft((d: any) => ({ ...d, is_online: e.target.checked }))} style={{ width: 18, height: 18, accentColor: '#5BBE93' }} />
                       🌍 Online group (members anywhere)
+                    </label>
+                    <label style={{ ...editLabel, flexDirection: 'row', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!draft.is_private} onChange={e => setDraft((d: any) => ({ ...d, is_private: e.target.checked }))} style={{ width: 18, height: 18, accentColor: '#5BBE93', marginTop: 1 }} />
+                      <span>🔒 Private group
+                        <span style={{ display: 'block', fontWeight: 500, color: C.sub, marginTop: 2 }}>People have to request to join, and you or a moderator approve them. Only members see posts, activity, goals and members.</span>
+                      </span>
                     </label>
                     <label style={editLabel}>🏷️ Tags <span style={{ fontWeight: 500, color: C.sub }}>(comma separated, up to 10)</span>
                       <input value={draft.tags} placeholder="#Running, #LasVegas"
@@ -2893,6 +3053,24 @@ export default function GroupPage() {
             );
           })()}
 
+          {locked && (
+            <div style={{ background:C.white, border:`2px solid ${C.blueMid}`, borderRadius:20, padding:"28px 22px", textAlign:"center", marginBottom:20 }}>
+              <div style={{ fontSize:40, marginBottom:8 }}>🔒</div>
+              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:6 }}>This group is private</div>
+              <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, maxWidth:420, margin:"0 auto 16px" }}>
+                {joinRequest === "pending"
+                  ? "Your request is in. You'll get a notification when the owner or a moderator approves it."
+                  : "Request to join to see posts, member activity, goals and who's in the group."}
+              </div>
+              {currentUser && (
+                <button onClick={handleJoinGroup} disabled={joining} style={{ padding:"12px 28px", borderRadius:13, border: joinRequest === "pending" ? `2px solid ${C.blueMid}` : "none", background: joinRequest === "pending" ? "transparent" : "linear-gradient(135deg,#5BBE93,#86CFAE)", color: joinRequest === "pending" ? C.sub : "#fff", fontWeight:800, fontSize:15, cursor:"pointer" }}>
+                  {joining ? "Working..." : joinRequest === "pending" ? "⏳ Requested — tap to withdraw" : "🔒 Request to Join"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {!locked && (<>
           {/* Group highlights — 27-slot photo grid curated by owners/mods.
               Photos are pulled from the group's posts, notes, and war
               media via the group-photos API. Members see read-only.
@@ -3142,7 +3320,9 @@ export default function GroupPage() {
           )}
 
           </>)}
+          </>)}
 
+          {!locked && (<>
           {/* ── CHALLENGES & WARS screen ── */}
           {(tab === "challenges" || tab === "war") && (
             <>
@@ -4414,10 +4594,12 @@ export default function GroupPage() {
               </div>
             );
           })()}
+          </>)}
         </div>
 
         {/* ══ RIGHT: Sidebar — Desktop only ══ */}
         <div className="groups-desktop-sidebar groups-sidebar" style={{ width:300, flexShrink:0 }}>
+          {!locked && (<>
 
           {/* Events sidebar */}
           <div style={{ marginBottom:20 }}>
@@ -4551,6 +4733,7 @@ export default function GroupPage() {
               />
             </div>
           )}
+          </>)}
         </div>
       </div>
     </div>
