@@ -13,7 +13,7 @@
 // and the pages read params through useShellParams(), which swaps the "_"
 // placeholder for the query value. The website (normal server build) is
 // untouched — STATIC_SHELL is only set by the mobile build.
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 export const STATIC_SHELL = process.env.NEXT_PUBLIC_STATIC_SHELL === "1";
@@ -52,7 +52,15 @@ export function toShellHref(href: string, force = false): string {
 /** Like useParams(), but resolves the "_" shell placeholder from the query. */
 export function useShellParams<T extends Record<string, string> = Record<string, string>>(): T {
   const params = useParams() as Record<string, string | string[]> | null;
-  const search = typeof window !== "undefined" ? window.location.search : "";
+  // During an in-app navigation the first render can still see the OLD url
+  // (Next updates history when the new page commits). Re-read the query
+  // after every commit so pages get the real id right away instead of a
+  // stale/empty one (which flashed "Group not found").
+  const [search, setSearch] = useState(() => (typeof window !== "undefined" ? window.location.search : ""));
+  useEffect(() => {
+    const s = window.location.search;
+    if (s !== search) setSearch(s);
+  });
   return useMemo(() => {
     const sp = new URLSearchParams(search);
     const out: Record<string, string> = {};
