@@ -58,49 +58,29 @@ export async function computeMetricContribution(
   to: string,
 ): Promise<number> {
   switch (metric) {
-    case "miles_run": {
-      // Sum cardio.miles from workout rows in category=running
+    case "miles_run":
+    case "miles_walked":
+    case "miles_biked":
+    case "miles_swum": {
+      // Sum the miles of every cardio entry of this kind, whatever the
+      // workout's category — a run logged inside a lifting session counts.
+      const re = metric === "miles_run" ? /run|jog/ : metric === "miles_walked" ? /walk/ : metric === "miles_biked" ? /bik|cycl|spin/ : /swim/;
       const { data } = await supabase
         .from("activity_logs")
-        .select("cardio")
+        .select("cardio, workout_category")
         .eq("user_id", userId)
         .eq("log_type", "workout")
-        .eq("workout_category", "running")
         .gte("logged_at", from)
         .lte("logged_at", to);
       return (data ?? []).reduce((sum, row: any) => {
         const arr = Array.isArray(row.cardio) ? row.cardio : [];
-        return sum + arr.reduce((s: number, c: any) => s + (parseFloat(c.miles) || 0), 0);
-      }, 0);
-    }
-    case "miles_walked": {
-      const { data } = await supabase
-        .from("activity_logs").select("cardio")
-        .eq("user_id", userId).eq("log_type", "workout").eq("workout_category", "walking")
-        .gte("logged_at", from).lte("logged_at", to);
-      return (data ?? []).reduce((sum, row: any) => {
-        const arr = Array.isArray(row.cardio) ? row.cardio : [];
-        return sum + arr.reduce((s: number, c: any) => s + (parseFloat(c.miles) || 0), 0);
-      }, 0);
-    }
-    case "miles_biked": {
-      const { data } = await supabase
-        .from("activity_logs").select("cardio")
-        .eq("user_id", userId).eq("log_type", "workout").eq("workout_category", "biking")
-        .gte("logged_at", from).lte("logged_at", to);
-      return (data ?? []).reduce((sum, row: any) => {
-        const arr = Array.isArray(row.cardio) ? row.cardio : [];
-        return sum + arr.reduce((s: number, c: any) => s + (parseFloat(c.miles) || 0), 0);
-      }, 0);
-    }
-    case "miles_swum": {
-      const { data } = await supabase
-        .from("activity_logs").select("cardio")
-        .eq("user_id", userId).eq("log_type", "workout").eq("workout_category", "swimming")
-        .gte("logged_at", from).lte("logged_at", to);
-      return (data ?? []).reduce((sum, row: any) => {
-        const arr = Array.isArray(row.cardio) ? row.cardio : [];
-        return sum + arr.reduce((s: number, c: any) => s + (parseFloat(c.miles) || 0), 0);
+        return sum + arr.reduce((s: number, c: any) => {
+          const kind = String(c?.type || row.workout_category || "").toLowerCase();
+          if (!re.test(kind)) return s;
+          // Swim "distance" can be yards/meters, so only trust .miles there.
+          const mi = c?.miles ?? (metric === "miles_swum" ? null : c?.distance);
+          return s + (parseFloat(mi) || 0);
+        }, 0);
       }, 0);
     }
     case "runs": {
