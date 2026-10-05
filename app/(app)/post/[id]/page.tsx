@@ -7,7 +7,7 @@
 // Loads the post + its author + its comments via the /api/db admin route
 // (since RLS blocks nested SELECTs from the client).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
@@ -42,6 +42,7 @@ interface Comment {
   user_id: string;
   content: string;
   created_at: string;
+  parent_id?: string | null;  // set on replies (top-level comment id)
   users?: Author;  // server returns users (joined) not user
 }
 
@@ -70,6 +71,8 @@ export default function PostDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [posting, setPosting] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string; username: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [likeBusy, setLikeBusy] = useState(false);
 
   // ── Load post + comments ────────────────────────────────────────────────
@@ -146,12 +149,13 @@ export default function PostDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "post_feed_comment",
-          payload: { postId: id, commenterId: user.id, content: commentText.trim(), postOwnerId: post?.user_id },
+          payload: { postId: id, commenterId: user.id, content: commentText.trim(), postOwnerId: post?.user_id, parentId: replyTo?.id || null },
         }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setCommentText("");
+      setReplyTo(null);
       // The API returns the full updated comments list — use it directly
       if (Array.isArray(json.comments)) {
         setPost(p => p ? { ...p, comments: json.comments } : p);
@@ -339,52 +343,91 @@ export default function PostDetailPage() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {(post.comments || []).map(c => {
-                const isMineComment = c.user_id === user?.id;
-                return (
-                  <div key={c.id} style={{ display: "flex", gap: 10 }}>
-                    {(c.users as any)?.avatar_video_url ? (
-                      <video src={(c.users as any).avatar_video_url} poster={c.users?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata"
-                        style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                    ) : c.users?.avatar_url ? (
-                      <img src={c.users?.avatar_url} loading="lazy" decoding="async" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" />
-                    ) : (
-                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.purple, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-                        {(c.users?.full_name || "?")[0]}
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ background: C.card, borderRadius: 14, padding: "9px 13px", border: `1px solid ${C.border}` }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 3 }}>
-                          {c.users?.full_name || "Unknown"}
-                          <span style={{ color: C.sub, fontWeight: 500, marginLeft: 6 }}>@{c.users?.username || "user"}</span>
+              {(() => {
+                const all = post.comments || [];
+                const ids = new Set(all.map(c => c.id));
+                const top = all.filter(c => !c.parent_id || !ids.has(c.parent_id));
+                const repliesOf = (pid: string) => all.filter(c => c.parent_id === pid);
+                const row = (c: Comment, isReply: boolean) => {
+                  const isMineComment = c.user_id === user?.id;
+                  const sz = isReply ? 26 : 32;
+                  return (
+                    <div key={c.id} style={{ display: "flex", gap: 10 }}>
+                      {(c.users as any)?.avatar_video_url ? (
+                        <video src={(c.users as any).avatar_video_url} poster={c.users?.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata"
+                          style={{ width: sz, height: sz, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                      ) : c.users?.avatar_url ? (
+                        <img src={c.users?.avatar_url} loading="lazy" decoding="async" style={{ width: sz, height: sz, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" />
+                      ) : (
+                        <div style={{ width: sz, height: sz, borderRadius: "50%", background: C.purple, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: isReply ? 11 : 13, flexShrink: 0 }}>
+                          {(c.users?.full_name || "?")[0]}
                         </div>
-                        <div style={{ fontSize: 14, color: C.text, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{c.content}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 12, marginTop: 4, paddingLeft: 4, fontSize: 11, color: C.sub }}>
-                        <span>{new Date(c.created_at).toLocaleDateString()}</span>
-                        {isMineComment && (
-                          <button onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>
-                            Delete
-                          </button>
-                        )}
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ background: C.card, borderRadius: 14, padding: "9px 13px", border: `1px solid ${C.border}` }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 3 }}>
+                            {c.users?.full_name || "Unknown"}
+                            <span style={{ color: C.sub, fontWeight: 500, marginLeft: 6 }}>@{c.users?.username || "user"}</span>
+                          </div>
+                          <div style={{ fontSize: 14, color: C.text, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{c.content}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 12, marginTop: 4, paddingLeft: 4, fontSize: 11, color: C.sub }}>
+                          <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                          {user && (
+                            <button onClick={() => {
+                              setReplyTo({ id: c.parent_id && ids.has(c.parent_id) ? c.parent_id : c.id, name: c.users?.full_name || c.users?.username || "them", username: c.users?.username || "" });
+                              // Replying to a reply: start with their @handle so it's clear who you mean.
+                              if (isReply && c.users?.username && c.user_id !== user.id) setCommentText(t => t.startsWith(`@${c.users!.username}`) ? t : `@${c.users!.username} ${t}`);
+                              setTimeout(() => inputRef.current?.focus(), 0);
+                            }} style={{ background: "none", border: "none", color: C.purple, fontSize: 11, cursor: "pointer", fontWeight: 700, padding: 0 }}>
+                              Reply
+                            </button>
+                          )}
+                          {isMineComment && (
+                            <button onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                };
+                return top.map(c => {
+                  const reps = repliesOf(c.id);
+                  return (
+                    <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {row(c, false)}
+                      {reps.length > 0 && (
+                        <div style={{ marginLeft: 42, paddingLeft: 12, borderLeft: `2px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                          {reps.map(r => row(r, true))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
       </div>
 
       {/* Compose bar - sticky bottom */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(13,13,13,0.96)", backdropFilter: "blur(10px)", borderTop: `1px solid ${C.border}`, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center", zIndex: 20 }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(13,13,13,0.96)", backdropFilter: "blur(10px)", borderTop: `1px solid ${C.border}`, padding: "12px 16px", zIndex: 20 }}>
+       <div style={{ maxWidth: 600, margin: "0 auto" }}>
+        {replyTo && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, marginBottom: 8, paddingLeft: 6 }}>
+            <span>Replying to <b style={{ color: C.text }}>{replyTo.name}</b></span>
+            <button onClick={() => setReplyTo(null)} aria-label="Cancel reply" style={{ background: "none", border: "none", color: C.sub, cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <input
+          ref={inputRef}
           value={commentText}
           onChange={e => setCommentText(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmitComment(); } }}
-          placeholder="Add a comment..."
+          placeholder={replyTo ? `Reply to ${replyTo.name}...` : "Add a comment..."}
           style={{
             flex: 1, padding: "11px 16px", borderRadius: 99, border: `1.5px solid ${C.border}`,
             background: C.card, color: C.text, fontSize: 14, outline: "none",
@@ -399,8 +442,10 @@ export default function PostDetailPage() {
             cursor: !commentText.trim() || posting ? "not-allowed" : "pointer",
           }}
         >
-          {posting ? "..." : "Post"}
+          {posting ? "..." : replyTo ? "Reply" : "Post"}
         </button>
+        </div>
+       </div>
       </div>
     </div>
   );
