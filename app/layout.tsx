@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import PWARegister from "@/components/PWARegister";
@@ -9,6 +9,19 @@ import PostHogProvider from "@/components/PostHogProvider";
 export const metadata: Metadata = {
   title: "Livelee — Track. Connect. Compete.",
   description: "The fitness and wellness social app built for people who show up.",
+};
+
+// Viewport is declared here (not as a <meta> in <head>) so Next.js doesn't
+// add its own default viewport tag after ours. That default (no
+// viewport-fit=cover) was overriding this one, which made iOS report a 0px
+// safe area — so nothing could move below the notch / Dynamic Island.
+// maximumScale 1 stops iOS auto-zooming into inputs; pinch zoom still works.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: true,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -28,13 +41,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Livelee" />
         <meta name="mobile-web-app-capable" content="yes" />
-        {/* Viewport: maximum-scale=1 prevents iOS Safari from auto-zooming
-            into <input>/<textarea> elements when the user focuses them.
-            Without it, any input with computed font-size < 16px triggers
-            an aggressive zoom-in that the user has to undo manually. We
-            still allow user-initiated pinch-to-zoom on the rest of the
-            page (via user-scalable=yes) so accessibility isn't broken. */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes, viewport-fit=cover" />
       </head>
       <body>
         <PWARegister />
