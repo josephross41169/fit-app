@@ -4660,7 +4660,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         )}
 
         {/* Profile header */}
-        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:32,alignItems:"flex-start",flexWrap:"wrap",marginBottom:28}}>
+        <div className="profile-header-wrap" style={{display:"flex",gap:isMobile?16:32,alignItems:isMobile?"flex-start":"center",flexWrap:"wrap",marginBottom:28}}>
           {/* Avatar */}
           {/* Desktop-only nudge: shifted left/down to improve visual balance
               with the banner. Mobile centering is unchanged.
@@ -4778,17 +4778,17 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   lvl >= 6 ? "tier-diamond-name" :
                   lvl >= 4 ? "tier-gold-name"   : "";
                 return (
-                  <div className={nameClass} style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:2}}>
+                  <div className={nameClass} style={{fontWeight:900,fontSize:isMobile?18:28,color:C.text,marginBottom:isMobile?2:4,lineHeight:1.15}}>
                     {profile.name}
                   </div>
                 );
               })()}
               {profile.username && (
-                <div style={{fontWeight:600,fontSize:13,color:C.sub,marginBottom:6}}>@{profile.username}</div>
+                <div style={{fontWeight:600,fontSize:isMobile?13:17,color:C.sub,marginBottom:6}}>@{profile.username}</div>
               )}
               {/* LEVEL pill removed — already shown in floating XP badge */}
               {profile.city && (
-                <div style={{fontSize:12,color:C.sub,marginTop:6}}>📍 {profile.city}</div>
+                <div style={{fontSize:isMobile?12:16,color:C.sub,marginTop:isMobile?6:8}}>📍 {profile.city}</div>
               )}
 
               {(viewProfile as any)?.account_type === 'business' && (
