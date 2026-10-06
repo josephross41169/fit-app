@@ -39,22 +39,35 @@ export function BadgeShowcase({ badges, compact, onSelect }: {
     <div style={{
       flex: 1, minHeight: 0, width: "100%", display: "grid",
       gridTemplateColumns: compact ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
-      gridAutoRows: "1fr", gap: compact ? 6 : 12, alignItems: "center",
+      gridAutoRows: "1fr", gap: compact ? 6 : 12, alignItems: "stretch",
     }}>
       {four.map(b => (
+        // The cell is a size container so the art can be as big as possible
+        // while leaving room for the title box underneath; art + title are
+        // centered together as one group.
         <div key={b.key} role="button" tabIndex={0}
           onClick={(e: MouseEvent) => { e.stopPropagation(); onSelect(b); }}
-          style={{ minWidth: 0, minHeight: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: compact ? 2 : 8, cursor: "pointer" }}>
-          <div style={{ flex: 1, minHeight: 0, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", containerType: "size" } as CSSProperties}>
-            <div style={{ width: "min(100cqw, 100cqh)", height: "min(100cqw, 100cqh)" } as CSSProperties}>
+          style={{ minWidth: 0, minHeight: 0, height: "100%", containerType: "size", cursor: "pointer" } as CSSProperties}>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: compact ? 0 : 10 }}>
+            <div style={{
+              width: compact ? "min(100cqw, 100cqh)" : "min(100cqw, calc(100cqh - 46px))",
+              height: compact ? "min(100cqw, 100cqh)" : "min(100cqw, calc(100cqh - 46px))",
+              flexShrink: 0,
+            } as CSSProperties}>
               <BadgeArtFill b={b} />
             </div>
+            {!compact && (
+              <div style={{
+                width: "100%", boxSizing: "border-box", padding: "7px 8px", borderRadius: 10,
+                background: "linear-gradient(180deg, #1E2B24, #16201B)", border: `1.5px solid ${ringColor(b)}66`,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                fontSize: 14, fontWeight: 900, color: "#F0F7F3", textAlign: "center", lineHeight: 1.2,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0,
+              }}>
+                {b.label}
+              </div>
+            )}
           </div>
-          {!compact && (
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#E5F2EA", textAlign: "center", lineHeight: 1.2, width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {b.label}
-            </div>
-          )}
         </div>
       ))}
     </div>
