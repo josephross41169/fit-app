@@ -10,6 +10,7 @@ import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@
 import { BadgeTile } from "@/components/BadgeTile";
 import FollowButton from "@/components/FollowButton";
 import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
+import { prettyWorkoutType, workoutSource } from "@/lib/workoutSource";
 import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
 import HighlightAlbums from "@/components/HighlightAlbums";
 import TemplateGallery from "@/components/TemplateGallery";
@@ -1170,7 +1171,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     });
                     if(exList.length>0) parts.push(workout.type||'Workout');
                     return parts.length>0 ? parts.join(' & ') : (workout.type||'Workout');
-                  })()}</div>
+                  })()}{(workout as any).source && <div style={{fontSize:11,fontWeight:700,color:"#F472B6",marginTop:2}}>❤️ from {(workout as any).source}</div>}</div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
                 <div style={{flex:1,minWidth:0,fontSize:12,color:C.sub,display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -2211,7 +2212,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
       const parts = sortedWorkouts.map((w: any) => ({
         id: w.id,
-        type: w.workout_type || 'Workout',
+        type: prettyWorkoutType(w.workout_type),
+        source: workoutSource(w),
         time: w.logged_at,
         notes: w.notes || '',
         duration: w.workout_duration_min ? fmtDur(w.workout_duration_min) : '—',
@@ -2263,6 +2265,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           duration: totalDurationMin > 0 ? `${totalDurationMin} min` : '—',
           calories: totalCalories,
           notes: parts.map((p: any) => p.notes).filter(Boolean).join(' · '),
+          // Only label the card when every part came from the same app.
+          source: parts.every((p: any) => p.source && p.source === parts[0].source) ? parts[0].source : null,
           exercises: allExercises,
           cardio: allCardio,
         };
