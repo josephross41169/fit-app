@@ -323,6 +323,8 @@ function ringStyle(opts: { inset: number; border: string }): React.CSSProperties
 export interface BadgeTileProps {
   tier: BadgeTier;
   emoji: string;
+  /** Custom badge art; replaces the emoji when set. */
+  image?: string | null;
   label: string;
   desc?: string;
   category?: string;
@@ -342,7 +344,7 @@ export interface BadgeTileProps {
 }
 
 export function BadgeTile({
-  tier, emoji, label, desc, category, earnedCount, maxTier, progress, compact,
+  tier, emoji, image, label, desc, category, earnedCount, maxTier, progress, compact,
 }: BadgeTileProps) {
   const style = TIER_STYLES[tier];
   const theme = getTheme(category);
@@ -440,7 +442,9 @@ export function BadgeTile({
         <div style={{
           fontSize: compact ? 22 : 36, marginBottom: compact ? 3 : 6,
           filter: `drop-shadow(0 2px 5px rgba(0,0,0,0.7)) drop-shadow(0 0 8px ${theme.accent}88)`,
-        }}>{emoji}</div>
+        }}>{image
+          ? <img src={image} alt="" draggable={false} style={{ width: compact ? 60 : 100, height: compact ? 60 : 100, objectFit: "contain", display: "block", margin: "0 auto" }} />
+          : emoji}</div>
         <div style={{
           fontWeight: 900, fontSize: compact ? 10 : 12,
           color: style.textColor,
