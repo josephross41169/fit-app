@@ -8,6 +8,7 @@ import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
 import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
+import { BadgeShowcase, BadgeDetailSheet } from "@/components/BadgeShowcase";
 import FollowButton from "@/components/FollowButton";
 import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 import { prettyWorkoutType, workoutSource } from "@/lib/workoutSource";
@@ -40,6 +41,7 @@ import { TileProvider, InTile, TileGrid, JustifiedThumbs, type TileId } from "@/
 import { monthActivitySummary, fmtMinutes } from "@/lib/workoutStats";
 import HighlightBoxEditor from "@/components/HighlightBoxEditor";
 import GoalHistory from "@/components/GoalHistory";
+import { BadgeIcon } from "@/components/BadgeIcon";
 
 const C = {
   purple:"#5BBE93", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
@@ -1696,7 +1698,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 if (!badge) return null;
                 return (
                   <div key={badgeId} style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(245,166,35,0.12)", border:"1.5px solid rgba(245,166,35,0.35)", borderRadius:99, padding:"5px 12px" }}>
-                    <span style={{ fontSize:14 }}>{badge.emoji}</span>
+                    <BadgeIcon id={badge.id} emoji={badge.emoji} size={14} />
                     <span style={{ fontSize:12, fontWeight:700, color:"#F5A623" }}>{badge.label}</span>
                   </div>
                 );
@@ -2569,7 +2571,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     supabase.from('badges').select('badge_id, year, id, pin_slot, earned_at').eq('user_id', viewUserId)
       .then(({ data }) => {
         if (data) {
-          setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null })));
+          setEarnedBadges(data.map((b: any) => ({ badge_id: b.badge_id, year: b.year ?? null, id: b.id, pin_slot: b.pin_slot ?? null, earned_at: b.earned_at ?? null })));
           // Map badge_id → the day it was earned (YYYY-MM-DD, local) so each
           // day's activity card can show ONLY the badges earned that day,
           // instead of the user's whole lifetime collection.
@@ -2617,6 +2619,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // unpinned, or pin closed without action. Cap of 5 pinned enforced
   // here: if user tries to pin a 6th, show alert.
   const [pinMenuFor, setPinMenuFor] = useState<{ badgeRowId: string; currentSlot: number | null; label: string } | null>(null);
+  // Badge detail sheet — stores the family key so the sheet re-derives from
+  // live state (pins, counters) instead of a stale snapshot.
+  const [badgeDetailKey, setBadgeDetailKey] = useState<string | null>(null);
 
   // How many badges are already pinned. Used to enforce 5-pin cap.
   function countPinned(): number {
@@ -2660,8 +2665,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // what the logging UI actually writes. workout_type is currently free-text
   // (e.g. "Chest", "Deadlift day") so running/lifting counts return 0 until we
   // add proper category dropdowns to the workout logger (Fix 2).
+  // Counters load once per viewed profile, when any badge view needs them
+  // (all-badges modal, the Badges box opened, or a badge detail sheet).
+  const wantBadgeCounters = showAllBadgesModal || openTile === "badges" || !!badgeDetailKey;
+  const badgeCountersFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!user || !showAllBadgesModal) return;
+    if (!user || !wantBadgeCounters || !viewUserId || badgeCountersFor.current === viewUserId) return;
+    badgeCountersFor.current = viewUserId;
     (async () => {
       const uid = viewUserId;
       try {
@@ -2827,9 +2837,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       } catch (e) {
         console.error('Failed to fetch badge counters:', e);
         setBadgeCounters({});
+        badgeCountersFor.current = null;
       }
     })();
-  }, [user, showAllBadgesModal]);
+  }, [user, wantBadgeCounters, viewUserId]);
 
   // 🏆 Tier state — computed from activity logs
   const [userTier, setUserTier] = useState<Tier>("default");
@@ -3418,7 +3429,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
   // One earned-badge family tile (credential / yearly / progression look).
   // Shared by the Badges card and the Badges box preview.
-  const badgeFamilyTile = (g: DisplayBadge) => {
+  const badgeFamilyTile = (g: DisplayBadge) => (
+    <div key={g.key} onClick={() => setBadgeDetailKey(g.key)} style={{ cursor: "pointer", minWidth: 0 }}>{badgeFamilyTileInner(g)}</div>
+  );
+  const badgeFamilyTileInner = (g: DisplayBadge) => {
                         // ── CREDENTIAL: holographic prestige look (compact) ──
                         if (g.renderType === "credential") {
                           return (
@@ -3449,7 +3463,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                                 animation:"holoShimmer 5s ease infinite",
                               }} />
                               <div style={{position:"relative"}}>
-                                <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                                <div style={{fontSize:22,marginBottom:3}}><BadgeIcon image={g.image} emoji={g.emoji} size={22} imgSize={60} /></div>
                                 <div style={{fontWeight:800,fontSize:10,color:"#F0F0F0",lineHeight:1.2}}>{g.label}</div>
                               </div>
                             </div>
@@ -3482,7 +3496,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                                   {g.year}
                                 </div>
                               )}
-                              <div style={{fontSize:22,marginBottom:3}}>{g.emoji}</div>
+                              <div style={{fontSize:22,marginBottom:3}}><BadgeIcon image={g.image} emoji={g.emoji} size={22} imgSize={60} /></div>
                               <div style={{fontWeight:900,fontSize:10,color:"#FFE5F1",lineHeight:1.2}}>{g.label}</div>
                             </div>
                           );
@@ -3494,6 +3508,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             key={g.key}
                             tier={g.tier ?? 1}
                             emoji={g.emoji}
+                            image={g.image}
                             label={g.label}
                             desc={g.desc}
                             category={g.category}
@@ -3913,7 +3928,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 return (
                   <button key={b.id} onClick={()=>setSelectedBadge(b.id)} disabled={earned}
                     style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,border:`2px solid ${sel?C.purple:cs.border}`,background:sel?cs.bg:`${cs.bg}99`,cursor:earned?"not-allowed":"pointer",textAlign:"left",opacity:earned?0.45:1,boxShadow:sel?`0 0 0 3px ${C.purple}33`:"none",transition:"all 0.12s"}}>
-                    <span style={{fontSize:30,flexShrink:0}}>{b.emoji}</span>
+                    <BadgeIcon id={b.id} emoji={b.emoji} size={30} imgSize={48} />
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:800,fontSize:14,color:"#fff",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                         {b.label}
@@ -3952,6 +3967,27 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         );
       })()}
 
+      {badgeDetailKey && (() => {
+        const fams = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
+        const b = fams.find(x => x.key === badgeDetailKey);
+        if (!b) return null;
+        const pinnedIds: Record<number, string | undefined> = {};
+        for (const eb of earnedBadges) if (eb.pin_slot != null && eb.id) pinnedIds[eb.pin_slot] = eb.id;
+        return (
+          <BadgeDetailSheet badge={b} isOwn={isOwn} ownerName={profile.name || profile.username}
+            pinnedIds={pinnedIds}
+            onPin={slot => {
+              if (!b.badge_row_id) return;
+              // Unpinning: clear every row in this family that holds a slot.
+              if (slot == null) {
+                const rows = earnedBadges.filter(eb => eb.pin_slot != null && eb.id && (b.history?.some(h => h.id === eb.badge_id) || eb.id === b.badge_row_id));
+                (rows.length ? rows : [{ id: b.badge_row_id } as any]).forEach(r => setPin(r.id, null));
+              } else setPin(b.badge_row_id, slot);
+            }}
+            onClose={() => setBadgeDetailKey(null)} />
+        );
+      })()}
+
       {/* ── All Badges Modal ── */}
       {/* Pin badge action sheet — opens when user taps the ⋯ button on
           any badge tile. Lets them pick a slot 1-5 or unpin. The cap of
@@ -3970,7 +4006,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 18 }}>{pinMenuFor.label}</div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[1, 2, 3, 4, 5].map(slot => {
+              {[1, 2, 3, 4].map(slot => {
                 const isCurrent = pinMenuFor.currentSlot === slot;
                 // Find what (if anything) is pinned in this slot
                 const occupant = earnedBadges.find(b => b.pin_slot === slot && b.id !== pinMenuFor.badgeRowId);
@@ -4110,7 +4146,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   </div>
                 ) : (
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
-                    {grouped.map(g => {
+                    {grouped.map(g => <div key={g.key} onClick={() => setBadgeDetailKey(g.key)} style={{ cursor: "pointer", minWidth: 0 }}>{(() => {
                       // ── CREDENTIAL: holographic prestige look ──
                       if (g.renderType === "credential") {
                         return (
@@ -4135,7 +4171,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               animation:"holoShimmer 5s ease infinite",
                             }} />
                             <div style={{position:"relative"}}>
-                              <div style={{fontSize:34,marginBottom:6}}>{g.emoji}</div>
+                              <div style={{fontSize:34,marginBottom:6}}><BadgeIcon image={g.image} emoji={g.emoji} size={34} imgSize={100} /></div>
                               <div style={{fontWeight:900,fontSize:13,color:"#F0F0F0",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
                               <div style={{fontSize:10,color:"#86CFAE",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
                               <div style={{display:"inline-block",
@@ -4173,7 +4209,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                                 {g.year}
                               </div>
                             )}
-                            <div style={{fontSize:34,marginBottom:6}}>{g.emoji}</div>
+                            <div style={{fontSize:34,marginBottom:6}}><BadgeIcon image={g.image} emoji={g.emoji} size={34} imgSize={100} /></div>
                             <div style={{fontWeight:900,fontSize:12,color:"#FFE5F1",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
                             <div style={{fontSize:10,color:"#F9A8D4",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
                             <div style={{display:"inline-block",
@@ -4217,6 +4253,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                           <BadgeTile
                             tier={g.tier ?? 1}
                             emoji={g.emoji}
+                            image={g.image}
                             label={g.label}
                             desc={g.desc}
                             category={g.category}
@@ -4235,7 +4272,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                           />
                         </div>
                       );
-                    })}
+                    })()}</div>)}
                     {/* Group-challenge completions are intentionally NOT shown
                         here — those belong on the group page, not the personal
                         profile's fitness badges. */}
@@ -5172,10 +5209,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     id: "badges", emoji: "🏆", title: "Badges",
                     meta: `${badgeCount} earned`,
                     // Real badge tiles, shrunk with CSS zoom so their proportions stay intact.
+                    // The 4 badges the user picked (pinned first, then their best).
                     preview: badgeFams.length ? (
-                      <div style={{ flex: 1, minHeight: 0, zoom: isMobile ? 0.33 : 0.74, display: "grid", gridTemplateColumns: `repeat(${isMobile ? 3 : 5}, minmax(0, 1fr))`, alignContent: "start", gap: 10, pointerEvents: "none", width: "100%" } as any}>
-                        {badgeFams.slice(0, isMobile ? 6 : 10).map(g => badgeFamilyTile(g))}
-                      </div>
+                      <BadgeShowcase badges={badgeFams} compact={isMobile} onSelect={g => setBadgeDetailKey(g.key)} />
                     ) : <div><div style={big}>{badgeCount}</div><div style={sub}>earned</div></div>,
                   },
                   {
