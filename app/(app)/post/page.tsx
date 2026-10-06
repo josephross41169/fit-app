@@ -26,6 +26,7 @@ import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSu
 import SupplementFactsEditor from "@/components/SupplementFactsEditor";
 import { saveFood, saveMeal, fetchSavedFoods, type SavedFoodItem, type SavedFood } from "@/lib/savedFoods";
 
+import { isHealthKitAvailable, isHealthKitConnected, runHealthKitSync } from "@/lib/healthkit";
 const C = {
   blue: "#5BBE93",
   greenLight: "#111811",
@@ -654,6 +655,26 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   const [funnel, setFunnel] = useState<Funnel>("home");
   const [woSection, setWoSection] = useState<WoSection | null>(null);
   const [addPickOpen, setAddPickOpen] = useState(false);
+  // Apple Health sync from the workout screen (iPhone app only).
+  const [hkAvail, setHkAvail] = useState(false);
+  useEffect(() => { setHkAvail(isHealthKitAvailable()); }, []);
+  const [hkSync, setHkSync] = useState<{ busy: boolean; msg: string | null; ok?: boolean }>({ busy: false, msg: null });
+  async function syncAppleHealth() {
+    if (!user || hkSync.busy) return;
+    // Not connected yet → the Apple Health settings page owns the permission
+    // flow (App Store 5.1.1 wording rules), so send them there.
+    if (!isHealthKitConnected(user.id)) { router.push("/settings/healthkit"); return; }
+    setHkSync({ busy: true, msg: null });
+    try {
+      const r = await runHealthKitSync(user.id, { minDays: 7 });
+      const nw = r.newWorkouts || [];
+      if (nw.length) setHkSync({ busy: false, ok: true, msg: `Imported ${nw.length === 1 ? "" : nw.length + " workouts: "}${nw.join(", ")}` });
+      else if (r.errors.length) setHkSync({ busy: false, ok: false, msg: "Couldn't finish syncing. Try again in a minute." });
+      else setHkSync({ busy: false, ok: true, msg: "Up to date — no new workouts in Apple Health" });
+    } catch {
+      setHkSync({ busy: false, ok: false, msg: "Couldn't finish syncing. Try again in a minute." });
+    }
+  }
   const [resumedLabel, setResumedLabel] = useState<string | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<{ today: { id: string; type: string } | null; yesterday: { id: string; type: string } | null } | null>(null);
   const [saved, setSaved] = useState(false);
@@ -3365,6 +3386,16 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>Start fresh</span>
               </button>
             </div>
+            {hkAvail && (
+              <button onClick={syncAppleHealth} disabled={hkSync.busy} className="funnel-box funnel-wide"
+                style={{ border: "2px solid rgba(244,114,182,0.55)", background: "rgba(244,114,182,0.08)", cursor: hkSync.busy ? "wait" : "pointer" }}>
+                <span style={{ fontSize: 24 }}>{hkSync.busy ? "⏳" : "❤️"}</span>
+                <span style={{ fontWeight: 900, fontSize: 16, color: C.text }}>{hkSync.busy ? "Syncing…" : "Sync Apple Health"}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: hkSync.msg ? (hkSync.ok ? "#86CFAE" : "#F87171") : C.sub }}>
+                  {hkSync.msg || "Pull in workouts from your Watch, Orangetheory & other apps"}
+                </span>
+              </button>
+            )}
             {addPickOpen && (
               <div onClick={() => setAddPickOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
                 <div onClick={e => e.stopPropagation()} style={{ background: "#111811", borderRadius: 22, padding: 20, width: "100%", maxWidth: 400, border: `2px solid ${C.greenMid}` }}>
