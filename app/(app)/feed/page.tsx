@@ -22,6 +22,7 @@ import { getCached, setCached } from "@/lib/queryCache";
 import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
 import { notifHref } from "@/lib/notifLinks";
 import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
+import { prettyWorkoutType, workoutSource } from "@/lib/workoutSource";
 
 const C = {
   blue:"#5BBE93", greenLight:"#161D19", greenMid:"#1B231E",
@@ -689,6 +690,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ fontWeight:800,fontSize:14,color:"#fff" }}>{workout.type}</span>
               {isPR && <span style={{ fontSize:9, fontWeight:800, background:C.gold, color:"#000", borderRadius:99, padding:"1px 6px", flexShrink:0 }}>🏆 PR</span>}
+              {(workout as any).source && <span style={{ fontSize:10, fontWeight:800, background:"rgba(0,0,0,0.25)", color:"#fff", borderRadius:99, padding:"2px 8px", flexShrink:0, whiteSpace:"nowrap" }}>❤️ from {(workout as any).source}</span>}
             </div>
             <div style={{ fontSize:11,color:"rgba(255,255,255,0.8)" }}>
               {workout.duration}{workout.calories > 0 ? ` · ${workout.calories} cal` : ''}
@@ -3036,7 +3038,8 @@ export default function FeedPage() {
       const wels = entry._wellnessLogs;
 
       const workout = wl ? {
-        type: wl.workout_type || 'Workout',
+        type: prettyWorkoutType(wl.workout_type),
+        source: workoutSource(wl),
         duration: wl.workout_duration_min ? fmtDur(wl.workout_duration_min) : '—',
         calories: wl.workout_calories || 0,
         exercises: Array.isArray(wl.exercises) ? wl.exercises.map((e: any) => ({ name: e.name || '', sets: parseInt(e.sets)||0, reps: parseInt(e.reps)||0, weight: e.weight || '—', weights: Array.isArray(e.weights) ? e.weights : undefined, repsArr: Array.isArray(e.repsArr) ? e.repsArr : undefined })) : [],
