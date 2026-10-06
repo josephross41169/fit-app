@@ -8,7 +8,7 @@ import type { Tier } from "@/lib/tiers";
 import { TierFrame } from "@/components/TierFrame";
 
 const C = {
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
   purpleDark: "#1E1530",
   purpleMid: "#1B231E",
   purpleBorder: "#4C3A7A",
@@ -145,7 +145,7 @@ function UserRow({ entry, onClick }: { entry: LeaderEntry; onClick: () => void }
             {entry.full_name || entry.username}
           </span>
           {entry.isCurrentUser && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: C.purple, background: `${C.purple}20`, padding: "1px 7px", borderRadius: 99, border: `1px solid ${C.purple}40` }}>YOU</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#4A9D6E", background: `${C.purple}20`, padding: "1px 7px", borderRadius: 99, border: `1px solid ${C.purple}40` }}>YOU</span>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>

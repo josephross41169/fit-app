@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import ShareCard, { type ShareCardData } from "@/components/ShareCard";
 
 const C = {
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
   gold: "#F5A623",
   text: "#F0F0F0",
   sub: "#9CA3AF",
@@ -67,7 +67,7 @@ const MUSCLE_COLORS: Record<string, string> = {
   Chest: "#EF4444",
   Legs: "#3B82F6",
   Back: "#10B981",
-  Shoulders: "#5BBE93",
+  Shoulders: "#1F5F3F",
   Arms: "#F59E0B",
   Core: "#EC4899",
   Cardio: "#06B6D4",
@@ -84,7 +84,7 @@ function VolumeBar({ volume, max }: { volume: number; max: number }) {
     <div style={{ background: "#161D19", borderRadius: 4, height: 6, overflow: "hidden", marginTop: 6 }}>
       <div style={{
         width: `${pct}%`, height: "100%", borderRadius: 4,
-        background: "linear-gradient(90deg, #5BBE93, #86CFAE)",
+        background: "linear-gradient(90deg, #1F5F3F, #4A9D6E)",
         transition: "width 0.5s ease",
       }} />
     </div>
@@ -193,7 +193,7 @@ export default function PRsPage() {
                 padding: "6px 14px", borderRadius: 20,
                 border: `1.5px solid ${sortBy === s ? C.purple : "#232C27"}`,
                 background: sortBy === s ? "rgba(124,58,237,0.15)" : "transparent",
-                color: sortBy === s ? "#86CFAE" : C.sub,
+                color: sortBy === s ? "#4A9D6E" : C.sub,
                 fontWeight: 700, fontSize: 12, cursor: "pointer",
               }}
             >
@@ -243,7 +243,7 @@ export default function PRsPage() {
             {recentPR && (
               <div style={{ background: C.card, borderRadius: 16, padding: "14px 16px", border: `1.5px solid ${C.border}` }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Latest PR</div>
-                <div style={{ fontWeight: 900, fontSize: 18, color: "#86CFAE" }}>{recentPR.exercise}</div>
+                <div style={{ fontWeight: 900, fontSize: 18, color: "#4A9D6E" }}>{recentPR.exercise}</div>
                 <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{formatDate(recentPR.best.logged_at)}</div>
               </div>
             )}
@@ -275,7 +275,7 @@ export default function PRsPage() {
                 style={{
                   padding: "12px 24px", borderRadius: 14,
                   border: "none",
-                  background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
+                  background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)",
                   color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
                 }}
               >
@@ -346,7 +346,7 @@ export default function PRsPage() {
                     <div style={{ fontSize: 12, color: C.sub }}>
                       × {pr.best.reps} reps
                     </div>
-                    <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginTop: 1 }}>
+                    <div style={{ fontSize: 11, color: "#4A9D6E", fontWeight: 700, marginTop: 1 }}>
                       {Math.round(pr.best.volume).toLocaleString()} vol
                     </div>
                   </div>
@@ -369,7 +369,7 @@ export default function PRsPage() {
                       style={{
                         background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)",
                         borderRadius: 8, padding: "3px 7px", cursor: "pointer",
-                        fontSize: 12, color: "#86CFAE", fontWeight: 700,
+                        fontSize: 12, color: "#4A9D6E", fontWeight: 700,
                       }}
                     >
                       📤
@@ -404,7 +404,7 @@ export default function PRsPage() {
                             <div style={{ fontSize: 11, color: C.sub }}>{formatDate(h.logged_at)}</div>
                           </div>
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? C.purple : C.sub }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? "#4A9D6E" : C.sub }}>
                           {Math.round(h.volume).toLocaleString()} vol
                         </div>
                       </div>

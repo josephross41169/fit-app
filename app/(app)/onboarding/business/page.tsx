@@ -30,7 +30,7 @@ import { BUSINESS_TYPES, getBusinessType, isBusinessAccount } from "@/lib/busine
 // ─────────────────────────────────────────────────────────────────────────────
 
 const C = {
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
   purpleDark: "#3E9E74",
   purpleLight: "#EFF7F2",
   purpleMid: "#C9E8D8",
@@ -406,7 +406,7 @@ export default function BusinessOnboardingPage() {
           <button type="button" onClick={next} disabled={saving || !canProceed[step]}
             style={{
               flex: 1, padding: "14px 20px", borderRadius: 14, border: "none",
-              background: canProceed[step] && !saving ? `linear-gradient(135deg,${C.purple},#86CFAE)` : "#374151",
+              background: canProceed[step] && !saving ? `linear-gradient(135deg,${C.purple},#4A9D6E)` : "#374151",
               color: "#fff", fontWeight: 900, fontSize: 15,
               cursor: canProceed[step] && !saving ? "pointer" : "not-allowed",
             }}>

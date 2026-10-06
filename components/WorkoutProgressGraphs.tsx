@@ -27,7 +27,7 @@ type ExerciseStats = {
 };
 
 const C = {
-  purple: "#5BBE93", purpleDark: "#1E1530", purpleMid: "#1B231E",
+  purple: "#1F5F3F", purpleDark: "#1E1530", purpleMid: "#1B231E",
   purpleBorder: "#4C3A7A", gold: "#F5A623", cyan: "#06B6D4",
   text: "#F0F0F0", sub: "#9CA3AF", green: "#4ADE80",
 };
@@ -395,7 +395,7 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Muscle Groups</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.purple }}>{liftingChips.length || "—"}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#4A9D6E" }}>{liftingChips.length || "—"}</div>
         </div>
         <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>Avg/Week</div>

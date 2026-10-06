@@ -21,7 +21,7 @@ import PromptsCard from "@/components/PromptsCard";
 import { COUPLE_PROMPTS } from "@/lib/rivalPrompts";
 
 const C = {
-  text: "#F0F0F0", sub: "#9CA3AF", pink: "#EC4899", purple: "#5BBE93", purpleLt: "#86CFAE",
+  text: "#F0F0F0", sub: "#9CA3AF", pink: "#EC4899", purple: "#1F5F3F", purpleLt: "#4A9D6E",
   card: "#160F28", border: "#2A1F45", input: "#0E1311",
 };
 

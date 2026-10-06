@@ -21,8 +21,8 @@ const C = {
   border: "#1B231E",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  purple: "#5BBE93",
-  purpleMid: "#86CFAE",
+  purple: "#1F5F3F",
+  purpleMid: "#4A9D6E",
   red: "#EF4444",
 };
 
@@ -379,7 +379,7 @@ export default function PostDetailPage() {
                               // Replying to a reply: start with their @handle so it's clear who you mean.
                               if (isReply && c.users?.username && c.user_id !== user.id) setCommentText(t => t.startsWith(`@${c.users!.username}`) ? t : `@${c.users!.username} ${t}`);
                               setTimeout(() => inputRef.current?.focus(), 0);
-                            }} style={{ background: "none", border: "none", color: C.purple, fontSize: 11, cursor: "pointer", fontWeight: 700, padding: 0 }}>
+                            }} style={{ background: "none", border: "none", color: "#4A9D6E", fontSize: 11, cursor: "pointer", fontWeight: 700, padding: 0 }}>
                               Reply
                             </button>
                           )}

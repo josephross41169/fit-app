@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/components/PostHogProvider";
 
-const G = "#5BBE93";
+const G = "#1F5F3F";
 const GL = "#EFF7F2";
 const GM = "#C9E8D8";
 const DARK_BG = "#0E1311";
@@ -158,7 +158,7 @@ export default function SignupPage() {
     <div style={{ minHeight: "100vh", background: DARK_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ width: "100%", maxWidth: 420, textAlign: "center" }}>
         <div style={{ fontSize: 64, marginBottom: 12 }}>✉️</div>
-        <h1 style={{ fontSize: 28, fontWeight: 900, color: G, margin: "0 0 12px", letterSpacing: -0.5 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900, color: "#4A9D6E", margin: "0 0 12px", letterSpacing: -0.5 }}>
           Check Your Email
         </h1>
         <p style={{ color: "#9CA3AF", fontSize: 15, lineHeight: 1.6, marginBottom: 8 }}>
@@ -177,7 +177,7 @@ export default function SignupPage() {
         <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 20 }}>
           Don&apos;t see it? Check your spam folder. Link expires in 24 hours.
         </p>
-        <Link href="/login" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: "transparent", color: G, fontWeight: 700, fontSize: 15, border: `1.5px solid ${G}`, textDecoration: "none" }}>
+        <Link href="/login" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: "transparent", color: "#4A9D6E", fontWeight: 700, fontSize: 15, border: `1.5px solid ${G}`, textDecoration: "none" }}>
           Back to Sign In
         </Link>
       </div>
@@ -187,7 +187,7 @@ export default function SignupPage() {
   if (success) return (
     <div style={{ minHeight: "100vh", background: DARK_BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
       <div style={{ fontSize: 64 }}>🎉</div>
-      <h2 style={{ fontSize: 24, fontWeight: 900, color: G, margin: 0 }}>Welcome to Fit!</h2>
+      <h2 style={{ fontSize: 24, fontWeight: 900, color: "#4A9D6E", margin: 0 }}>Welcome to Fit!</h2>
       <p style={{ color: "#6B7280", marginTop: 8 }}>Taking you to the app...</p>
     </div>
   );
@@ -198,7 +198,7 @@ export default function SignupPage() {
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0 }}>Livelee</h1>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: "#4A9D6E", margin: 0 }}>Livelee</h1>
           <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 4 }}>Choose your account type</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -216,7 +216,7 @@ export default function SignupPage() {
         </div>
         <div style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: "#6B7280" }}>
           Already have an account?{" "}
-          <Link href="/login" style={{ color: G, fontWeight: 700, textDecoration: "none" }}>Sign in</Link>
+          <Link href="/login" style={{ color: "#4A9D6E", fontWeight: 700, textDecoration: "none" }}>Sign in</Link>
         </div>
       </div>
     </div>
@@ -228,7 +228,7 @@ export default function SignupPage() {
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0, letterSpacing: -1 }}>Livelee</h1>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: "#4A9D6E", margin: 0, letterSpacing: -1 }}>Livelee</h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 4 }}>
             {accountType === "business" ? "🏢 Business Account" : "Your fitness journey starts here."}
           </p>
@@ -336,7 +336,7 @@ export default function SignupPage() {
 
           <button type="submit" disabled={loading} style={{
             width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
+            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #4A9D6E)`,
             color: "#fff", fontWeight: 900, fontSize: 16,
             cursor: loading ? "not-allowed" : "pointer",
             transition: "all 0.2s",
@@ -346,7 +346,7 @@ export default function SignupPage() {
 
           <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#6B7280" }}>
             Already have an account?{" "}
-            <Link href="/login" style={{ color: G, fontWeight: 700, textDecoration: "none" }}>Sign in</Link>
+            <Link href="/login" style={{ color: "#4A9D6E", fontWeight: 700, textDecoration: "none" }}>Sign in</Link>
           </div>
         </form>
       </div>

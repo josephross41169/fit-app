@@ -33,7 +33,7 @@ export default function CompetitionsPage() {
                   <p className="text-sm" style={{ color: "#6B7280" }}>{comp.description}</p>
                 </div>
                 <div className="text-center flex-shrink-0">
-                  <div className="text-2xl font-black" style={{ color: "#5BBE93" }}>{comp.daysLeft}</div>
+                  <div className="text-2xl font-black" style={{ color: "#4A9D6E" }}>{comp.daysLeft}</div>
                   <div className="text-xs" style={{ color: "#6B7280" }}>days left</div>
                 </div>
               </div>
@@ -45,14 +45,14 @@ export default function CompetitionsPage() {
                   <span>Goal: {comp.target}</span>
                 </div>
                 <div className="h-3 rounded-full overflow-hidden" style={{ background: "#C9E8D8" }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${comp.progress * 100}%`, background: "linear-gradient(90deg, #5BBE93, #86CFAE)" }} />
+                  <div className="h-full rounded-full transition-all" style={{ width: `${comp.progress * 100}%`, background: "linear-gradient(90deg, #1F5F3F, #4A9D6E)" }} />
                 </div>
-                <div className="text-right text-xs mt-1 font-semibold" style={{ color: "#5BBE93" }}>{Math.round(comp.progress * 100)}%</div>
+                <div className="text-right text-xs mt-1 font-semibold" style={{ color: "#4A9D6E" }}>{Math.round(comp.progress * 100)}%</div>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-xs" style={{ color: "#6B7280" }}>👥 {comp.participants.toLocaleString()} competing</span>
-                <span className="text-sm font-bold" style={{ color: "#86CFAE" }}>{comp.prize}</span>
+                <span className="text-sm font-bold" style={{ color: "#4A9D6E" }}>{comp.prize}</span>
               </div>
             </div>
           ))}
@@ -76,8 +76,8 @@ export default function CompetitionsPage() {
                   onClick={() => setJoined(j => j.includes(comp.id) ? j.filter(x => x !== comp.id) : [...j, comp.id])}
                   className="flex-shrink-0 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
                   style={joined.includes(comp.id)
-                    ? { background: "#EFF7F2", color: "#5BBE93", border: "2px solid #5BBE93" }
-                    : { background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "white" }}>
+                    ? { background: "#EFF7F2", color: "#4A9D6E", border: "2px solid #1F5F3F" }
+                    : { background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)", color: "white" }}>
                   {joined.includes(comp.id) ? "Joined ✓" : "Join"}
                 </button>
               </div>

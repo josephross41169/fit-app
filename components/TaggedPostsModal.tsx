@@ -122,7 +122,7 @@ export default function TaggedPostsModal({ userId, displayName, isOwnProfile, on
         <div style={{ overflowY: "auto", padding: 14, flex: 1 }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#9CA3AF" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #1B231E", borderTopColor: "#5BBE93", animation: "ptm-spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+              <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #1B231E", borderTopColor: "#1F5F3F", animation: "ptm-spin 0.8s linear infinite", margin: "0 auto 12px" }} />
               <style>{`@keyframes ptm-spin { to { transform: rotate(360deg); } }`}</style>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Loading tagged posts…</div>
             </div>
@@ -179,7 +179,7 @@ export default function TaggedPostsModal({ userId, displayName, isOwnProfile, on
                         width: "100%", height: "100%",
                         background: "linear-gradient(135deg,#161D19,#1B231E)",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        padding: 8, fontSize: 11, fontWeight: 600, color: "#86CFAE",
+                        padding: 8, fontSize: 11, fontWeight: 600, color: "#4A9D6E",
                         textAlign: "center", lineHeight: 1.3,
                         overflow: "hidden", textOverflow: "ellipsis",
                       }}>

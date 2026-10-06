@@ -10,7 +10,7 @@ import { ImagePresets } from "@/lib/imageUrls";
 import { geocode, distanceMiles, type Coords } from "@/lib/geocode";
 
 const C = {
-  blue:"#5BBE93", greenLight:"#160F28", greenMid:"#2A1F45",
+  blue:"#1F5F3F", greenLight:"#160F28", greenMid:"#2A1F45",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
   dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
@@ -296,7 +296,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             router.push onClick which navigates fine but skips the
             prefetch step. */}
         <Link href={`/profile/${displayHandle}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
-          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
+          <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4A9D6E)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
             {avatarVideoUrl
               ? <video src={avatarVideoUrl} poster={avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
               : avatarUrl
@@ -453,7 +453,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
           {commentsCount > 0 && (
-            <span style={{ fontSize:14,fontWeight:700,color:showComments ? C.blue : C.sub }}>{commentsCount}</span>
+            <span style={{ fontSize:14,fontWeight:700,color:showComments ? "#4A9D6E" : C.sub }}>{commentsCount}</span>
           )}
         </button>
         <button style={{ marginLeft:"auto",display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0 }}>
@@ -507,7 +507,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
                 const cini  = (cname || "U").split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase();
                 return (
                   <div key={c.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                    <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#86CFAE)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                    <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.blue},#4A9D6E)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                       {cu.avatar_video_url
                         ? <video src={cu.avatar_video_url} poster={cu.avatar_url || undefined} autoPlay muted loop playsInline preload="metadata" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
                         : cu.avatar_url
@@ -535,7 +535,7 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             <button
               onClick={submitComment}
               disabled={!commentText.trim() || commentSubmitting}
-              style={{ background:`linear-gradient(135deg,${C.blue},#86CFAE)`, color:"#fff", border:"none", borderRadius:999, padding:"6px 14px", fontWeight:800, fontSize:12, cursor:"pointer", opacity:(!commentText.trim() || commentSubmitting) ? 0.5 : 1 }}>
+              style={{ background:`linear-gradient(135deg,${C.blue},#4A9D6E)`, color:"#fff", border:"none", borderRadius:999, padding:"6px 14px", fontWeight:800, fontSize:12, cursor:"pointer", opacity:(!commentText.trim() || commentSubmitting) ? 0.5 : 1 }}>
               {commentSubmitting ? "..." : "Post"}
             </button>
           </div>
@@ -578,11 +578,11 @@ function EventCard({ event }: { event: DiscoverEvent }) {
     <Link href={`/events/${event.id}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div
         style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"border-color 0.15s" }}
-        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#5BBE93"}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#1F5F3F"}
         onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = C.darkBorder}
       >
         {/* Date badge */}
-        <div style={{ width:48,height:48,borderRadius:13,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+        <div style={{ width:48,height:48,borderRadius:13,background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
           <div style={{ fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.85)",textTransform:"uppercase",letterSpacing:0.5 }}>{day}</div>
           <div style={{ fontSize:20,fontWeight:900,color:"#fff",lineHeight:1 }}>{dateNum}</div>
         </div>
@@ -596,12 +596,12 @@ function EventCard({ event }: { event: DiscoverEvent }) {
             <div style={{ fontSize:11,color:C.darkSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4 }}>
               📍 {event.location_name}
               {event._distanceMi != null && (
-                <span style={{ color:"#86CFAE",fontWeight:700 }}> · {event._distanceMi < 1 ? "<1" : Math.round(event._distanceMi)} mi away</span>
+                <span style={{ color:"#4A9D6E",fontWeight:700 }}> · {event._distanceMi < 1 ? "<1" : Math.round(event._distanceMi)} mi away</span>
               )}
             </div>
           )}
           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
-            <span style={{ background:"rgba(124,58,237,0.2)",color:"#86CFAE",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
+            <span style={{ background:"rgba(124,58,237,0.2)",color:"#4A9D6E",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,border:"1px solid rgba(124,58,237,0.3)" }}>{cat.label}</span>
             <span style={{ color:event.price === "Free" ? "#22C55E" : C.gold,fontSize:11,fontWeight:800 }}>{event.price}</span>
             <span style={{ color:C.darkSub,fontSize:10 }}>· {timeStr}</span>
           </div>
@@ -628,7 +628,7 @@ function BrandCard({ brand, rank }: { brand: typeof TRENDING_BRANDS[0]; rank: nu
         <div style={{ fontSize:11,color:C.darkSub,marginTop:1 }}>{brand.category}</div>
       </div>
       <div style={{ textAlign:"right",flexShrink:0 }}>
-        <div style={{ marginTop:6,padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",color:C.blue,fontSize:10,fontWeight:700,border:`1px solid rgba(124,58,237,0.3)` }}>View ?</div>
+        <div style={{ marginTop:6,padding:"4px 10px",borderRadius:8,background:"rgba(124,58,237,0.15)",color:"#4A9D6E",fontSize:10,fontWeight:700,border:`1px solid rgba(124,58,237,0.3)` }}>View ?</div>
       </div>
     </div>
   );
@@ -641,16 +641,16 @@ function TrendingPersonCard({ person, rank }: { person: any; rank: number }) {
     <Link href={`/profile/${person.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
         <div style={{ width:14,fontSize:11,fontWeight:900,color:C.darkSub,flexShrink:0,textAlign:"center" }}>#{rank}</div>
-        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
           {person.avatar.slice(0,2)}
         </div>
         <div style={{ flex:1,minWidth:0 }}>
           <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.name}</div>
           <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.specialty}</div>
-          <div style={{ fontSize:10,color:"#5BBE93",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
+          <div style={{ fontSize:10,color:"#4A9D6E",marginTop:2,fontWeight:700 }}>🔥 {person.trend}</div>
         </div>
         {/* preventDefault stops the Link navigation when the follow button is tapped */}
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#232C27":`linear-gradient(135deg,${C.blue},#86CFAE)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#232C27":`linear-gradient(135deg,${C.blue},#4A9D6E)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
           {following ? "Following" : "+ Follow"}
         </button>
       </div>
@@ -664,18 +664,18 @@ function SuggestedCard({ account }: { account: any }) {
   return (
     <Link href={`/profile/${account.handle.replace("@","")}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background:C.darkCard,borderRadius:16,border:`1px solid ${C.darkBorder}`,marginBottom:10,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer" }}>
-        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        <div style={{ width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4A9D6E)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>
           {account.avatar}
         </div>
         <div style={{ flex:1,minWidth:0 }}>
           <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.name}</div>
           <div style={{ fontSize:10,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{account.specialty}</div>
           <div style={{ fontSize:10,color:C.darkSub,marginTop:2 }}>
-            <span style={{ color:C.blue,fontWeight:700 }}>{account.followers}</span> followers ·
-            <span style={{ color:"#5BBE93",fontWeight:700 }}> {account.mutual} mutual</span>
+            <span style={{ color:"#4A9D6E",fontWeight:700 }}>{account.followers}</span> followers ·
+            <span style={{ color:"#4A9D6E",fontWeight:700 }}> {account.mutual} mutual</span>
           </div>
         </div>
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#232C27":`linear-gradient(135deg,${C.blue},#86CFAE)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
+        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFollowing(f=>!f); }} style={{ padding:"6px 12px",borderRadius:9,border:"none",background:following?"#232C27":`linear-gradient(135deg,${C.blue},#4A9D6E)`,color:following?C.darkSub:"#fff",fontWeight:800,fontSize:11,cursor:"pointer",flexShrink:0,transition:"all 0.15s" }}>
           {following ? "Following" : "+ Follow"}
         </button>
       </div>
@@ -705,7 +705,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
       <div style={{ flex:1, minWidth:0 }}>
         {/* City banner — copy changes based on whether we have local content
             or are showing trending nationwide content as a fallback. */}
-        <div style={{ background:"linear-gradient(135deg,#5BBE93,#86CFAE)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
+        <div style={{ background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px rgba(124,58,237,0.3)" }}>
           <div style={{ fontSize:36 }}>{showingTrending ? "🔥" : "📍"}</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>
@@ -729,7 +729,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
             <div style={{ fontSize:40,marginBottom:10 }}>📍</div>
             <div style={{ fontWeight:900,fontSize:16,color:"#E2E8F0",marginBottom:6 }}>No posts near {userCity} yet</div>
             <div style={{ fontSize:13,color:C.darkSub,lineHeight:1.5,marginBottom:16 }}>Be the first — share a workout or meal and tag your city to put {userCity} on the map.</div>
-            <Link href="/post" style={{ display:"inline-block",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:800,fontSize:13,borderRadius:99,padding:"10px 22px",textDecoration:"none" }}>+ Create a post</Link>
+            <Link href="/post" style={{ display:"inline-block",background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",color:"#fff",fontWeight:800,fontSize:13,borderRadius:99,padding:"10px 22px",textDecoration:"none" }}>+ Create a post</Link>
           </div>
         ) : postsToShow.map((post: any) => <DiscoverPost key={post.id} post={post} liked={false} />)}
       </div>
@@ -743,14 +743,14 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
               <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>📅 Local Events This Week</div>
               <div style={{ fontSize:11,color:C.darkSub }}>{userCity} · this week</div>
             </div>
-            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#86CFAE",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
+            <button onClick={() => setShowAllEvents(!showAllEvents)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#4A9D6E",padding:0 }}>{showAllEvents ? "Show less" : "See all"}</button>
           </div>
         </div>
 
         {eventsToShow.map((event: any) => <EventCard key={event.id} event={event} />)}
         {allEvents.length > 6 && (
           <button onClick={() => setShowAllEvents(!showAllEvents)}
-            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#86CFAE",marginBottom:8,textAlign:"center" }}>
+            style={{ width:"100%",padding:"8px",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#4A9D6E",marginBottom:8,textAlign:"center" }}>
             {showAllEvents ? "Show less ↑" : `See all ${allEvents.length} events →`}
           </button>
         )}
@@ -758,7 +758,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         {/* Submit event CTA — links to the new dedicated /events/new page.
             Old inline modal removed in favor of the full create-event flow. */}
         <Link href="/events/new" style={{ textDecoration: "none", display: "block" }}>
-          <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #5BBE93`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
+          <div style={{ marginTop:4,padding:"14px 16px",background:C.darkCard,borderRadius:16,border:`1px dashed #1F5F3F`,textAlign:"center",cursor:"pointer",transition:"all 0.15s" }}
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="#160F28"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background=C.darkCard; }}
           >
@@ -769,7 +769,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
         </Link>
 
         {/* Browse all events link */}
-        <Link href="/events" style={{ display: "block", textDecoration: "none", textAlign: "center", marginTop: 12, padding: "10px", color: "#86CFAE", fontSize: 12, fontWeight: 700 }}>
+        <Link href="/events" style={{ display: "block", textDecoration: "none", textAlign: "center", marginTop: 12, padding: "10px", color: "#4A9D6E", fontSize: 12, fontWeight: 700 }}>
           Browse all events →
         </Link>
       </div>
@@ -793,14 +793,14 @@ function RealPersonCard({ person, rank }: { person: RealPerson; rank: number }) 
         {person.avatar_url ? (
           <img src={person.avatar_url} alt="" style={{ width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0 }} />
         ) : (
-          <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
+          <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",flexShrink:0 }}>
             {(person.full_name || person.username || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase()}
           </div>
         )}
         <div style={{ flex:1,minWidth:0 }}>
           <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.full_name || person.username}</div>
           <div style={{ fontSize:11,color:C.darkSub,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>@{person.username}{person.city ? ` · ${person.city}` : ""}</div>
-          <div style={{ fontSize:10,color:"#5BBE93",marginTop:2,fontWeight:700 }}>{fmtFollowerCount(person.followers_count)} followers</div>
+          <div style={{ fontSize:10,color:"#4A9D6E",marginTop:2,fontWeight:700 }}>{fmtFollowerCount(person.followers_count)} followers</div>
         </div>
         {/* preventDefault stops the Link navigation when the follow button is tapped */}
         <div onClick={e => { e.preventDefault(); e.stopPropagation(); }} style={{ flexShrink:0 }}>
@@ -818,7 +818,7 @@ function WorldTab({ posts, people }: { posts: any[]; people: RealPerson[] }) {
       {/* LEFT: World posts feed */}
       <div style={{ flex:1, minWidth:0 }}>
         {/* Trending banner */}
-        <div style={{ background:`linear-gradient(135deg,#5BBE93,#86CFAE)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
+        <div style={{ background:`linear-gradient(135deg,#1F5F3F,#4A9D6E)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ fontSize:36 }}>🌍</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Trending Worldwide</div>
@@ -831,7 +831,7 @@ function WorldTab({ posts, people }: { posts: any[]; people: RealPerson[] }) {
             <div style={{ fontSize:40,marginBottom:10 }}>🌍</div>
             <div style={{ fontWeight:900,fontSize:16,color:"#E2E8F0",marginBottom:6 }}>Nothing trending yet</div>
             <div style={{ fontSize:13,color:C.darkSub,lineHeight:1.5,marginBottom:16 }}>The community is just getting started — your post could be the first thing everyone sees.</div>
-            <Link href="/post" style={{ display:"inline-block",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:800,fontSize:13,borderRadius:99,padding:"10px 22px",textDecoration:"none" }}>+ Create a post</Link>
+            <Link href="/post" style={{ display:"inline-block",background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",color:"#fff",fontWeight:800,fontSize:13,borderRadius:99,padding:"10px 22px",textDecoration:"none" }}>+ Create a post</Link>
           </div>
         ) : posts.map((post: any) => <DiscoverPost key={post.id} post={post} liked={false} />)}
       </div>
@@ -877,7 +877,7 @@ function DiscoverTab({ people }: { people: RealPerson[] }) {
 
       {/* LEFT: People to discover */}
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ background:`linear-gradient(135deg,#5BBE93,#86CFAE)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
+        <div style={{ background:`linear-gradient(135deg,#1F5F3F,#4A9D6E)`,borderRadius:18,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ fontSize:36 }}>🧭</div>
           <div>
             <div style={{ fontWeight:900,fontSize:18,color:"#fff" }}>Discover People</div>
@@ -1204,7 +1204,7 @@ export default function DiscoverPage() {
                         style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.greenLight}`,transition:"background 0.1s" }}
                         onMouseEnter={e=>(e.currentTarget.style.background=C.greenLight)}
                         onMouseLeave={e=>(e.currentTarget.style.background=C.white)}>
-                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#86CFAE)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
+                        <div style={{ width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4A9D6E)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff" }}>
                           {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                         </div>
                         <div style={{ flex:1,minWidth:0 }}>
@@ -1230,7 +1230,7 @@ export default function DiscoverPage() {
               background:"none",
               border:"none",
               cursor:"pointer",
-              color: tab===t ? C.blue : C.sub,
+              color: tab===t ? "#4A9D6E" : C.sub,
               borderBottom: tab===t ? `3px solid ${C.blue}` : "3px solid transparent",
               transition:"all 0.15s",
               display:"flex",
@@ -1265,7 +1265,7 @@ export default function DiscoverPage() {
             />
             <div style={{ display:"flex",gap:12 }}>
               <button onClick={() => setShowChangeCityOverlay(false)} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"1.5px solid #2A4A30",background:"transparent",color:"#9CA3AF",fontWeight:700,fontSize:14,cursor:"pointer" }}>Cancel</button>
-              <button onClick={() => { if (newCityInput.trim()) { setUserCity(newCityInput.trim()); setLocalPosts([]); setShowChangeCityOverlay(false); } }} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"none",background:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>Update</button>
+              <button onClick={() => { if (newCityInput.trim()) { setUserCity(newCityInput.trim()); setLocalPosts([]); setShowChangeCityOverlay(false); } }} style={{ flex:1,padding:"12px 0",borderRadius:12,border:"none",background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>Update</button>
             </div>
           </div>
         </div>

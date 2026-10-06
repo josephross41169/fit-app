@@ -44,7 +44,7 @@ import GoalHistory from "@/components/GoalHistory";
 import { BadgeIcon } from "@/components/BadgeIcon";
 
 const C = {
-  purple:"#5BBE93", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
+  purple:"#1F5F3F", purpleLight:"#1B231E", purpleMid:"#2A3A2A",
   gold:"#F5A623", goldLight:"#2A2010",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
 };
@@ -267,11 +267,11 @@ const WELLNESS_STYLES: Record<string, WellnessStyle> = {
   "steam room":           { emoji: "♨️", accent: "#FBBF24" },
   "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
   // Mind / breath — purples & soft tones
-  "meditation":           { emoji: "🧘", accent: "#86CFAE" },
+  "meditation":           { emoji: "🧘", accent: "#4A9D6E" },
   "breathwork":           { emoji: "💨", accent: "#818CF8" },
-  "yoga nidra":           { emoji: "🌙", accent: "#86CFAE" },
+  "yoga nidra":           { emoji: "🌙", accent: "#4A9D6E" },
   "journaling":           { emoji: "📓", accent: "#A7DCC4" },
-  "therapy":              { emoji: "💬", accent: "#86CFAE" },
+  "therapy":              { emoji: "💬", accent: "#4A9D6E" },
   "sound bath":           { emoji: "🎵", accent: "#9BD9BC" },
   // Body / mobility — earthy greens
   "stretching":           { emoji: "🤸", accent: "#34D399" },
@@ -280,7 +280,7 @@ const WELLNESS_STYLES: Record<string, WellnessStyle> = {
   "massage":              { emoji: "💆", accent: "#6EE7B7" },
   "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
   "acupuncture":          { emoji: "📍", accent: "#34D399" },
-  "cupping":              { emoji: "🟣", accent: "#86CFAE" },
+  "cupping":              { emoji: "🟣", accent: "#4A9D6E" },
   // Outdoor / light
   "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
   "grounding":            { emoji: "🌱", accent: "#84CC16" },
@@ -291,10 +291,10 @@ const WELLNESS_STYLES: Record<string, WellnessStyle> = {
   "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
   // Sleep & fasting
   "sleep":                { emoji: "😴", accent: "#6366F1" },
-  "fasting":              { emoji: "⏳", accent: "#86CFAE" },
+  "fasting":              { emoji: "⏳", accent: "#4A9D6E" },
 };
 function getWellnessStyle(activity: string): WellnessStyle {
-  return WELLNESS_STYLES[activity.toLowerCase().trim()] || autoWellnessStyle(activity) || { emoji: "🌿", accent: "#86CFAE" };
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || autoWellnessStyle(activity) || { emoji: "🌿", accent: "#4A9D6E" };
 }
 
 // Format an ISO datetime as a friendly local time, e.g. "8:42 AM".
@@ -348,7 +348,7 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
       <button onClick={() => setOpen(o => !o)} style={{
         width: "100%",
         background: open ? "#1B231E" : "#161D19",
-        border: `2px solid ${open ? "#5BBE93" : "#2A3A2A"}`,
+        border: `2px solid ${open ? "#1F5F3F" : "#2A3A2A"}`,
         borderRadius: open ? "16px 16px 0 0" : 16,
         padding: "14px 18px", cursor: "pointer", textAlign: "left",
         transition: "all 0.2s",
@@ -367,7 +367,7 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
           </div>
           <div style={{
             width:32, height:32, borderRadius:"50%",
-            background: open ? "#5BBE93" : "#1B231E",
+            background: open ? "#1F5F3F" : "#1B231E",
             display:"flex", alignItems:"center", justifyContent:"center",
             flexShrink:0, marginLeft:12,
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
@@ -381,7 +381,7 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
       </button>
       {open && (
         <div style={{
-          border: "2px solid #5BBE93", borderTop:"none",
+          border: "2px solid #1F5F3F", borderTop:"none",
           borderRadius:"0 0 16px 16px",
           padding:"8px 10px 10px",
           background:"#0E1311",
@@ -823,7 +823,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     lvl >= 3 ? { background: "linear-gradient(135deg, #14161C 0%, #2A2D38 40%, #383B47 50%, #2A2D38 60%, #14161C 100%)", border: "1.5px solid #C0C0C0", boxShadow: "0 0 14px rgba(220,220,235,0.25), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" } :
     lvl >= 2 ? { background: "linear-gradient(135deg, #1A0E05 0%, #3A2410 40%, #4A2D14 50%, #3A2410 60%, #1A0E05 100%)", border: "1.5px solid #CD7F32", boxShadow: "0 0 14px rgba(205,127,50,0.30), 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(232,168,124,0.2)" } :
     /* L1: default light card */
-    { background: C.white, border: `2px solid ${C.purpleMid}`, boxShadow: "0 4px 18px rgba(91,190,147,0.10)" };
+    { background: C.white, border: `2px solid ${C.purpleMid}`, boxShadow: "0 4px 18px rgba(46,125,84,0.10)" };
 
   // Header background — when card body is dark-themed (L2+), the open header
   // needs a slightly brighter shade to differentiate it from the collapsed
@@ -842,7 +842,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
     lvl >= 4 ? { collapsed:"#2A2008", body:"#211900", border:"#4A3A14", chip:"rgba(255,215,0,0.14)", chipBorder:"rgba(255,215,0,0.4)", chipText:"#FDE68A", iconBg:"rgba(255,215,0,0.16)", iconBorder:"rgba(255,215,0,0.4)", chevBg:"#2A2008", chevBorder:"#4A3A14" } :
     lvl >= 3 ? { collapsed:"#23262F", body:"#1B1E25", border:"#3A3E4A", chip:"rgba(212,212,220,0.14)", chipBorder:"rgba(212,212,220,0.45)", chipText:"#E5E5EA", iconBg:"rgba(212,212,220,0.16)", iconBorder:"rgba(212,212,220,0.45)", chevBg:"#2A2D38", chevBorder:"#3A3E4A" } :
     lvl >= 2 ? { collapsed:"#2A1A0E", body:"#211309", border:"#4A3018", chip:"rgba(205,127,50,0.16)", chipBorder:"rgba(205,127,50,0.45)", chipText:"#E8A87C", iconBg:"rgba(205,127,50,0.18)", iconBorder:"rgba(205,127,50,0.45)", chevBg:"#3A2410", chevBorder:"#4A3018" } :
-    { collapsed:"#111811", body:"#0E1311", border:"#2A3A2A", chip:"rgba(91,190,147,0.12)", chipBorder:"rgba(91,190,147,0.35)", chipText:"#86CFAE", iconBg:"rgba(91,190,147,0.16)", iconBorder:"rgba(91,190,147,0.35)", chevBg:"#1F1636", chevBorder:"#2A3A2A" };
+    { collapsed:"#111811", body:"#0E1311", border:"#2A3A2A", chip:"rgba(46,125,84,0.12)", chipBorder:"rgba(46,125,84,0.35)", chipText:"#4A9D6E", iconBg:"rgba(46,125,84,0.16)", iconBorder:"rgba(46,125,84,0.35)", chevBg:"#1F1636", chevBorder:"#2A3A2A" };
 
   // Pulled out of JSX so both the (hidden) share button and the ⋯ menu
   // can reference the same payload without duplicating this large object.
@@ -930,7 +930,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",flexDirection:"column",alignItems:"stretch",gap:12,padding:"18px 20px",cursor:"pointer",background:open?headerOpenBg:headerClosedBg,border:"none",textAlign:"left",borderRadius:open?"22px 22px 0 0":"22px",transition:"background 0.2s"}}>
         {/* Single compact row: date badge + summary text + controls (chevron + ⋯ menu) */}
         <div style={{display:"flex",alignItems:"center",gap:14,width:"100%"}}>
-        <div style={{width:52,height:52,borderRadius:15,flexShrink:0,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(91,190,147,0.35)"}}>
+        <div style={{width:52,height:52,borderRadius:15,flexShrink:0,background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(46,125,84,0.35)"}}>
           <span style={{color:"#fff",fontWeight:900,fontSize:21,lineHeight:1}}>{d}</span>
           <span style={{color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700}}>{MONTHS[m-1]}</span>
         </div>
@@ -969,7 +969,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           </div>
           {/* ⋯ menu always available (Share works for any day; Delete only if onDelete given) */}
           <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
-              <button onClick={()=>{setMenuOpen(o=>!o);setConfirmDel(false);}} aria-label="More actions" style={{width:32,height:32,borderRadius:"50%",background:menuOpen?"#1A2A1A":"#1B231E",border:"none",color:C.purple,fontSize:18,fontWeight:900,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>⋯</button>
+              <button onClick={()=>{setMenuOpen(o=>!o);setConfirmDel(false);}} aria-label="More actions" style={{width:32,height:32,borderRadius:"50%",background:menuOpen?"#1A2A1A":"#1B231E",border:"none",color:"#4A9D6E",fontSize:18,fontWeight:900,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>⋯</button>
               {menuOpen && (<>
                 {/* tap-away backdrop */}
                 <div onClick={()=>{setMenuOpen(false);setConfirmDel(false);}} style={{position:"fixed",inset:0,zIndex:40}}/>
@@ -1018,7 +1018,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         {/* ── WORKOUT ── */}
         {editWo ? (
           <div style={{borderRadius:18,border:`2px solid ${C.purple}`,marginBottom:20,overflow:"hidden"}}>
-            <div style={{background:`linear-gradient(135deg,${C.purple},#86CFAE)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Workout</span>
             </div>
             <div style={{background:"#111811",padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -1030,7 +1030,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12,marginTop:4}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Exercises</span>
-                  <button onClick={()=>setWoBuf(w=>({...w,exercises:[...w.exercises,{name:"",sets:3,reps:10,weight:""}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:C.purple,border:"1.5px solid #5BBE93",cursor:"pointer"}}>+ Add Exercise</button>
+                  <button onClick={()=>setWoBuf(w=>({...w,exercises:[...w.exercises,{name:"",sets:3,reps:10,weight:""}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:"#4A9D6E",border:"1.5px solid #1F5F3F",cursor:"pointer"}}>+ Add Exercise</button>
                 </div>
                 {woBuf.exercises.map((ex,i)=>{
                   const numSets = ex.sets || 1;
@@ -1117,7 +1117,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                               })})
                               );
                             }}
-                              style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.purpleMid}`,background:"#1B231E",color:"#86CFAE",cursor:"pointer",flexShrink:0}}>
+                              style={{fontSize:10,fontWeight:800,padding:"4px 6px",borderRadius:7,border:`1.5px solid ${C.purpleMid}`,background:"#1B231E",color:"#4A9D6E",cursor:"pointer",flexShrink:0}}>
                               +{d}
                             </button>
                           ))}
@@ -1132,7 +1132,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12,marginTop:4}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>🏃 Cardio</span>
-                  <button onClick={()=>setWoBuf(w=>({...w,cardio:[...w.cardio,{...emptyCardio}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:C.purple,border:"1.5px solid #5BBE93",cursor:"pointer"}}>+ Add Cardio</button>
+                  <button onClick={()=>setWoBuf(w=>({...w,cardio:[...w.cardio,{...emptyCardio}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:"#4A9D6E",border:"1.5px solid #1F5F3F",cursor:"pointer"}}>+ Add Cardio</button>
                 </div>
                 {(woBuf.cardio || []).map((c,i)=>(
                   <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
@@ -1146,7 +1146,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditWo(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0E1311",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
+                <button onClick={saveWorkout} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Workout</button>
               </div>
             </div>
           </div>
@@ -1273,8 +1273,8 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                             <div key={i}>
                               <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,alignItems:"start",padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
                                 <span style={{fontSize:13,fontWeight:600,color:C.text,overflowWrap:"anywhere",wordBreak:"break-word",lineHeight:1.3}}>{ex.name}</span>
-                                <span style={{fontSize:14,fontWeight:900,color:C.purple,textAlign:"center"}}>{ex.sets}</span>
-                                <span style={{fontSize:11,fontWeight:800,color:C.purple,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{repsDisplay}</span>
+                                <span style={{fontSize:14,fontWeight:900,color:"#4A9D6E",textAlign:"center"}}>{ex.sets}</span>
+                                <span style={{fontSize:11,fontWeight:800,color:"#4A9D6E",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{repsDisplay}</span>
                                 <span style={{fontSize:11,fontWeight:800,color:C.gold,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{weightDisplay}</span>
                               </div>
                               {ex.notes && String(ex.notes).trim().length > 0 && (
@@ -1322,7 +1322,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                                       {dur && (
                                         <div style={{background:`${C.purpleMid}55`,borderRadius:8,padding:"6px 10px",minWidth:0}}>
                                           <div style={{fontSize:9,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:0.6,marginBottom:2}}>Duration</div>
-                                          <div style={{fontSize:14,fontWeight:800,color:C.purple}}>{dur}</div>
+                                          <div style={{fontSize:14,fontWeight:800,color:"#4A9D6E"}}>{dur}</div>
                                         </div>
                                       )}
                                       {distDisplay && (
@@ -1379,7 +1379,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                       <div key={p.id} style={{ marginBottom: idx < parts.length - 1 ? 16 : 0, paddingBottom: idx < parts.length - 1 ? 16 : 0, borderBottom: idx < parts.length - 1 ? `2px dashed ${C.purpleMid}` : 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 11, fontWeight: 900, color: '#fff', background: `linear-gradient(135deg, ${C.purple}, #86CFAE)`, padding: '4px 10px', borderRadius: 999, letterSpacing: 0.5 }}>WORKOUT {idx + 1}</span>
+                            <span style={{ fontSize: 11, fontWeight: 900, color: '#fff', background: `linear-gradient(135deg, ${C.purple}, #4A9D6E)`, padding: '4px 10px', borderRadius: 999, letterSpacing: 0.5 }}>WORKOUT {idx + 1}</span>
                             <span style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{p.type}</span>
                           </div>
                           <div style={{ display: 'flex', gap: 10, fontSize: 12, color: C.sub, flexWrap: 'wrap' }}>
@@ -1403,14 +1403,14 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,padding:24,textAlign:"center",background:"#111811",border:"2px solid #2A3A2A",marginBottom:20}}>
             <div style={{fontSize:34,marginBottom:8}}>😴</div>
             <div style={{fontSize:15,fontWeight:600,color:C.sub,marginBottom:12}}>No workout logged</div>
-            {editable && <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>}
+            {editable && <button onClick={()=>{setWoBuf({type:"",duration:"",calories:0,exercises:[]});setEditWo(true);}} style={{padding:"10px 24px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:C.white,fontWeight:700,cursor:"pointer"}}>+ Log Workout</button>}
           </div>
         )}
 
         {/* ── NUTRITION ── */}
         {editNut ? (
           <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden"}}>
-            <div style={{background:`linear-gradient(135deg,${C.purple},#86CFAE)`,padding:"14px 20px"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,padding:"14px 20px"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Nutrition</span>
             </div>
             <div style={{background:"#111811",padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -1426,7 +1426,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               <div style={{borderTop:`1px solid ${C.purpleMid}`,paddingTop:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Meals</span>
-                  <button onClick={()=>setNutBuf(n=>({...n,meals:[...n.meals,{key:"Snack",emoji:"🍎",name:"",cal:0}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:C.purple,border:"1.5px solid #5BBE93",cursor:"pointer"}}>+ Add Meal</button>
+                  <button onClick={()=>setNutBuf(n=>({...n,meals:[...n.meals,{key:"Snack",emoji:"🍎",name:"",cal:0}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:"#4A9D6E",border:"1.5px solid #1F5F3F",cursor:"pointer"}}>+ Add Meal</button>
                 </div>
                 {nutBuf.meals.map((meal,i)=>(
                   <div key={i} style={{display:"grid",gridTemplateColumns:"50px 90px 1fr 80px 36px",gap:8,marginBottom:8,alignItems:"center"}}>
@@ -1440,7 +1440,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               </div>
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditNut(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0E1311",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
+                <button onClick={saveNutrition} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save Nutrition</button>
               </div>
             </div>
           </div>
@@ -1474,7 +1474,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 const rows = [
                   {label:"Calories",val:nutrition.calories,goal:goals.calories||0,unit:"kcal",color:C.gold},
                   {label:"Protein",val:nutrition.protein,goal:goals.protein||0,unit:"g",color:"#3B82F6"},
-                  {label:"Carbs",val:nutrition.carbs,goal:goals.carbs||0,unit:"g",color:"#5BBE93"},
+                  {label:"Carbs",val:nutrition.carbs,goal:goals.carbs||0,unit:"g",color:"#4A9D6E"},
                   {label:"Fat",val:nutrition.fat,goal:goals.fat||0,unit:"g",color:"#9BD9BC"},
                 ];
                 return (
@@ -1483,7 +1483,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     {rows.filter(r=>r.goal>0).map(r=>{
                       const pct = Math.min((r.val/r.goal)*100,100);
                       const over = r.val > r.goal;
-                      const barColor = over ? "#EF4444" : pct >= 90 ? "#5BBE93" : r.color;
+                      const barColor = over ? "#EF4444" : pct >= 90 ? "#1F5F3F" : r.color;
                       return (
                         <div key={r.label}>
                           <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,color:C.sub,marginBottom:3}}>
@@ -1500,7 +1500,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 );
               })()}
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:nut?20:0}}>
-                {[{label:"Calories",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000},{label:"Protein",val:nutrition.protein,unit:"g",color:"#3B82F6",max:250},{label:"Carbs",val:nutrition.carbs,unit:"g",color:C.purple,max:300},{label:"Fat",val:nutrition.fat,unit:"g",color:"#4ADE80",max:100}].map(mc=>(
+                {[{label:"Calories",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000},{label:"Protein",val:nutrition.protein,unit:"g",color:"#3B82F6",max:250},{label:"Carbs",val:nutrition.carbs,unit:"g",color:"#4A9D6E",max:300},{label:"Fat",val:nutrition.fat,unit:"g",color:"#4ADE80",max:100}].map(mc=>(
                   <div key={mc.label} style={{background:"#0E1311",borderRadius:14,padding:"12px 6px",textAlign:"center",border:"1.5px solid #2A3A2A"}}>
                     <div style={{fontSize:20,fontWeight:900,color:mc.color}}>{mc.val}</div>
                     <div style={{fontSize:11,color:C.sub}}>{mc.unit}</div>
@@ -1583,13 +1583,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
         {/* ── WELLNESS ── */}
         {editWell ? (
           <div style={{borderRadius:18,border:`2px solid ${C.purple}`,overflow:"hidden",marginTop:16}}>
-            <div style={{background:`linear-gradient(135deg,${C.purple},#86CFAE)`,padding:"14px 20px"}}>
+            <div style={{background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,padding:"14px 20px"}}>
               <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>✏️ Edit Wellness</span>
             </div>
             <div style={{background:"#111811",padding:16,display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                 <span style={{fontSize:12,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:1}}>Activities</span>
-                <button onClick={()=>setWellBuf(w=>({entries:[...w.entries,{...emptyWellness}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:C.purple,border:"1.5px solid #5BBE93",cursor:"pointer"}}>+ Add Activity</button>
+                <button onClick={()=>setWellBuf(w=>({entries:[...w.entries,{...emptyWellness}]}))} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#0E1311",color:"#4A9D6E",border:"1.5px solid #1F5F3F",cursor:"pointer"}}>+ Add Activity</button>
               </div>
               {wellBuf.entries.map((e,i)=>(
                 <div key={i} style={{display:"grid",gridTemplateColumns:"40px 1fr 80px 32px",gap:8,alignItems:"center"}}>
@@ -1602,7 +1602,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
               {wellBuf.entries.length===0 && <div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"8px 0"}}>Add wellness activities like meditation, cold plunge, sauna, stretching...</div>}
               <div style={{display:"flex",gap:10,marginTop:4}}>
                 <button onClick={()=>setEditWell(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0E1311",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+                <button onClick={saveWellness} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
               </div>
             </div>
           </div>
@@ -1655,7 +1655,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                         {dur != null && dur > 0 && (
                           <span style={{
                             fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:999,
-                            background:`${style.accent}22`,color:style.accent,
+                            background:`${style.accent}22`,color:"#4A9D6E",
                             letterSpacing:0.3,
                           }}>{dur} min</span>
                         )}
@@ -1736,7 +1736,7 @@ function EditableList({title,items,onSave,renderItem,emptyItem,canEdit=true}:{
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         {list.map((item,i)=>renderItem(item,i,setList))}
       </div>
-      <button onClick={()=>setList(l=>[...l,{...emptyItem}])} style={{width:"100%",padding:"9px 0",borderRadius:12,border:`2px dashed ${C.purpleMid}`,background:"#1B231E",color:"#86CFAE",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12}}>+ Add</button>
+      <button onClick={()=>setList(l=>[...l,{...emptyItem}])} style={{width:"100%",padding:"9px 0",borderRadius:12,border:`2px dashed ${C.purpleMid}`,background:"#1B231E",color:"#4A9D6E",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12}}>+ Add</button>
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setEditing(false)} style={{flex:1,padding:"11px 0",borderRadius:12,border:`2px solid ${C.purpleMid}`,background:"#0E1311",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
         <button onClick={()=>{onSave(list);setEditing(false);}} style={{flex:1,padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4ADE80)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
@@ -1747,7 +1747,7 @@ function EditableList({title,items,onSave,renderItem,emptyItem,canEdit=true}:{
     <div style={{background:"#111811",borderRadius:22,padding:24,border:`1.5px solid #2A3A2A`,marginBottom:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontWeight:900,fontSize:17,color:C.text}}>{title}</div>
-        {canEdit && <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:C.purple,border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>}
+        {canEdit && <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:20,background:"#1A2A1A",color:"#4A9D6E",border:`1px solid #2A3A2A`,cursor:"pointer"}}>✏️ Edit</button>}
       </div>
       {items.map((item,i)=>(
         <div key={i} style={{background:i%2===0?"#1A2A1A":"#141F14",borderRadius:14,padding:"13px 15px",marginBottom:10,display:"flex",alignItems:"center",gap:12,border:"1px solid #2A3A2A"}}>
@@ -3524,8 +3524,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
       <style jsx global>{`
         .own-bio { transition: box-shadow .15s; }
-        .own-bio:hover { box-shadow: 0 0 0 1.5px rgba(91,190,147,0.55); }
-        .own-bio:hover::after { content: '✏️ Edit'; position: absolute; top: 8px; right: 10px; font-size: 11px; font-style: normal; color: #86CFAE; font-weight: 700; }
+        .own-bio:hover { box-shadow: 0 0 0 1.5px rgba(46,125,84,0.55); }
+        .own-bio:hover::after { content: '✏️ Edit'; position: absolute; top: 8px; right: 10px; font-size: 11px; font-style: normal; color: #4A9D6E; font-weight: 700; }
         /* ─── Cosmetic Level Reward Effects ─────────────────────────────────
            Activated by adding the tier class to elements based on user level.
            Each tier's effects layer on top of the previous (Diamond gets
@@ -3637,7 +3637,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             #E879F9 20%,
             #FCD34D 40%,
             #6EE7B7 60%,
-            #86CFAE 80%,
+            #4A9D6E 80%,
             #67E8F9 100%
           );
           background-size: 250% 100%;
@@ -3774,7 +3774,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
             {/* Also allow uploading from camera roll */}
             <label style={{display:"flex",alignItems:"center",gap:10,marginTop:20,padding:"14px 16px",borderRadius:16,border:`1.5px dashed ${C.purpleMid}`,background:"#111811",cursor:"pointer",justifyContent:"center"}}>
               <span style={{fontSize:20}}>📷</span>
-              <span style={{fontWeight:700,fontSize:14,color:C.purple}}>Upload from camera roll</span>
+              <span style={{fontWeight:700,fontSize:14,color:"#4A9D6E"}}>Upload from camera roll</span>
               <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
                 const f=e.target.files?.[0]; if(!f) return;
                 const r=new FileReader();
@@ -3835,7 +3835,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     onPointerEnter={() => router.prefetch(`/profile/${u.username}`)}
                     onMouseLeave={e=>(e.currentTarget.style.background="transparent")}
                     onClick={()=>{setSocialModal(null);router.push(`/profile/${u.username}`);}}>
-                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
+                    <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff"}}>
                       {u.avatar_url ? <img src={u.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (u.full_name||u.username||"?")[0].toUpperCase()}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
@@ -3857,7 +3857,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
       {/* ── Toast ── */}
       {badgeToast && (
-        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(91,190,147,0.35)",pointerEvents:"none"}}>
+        <div style={{position:"fixed",bottom:32,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",fontWeight:800,fontSize:15,padding:"14px 28px",borderRadius:24,boxShadow:"0 8px 32px rgba(46,125,84,0.35)",pointerEvents:"none"}}>
           {badgeToast}
         </div>
       )}
@@ -3883,7 +3883,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           wellness:    { bg: "linear-gradient(135deg,#14532D,#166534)", border: "#16A34A", chip: "#BBF7D0" },
           nutrition:   { bg: "linear-gradient(135deg,#365314,#3F6212)", border: "#65A30D", chip: "#D9F99D" },
           challenges:  { bg: "linear-gradient(135deg,#1E3A8A,#1D4ED8)", border: "#3B82F6", chip: "#BFDBFE" },
-          social:      { bg: "linear-gradient(135deg,#581C87,#6B21A8)", border: "#A855F7", chip: "#D6EFE2" },
+          social:      { bg: "linear-gradient(135deg,#581C87,#6B21A8)", border: "#A855F7", chip: "#D4E5DA" },
           special:     { bg: "linear-gradient(135deg,#831843,#86198F)", border: "#D946EF", chip: "#F5D0FE" },
         };
         const fallbackStyle = { bg: "#161D19", border: C.purpleMid, chip: C.purple };
@@ -3900,9 +3900,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
               {/* Category chips */}
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                <button onClick={()=>setBadgeCategoryFilter("all")} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter==="all"?C.purple:C.purpleMid}`,background:badgeCategoryFilter==="all"?"#1B231E":"transparent",color:badgeCategoryFilter==="all"?"#D6EFE2":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>All</button>
+                <button onClick={()=>setBadgeCategoryFilter("all")} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter==="all"?C.purple:C.purpleMid}`,background:badgeCategoryFilter==="all"?"#1B231E":"transparent",color:badgeCategoryFilter==="all"?"#D4E5DA":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>All</button>
                 {cats.map(cat => (
-                  <button key={cat} onClick={()=>setBadgeCategoryFilter(cat)} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter===cat?C.purple:C.purpleMid}`,background:badgeCategoryFilter===cat?"#1B231E":"transparent",color:badgeCategoryFilter===cat?"#D6EFE2":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>{cat}</button>
+                  <button key={cat} onClick={()=>setBadgeCategoryFilter(cat)} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${badgeCategoryFilter===cat?C.purple:C.purpleMid}`,background:badgeCategoryFilter===cat?"#1B231E":"transparent",color:badgeCategoryFilter===cat?"#D4E5DA":C.sub,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"capitalize"}}>{cat}</button>
                 ))}
               </div>
             </div>
@@ -3959,7 +3959,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               </div>
               <div style={{display:"flex",gap:12}}>
                 <button onClick={()=>{setShowBadgeModal(false);setSelectedBadge("");setBadgeNote("");setBadgeSearch("");setBadgeCategoryFilter("all");}} style={{flex:1,padding:"13px 0",borderRadius:14,border:`2px solid ${C.purpleMid}`,background:"#0E1311",color:C.sub,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-                <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#86CFAE)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
+                <button onClick={claimBadge} disabled={!selectedBadge} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:selectedBadge?`linear-gradient(135deg,${C.purple},#4A9D6E)`:"#E5E7EB",color:selectedBadge?C.white:"#9CA3AF",fontWeight:900,cursor:selectedBadge?"pointer":"not-allowed"}}>Claim Badge</button>
               </div>
             </div>
           </div>
@@ -4016,8 +4016,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     onClick={() => setPin(pinMenuFor.badgeRowId, slot)}
                     style={{
                       padding: "12px 14px", borderRadius: 12,
-                      background: isCurrent ? "#5BBE93" : "#161D19",
-                      border: `1px solid ${isCurrent ? "#5BBE93" : "#2A3A2A"}`,
+                      background: isCurrent ? "#1F5F3F" : "#161D19",
+                      border: `1px solid ${isCurrent ? "#1F5F3F" : "#2A3A2A"}`,
                       color: isCurrent ? "#fff" : "#F0F0F0",
                       fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left",
                       display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -4173,7 +4173,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             <div style={{position:"relative"}}>
                               <div style={{fontSize:34,marginBottom:6}}><BadgeIcon image={g.image} emoji={g.emoji} size={34} imgSize={100} /></div>
                               <div style={{fontWeight:900,fontSize:13,color:"#F0F0F0",lineHeight:1.3,marginBottom:4}}>{g.label}</div>
-                              <div style={{fontSize:10,color:"#86CFAE",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
+                              <div style={{fontSize:10,color:"#4A9D6E",lineHeight:1.3,marginBottom:8}}>{g.desc}</div>
                               <div style={{display:"inline-block",
                                 background:"linear-gradient(90deg, #ff6ec4, #7873f5, #4ade80, #facc15)",
                                 backgroundSize:"200% 200%",
@@ -4243,7 +4243,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               style={{
                                 position: "absolute", top: 6, right: 6, zIndex: 5,
                                 width: 26, height: 26, borderRadius: 999,
-                                background: g.pin_slot != null ? "#5BBE93" : "rgba(0,0,0,0.55)",
+                                background: g.pin_slot != null ? "#1F5F3F" : "rgba(0,0,0,0.55)",
                                 border: "none", color: "#fff",
                                 cursor: "pointer", fontSize: 13, lineHeight: 1,
                                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -4375,7 +4375,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 const unlocked = userLvl >= reward.level;
                 return (
                   <div>
-                    <button onClick={() => setCustomizationDetail(null)} style={{ background: "none", border: "none", color: "#86CFAE", fontSize: 13, fontWeight: 700, padding: 0, marginBottom: 16, cursor: "pointer" }}>
+                    <button onClick={() => setCustomizationDetail(null)} style={{ background: "none", border: "none", color: "#4A9D6E", fontSize: 13, fontWeight: 700, padding: 0, marginBottom: 16, cursor: "pointer" }}>
                       ← Back to all rewards
                     </button>
                     <div style={{ background: unlocked ? `linear-gradient(135deg, ${reward.color}33, ${reward.color}11)` : "rgba(255,255,255,0.04)", borderRadius: 18, padding: 24, border: `1.5px solid ${unlocked ? reward.color : "#1B231E"}`, marginBottom: 16 }}>
@@ -4463,7 +4463,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   boxShadow: `0 0 32px ${lvlColors.glow}`,
                 }}>
                   <div style={{fontSize:13,color:"#9CA3AF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase" as const}}>Current Level</div>
-                  <div style={{fontSize:54,fontWeight:900,color:lvlColors.accent,lineHeight:1,marginTop:4}}>
+                  <div style={{fontSize:54,fontWeight:900,color:"#4A9D6E",lineHeight:1,marginTop:4}}>
                     {progressInfo.level}
                   </div>
                   {progressInfo.isMaxLevel ? (
@@ -4505,16 +4505,16 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     <div key={cat.key} style={{
                       display:"flex",justifyContent:"space-between",alignItems:"center",
                       padding:"7px 10px",
-                      background: done ? "linear-gradient(135deg, rgba(91,190,147,0.45), rgba(134,207,174,0.30))" : "#0E1311",
+                      background: done ? "linear-gradient(135deg, rgba(46,125,84,0.45), rgba(74,157,110,0.30))" : "#0E1311",
                       borderRadius:8,
-                      border: done ? "1px solid #86CFAE" : "1px solid #1B231E",
-                      boxShadow: done ? "0 0 8px rgba(134,207,174,0.35)" : "none",
+                      border: done ? "1px solid #4A9D6E" : "1px solid #1B231E",
+                      boxShadow: done ? "0 0 8px rgba(74,157,110,0.35)" : "none",
                       transition: "all 0.2s",
                     }}>
                       <span style={{fontSize:12,color:"#F0F0F0",fontWeight:done?700:400}}>
                         {cat.icon} {cat.label} {done && <span style={{fontSize:11,marginLeft:4}}>✓</span>}
                       </span>
-                      <span style={{fontSize:11,fontWeight:800,color:done?"#FFFFFF":"#86CFAE"}}>+{cat.xp}</span>
+                      <span style={{fontSize:11,fontWeight:800,color:done?"#FFFFFF":"#4A9D6E"}}>+{cat.xp}</span>
                     </div>
                   );
                 })}
@@ -4565,7 +4565,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 <div style={{background:"#0E1311",borderRadius:14,padding:"16px",
                   border:`1.5px solid ${lvlColors.border}`,marginBottom:8}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                    <div style={{fontWeight:900,fontSize:16,color:lvlColors.accent}}>
+                    <div style={{fontWeight:900,fontSize:16,color:"#4A9D6E"}}>
                       Level {sel} {sel === 6 && "— MAX"}
                     </div>
                     {reached ? (
@@ -4573,7 +4573,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         color:"#10B981",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>REACHED</div>
                     ) : showLiveProgress ? (
                       <div style={{padding:"3px 10px",borderRadius:99,background:lvlColors.badge,
-                        color:lvlColors.accent,fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>NEXT UP</div>
+                        color:"#4A9D6E",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>NEXT UP</div>
                     ) : (
                       <div style={{padding:"3px 10px",borderRadius:99,background:"#161D19",
                         color:"#6B7280",fontSize:10,fontWeight:800,letterSpacing:"0.05em"}}>LOCKED</div>
@@ -4634,7 +4634,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               </div>
                               {live && (
                                 <div style={{flexShrink:0,fontSize:11,fontWeight:800,
-                                  color: complete ? "#10B981" : "#86CFAE",fontVariantNumeric:"tabular-nums" as any}}>
+                                  color: complete ? "#10B981" : "#4A9D6E",fontVariantNumeric:"tabular-nums" as any}}>
                                   {have}/{need}
                                 </div>
                               )}
@@ -4673,7 +4673,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 await supabase.from('users').update({full_name:profile.name,username:profile.username,bio:profile.bio,city:profile.city} as any).eq('id',user.id);
                 await refreshProfile();
                 setEditProfile(false);
-              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
+              }} style={{flex:1,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:C.white,fontWeight:900,cursor:"pointer"}}>Save</button>
             </div>
           </div>
         </div>
@@ -4776,7 +4776,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 />
               ) : profileImg
                 ? <img src={ImagePresets.full(profileImg)} loading="lazy" decoding="async" style={{width:avatarSize,height:avatarSize,borderRadius:"50%",objectFit:"cover",objectPosition:`center ${avatarPosition}%`,transform:`scale(${avatarScale/100})`,transformOrigin:"center center",display:"block",pointerEvents:"none",transition:avatarDragState?"none":"transform 0.1s, object-position 0.1s"}} alt="Profile"/>
-                : <div style={{width:avatarSize,height:avatarSize,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
+                : <div style={{width:avatarSize,height:avatarSize,borderRadius:"50%",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:avatarSize<140?38:58,fontWeight:900,color:"#fff"}}>{profile.name[0]}</div>}
               </TierFrame>
               {/* When no image, make whole circle a label. accept now
                   includes video so users can upload a Live Photo /MOV/
@@ -4791,7 +4791,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   isOwn-gated: visitors must never see edit controls on someone
                   else's profile. */}
               {isOwn && !avatarRepositionMode && (
-                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#5BBE93",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
+                <label style={{position:"absolute",bottom:8,right:8,width:32,height:32,borderRadius:"50%",background:"#1F5F3F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.4)"}}>
                   📷
                   <input type="file" accept="image/*,video/*" style={{display:"none"}} onChange={e=>loadImg(e,setAvatar,user?{bucket:'avatars',path:`${user.id}/avatar.jpg`,dbField:'avatar_url'}:undefined)}/>
                 </label>
@@ -4820,13 +4820,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%",maxWidth:300}}>
                 <div style={{background:"rgba(0,0,0,0.85)",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:8,width:"100%"}}>
                   <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarScale(s=>Math.max(100,s-10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 4px",lineHeight:1}}>−</button>
-                  <input type="range" min={100} max={300} step={1} value={avatarScale} onChange={e=>setAvatarScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#5BBE93"}}/>
+                  <input type="range" min={100} max={300} step={1} value={avatarScale} onChange={e=>setAvatarScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#1F5F3F"}}/>
                   <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarScale(s=>Math.min(300,s+10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 4px",lineHeight:1}}>+</button>
                   <span style={{color:"#fff",fontSize:10,fontWeight:700,minWidth:32,textAlign:"right"}}>{Math.round(avatarScale)}%</span>
                 </div>
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarPosition(50);setAvatarScale(100);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 10px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Reset</button>
-                  <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#5BBE93",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
+                  <button onClick={e=>{e.preventDefault();e.stopPropagation();saveAvatarPosition();}} style={{background:"#1F5F3F",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✓ Save</button>
                   <button onClick={e=>{e.preventDefault();e.stopPropagation();setAvatarRepositionMode(false);setAvatarDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"5px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Cancel</button>
                 </div>
               </div>
@@ -4858,12 +4858,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
               {(viewProfile as any)?.account_type === 'business' && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
-                  <span style={{ background: "#1A2A1A", color: "#5BBE93", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
+                  <span style={{ background: "#1A2A1A", color: "#4A9D6E", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A" }}>
                     🏢 {(viewProfile as any)?.business_type || 'Business'}
                   </span>
                   {(viewProfile as any)?.business_website && (
                     <a href={(viewProfile as any)?.business_website} target="_blank" rel="noopener noreferrer"
-                      style={{ background: "#1A2A1A", color: "#5BBE93", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
+                      style={{ background: "#1A2A1A", color: "#4A9D6E", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid #2A3A2A", textDecoration: "none" }}>
                       🔗 Website
                     </a>
                   )}
@@ -4910,13 +4910,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         − / + buttons for precise control. */}
                     <div style={{background:"rgba(0,0,0,0.65)",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,width:"100%"}}>
                       <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerScale(s=>Math.max(100,s-10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 6px",lineHeight:1}}>−</button>
-                      <input type="range" min={100} max={300} step={1} value={bannerScale} onChange={e=>setBannerScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#5BBE93"}}/>
+                      <input type="range" min={100} max={300} step={1} value={bannerScale} onChange={e=>setBannerScale(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} style={{flex:1,accentColor:"#1F5F3F"}}/>
                       <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerScale(s=>Math.min(300,s+10));}} style={{background:"transparent",border:"none",color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer",padding:"0 6px",lineHeight:1}}>+</button>
                       <span style={{color:"#fff",fontSize:11,fontWeight:700,minWidth:36,textAlign:"right"}}>{Math.round(bannerScale)}%</span>
                     </div>
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={e=>{e.preventDefault();e.stopPropagation();setBannerPosition(50);setBannerScale(100);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 12px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Reset</button>
-                      <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#5BBE93",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
+                      <button onClick={e=>{e.preventDefault();e.stopPropagation();saveBannerPosition();}} style={{background:"#1F5F3F",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Save</button>
                       <button onClick={e=>{e.preventDefault();e.stopPropagation();setRepositionMode(false);setDragState(null);}} style={{background:"rgba(0,0,0,0.55)",borderRadius:20,padding:"6px 16px",border:"none",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Done</button>
                     </div>
                   </div>
@@ -4954,7 +4954,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     setProfile(p=>({...p, bio}));
                     setBioEditing(false);
                     refreshProfile?.();
-                  }} style={{ padding:"7px 16px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.purple},#86CFAE)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>{bioSaving ? "Saving…" : "Save"}</button>
+                  }} style={{ padding:"7px 16px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${C.purple},#4A9D6E)`, color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer" }}>{bioSaving ? "Saving…" : "Save"}</button>
                 </div>
               </div>
             ) : (profile.bio || isOwn) ? (
@@ -4989,7 +4989,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   style={{flex:1,textAlign:"center",cursor:"pointer",padding:"14px 10px",background:"#111811",transition:"background 0.15s",position:"relative",borderLeft:i>0?"1px solid #2A3A2A":"none"}}
                   onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.background="#1A2A1A"}}
                   onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background="#111811"}}>
-                  <div style={{fontSize:26,fontWeight:900,color:C.purple,lineHeight:1,letterSpacing:-1}}>{s.v.toLocaleString()}</div>
+                  <div style={{fontSize:26,fontWeight:900,color:"#4A9D6E",lineHeight:1,letterSpacing:-1}}>{s.v.toLocaleString()}</div>
                   <div style={{fontSize:11,color:C.sub,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{s.l}</div>
                 </div>
               ))}
@@ -4997,7 +4997,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
             <div style={{display:"flex", gap:8, width:"100%"}}>
               {isOwn ? (
-                <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
+                <button onClick={()=>setEditProfile(true)} style={{padding:"11px 22px",borderRadius:14,border:`1.5px solid ${C.purple}`,background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",flex:1,transition:"all 0.15s"}}
                   onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.filter="brightness(1.08)"}}
                   onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.filter="none"}}>
                   ✏️ Edit Profile
@@ -5007,7 +5007,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               )}
               <button onClick={shareProfile} aria-label="Share profile" style={{
                 padding:"11px 14px", borderRadius:14, border:`1.5px solid ${C.purple}`,
-                background: "transparent", color: C.purple,
+                background: "transparent", color: "#4A9D6E",
                 fontWeight: 800, fontSize: 14, cursor: "pointer",
                 flexShrink: 0, transition: "all 0.15s",
               }}>
@@ -5030,10 +5030,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               width:"100%",marginBottom:12,
               background: progressInfo
                 ? `linear-gradient(135deg, ${LEVEL_COLORS[progressInfo.level].badge}, rgba(14,8,32,0.8))`
-                : "rgba(91,190,147,0.10)",
+                : "rgba(46,125,84,0.10)",
               border: progressInfo
                 ? `1.5px solid ${LEVEL_COLORS[progressInfo.level].border}`
-                : "1.5px solid rgba(91,190,147,0.35)",
+                : "1.5px solid rgba(46,125,84,0.35)",
               borderRadius:16,padding:"14px 16px",cursor:"pointer",textAlign:"left" as const,
               boxShadow: progressInfo ? `0 0 16px ${LEVEL_COLORS[progressInfo.level].glow}` : "none",
             }}>
@@ -5042,15 +5042,15 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   ⚡ Level {progressInfo?.level ?? 1} Progress
                 </div>
                 <span style={{fontSize:11,fontWeight:700,
-                  color: progressInfo ? LEVEL_COLORS[progressInfo.level].accent : "#5BBE93"}}>
+                  color: progressInfo ? LEVEL_COLORS[progressInfo.level].accent : "#4A9D6E"}}>
                   {progressInfo?.isMaxLevel ? "MAX" : `${progressInfo?.xpInLevel ?? 0}/${progressInfo?.xpNeeded ?? 36} XP`}
                 </span>
               </div>
               <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,0.08)",overflow:"hidden",marginBottom:6}}>
                 <div style={{height:"100%",borderRadius:99,
                   background: progressInfo
-                    ? `linear-gradient(90deg, ${LEVEL_COLORS[progressInfo.level].accent}, #86CFAE)`
-                    : "linear-gradient(90deg,#5BBE93,#86CFAE)",
+                    ? `linear-gradient(90deg, ${LEVEL_COLORS[progressInfo.level].accent}, #4A9D6E)`
+                    : "linear-gradient(90deg,#1F5F3F,#4A9D6E)",
                   width:`${progressInfo?.xpPercent ?? 0}%`,transition:"width 0.5s ease"}}/>
               </div>
               {progressInfo?.readyToLevelUp ? (
@@ -5075,8 +5075,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               style={{
                 width: "100%",
                 marginBottom: 12,
-                background: "linear-gradient(135deg, rgba(91,190,147,0.15), rgba(134,207,174,0.10))",
-                border: "1.5px solid rgba(134,207,174,0.45)",
+                background: "linear-gradient(135deg, rgba(46,125,84,0.15), rgba(74,157,110,0.10))",
+                border: "1.5px solid rgba(74,157,110,0.45)",
                 borderRadius: 16,
                 padding: "14px 16px",
                 cursor: "pointer",
@@ -5087,7 +5087,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 <div style={{ fontWeight: 800, fontSize: 13, color: C.text }}>
                   ✨ Customizations
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#86CFAE" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#4A9D6E" }}>
                   {(() => {
                     const lvl = progressInfo?.level ?? 1;
                     const unlockedCount = [2, 3, 4, 5, 6].filter(l => lvl >= l).length;
@@ -5109,7 +5109,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               const badgeFams = groupBadgesIntoFamilies(earnedBadges, badgeCounters);
               const badgeCount = badgeFams.length + rivalryBadges.length;
               const mStats = monthActivitySummary(monthLogs);
-              const big = { fontSize: 40, fontWeight: 900, color: C.purple, lineHeight: 1, letterSpacing: -1 } as const;
+              const big = { fontSize: 40, fontWeight: 900, color: "#4A9D6E", lineHeight: 1, letterSpacing: -1 } as const;
               const sub = { fontSize: 12, color: C.sub, fontWeight: 600, marginTop: 4 } as const;
               return (
                 <TileGrid wide={!isMobile} onOpen={setOpenTile} tiles={[
@@ -5128,12 +5128,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))`, gap: 6 }}>
                           {(isMobile ? [
                             { l: "💪 Workouts", v: mStats.workouts || "0", c: "#F5C451" },
-                            { l: "📅 Active days", v: mStats.activeDays || "0", c: "#86CFAE" },
+                            { l: "📅 Active days", v: mStats.activeDays || "0", c: "#4A9D6E" },
                             { l: "🏃 Cardio", v: mStats.cardioSessions || "0", c: "#5BC8E0" },
                             { l: "🧘 Wellness", v: mStats.wellnessSessions || "0", c: C.purple },
                           ] : [
                             { l: "💪 Workouts", v: mStats.workouts || "0", c: "#F5C451" },
-                            { l: "📅 Active days", v: mStats.activeDays || "0", c: "#86CFAE" },
+                            { l: "📅 Active days", v: mStats.activeDays || "0", c: "#4A9D6E" },
                             { l: "⏱ Time trained", v: fmtMinutes(mStats.minutes), c: "#5BC8E0" },
                             { l: "Avg / week", v: mStats.avgPerWeek, c: C.purple },
                           ]).map(x => (
@@ -5153,7 +5153,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                       const empty = (t: string) => <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, color: C.sub, textAlign: "center" }}>{t}</div>;
                       return (
                         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                          <div style={{ fontSize: 11, color: C.purple, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: -4 }}>{mStats.monthLabel}</div>
+                          <div style={{ fontSize: 11, color: "#4A9D6E", fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: -4 }}>{mStats.monthLabel}</div>
                           {statCells}
                           <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
                             {/* Lifting: sessions + muscle groups trained */}
@@ -5187,7 +5187,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             </div>
                             {/* Wellness at a glance */}
                             <div style={panel}>
-                              <div style={head}><span>🧘 Wellness</span><span style={{ color: C.purple }}>{mStats.wellnessSessions}×</span></div>
+                              <div style={head}><span>🧘 Wellness</span><span style={{ color: "#4A9D6E" }}>{mStats.wellnessSessions}×</span></div>
                               {mStats.wellness.length ? (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                                   {mStats.wellness.slice(0, 4).map(w => (
@@ -5230,12 +5230,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         const now = Date.now();
                         const daysLeft = end ? Math.max(0, Math.ceil((end - now) / DAY)) : null;
                         let pace: { t: string; c: string } | null = null;
-                        if (tgt > 0 && cur >= tgt) pace = { t: "🎉 Goal hit!", c: "#86CFAE" };
+                        if (tgt > 0 && cur >= tgt) pace = { t: "🎉 Goal hit!", c: "#4A9D6E" };
                         else if (end && end > start) {
                           const expected = tgt * Math.min(1, Math.max(0, (now - start) / (end - start)));
                           const perDay = daysLeft ? (tgt - cur) / daysLeft : tgt - cur;
                           pace = cur >= expected
-                            ? { t: "✅ On pace", c: "#86CFAE" }
+                            ? { t: "✅ On pace", c: "#4A9D6E" }
                             : { t: `Need ${num(perDay)} ${unitS(g.unit)}/day`, c: "#F5C451" };
                         }
                         return { cur, tgt, pct, daysLeft, pace };
@@ -5248,7 +5248,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               <div key={g.id}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.emoji || "🎯"} {g.title}</div>
                                 <div style={{ height: 6, background: "#243329", borderRadius: 99, overflow: "hidden", marginTop: 4 }}>
-                                  <div style={{ height: "100%", width: `${Math.max(x.pct, 2)}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
+                                  <div style={{ height: "100%", width: `${Math.max(x.pct, 2)}%`, background: `linear-gradient(90deg, ${C.purple}, #4A9D6E)`, borderRadius: 99 }} />
                                 </div>
                                 <div style={{ fontSize: 9.5, color: C.sub, fontWeight: 700, marginTop: 3 }}>{x.cur}/{x.tgt} {unitS(g.unit)}{x.daysLeft != null ? ` · ${x.daysLeft}d left` : ""}</div>
                               </div>
@@ -5266,11 +5266,11 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               <div key={g.id} style={{ background: "#0E1311", border: "1px solid #243329", borderRadius: 12, padding: "10px 12px" }}>
                                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                                   <span style={{ fontSize: 14, fontWeight: 800, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.emoji || "🎯"} {g.title}</span>
-                                  <span style={{ fontSize: 13, fontWeight: 900, color: C.purple, flexShrink: 0 }}>{x.cur} <span style={{ color: C.sub, fontWeight: 700 }}>/ {x.tgt} {unitS(g.unit)}</span></span>
+                                  <span style={{ fontSize: 13, fontWeight: 900, color: "#4A9D6E", flexShrink: 0 }}>{x.cur} <span style={{ color: C.sub, fontWeight: 700 }}>/ {x.tgt} {unitS(g.unit)}</span></span>
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0 7px" }}>
                                   <div style={{ flex: 1, height: 8, background: "#243329", borderRadius: 99, overflow: "hidden" }}>
-                                    <div style={{ height: "100%", width: `${Math.max(x.pct, 1.5)}%`, background: `linear-gradient(90deg, ${C.purple}, #86CFAE)`, borderRadius: 99 }} />
+                                    <div style={{ height: "100%", width: `${Math.max(x.pct, 1.5)}%`, background: `linear-gradient(90deg, ${C.purple}, #4A9D6E)`, borderRadius: 99 }} />
                                   </div>
                                   <span style={{ fontSize: 11, fontWeight: 800, color: C.text, width: 34, textAlign: "right" }}>{Math.round(x.pct)}%</span>
                                 </div>
@@ -5282,7 +5282,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               </div>
                             );
                           })}
-                          {profileGoals.length > 2 && <div style={{ fontSize: 11, color: C.purple, fontWeight: 800 }}>+{profileGoals.length - 2} more active goal{profileGoals.length - 2 === 1 ? "" : "s"}</div>}
+                          {profileGoals.length > 2 && <div style={{ fontSize: 11, color: "#4A9D6E", fontWeight: 800 }}>+{profileGoals.length - 2} more active goal{profileGoals.length - 2 === 1 ? "" : "s"}</div>}
                           {past.length > 0 && (
                             <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 2 }}>
                               <div style={{ fontSize: 10, color: C.sub, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6 }}>Past goals</div>
@@ -5294,9 +5294,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                                     <span style={{ flexShrink: 0 }}>{done ? "🏆" : (g.emoji || "🎯")}</span>
                                     <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.title} <span style={{ color: C.sub }}>· {x.cur}/{x.tgt} {unitS(g.unit)}</span></span>
                                     <div style={{ width: 60, height: 5, background: "#243329", borderRadius: 99, overflow: "hidden", flexShrink: 0 }}>
-                                      <div style={{ height: "100%", width: `${x.pct}%`, background: done ? "#86CFAE" : "#4B5E54", borderRadius: 99 }} />
+                                      <div style={{ height: "100%", width: `${x.pct}%`, background: done ? "#4A9D6E" : "#4B5E54", borderRadius: 99 }} />
                                     </div>
-                                    <span style={{ width: 86, textAlign: "right", color: done ? "#86CFAE" : C.sub, flexShrink: 0, fontSize: 10, whiteSpace: "nowrap" }}>{done ? "✓ Done" : `${Math.round(x.pct)}% · ${fmtD(g.completed_at || g.window_end)}`}</span>
+                                    <span style={{ width: 86, textAlign: "right", color: done ? "#4A9D6E" : C.sub, flexShrink: 0, fontSize: 10, whiteSpace: "nowrap" }}>{done ? "✓ Done" : `${Math.round(x.pct)}% · ${fmtD(g.completed_at || g.window_end)}`}</span>
                                   </div>
                                 );
                               })}
@@ -5305,7 +5305,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         </div>
                       );
                     })()                    ) : (
-                      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, border: `1.5px dashed ${C.purpleMid}`, borderRadius: 14, background: "rgba(91,190,147,0.05)", textAlign: "center", padding: 10 }}>
+                      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, border: `1.5px dashed ${C.purpleMid}`, borderRadius: 14, background: "rgba(46,125,84,0.05)", textAlign: "center", padding: 10 }}>
                         <div style={{ fontSize: isMobile ? 22 : 30 }}>🎯</div>
                         <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 800, color: C.text }}>{isOwn ? "Set your first goal" : "No active goals"}</div>
                         {!isMobile && <div style={{ fontSize: 11, color: C.sub }}>{isOwn ? "Track a target and watch the progress bar fill up" : ""}{profilePastGoals.length ? ` · ${profilePastGoals.length} past` : ""}</div>}
@@ -5328,7 +5328,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               </InTile>
             )}
             <InTile slot="photos">
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(91,190,147,0.08)",marginBottom:20}}>
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(46,125,84,0.08)",marginBottom:20}}>
               {/* Title row — just the heading + Edit toggle. The three
                   navigation buttons (All Photos / Tagged In / Recaps) used
                   to live here too, but with three of them the row wrapped
@@ -5339,9 +5339,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               </div>
               {/* Nav buttons row */}
               <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-                <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
-                <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
-                {isOwn && (<Link href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #2A3A2A",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</Link>)}
+                <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
+                <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
+                {isOwn && (<Link href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</Link>)}
               </div>
               {/* Highlights strip — horizontal scroll. Same component used by
                   group highlights (HighlightsStrip from GroupHighlights.tsx).
@@ -5354,23 +5354,23 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 isOwn={isOwn}
                 favoritesCount={highlights.length}
                 favoritesActions={isOwn && (highlights.length > 0 || highlights.length < HIGHLIGHT_SLOTS) ? (<>{isOwn && highlights.length > 0 && (
-                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#1B231E",color:editingHighlights?"#fff":C.purple,border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
+                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#1B231E",color:editingHighlights?"#fff":"#4A9D6E",border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
                       {editingHighlights ? "✓ Done" : "✏️ Edit"}
                     </button>
                   )}
                   {isOwn && highlights.length < HIGHLIGHT_SLOTS && (
-                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",border:"none",cursor:"pointer"}}>
+                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",border:"none",cursor:"pointer"}}>
                       + Add
                     </button>
                   )}</>) : null}
                 favorites={<>{highlights.length === 0 ? (
                 isOwn ? (
-                <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(91,190,147,0.06)",color:C.purple,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(46,125,84,0.06)",color:"#4A9D6E",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
                   <span style={{fontSize:24}}>+</span>
                   <span>Add highlights — photos and videos from your posts</span>
                 </button>
                 ) : (
-                  <div style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(91,190,147,0.06)",color:C.sub,fontWeight:700,fontSize:13,textAlign:"center"}}>No highlights yet</div>
+                  <div style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(46,125,84,0.06)",color:C.sub,fontWeight:700,fontSize:13,textAlign:"center"}}>No highlights yet</div>
                 )
               ) : editingHighlights ? (
                 // Edit mode: show items as small thumbnails with × buttons.
@@ -5406,13 +5406,13 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 creation modal (CreateGoalModal mounted at bottom of page).
                 Empty-state nudges the user to set their first goal. */}
             <InTile slot="goals">
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(91,190,147,0.08)",marginBottom:20}}>
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(46,125,84,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>🎯 Goals</div>
                 {isOwn && (
                 <button
                   onClick={()=>setShowGoalCreate(true)}
-                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#1B231E",color:"#86CFAE",border:"1.5px solid #2A3A2A",cursor:"pointer"}}
+                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer"}}
                 >+ New</button>
                 )}
               </div>
@@ -5426,7 +5426,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   <button key={t.key} onClick={()=>setProfileGoalsHistoryTab(t.key)} style={{
                     flex:1,padding:"6px 4px",borderRadius:6,border:"none",cursor:"pointer",
                     fontWeight:700,fontSize:11,
-                    background:profileGoalsHistoryTab===t.key?"linear-gradient(135deg,#5BBE93,#86CFAE)":"transparent",
+                    background:profileGoalsHistoryTab===t.key?"linear-gradient(135deg,#1F5F3F,#4A9D6E)":"transparent",
                     color:profileGoalsHistoryTab===t.key?"#fff":"#9CA3AF",
                   }}>{t.label}</button>
                 ))}
@@ -5466,10 +5466,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                               {g.title}
                             </div>
-                            <div style={{fontSize:10,fontWeight:800,color: completedSuccessfully ? "#4ADE80" : C.purple,flexShrink:0}}>
+                            <div style={{fontSize:10,fontWeight:800,color: completedSuccessfully ? "#4ADE80" : "#4A9D6E",flexShrink:0}}>
                               {completedSuccessfully ? "✓ Done" : `${Math.round(g.current)}/${g.target}`}
                             </div>
-                            <span style={{fontSize:14,color:"#5BBE93",flexShrink:0,marginLeft:2}}>›</span>
+                            <span style={{fontSize:14,color:"#4A9D6E",flexShrink:0,marginLeft:2}}>›</span>
                           </div>
                           <div style={{height:5,background:"#0E1311",borderRadius:99,overflow:"hidden"}}>
                             <div style={{
@@ -5477,7 +5477,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                               width:`${pct}%`,
                               background: completedSuccessfully
                                 ? "linear-gradient(90deg, #4ADE80, #22C55E)"
-                                : `linear-gradient(90deg, ${C.purple}, #86CFAE)`,
+                                : `linear-gradient(90deg, ${C.purple}, #4A9D6E)`,
                               borderRadius:99,
                             }}/>
                           </div>
@@ -5497,12 +5497,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 the card chrome. + New routes to the post page where
                 the Build Template modal lives. */}
             <InTile slot="activity-bottom">
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(91,190,147,0.08)",marginBottom:20}}>
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(46,125,84,0.08)",marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontWeight:900,fontSize:17,color:C.text}}>💪 Templates</div>
                 <button
                   onClick={() => router.push("/post?openBuilder=1")}
-                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",border:"none",cursor:"pointer"}}
+                  style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",border:"none",cursor:"pointer"}}
                 >+ New</button>
               </div>
               {user && (
@@ -5695,7 +5695,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                       style={{
                         background: "transparent",
                         border: `1.5px solid ${C.purpleMid}`,
-                        color: C.purple,
+                        color: "#4A9D6E",
                         padding: "10px 22px",
                         borderRadius: 14,
                         fontWeight: 700,
@@ -5727,7 +5727,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
             {/* Badges & Awards */}
             <InTile slot="badges">
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(91,190,147,0.08)",marginBottom:20}}>
+            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(46,125,84,0.08)",marginBottom:20}}>
               <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:16}}>🏆 Badges & Awards</div>
               {(() => {
                 // Use the same family grouping the modal uses, so the preview
@@ -5757,7 +5757,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                       {previewSlice.map(g => badgeFamilyTile(g))}
                     </div>
                     {totalBadges > 6 && (
-                      <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:"#1B231E",color:"#86CFAE",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                      <button onClick={()=>setShowAllBadgesModal(true)} style={{width:"100%",padding:"10px 0",marginBottom:12,borderRadius:14,border:`1.5px dashed ${C.purpleMid}`,background:"#1B231E",color:"#4A9D6E",fontWeight:700,fontSize:13,cursor:"pointer"}}>
                         👀 View all {totalBadges} badges
                       </button>
                     )}
@@ -5765,7 +5765,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 );
               })()}
               {isOwn && (
-              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
+              <button onClick={()=>setShowBadgeModal(true)} style={{width:"100%",padding:"13px 0",borderRadius:16,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:C.white,fontWeight:900,fontSize:14,cursor:"pointer"}}>
                 🏆 Report an Achievement
               </button>
               )}
@@ -5833,7 +5833,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                 <span style={{ fontSize:34, lineHeight:1 }}>{g.emoji || "🎯"}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:900, fontSize:18, color:C.text, lineHeight:1.2 }}>{g.title}</div>
-                  <div style={{ fontSize:12, fontWeight:800, marginTop:4, color: completed ? "#4ADE80" : (ended ? "#EF4444" : C.purple) }}>
+                  <div style={{ fontSize:12, fontWeight:800, marginTop:4, color: completed ? "#4ADE80" : (ended ? "#EF4444" : "#4A9D6E") }}>
                     {completed ? "✓ Completed" : (ended ? "Ended" : "Active")}
                   </div>
                 </div>
@@ -5850,10 +5850,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   <span style={{ fontSize:13, fontWeight:800, color:C.text }}>
                     {Math.round(current * 10) / 10} / {target}{g.unit ? ` ${g.unit}` : ""}
                   </span>
-                  <span style={{ fontSize:13, fontWeight:900, color: completed ? "#4ADE80" : C.purple }}>{Math.round(pct)}%</span>
+                  <span style={{ fontSize:13, fontWeight:900, color: completed ? "#4ADE80" : "#4A9D6E" }}>{Math.round(pct)}%</span>
                 </div>
                 <div style={{ height:10, background:"#0E1311", borderRadius:99, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${pct}%`, background: completed ? "linear-gradient(90deg,#4ADE80,#22C55E)" : `linear-gradient(90deg,${C.purple},#86CFAE)`, borderRadius:99 }}/>
+                  <div style={{ height:"100%", width:`${pct}%`, background: completed ? "linear-gradient(90deg,#4ADE80,#22C55E)" : `linear-gradient(90deg,${C.purple},#4A9D6E)`, borderRadius:99 }}/>
                 </div>
                 {!completed && remaining > 0 && (
                   <div style={{ fontSize:12, color:C.sub, marginTop:6 }}>

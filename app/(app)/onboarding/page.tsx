@@ -35,9 +35,9 @@ import { useIsNativeShell, isNativeShell } from "@/lib/native";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const C = {
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
   purpleDark: "#3E9E74",
-  purpleSoft: "#86CFAE",
+  purpleSoft: "#4A9D6E",
   purpleGhost: "rgba(124,58,237,0.14)",
   gold: "#F5A623",
   green: "#22C55E",

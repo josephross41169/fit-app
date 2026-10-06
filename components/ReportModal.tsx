@@ -127,7 +127,7 @@ export default function ReportModal({
               onClick={handleClose}
               style={{
                 padding: "11px 20px",
-                background: "#5BBE93",
+                background: "#1F5F3F",
                 border: "none",
                 borderRadius: 10,
                 color: "#fff",
@@ -159,7 +159,7 @@ export default function ReportModal({
                     padding: "10px 12px",
                     marginBottom: 6,
                     background: reason === r.key ? "#2A1F4A" : "#1B231E",
-                    border: `1px solid ${reason === r.key ? "#5BBE93" : "#232C27"}`,
+                    border: `1px solid ${reason === r.key ? "#1F5F3F" : "#232C27"}`,
                     borderRadius: 10,
                     cursor: "pointer",
                   }}
@@ -170,7 +170,7 @@ export default function ReportModal({
                     value={r.key}
                     checked={reason === r.key}
                     onChange={() => setReason(r.key)}
-                    style={{ marginTop: 3, accentColor: "#5BBE93" }}
+                    style={{ marginTop: 3, accentColor: "#1F5F3F" }}
                   />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0" }}>{r.label}</div>

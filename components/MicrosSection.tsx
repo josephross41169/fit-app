@@ -18,7 +18,7 @@ import { nutrientByKey, overUL, fmtAmount, type IngredientRow } from "@/lib/nutr
 
 const C = {
   card: "#111811", border: "#1B231E", text: "#F0F0F0", sub: "#9CA3AF",
-  green: "#5BBE93", greenBg: "#12291D", amber: "#EF9F27", track: "#1B231E",
+  green: "#1F5F3F", greenBg: "#12291D", amber: "#EF9F27", track: "#1B231E",
 };
 
 type LoggedSupp = { name: string; ingredients?: IngredientRow[] | null };
@@ -101,7 +101,7 @@ export default function MicrosSection({ userId, isOwn }: { userId: string; isOwn
               <div key={key} style={{ marginBottom: 9 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
                   <span style={{ color: C.text, fontWeight: 700 }}>{t.name}{over ? " ⚠️" : ""}</span>
-                  <span style={{ color: over ? C.amber : pct !== null ? (pct >= 100 ? "#86CFAE" : C.sub) : C.sub, fontWeight: 700 }}>
+                  <span style={{ color: over ? C.amber : pct !== null ? (pct >= 100 ? "#4A9D6E" : C.sub) : C.sub, fontWeight: 700 }}>
                     {over ? `${fmtAmount(t.amount, t.unit)} — over upper limit` : pct !== null ? `${pct}%` : fmtAmount(t.amount, t.unit)}
                   </span>
                 </div>
@@ -126,7 +126,7 @@ export default function MicrosSection({ userId, isOwn }: { userId: string; isOwn
             <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
               <span style={{ width: 110, fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0 }}>{name}</span>
               {days.map((_, i) => (
-                <span key={i} style={{ width: 18, height: 18, borderRadius: 5, background: set.has(i) ? C.greenBg : C.track, color: C.green, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900 }}>
+                <span key={i} style={{ width: 18, height: 18, borderRadius: 5, background: set.has(i) ? C.greenBg : C.track, color: "#4A9D6E", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900 }}>
                   {set.has(i) ? "✓" : ""}
                 </span>
               ))}

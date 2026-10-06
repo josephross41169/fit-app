@@ -6,8 +6,8 @@ import { useAuth } from "@/lib/auth";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
-const ACCENT = "#5BBE93";
-const ACCENT_BG = "rgba(91,190,147,0.15)";
+const ACCENT = "#4A9D6E";
+const ACCENT_BG = "rgba(46,125,84,0.15)";
 
 // ── Nav tab definitions ───────────────────────────────────────────────────────
 // Each tab has a `slot` declaring where it appears on mobile:
@@ -51,7 +51,7 @@ const tabs: Tab[] = [
     href: "/post", label: "Post", slot: "primary",
     icon: (_active) => (
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg -mt-3"
-        style={{ background: `linear-gradient(135deg, ${ACCENT}, #86CFAE)` }}>
+        style={{ background: `linear-gradient(135deg, #1F5F3F, #4A9D6E)` }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-6 h-6">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />

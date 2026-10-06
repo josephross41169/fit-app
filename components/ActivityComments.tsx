@@ -8,7 +8,7 @@ const C = {
   darkCard: "#161D19",
   darkBorder: "#232C27",
   darkSub: "#8892A4",
-  blue: "#5BBE93",
+  blue: "#1F5F3F",
   text: "#E2E8F0",
   sub: "#9CA3AF",
 };
@@ -139,7 +139,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
                   <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <div style={{
                       width: 30, height: 30, borderRadius: "50%",
-                      background: "linear-gradient(135deg,#5BBE93,#4ADE80)",
+                      background: "linear-gradient(135deg,#1F5F3F,#4ADE80)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden",
                     }}>
@@ -169,7 +169,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <div style={{
                 width: 28, height: 28, borderRadius: "50%",
-                background: "linear-gradient(135deg,#5BBE93,#4ADE80)",
+                background: "linear-gradient(135deg,#1F5F3F,#4ADE80)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 10, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden",
               }}>
@@ -205,7 +205,7 @@ export default function ActivityComments({ cardId, cardOwnerId }: Props) {
                     disabled={posting}
                     style={{
                       background: "none", border: "none", cursor: posting ? "not-allowed" : "pointer",
-                      color: C.blue, fontWeight: 800, fontSize: 13, padding: 0,
+                      color: "#4A9D6E", fontWeight: 800, fontSize: 13, padding: 0,
                       opacity: posting ? 0.5 : 1,
                     }}
                   >

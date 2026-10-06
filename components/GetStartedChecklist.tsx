@@ -14,7 +14,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
-const PURPLE = "#5BBE93";
+const PURPLE = "#1F5F3F";
 const DISMISS_KEY = "ll_getstarted_dismissed";
 
 interface Item { key: string; label: string; sub: string; done: boolean; }
@@ -137,7 +137,7 @@ export default function GetStartedChecklist({
           {doneCount} of {items.length} done{!expanded && remaining > 0 ? ` — ${remaining} step${remaining === 1 ? "" : "s"} left, tap to see all` : " — finish setting up to get the most out of the app."}
         </div>
         <div style={{ height: 8, borderRadius: 99, background: "#2A2140", overflow: "hidden", marginBottom: 16 }}>
-          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${PURPLE},#86CFAE)`, transition: "width 0.4s" }} />
+          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${PURPLE},#4A9D6E)`, transition: "width 0.4s" }} />
         </div>
       </button>
 
@@ -184,7 +184,7 @@ export default function GetStartedChecklist({
       {items.length > 1 && (
         <button onClick={() => setExpanded(v => !v)} style={{
           width: "100%", marginTop: 10, background: "none", border: "none",
-          color: "#86CFAE", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 6,
+          color: "#4A9D6E", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 6,
         }}>
           {expanded ? "Show less" : `Show all ${items.length} steps`}
         </button>

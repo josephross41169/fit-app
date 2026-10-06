@@ -48,11 +48,11 @@ const TIER_CONFIG: Record<Tier, {
     label: "Active",
     title: "Active",
     cardBg: "#161D19",
-    borderColor: "#5BBE93",
+    borderColor: "#1F5F3F",
     glowColor: "rgba(124,58,237,0.3)",
     nameBadgeBg: "#1E3D34",
-    nameBadgeText: "#86CFAE",
-    accentColor: "#5BBE93",
+    nameBadgeText: "#4A9D6E",
+    accentColor: "#1F5F3F",
     statsBg: "#110D1E",
     icon: "🟣",
     animated: false,
@@ -114,7 +114,7 @@ function Avatar({ name, url, tier, size = 42 }: { name: string; url?: string; ti
       overflow: "hidden", flexShrink: 0,
       background: cfg.nameBadgeBg,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.35, fontWeight: 800, color: cfg.accentColor,
+      fontSize: size * 0.35, fontWeight: 800, color: "#4A9D6E",
     }}>
       {url
         ? <img src={url} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt={name} />
@@ -217,7 +217,7 @@ export function TierActivityCard({ card }: { card: ActivityCardData }) {
               <TierBadge tier={card.tier} />
             </div>
             {cfg.title && (
-              <div style={{ fontSize: 10, color: cfg.accentColor, fontWeight: 700, letterSpacing: 0.5, marginTop: 1 }}>
+              <div style={{ fontSize: 10, color: "#4A9D6E", fontWeight: 700, letterSpacing: 0.5, marginTop: 1 }}>
                 {cfg.title}
               </div>
             )}
@@ -261,7 +261,7 @@ export function TierActivityCard({ card }: { card: ActivityCardData }) {
             }}>
               <div style={{
                 fontWeight: 900, fontSize: 16,
-                color: cfg.accentColor,
+                color: "#4A9D6E",
                 ...(card.tier === "elite" || card.tier === "untouchable" ? {
                   background: `linear-gradient(90deg, ${cfg.accentColor}, #fff, ${cfg.accentColor})`,
                   backgroundSize: "200% auto",

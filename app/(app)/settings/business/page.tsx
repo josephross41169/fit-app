@@ -243,7 +243,7 @@ export default function BusinessProfileView({
           height: 240,
           background: (editing ? bannerUrl : profile.banner_url)
             ? `url(${editing ? bannerUrl : profile.banner_url}) center/cover`
-            : "linear-gradient(135deg, #5BBE93, #86CFAE)",
+            : "linear-gradient(135deg, #1F5F3F, #4A9D6E)",
           cursor: editing ? "pointer" : "default",
         }}
       >
@@ -378,7 +378,7 @@ export default function BusinessProfileView({
               padding: "11px 18px",
               background: "transparent",
               border: "none",
-              borderBottom: activeTab === t.key ? "2px solid #86CFAE" : "2px solid transparent",
+              borderBottom: activeTab === t.key ? "2px solid #4A9D6E" : "2px solid transparent",
               color: activeTab === t.key ? C.text : C.sub,
               fontWeight: activeTab === t.key ? 700 : 500,
               fontSize: 14,
@@ -543,7 +543,7 @@ function ContactField({ icon, label, editing, value, onChange, view, link, place
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{label}</div>
         <div style={{ color: C.text, fontSize: 14, wordBreak: "break-word" }}>
-          {link ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ color: "#86CFAE", textDecoration: "none" }}>{display}</a> : display}
+          {link ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ color: "#4A9D6E", textDecoration: "none" }}>{display}</a> : display}
         </div>
       </div>
     </div>
@@ -566,7 +566,7 @@ function HoursTable({ hours, editing, onToggle, onChange }: {
             <div key={d.key} style={{ display: "grid", gridTemplateColumns: "90px 80px 1fr 1fr", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.label}</div>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.sub, cursor: "pointer" }}>
-                <input type="checkbox" checked={!!isOpen} onChange={() => onToggle(d.key)} style={{ accentColor: "#5BBE93" }} />Open
+                <input type="checkbox" checked={!!isOpen} onChange={() => onToggle(d.key)} style={{ accentColor: "#1F5F3F" }} />Open
               </label>
               {isOpen ? (
                 <>
@@ -641,7 +641,7 @@ const C = {
 };
 
 const pillStyle: React.CSSProperties = {
-  background: "#2A1F4A", border: "1px solid #5BBE93", color: "#D6EFE2",
+  background: "#2A1F4A", border: "1px solid #1F5F3F", color: "#D4E5DA",
   fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 99,
 };
 
@@ -652,7 +652,7 @@ const inlineInput: React.CSSProperties = {
 
 const primaryBtn: React.CSSProperties = {
   padding: "11px 20px", borderRadius: 12, border: "none",
-  background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
+  background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)",
   color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", flex: 1,
 };
 

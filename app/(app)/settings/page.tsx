@@ -206,7 +206,7 @@ export default function SettingsPage() {
           <Row>
             <button onClick={handleEnablePush} disabled={pushBusy}
               style={{
-                background: pushBusy ? "#232C27" : "linear-gradient(135deg,#5BBE93,#86CFAE)",
+                background: pushBusy ? "#232C27" : "linear-gradient(135deg,#1F5F3F,#4A9D6E)",
                 color: "#fff", border: "none", padding: "10px 18px",
                 borderRadius: 12, fontWeight: 800, fontSize: 13,
                 cursor: pushBusy ? "default" : "pointer",
@@ -537,7 +537,7 @@ function BusinessInsights({ profile }: { profile: any }) {
 }
 
 const linkStyle = {
-  color: "#86CFAE",
+  color: "#4A9D6E",
   textDecoration: "none",
   fontSize: 14,
   fontWeight: 600,

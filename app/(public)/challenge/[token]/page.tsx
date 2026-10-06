@@ -29,8 +29,8 @@ const C = {
   border: "#1B231E",
   text: "#F5F1E8",
   sub: "#9CA3AF",
-  accent: "#5BBE93",
-  accent2: "#86CFAE",
+  accent: "#1F5F3F",
+  accent2: "#4A9D6E",
   green: "#4ADE80",
   red: "#F87171",
 };

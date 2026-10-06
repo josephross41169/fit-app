@@ -17,7 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { isVideoUrl } from "@/components/GroupHighlights";
 
 const C = {
-  green: "#5BBE93", greenLight: "#86CFAE", card: "#161D19", dark: "#0E1311",
+  green: "#1F5F3F", greenLight: "#4A9D6E", card: "#161D19", dark: "#0E1311",
   chip: "#1B231E", border: "#2A3A2A", text: "#F0F0F0", sub: "#9CA3AF", red: "#EF4444",
 };
 
@@ -72,7 +72,7 @@ function Bubble({ cover, label, sub, onClick, dashed }: { cover?: string; label:
   return (
     <button onClick={onClick} style={{ width: 76, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
       <div style={{ width: 68, height: 68, borderRadius: "50%", padding: 3, background: dashed ? "transparent" : `linear-gradient(135deg, ${C.green}, ${C.greenLight})`, border: dashed ? `2px dashed ${C.border}` : "none", boxSizing: "border-box" }}>
-        <div style={{ width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden", background: C.chip, border: dashed ? "none" : `2px solid ${C.card}`, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", color: C.green, fontSize: 24, fontWeight: 800 }}>
+        <div style={{ width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden", background: C.chip, border: dashed ? "none" : `2px solid ${C.card}`, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", color: "#4A9D6E", fontSize: 24, fontWeight: 800 }}>
           {cover ? <Thumb src={cover} radius={0} /> : (dashed ? "+" : "📷")}
         </div>
       </div>

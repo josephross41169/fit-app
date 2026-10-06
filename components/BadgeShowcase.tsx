@@ -8,7 +8,7 @@ const fmtDate = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
 
 function ringColor(b: DisplayBadge): string {
-  if (b.renderType === "progression") return TIER_STYLES[b.tier ?? 1]?.border ?? "#5BBE93";
+  if (b.renderType === "progression") return TIER_STYLES[b.tier ?? 1]?.border ?? "#1F5F3F";
   if (b.renderType === "yearly") return "#F472B6";
   return "#A78BFA";
 }
@@ -117,7 +117,7 @@ export function BadgeDetailSheet({ badge: b, isOwn, ownerName, pinnedIds, onPin,
     return n === 1 && l.endsWith("s") && !l.includes("lbs") ? l.slice(0, -1) : l;
   };
 
-  const stat = (label: string, value: string, accent = "#86CFAE") => (
+  const stat = (label: string, value: string, accent = "#4A9D6E") => (
     <div style={{ flex: 1, minWidth: 0, background: "#141C18", border: "1px solid #243329", borderRadius: 14, padding: "10px 12px" }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: "#8FA39A", letterSpacing: 0.6, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 900, color: accent, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
@@ -175,7 +175,7 @@ export function BadgeDetailSheet({ badge: b, isOwn, ownerName, pinnedIds, onPin,
           <div style={{ marginTop: 14, background: "#141C18", border: "1px solid #243329", borderRadius: 16, overflow: "hidden" }}>
             {b.history.map((h, i) => (
               <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderTop: i ? "1px solid #1E2A23" : "none", opacity: h.earned ? 1 : 0.5 }}>
-                <span style={{ width: 20, textAlign: "center", fontSize: 13, color: h.earned ? "#5BBE93" : "#5C6F65" }}>{h.earned ? "✓" : "○"}</span>
+                <span style={{ width: 20, textAlign: "center", fontSize: 13, color: h.earned ? "#4A9D6E" : "#5C6F65" }}>{h.earned ? "✓" : "○"}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, color: "#E5F2EA", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.label}</span>
                 {h.threshold !== undefined && <span style={{ fontSize: 11, color: "#8FA39A", fontWeight: 700 }}>{h.threshold.toLocaleString()} {unit(h.threshold, b.progressLabel)}</span>}
                 <span style={{ fontSize: 11, color: "#8FA39A", width: 84, textAlign: "right" }}>{h.earned ? (fmtDate(h.earnedAt) || "Earned") : ""}</span>
@@ -194,7 +194,7 @@ export function BadgeDetailSheet({ badge: b, isOwn, ownerName, pinnedIds, onPin,
                 const taken = !current && !!pinnedIds[slot];
                 return (
                   <button key={slot} onClick={() => onPin(current ? null : slot)}
-                    style={{ padding: "10px 0", borderRadius: 12, border: `1.5px solid ${current ? "#5BBE93" : "#2A3A2A"}`, background: current ? "#5BBE93" : "#161D19", color: current ? "#0E1311" : "#E5F2EA", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
+                    style={{ padding: "10px 0", borderRadius: 12, border: `1.5px solid ${current ? "#1F5F3F" : "#2A3A2A"}`, background: current ? "#1F5F3F" : "#161D19", color: current ? "#0E1311" : "#E5F2EA", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
                     {slot}
                     <div style={{ fontSize: 9, fontWeight: 700, marginTop: 2, color: current ? "#0E1311" : "#8FA39A" }}>{current ? "Here" : taken ? "Swap" : "Empty"}</div>
                   </button>

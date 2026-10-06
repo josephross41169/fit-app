@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from "react";
 
-const C = { green: "#5BBE93", card: "#161D19", dark: "#0E1311", border: "#2A3A2A", text: "#F0F0F0", sub: "#9CA3AF" };
+const C = { green: "#1F5F3F", card: "#161D19", dark: "#0E1311", border: "#2A3A2A", text: "#F0F0F0", sub: "#9CA3AF" };
 const MAX = 16;
 
 function Thumb({ src, isVideo, h }: { src: string; isVideo: (u: string) => boolean; h: number }) {
@@ -40,7 +40,7 @@ export default function HighlightBoxEditor({ shown, all, isCustom, onSave, isVid
     <div style={{ background: C.card, borderRadius: 22, padding: 20, border: `2px solid ${C.border}`, marginBottom: 16, opacity: busy ? 0.7 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
         <div style={{ fontWeight: 900, fontSize: 16, color: C.text }}>🖼️ Photos in your box</div>
-        <button onClick={() => setPicking(p => !p)} style={{ ...btn, border: "none", background: picking ? C.green : "linear-gradient(135deg,#5BBE93,#86CFAE)", color: "#fff" }}>
+        <button onClick={() => setPicking(p => !p)} style={{ ...btn, border: "none", background: picking ? C.green : "linear-gradient(135deg,#1F5F3F,#4A9D6E)", color: "#fff" }}>
           {picking ? "✓ Done" : "+ Add photos"}
         </button>
       </div>

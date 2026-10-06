@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const G = "#5BBE93";
+const G = "#1F5F3F";
 const DARK_BG = "#0E1311";
 const DARK_CARD = "#161D19";
 const DARK_BORDER = "#232C27";
@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
           <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>
             Password reset links expire after 1 hour. Request a new one.
           </p>
-          <Link href="/forgot-password" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #86CFAE)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
+          <Link href="/forgot-password" style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #4A9D6E)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
             Request New Link
           </Link>
         </div>
@@ -100,7 +100,7 @@ export default function ResetPasswordPage() {
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>{success ? "✅" : "🔐"}</div>
-          <h1 style={{ fontSize: 28, fontWeight: 900, color: G, margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 900, color: "#4A9D6E", margin: 0, letterSpacing: -0.5 }}>
             {success ? "Password Updated" : "Set New Password"}
           </h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 6, lineHeight: 1.5 }}>
@@ -130,7 +130,7 @@ export default function ResetPasswordPage() {
 
             <button type="submit" disabled={loading || !password || !confirmPassword} style={{
               width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-              background: loading || !password || !confirmPassword ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
+              background: loading || !password || !confirmPassword ? DARK_BORDER : `linear-gradient(135deg, ${G}, #4A9D6E)`,
               color: "#fff", fontWeight: 900, fontSize: 16,
               cursor: loading || !password || !confirmPassword ? "not-allowed" : "pointer",
             }}>

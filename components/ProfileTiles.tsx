@@ -87,7 +87,7 @@ export function TileProvider({ mobile, wide = false, open, onClose, children }: 
             }}>
               <button onClick={onClose} aria-label="Back"
                 style={{ height: 44, minWidth: 44, padding: "0 10px", border: "none", background: "transparent",
-                  color: "#5BBE93", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  color: "#4A9D6E", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ fontSize: 26, lineHeight: 1, marginTop: -2 }}>{wide ? "×" : "‹"}</span> {wide ? "Close" : "Back"}
               </button>
               <div style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 17, color: "#F0F0F0", marginRight: 76 }}>{s.title}</div>
@@ -117,7 +117,7 @@ export function TileGrid({ tiles, onOpen, wide = false }: { tiles: TileSpec[]; o
           }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 15, marginBottom: 10 }}>
             <span>{t.emoji}</span><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
-            <span style={{ color: "#5BBE93", fontSize: 20, lineHeight: 1 }}>›</span>
+            <span style={{ color: "#4A9D6E", fontSize: 20, lineHeight: 1 }}>›</span>
           </div>
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>{t.preview}</div>
           {t.meta != null && <div style={{ fontSize: 12, color: "#8FA39A", marginTop: 8, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.meta}</div>}

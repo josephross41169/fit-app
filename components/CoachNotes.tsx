@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const C = { card: "#111811", border: "#1B231E", text: "#F0F0F0", sub: "#9CA3AF", green: "#5BBE93" };
+const C = { card: "#111811", border: "#1B231E", text: "#F0F0F0", sub: "#9CA3AF", green: "#1F5F3F" };
 
 export default function CoachNotes({ isOwn }: { isOwn: boolean }) {
   const [note, setNote] = useState<string | null>(null);

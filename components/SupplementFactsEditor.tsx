@@ -14,7 +14,7 @@ import { updateSupplementFacts, type SavedSupplement } from "@/lib/savedSuppleme
 
 const C = {
   card: "#0E1311", cardIn: "#111811", border: "#1B231E", borderIn: "#2A3A2A",
-  text: "#F0F0F0", sub: "#9CA3AF", green: "#5BBE93", greenLight: "#86CFAE",
+  text: "#F0F0F0", sub: "#9CA3AF", green: "#1F5F3F", greenLight: "#4A9D6E",
   greenBg: "#12291D", gold: "#F5A623",
 };
 
@@ -113,7 +113,7 @@ export default function SupplementFactsEditor({
 
           {!pickerOpen ? (
             <button onClick={() => setPickerOpen(true)}
-              style={{ width: "100%", padding: "11px 0", borderRadius: 10, border: `1.5px dashed ${C.borderIn}`, background: "transparent", color: C.green, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+              style={{ width: "100%", padding: "11px 0", borderRadius: 10, border: `1.5px dashed ${C.borderIn}`, background: "transparent", color: "#4A9D6E", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
               + Add ingredient
             </button>
           ) : (
@@ -136,7 +136,7 @@ export default function SupplementFactsEditor({
 
         <div style={{ padding: "12px 20px 16px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
           <button onClick={save} disabled={saving}
-            style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: saving ? "#24382E" : "linear-gradient(135deg,#5BBE93,#86CFAE)", color: "#04342C", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+            style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: saving ? "#24382E" : "linear-gradient(135deg,#1F5F3F,#4A9D6E)", color: "#04342C", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
             {saving ? "Saving..." : "Save facts"}
           </button>
         </div>

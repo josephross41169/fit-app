@@ -145,14 +145,14 @@ export default function DebugSessionPage() {
         <button
           onClick={runAll}
           disabled={running}
-          style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: running ? "#24382E" : "#5BBE93", color: "#04342C", fontWeight: 900, fontSize: 15, cursor: "pointer", marginBottom: 20 }}
+          style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: running ? "#24382E" : "#1F5F3F", color: "#04342C", fontWeight: 900, fontSize: 15, cursor: "pointer", marginBottom: 20 }}
         >
           {running ? "Runningâ¦" : "â¶ Run all checks"}
         </button>
         {lines.map((l, i) => (
           <div key={i} style={{ padding: "10px 12px", borderRadius: 10, marginBottom: 8, background: "#111811", border: `1px solid ${l.ok === false ? "#7F1D1D" : l.ok ? "#1E5B3F" : "#1B231E"}` }}>
             <div style={{ fontSize: 11, color: "#9CA3AF" }}>{l.label}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: l.ok === false ? "#FCA5A5" : l.ok ? "#86CFAE" : "#F0F0F0", wordBreak: "break-all" }}>{l.value}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: l.ok === false ? "#FCA5A5" : l.ok ? "#4A9D6E" : "#F0F0F0", wordBreak: "break-all" }}>{l.value}</div>
           </div>
         ))}
       </div>

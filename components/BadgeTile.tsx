@@ -45,7 +45,7 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
   challenges:  { accent: "#3B82F6", sigil: "shield"  },  // blue + shield
   social:      { accent: "#A855F7", sigil: "stars"   },  // purple + stars
   special:     { accent: "#EC4899", sigil: "hex"     },  // magenta + hex
-  default:     { accent: "#5BBE93", sigil: "rays"    },
+  default:     { accent: "#1F5F3F", sigil: "rays"    },
 };
 
 function getTheme(category?: string): CategoryTheme {

@@ -25,10 +25,10 @@ import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } f
 import { prettyWorkoutType, workoutSource } from "@/lib/workoutSource";
 
 const C = {
-  blue:"#5BBE93", greenLight:"#161D19", greenMid:"#1B231E",
+  blue:"#1F5F3F", greenLight:"#161D19", greenMid:"#1B231E",
   gold:"#F5A623", goldLight:"#FFFBEE",
   text:"#F0F0F0", sub:"#9CA3AF", white:"#161D19", bg:"#0E1311",
-  green:"#5BBE93",
+  green:"#1F5F3F",
   // Dark sidebar palette
   dark:"#0E1311", darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
@@ -145,7 +145,7 @@ function ReactionBar({
             style={{
               display: "flex", alignItems: "center", gap: 4,
               padding: "4px 10px", borderRadius: 99,
-              border: userHas ? "1.5px solid #5BBE93" : "1.5px solid #1B231E",
+              border: userHas ? "1.5px solid #1F5F3F" : "1.5px solid #1B231E",
               background: userHas ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.04)",
               cursor: loading ? "default" : "pointer",
               transition: "all 0.15s",
@@ -154,7 +154,7 @@ function ReactionBar({
           >
             <span style={{ fontSize: 14, lineHeight: 1 }}>{r.emoji}</span>
             {count > 0 && (
-              <span style={{ fontSize: 12, fontWeight: 700, color: userHas ? "#86CFAE" : "#9CA3AF" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: userHas ? "#4A9D6E" : "#9CA3AF" }}>
                 {count}
               </span>
             )}
@@ -451,11 +451,11 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "infrared sauna":       { emoji: "🌅", accent: "#FB923C" },
   "steam room":           { emoji: "♨️", accent: "#FBBF24" },
   "red light therapy":    { emoji: "🔴", accent: "#EF4444" },
-  "meditation":           { emoji: "🧘", accent: "#86CFAE" },
+  "meditation":           { emoji: "🧘", accent: "#4A9D6E" },
   "breathwork":           { emoji: "💨", accent: "#818CF8" },
-  "yoga nidra":           { emoji: "🌙", accent: "#86CFAE" },
+  "yoga nidra":           { emoji: "🌙", accent: "#4A9D6E" },
   "journaling":           { emoji: "📓", accent: "#A7DCC4" },
-  "therapy":              { emoji: "💬", accent: "#86CFAE" },
+  "therapy":              { emoji: "💬", accent: "#4A9D6E" },
   "sound bath":           { emoji: "🎵", accent: "#9BD9BC" },
   "stretching":           { emoji: "🤸", accent: "#34D399" },
   "foam rolling":         { emoji: "🌀", accent: "#10B981" },
@@ -463,7 +463,7 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "massage":              { emoji: "💆", accent: "#6EE7B7" },
   "chiropractic":         { emoji: "🦴", accent: "#A7F3D0" },
   "acupuncture":          { emoji: "📍", accent: "#34D399" },
-  "cupping":              { emoji: "🟣", accent: "#86CFAE" },
+  "cupping":              { emoji: "🟣", accent: "#4A9D6E" },
   "sunlight exposure":    { emoji: "☀️", accent: "#FBBF24" },
   "grounding":            { emoji: "🌱", accent: "#84CC16" },
   "nature walk":          { emoji: "🌲", accent: "#34D399" },
@@ -471,10 +471,10 @@ const WELLNESS_STYLES: Record<string, { emoji: string; accent: string }> = {
   "compression therapy":  { emoji: "🦿", accent: "#0EA5E9" },
   "float tank":           { emoji: "🌊", accent: "#0EA5E9" },
   "sleep":                { emoji: "😴", accent: "#6366F1" },
-  "fasting":              { emoji: "⏳", accent: "#86CFAE" },
+  "fasting":              { emoji: "⏳", accent: "#4A9D6E" },
 };
 function getWellnessStyle(activity: string): { emoji: string; accent: string } {
-  return WELLNESS_STYLES[activity.toLowerCase().trim()] || autoWellnessStyle(activity) || { emoji: "🌿", accent: "#86CFAE" };
+  return WELLNESS_STYLES[activity.toLowerCase().trim()] || autoWellnessStyle(activity) || { emoji: "🌿", accent: "#4A9D6E" };
 }
 
 // ── StreakCard ────────────────────────────────────────────────────────────
@@ -552,7 +552,7 @@ function StreakCard({ days, onDismiss, onLog }: { days: number; onDismiss: () =>
 function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: () => void }) {
   return (
     <div style={{
-      background: "linear-gradient(135deg, #5BBE93 0%, #DB2777 100%)",
+      background: "linear-gradient(135deg, #1F5F3F 0%, #DB2777 100%)",
       borderRadius: 16,
       padding: "14px 16px 14px 18px",
       marginBottom: 14,
@@ -576,7 +576,7 @@ function RecapPromptCard({ weekKey, onDismiss }: { weekKey: string; onDismiss: (
       <Link href={`/recap/${weekKey}`}
         style={{
           background: "rgba(255,255,255,0.95)",
-          color: "#5BBE93",
+          color: "#4A9D6E",
           border: "none",
           borderRadius: 99,
           padding: "8px 16px",
@@ -683,7 +683,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
   const isPR = (workout as any).isPR;
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#5BBE93,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#1F5F3F,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10, flex:1, minWidth:0 }}>
           <span style={{ fontSize:18, flexShrink:0 }}>💪</span>
           <div style={{ flex:1, minWidth:0 }}>
@@ -737,7 +737,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               {cardio.map((c,i) => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, padding:"4px 9px", borderRadius:99, background:"rgba(124,58,237,0.18)", border:"1px solid rgba(124,58,237,0.35)" }}>
                   <span style={{ fontWeight:800, color:"#E2E8F0" }}>{c.type}</span>
-                  {c.duration && <span style={{ color:C.blue, fontWeight:700 }}>· {fmtDur(c.duration)}</span>}
+                  {c.duration && <span style={{ color:"#4A9D6E", fontWeight:700 }}>· {fmtDur(c.duration)}</span>}
                   {/* Swim logged by laps → show meters + miles instead of raw distance */}
                   {c.meters != null ? (
                     <span style={{ color:C.gold, fontWeight:700 }}>· {Number(c.meters).toLocaleString()}m / {Number(c.miles).toLocaleString()}mi</span>
@@ -775,8 +775,8 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               return (
                 <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 30px 58px 88px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                   <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ex.name}</span>
-                  <span style={{ fontSize:13,fontWeight:900,color:C.blue,textAlign:"center" }}>{ex.sets}</span>
-                  <span style={{ fontSize:11,fontWeight:900,color:C.blue,textAlign:"center",whiteSpace:"nowrap" }}>{repsDisplay}</span>
+                  <span style={{ fontSize:13,fontWeight:900,color:"#4A9D6E",textAlign:"center" }}>{ex.sets}</span>
+                  <span style={{ fontSize:11,fontWeight:900,color:"#4A9D6E",textAlign:"center",whiteSpace:"nowrap" }}>{repsDisplay}</span>
                   <span style={{ fontSize:11,fontWeight:800,color:C.gold,textAlign:"center",whiteSpace:"nowrap" }}>{weightDisplay}</span>
                 </div>
               );
@@ -795,7 +795,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               {cardio.map((c,i) => (
                 <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 70px 70px",gap:5,padding:"7px 4px",borderRadius:7,background:i%2===0?"rgba(124,58,237,0.08)":"transparent" }}>
                   <span style={{ fontSize:12,fontWeight:600,color:"#E2E8F0" }}>{c.type}</span>
-                  <span style={{ fontSize:12,fontWeight:700,color:C.blue,textAlign:"center" }}>{fmtDur(c.duration)}</span>
+                  <span style={{ fontSize:12,fontWeight:700,color:"#4A9D6E",textAlign:"center" }}>{fmtDur(c.duration)}</span>
                   <span style={{ fontSize:12,fontWeight:700,color:C.gold,textAlign:"center" }}>{fmtDistance(c.distance)}</span>
                 </div>
               ))}
@@ -813,7 +813,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
   const [lightbox, setLightbox] = useState<string | null>(null);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#5BBE93,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#1F5F3F,#15803D)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:18 }}>🥗</span>
           <div>
@@ -845,7 +845,7 @@ function SideNutrition({ nutrition }: { nutrition: NonNullable<Post["nutrition"]
           {[
             { label:"Cal",val:nutrition.calories,unit:"kcal",color:C.gold,max:3000 },
             { label:"Protein",val:nutrition.protein,unit:"g",color:"#60A5FA",max:250 },
-            { label:"Carbs",val:nutrition.carbs,unit:"g",color:C.blue,max:300 },
+            { label:"Carbs",val:nutrition.carbs,unit:"g",color:"#4A9D6E",max:300 },
             { label:"Fat",val:nutrition.fat,unit:"g",color:"#9BD9BC",max:100 },
           ].map(m => (
             <div key={m.label} style={{ background:"#1B231E",borderRadius:10,padding:"10px 4px",textAlign:"center",border:"1px solid #232C27" }}>
@@ -897,7 +897,7 @@ function SideWellness({ wellness }: { wellness: NonNullable<Post["wellness"]> })
   const [lightbox, setLightbox] = useState<string | null>(null);
   return (
     <div style={{ borderRadius:14,overflow:"hidden",border:`1px solid ${C.darkBorder}`,marginBottom:10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#5BBE93,#3E9E74)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:"100%",background:"linear-gradient(135deg,#1F5F3F,#3E9E74)",padding:"13px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",cursor:"pointer",textAlign:"left" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:18 }}>🌿</span>
           <div>
@@ -1031,7 +1031,7 @@ function SideUserBlock({ post, userBadges = [] }: { post: Post; userBadges?: str
           role="link"
         >
           <TierFrame tier={(post as any).tier || "default"} size={44}>
-            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#5BBE93,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
+            <div style={{ width:"100%",height:"100%",background:"linear-gradient(135deg,#1F5F3F,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff" }}>
               {(post as any).avatarUrl
                 ? <img src={(post as any).avatarUrl} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
                 : post.avatar}
@@ -1114,7 +1114,7 @@ function renderMentions(text: string): React.ReactNode {
       <a
         key={`${matchStart}-${uname}`}
         href={`/profile/${uname}`}
-        style={{ color: '#86CFAE', fontWeight: 700, textDecoration: 'none' }}
+        style={{ color: '#4A9D6E', fontWeight: 700, textDecoration: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
         @{uname}
@@ -1411,7 +1411,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
             <TierTitle tier={post.tier || "default"} />
             <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
           </div>
-          <div style={{ width:50,height:50,borderRadius:13,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,0.3)" }}>
+          <div style={{ width:50,height:50,borderRadius:13,background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,0.3)" }}>
             <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
             <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
           </div>
@@ -1458,7 +1458,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
           <div
-            style={{ position:"relative",width:"100%",aspectRatio: postAspect ?? 1,background:"linear-gradient(135deg,#5BBE93,#86CFAE)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
+            style={{ position:"relative",width:"100%",aspectRatio: postAspect ?? 1,background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"pan-y" }}
             // Swipe support — uses Pointer Events instead of Touch Events for
             // iOS reliability. iOS Safari has a quirk where touch-action: pan-y
             // can absorb touch sequences if iOS detects any vertical component,
@@ -1775,7 +1775,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
             {isOwner ? (<>
               <span style={{ fontSize:36 }}>📷</span>
               <div>
-                <div style={{ fontSize:15,fontWeight:700,color:C.blue }}>Add Photo / Video</div>
+                <div style={{ fontSize:15,fontWeight:700,color:"#4A9D6E" }}>Add Photo / Video</div>
                 <div style={{ fontSize:12,color:C.sub,marginTop:2 }}>Tap to upload</div>
               </div>
               <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
@@ -1789,7 +1789,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
         )}
         {post.photos.length > 0 && isOwner && (
           <div style={{ padding:"6px 18px 0",display:"flex",alignItems:"center",gap:8 }}>
-            <label style={{ fontSize:12,fontWeight:700,color:C.blue,cursor:"pointer",padding:"5px 14px",borderRadius:20,background:"#161D19",border:"1px solid #1B231E" }}>
+            <label style={{ fontSize:12,fontWeight:700,color:"#4A9D6E",cursor:"pointer",padding:"5px 14px",borderRadius:20,background:"#161D19",border:"1px solid #1B231E" }}>
               + Add Photo
               <input type="file" accept="image/*,video/*" style={{ display:"none" }} onChange={addPhoto} />
             </label>
@@ -1823,7 +1823,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
               </svg>
-              <span style={{ fontSize:13,fontWeight:700,color: shareCopied ? C.green : C.sub, transition:"color 0.2s" }}>
+              <span style={{ fontSize:13,fontWeight:700,color: shareCopied ? "#4A9D6E" : C.sub, transition:"color 0.2s" }}>
                 {shareCopied ? "Copied" : "Share"}
               </span>
             </button>
@@ -1882,7 +1882,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
               </div>
             ))}
             {post.comments.length > 1 && (
-              <button onClick={() => setShowAllComments(s=>!s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:C.blue,textAlign:"left",padding:0 }}>
+              <button onClick={() => setShowAllComments(s=>!s)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#4A9D6E",textAlign:"left",padding:0 }}>
                 {showAllComments ? "Show less" : `View all ${post.comments.length} comments`}
               </button>
             )}
@@ -1914,7 +1914,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
                 style={{ width:"100%",background:"none",border:"none",outline:"none",fontSize:13,color:C.text }}
               />
             </div>
-            {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:C.blue,fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
+            {commentText.trim() && <button onClick={submitComment} disabled={commentLoading} style={{ background:"none",border:"none",cursor:"pointer",color:"#4A9D6E",fontWeight:800,fontSize:13,padding:0,opacity:commentLoading?0.5:1 }}>{commentLoading?"...":"Post"}</button>}
           </div>
         </div>
       </div>
@@ -1990,7 +1990,7 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ width:16, fontSize:11, fontWeight:900, color:C.darkSub, flexShrink:0, textAlign:"center" }}>#{i+1}</div>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #5BBE93" : "2px solid #232C27" }}>
+              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#1F5F3F,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden", border: isLocal ? "2px solid #1F5F3F" : "2px solid #232C27" }}>
                 {member.avatar_url
                   ? <img src={member.avatar_url} loading="lazy" decoding="async" style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   : ini}
@@ -1998,10 +1998,10 @@ function NewMembersPanel({ members, currentUser }: { members: Member[]; currentU
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontWeight:800, fontSize:13, color:"#E2E8F0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
-                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#5BBE93", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
+                  {isLocal && <span style={{ fontSize:9, fontWeight:800, color:"#4A9D6E", background:"rgba(22,163,74,0.15)", borderRadius:6, padding:"1px 5px", flexShrink:0 }}>LOCAL</span>}
                 </div>
                 <div style={{ fontSize:11, color:C.darkSub, marginTop:1 }}>@{member.username}{member.city ? ` · ${member.city.split(",")[0]}` : ""}</div>
-                <div style={{ fontSize:10, color:"#5BBE93", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
+                <div style={{ fontSize:10, color:"#4A9D6E", marginTop:2, fontWeight:700 }}>🆕 Joined {joined}</div>
               </div>
               <FollowButton targetUserId={member.id} size="sm" />
             </div>
@@ -2038,7 +2038,7 @@ function ActivityFilterChips({ value, onChange }: { value: ActivityFilter; onCha
         <button key={c.key} onClick={() => onChange(c.key)} style={{
           padding:"5px 11px", borderRadius:99, border:"none", cursor:"pointer",
           fontWeight:700, fontSize:11,
-          background: value === c.key ? "#5BBE93" : "rgba(124,58,237,0.10)",
+          background: value === c.key ? "#1F5F3F" : "rgba(124,58,237,0.10)",
           color: value === c.key ? "#fff" : "#9CA3AF",
           transition:"all 0.15s",
         }}>
@@ -3152,7 +3152,7 @@ export default function FeedPage() {
         <div className="feed-header-inner" style={{ padding:"14px 20px 12px",display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
             <span style={{ fontSize:20 }}>⚡</span>
-            <span style={{ fontWeight:900,fontSize:22,color:C.blue,letterSpacing:1.5 }}>Livelee</span>
+            <span style={{ fontWeight:900,fontSize:22,color:"#4A9D6E",letterSpacing:1.5 }}>Livelee</span>
           </div>
           {/* Search bar — sits right next to the FIT logo. Fixed width so it
               doesn't stretch out wide and feel disconnected from the logo. */}
@@ -3195,15 +3195,15 @@ export default function FeedPage() {
             style={{
               position:"relative", flexShrink:0,
               width:42, height:42, borderRadius:14,
-              background: feedTab === "notifications" ? "#5BBE93" : "rgba(124,58,237,0.12)",
-              border: feedTab === "notifications" ? "1.5px solid #86CFAE" : "1.5px solid rgba(124,58,237,0.35)",
+              background: feedTab === "notifications" ? "#1F5F3F" : "rgba(124,58,237,0.12)",
+              border: feedTab === "notifications" ? "1.5px solid #4A9D6E" : "1.5px solid rgba(124,58,237,0.35)",
               display:"flex", alignItems:"center", justifyContent:"center",
               cursor:"pointer", padding:0,
               transition:"all 0.15s",
             }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke={feedTab === "notifications" ? "#fff" : "#86CFAE"}
+              stroke={feedTab === "notifications" ? "#fff" : "#4A9D6E"}
               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -3233,7 +3233,7 @@ export default function FeedPage() {
             <button key={t.key} onClick={() => setFeedTab(t.key as any)} style={{
               padding:"8px 20px",borderRadius:99,border:"none",cursor:"pointer",
               fontWeight:800,fontSize:13,
-              background:feedTab===t.key?"#5BBE93":"transparent",
+              background:feedTab===t.key?"#1F5F3F":"transparent",
               color:feedTab===t.key?"#fff":"#6B7280",
               transition:"all 0.15s",
             }}>
@@ -3364,7 +3364,7 @@ export default function FeedPage() {
           <div style={{ height:1,background:"#1B231E",marginBottom:20 }}/>
           {feedTab === "notifications" ? (
             <div style={{ padding:"16px 20px", maxWidth:600 }}>
-              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div><style>{`.notif-row{transition:border-color .15s,filter .15s}.notif-row:hover{border-color:#5BBE93 !important;filter:brightness(1.12)}`}</style>
+              <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div><style>{`.notif-row{transition:border-color .15s,filter .15s}.notif-row:hover{border-color:#4A9D6E !important;filter:brightness(1.12)}`}</style>
               {notifications.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
                   <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
@@ -3373,21 +3373,21 @@ export default function FeedPage() {
                 </div>
               ) : notifications.map(n => (
                 <div key={n.id} role="button" tabIndex={0} className="notif-row" onClick={() => openNotif(n)} onKeyDown={e => { if (e.key === "Enter") openNotif(n); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}`, cursor:"pointer" }}>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                  <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#1F5F3F,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                     {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
                     <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
                   </div>
-                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#5BBE93",flexShrink:0}}/>}
+                  {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#1F5F3F",flexShrink:0}}/>}
                 </div>
               ))}
             </div>
           ) : feedTab === "following" ? (
             loadingFollowing ? (
               <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #1B231E",borderTopColor:"#5BBE93",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #1B231E",borderTopColor:"#1F5F3F",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <p style={{ fontWeight:600 }}>Loading following feed…</p>
               </div>
@@ -3472,7 +3472,7 @@ export default function FeedPage() {
                       posts AND no activity. Previously this said "no posts"
                       even when the user had logged plenty of activity. */}
                   {displayPosts.length === 0 && (
-                    <div style={{ background:"#161D19",border:"1.5px solid #1B231E",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#5BBE93",fontWeight:600 }}>
+                    <div style={{ background:"#161D19",border:"1.5px solid #1B231E",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#4A9D6E",fontWeight:600 }}>
                       👋 No posts yet. Share something to the feed to see it here!
                     </div>
                   )}
@@ -3499,7 +3499,7 @@ export default function FeedPage() {
                       <button
                         onClick={loadMorePosts}
                         disabled={loadingMorePosts}
-                        style={{ padding:"12px 32px", borderRadius:99, background:"#5BBE93", color:"#fff", border:"none", cursor:loadingMorePosts?"default":"pointer", fontWeight:800, fontSize:14, opacity:loadingMorePosts?0.6:1, transition:"opacity 0.15s" }}
+                        style={{ padding:"12px 32px", borderRadius:99, background:"#1F5F3F", color:"#fff", border:"none", cursor:loadingMorePosts?"default":"pointer", fontWeight:800, fontSize:14, opacity:loadingMorePosts?0.6:1, transition:"opacity 0.15s" }}
                       >
                         {loadingMorePosts ? "Loading…" : "Load More Posts"}
                       </button>
@@ -3533,7 +3533,7 @@ export default function FeedPage() {
                 <button
                   onClick={() => fetchActivityLogs(activityLogsPage + 1, true, activityFilter)}
                   disabled={loadingMoreActivity}
-                  style={{ padding:"9px 24px", borderRadius:99, background:"rgba(124,58,237,0.15)", color:"#5BBE93", border:"1px solid rgba(124,58,237,0.3)", cursor:loadingMoreActivity?"default":"pointer", fontWeight:700, fontSize:12, opacity:loadingMoreActivity?0.6:1 }}
+                  style={{ padding:"9px 24px", borderRadius:99, background:"rgba(124,58,237,0.15)", color:"#4A9D6E", border:"1px solid rgba(124,58,237,0.3)", cursor:loadingMoreActivity?"default":"pointer", fontWeight:700, fontSize:12, opacity:loadingMoreActivity?0.6:1 }}
                 >
                   {loadingMoreActivity ? "Loading…" : "Load More ↓"}
                 </button>
@@ -3545,7 +3545,7 @@ export default function FeedPage() {
                 <div style={{ fontWeight:900,fontSize:15,color:"#E2E8F0",marginBottom:2 }}>Suggested For You</div>
                 <div style={{ fontSize:11,color:C.darkSub }}>People you might like</div>
               </div>
-              <button onClick={() => router.push("/connect")} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:C.blue,padding:0 }}>See all</button>
+              <button onClick={() => router.push("/connect")} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#4A9D6E",padding:0 }}>See all</button>
             </div>
             {suggestedUsers.map(u => (
               <div key={u.id} style={{ background:C.darkCard,borderRadius:18,border:`1px solid ${C.darkBorder}`,overflow:"hidden",marginBottom:16 }}>
@@ -3553,7 +3553,7 @@ export default function FeedPage() {
                   {u.avatar_url ? (
                     <img src={u.avatar_url} alt="" style={{ width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0 }} />
                   ) : (
-                    <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{initialsOf(u.full_name, u.username)}</div>
+                    <div style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#1F5F3F,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{initialsOf(u.full_name, u.username)}</div>
                   )}
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{u.full_name || u.username}</div>
@@ -3619,12 +3619,12 @@ export default function FeedPage() {
             position:"absolute", top:0, left:0, right:0,
             display:"flex", alignItems:"center", justifyContent:"center",
             height: ptrRefreshing ? 60 : ptrPullPx,
-            color: "#86CFAE", fontSize: 13, fontWeight: 700,
+            color: "#4A9D6E", fontSize: 13, fontWeight: 700,
             transition: ptrRefreshing ? "height 0.18s" : undefined,
             pointerEvents:"none",
           }}>
             {ptrRefreshing
-              ? <div style={{ width:22, height:22, borderRadius:"50%", border:"3px solid #1B231E", borderTopColor:"#5BBE93", animation:"spin 0.8s linear infinite" }}/>
+              ? <div style={{ width:22, height:22, borderRadius:"50%", border:"3px solid #1B231E", borderTopColor:"#1F5F3F", animation:"spin 0.8s linear infinite" }}/>
               : (ptrPullPx >= 65 ? "↑ Release to refresh" : "↓ Pull to refresh")}
           </div>
         )}
@@ -3635,7 +3635,7 @@ export default function FeedPage() {
         <div style={{ height:1,background:"#1B231E",margin:"12px 0 16px" }}/>
         {feedTab === "notifications" ? (
           <div style={{ padding:"16px 4px", maxWidth:600 }}>
-            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div><style>{`.notif-row{transition:border-color .15s,filter .15s}.notif-row:hover{border-color:#5BBE93 !important;filter:brightness(1.12)}`}</style>
+            <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔔 Notifications</div><style>{`.notif-row{transition:border-color .15s,filter .15s}.notif-row:hover{border-color:#4A9D6E !important;filter:brightness(1.12)}`}</style>
             {notifications.length === 0 ? (
               <div style={{ textAlign:"center", padding:"48px 20px", color:C.sub }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔔</div>
@@ -3644,21 +3644,21 @@ export default function FeedPage() {
               </div>
             ) : notifications.map(n => (
               <div key={n.id} role="button" tabIndex={0} className="notif-row" onClick={() => openNotif(n)} onKeyDown={e => { if (e.key === "Enter") openNotif(n); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background: n.read ? "#161D19" : "#1A2A1A", borderRadius:16, marginBottom:10, border:`1px solid ${n.read ? "#232C27" : "#2A3A2A"}`, cursor:"pointer" }}>
-                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#5BBE93,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#1F5F3F,#4ADE80)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:"#fff", flexShrink:0, overflow:"hidden" }}>
                   {n.from_user?.avatar_url ? <img src={n.from_user.avatar_url} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : (n.from_user?.full_name||"?")[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, color:C.text, lineHeight:1.4 }}>{n.body}</div>
                   <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>{n.type==="like"?"❤️":n.type==="comment"?"💬":n.type==="message"?"✉️":"🔔"} {new Date(n.created_at).toLocaleDateString()}</div>
                 </div>
-                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#5BBE93",flexShrink:0}}/>}
+                {!n.read && <div style={{width:8,height:8,borderRadius:"50%",background:"#1F5F3F",flexShrink:0}}/>}
               </div>
             ))}
           </div>
         ) : feedTab === "following" ? (
           loadingFollowing ? (
             <div style={{ textAlign:"center",padding:"48px 20px",color:"#9CA3AF" }}>
-              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #1B231E",borderTopColor:"#5BBE93",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+              <div style={{ width:32,height:32,borderRadius:"50%",border:"4px solid #1B231E",borderTopColor:"#1F5F3F",animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
               <p style={{ fontWeight:600 }}>Loading following feed…</p>
             </div>
           ) : followingPosts.length === 0 ? (
@@ -3729,7 +3729,7 @@ export default function FeedPage() {
           <NewMembersPanel members={newMembers} currentUser={user as any} />
         )}
         {mobileItems.length === 0 && !loadingFeed && (
-          <div style={{ background:"#161D19",border:"1.5px solid #1B231E",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#5BBE93",fontWeight:600 }}>
+          <div style={{ background:"#161D19",border:"1.5px solid #1B231E",borderRadius:14,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#4A9D6E",fontWeight:600 }}>
             👋 No posts yet. Log a workout or share to feed to see content here!
           </div>
         )}
@@ -3742,7 +3742,7 @@ export default function FeedPage() {
               <div key={`activity-${item.data.id}-${idx}`} style={{ marginBottom:16 }}>
                 <div style={{ background:C.dark,borderRadius:20,overflow:"hidden" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px 10px",borderBottom:`1px solid ${C.darkBorder}` }}>
-                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
+                    <div style={{ width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#1F5F3F,#15803D)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",flexShrink:0 }}>{item.data.avatar}</div>
                     <div>
                       <div style={{ fontWeight:800,fontSize:13,color:"#E2E8F0" }}>{item.data.user}</div>
                       <div style={{ fontSize:11,color:C.darkSub }}>@{item.data.username} · {item.data.time}</div>
@@ -3769,7 +3769,7 @@ export default function FeedPage() {
                   {u.avatar_url ? (
                     <img src={u.avatar_url} alt="" onClick={() => router.push(`/profile/${u.username}`)} style={{ width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0 }} />
                   ) : (
-                    <div onClick={() => router.push(`/profile/${u.username}`)} style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#5BBE93,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{initialsOf(u.full_name, u.username)}</div>
+                    <div onClick={() => router.push(`/profile/${u.username}`)} style={{ width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,#1F5F3F,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>{initialsOf(u.full_name, u.username)}</div>
                   )}
                   <div style={{ flex:1,minWidth:0 }} onClick={() => router.push(`/profile/${u.username}`)}>
                     <div style={{ fontWeight:800,fontSize:14,color:"#E2E8F0" }}>{u.full_name || u.username}</div>

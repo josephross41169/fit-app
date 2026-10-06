@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 const C = {
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
   purpleDark: "#3E9E74",
   purpleLight: "#EFF7F2",
   purpleMid: "#C9E8D8",
@@ -286,7 +286,7 @@ function NotifRow({ notif: n }: { notif: Notif }) {
       {n.type === "follow" && (
         <button style={{
           padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.purple}`,
-          background: "transparent", color: C.purple, fontWeight: 700, fontSize: 12,
+          background: "transparent", color: "#4A9D6E", fontWeight: 700, fontSize: 12,
           cursor: "pointer", flexShrink: 0,
         }}>
           Follow

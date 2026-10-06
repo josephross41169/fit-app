@@ -17,7 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useUnreadCounts } from "@/lib/useUnreadCounts";
 
-const PURPLE = "#5BBE93";
+const PURPLE = "#1F5F3F";
 
 interface ConversationRow {
   id: string;
@@ -291,7 +291,7 @@ export default function MessagesFAB() {
                 border: "1px solid rgba(124,58,237,0.4)",
                 borderRadius: 10,
                 padding: "7px 12px",
-                color: PURPLE,
+                color: "#4A9D6E",
                 fontSize: 12, fontWeight: 700,
                 cursor: "pointer",
               }}

@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { supabase } from "@/lib/supabase";
 
 const C = {
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
   purpleDark: "#3E9E74",
   purpleLight: "#EFF7F2",
   purpleMid: "#C9E8D8",
@@ -66,7 +66,7 @@ function CustomTooltip({ active, payload }: any) {
       boxShadow: "0 4px 16px rgba(124,58,237,0.25)",
     }}>
       <div style={{ fontSize: 12, color: C.sub, marginBottom: 2 }}>{formatDateFull(entry.logged_at)}</div>
-      <div style={{ fontSize: 18, fontWeight: 900, color: C.purple }}>{entry.weight_lbs} lbs</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#4A9D6E" }}>{entry.weight_lbs} lbs</div>
       {entry.notes && <div style={{ fontSize: 11, color: C.sub, marginTop: 3 }}>{entry.notes}</div>}
     </div>
   );
@@ -237,7 +237,7 @@ export default function WeightTracker({ userId }: Props) {
             disabled={saving || !weightInput}
             style={{
               padding: "11px 0", borderRadius: 12, border: "none",
-              background: weightInput ? `linear-gradient(135deg,${C.purple},#86CFAE)` : "#374151",
+              background: weightInput ? `linear-gradient(135deg,${C.purple},#4A9D6E)` : "#374151",
               color: "#fff", fontWeight: 900, cursor: weightInput ? "pointer" : "not-allowed",
               fontSize: 14,
             }}
@@ -266,13 +266,13 @@ export default function WeightTracker({ userId }: Props) {
           {/* Stats pills */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
             <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: C.purple }}>{latest ?? "—"}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: "#4A9D6E" }}>{latest ?? "—"}</div>
               <div style={{ fontSize: 10, color: C.sub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Current (lbs)</div>
             </div>
             <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
               <div style={{
                 fontSize: 22, fontWeight: 900,
-                color: change === null ? C.sub : change < 0 ? "#5BBE93" : change > 0 ? "#EF4444" : C.sub,
+                color: change === null ? C.sub : change < 0 ? "#4A9D6E" : change > 0 ? "#EF4444" : C.sub,
               }}>
                 {change === null ? "—" : `${change > 0 ? "+" : ""}${change}`}
               </div>
@@ -288,7 +288,7 @@ export default function WeightTracker({ userId }: Props) {
             )}
             {minW !== null && (
               <div style={{ background: "#0E1311", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: `1.5px solid ${C.border}` }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#5BBE93" }}>{minW}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#4A9D6E" }}>{minW}</div>
                 <div style={{ fontSize: 10, color: C.sub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Lowest</div>
               </div>
             )}
@@ -352,7 +352,7 @@ export default function WeightTracker({ userId }: Props) {
                         <Dot
                           {...props}
                           r={isLatest ? 6 : 3}
-                          fill={isLatest ? C.purple : "#86CFAE"}
+                          fill={isLatest ? C.purple : "#4A9D6E"}
                           strokeWidth={isLatest ? 2 : 0}
                           stroke={isLatest ? "#fff" : "none"}
                         />
@@ -398,7 +398,7 @@ export default function WeightTracker({ userId }: Props) {
                   </div>
                   {latest ? (
                     <div style={{ display: "flex", alignItems: "baseline", gap: 7, whiteSpace: "nowrap", overflow: "hidden" }}>
-                      <span style={{ fontSize: 17, fontWeight: 900, color: C.purple }}>{latest.weight_lbs}</span>
+                      <span style={{ fontSize: 17, fontWeight: 900, color: "#4A9D6E" }}>{latest.weight_lbs}</span>
                       <span style={{ fontSize: 11, color: C.sub }}>lbs</span>
                       {latestDelta !== null && latestDelta !== 0 && (
                         <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: latestDelta < 0 ? "#4ADE80" : "#F87171" }}>
@@ -444,7 +444,7 @@ export default function WeightTracker({ userId }: Props) {
                       >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                          <span style={{ fontSize: 17, fontWeight: 900, color: C.purple }}>{log.weight_lbs}</span>
+                          <span style={{ fontSize: 17, fontWeight: 900, color: "#4A9D6E" }}>{log.weight_lbs}</span>
                           <span style={{ fontSize: 11, color: C.sub }}>lbs</span>
                           {delta !== null && delta !== 0 && (
                             <span style={{ fontSize: 11, fontWeight: 700, color: delta < 0 ? "#4ADE80" : "#F87171" }}>

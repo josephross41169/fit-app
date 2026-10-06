@@ -105,7 +105,7 @@ export default function EventsListPage() {
             </div>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, cursor: "pointer" }}>
-            <input type="checkbox" checked={showPastEvents} onChange={e => setShowPastEvents(e.target.checked)} style={{ accentColor: "#5BBE93" }} />
+            <input type="checkbox" checked={showPastEvents} onChange={e => setShowPastEvents(e.target.checked)} style={{ accentColor: "#1F5F3F" }} />
             Show past events
           </label>
         </div>
@@ -164,7 +164,7 @@ function EventCard({ event }: { event: EventRow }) {
           height: 140,
           background: event.image_url
             ? `url(${event.image_url}) center/cover`
-            : `linear-gradient(135deg, #5BBE93, #86CFAE)`,
+            : `linear-gradient(135deg, #1F5F3F, #4A9D6E)`,
           position: "relative",
         }}>
           <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.7)", color: "#fff", padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
@@ -200,9 +200,9 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button onClick={onClick} style={{
       padding: "7px 14px",
       borderRadius: 99,
-      border: `1.5px solid ${active ? "#5BBE93" : C.border}`,
+      border: `1.5px solid ${active ? "#1F5F3F" : C.border}`,
       background: active ? "#2A1F4A" : C.card,
-      color: active ? "#D6EFE2" : C.text,
+      color: active ? "#D4E5DA" : C.text,
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer",
@@ -233,7 +233,7 @@ const inputStyle: React.CSSProperties = {
 
 const primaryBtn: React.CSSProperties = {
   padding: "10px 18px", borderRadius: 12, border: "none",
-  background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
+  background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)",
   color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
   textDecoration: "none", display: "inline-block",
 };

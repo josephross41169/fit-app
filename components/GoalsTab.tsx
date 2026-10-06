@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/auth";
 import { GOAL_TEMPLATES, type Goal, type GoalMetric } from "@/lib/goals";
 
 const C = {
-  purple: "#5BBE93", purpleDim: "#1B231E", purpleBorder: "#3D2A6E",
+  purple: "#1F5F3F", purpleDim: "#1B231E", purpleBorder: "#3D2A6E",
   gold: "#F5A623", green: "#4ADE80",
   text: "#F0F0F0", sub: "#9CA3AF",
   card: "#161D19", bg: "#0D0820",
@@ -77,7 +77,7 @@ export default function GoalsTab() {
           onClick={() => setShowCreate(true)}
           style={{
             padding: "8px 14px", borderRadius: 12, border: "none",
-            background: `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
+            background: `linear-gradient(135deg, ${C.purple}, #4A9D6E)`,
             color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer",
           }}
         >+ New Goal</button>
@@ -340,7 +340,7 @@ export function CreateGoalModal({
             <button onClick={pickCustom} style={{
               padding: "12px 14px", borderRadius: 12,
               background: "transparent", border: `1.5px dashed ${C.purpleBorder}`,
-              color: C.purple, fontWeight: 800, fontSize: 13, cursor: "pointer",
+              color: "#4A9D6E", fontWeight: 800, fontSize: 13, cursor: "pointer",
             }}>+ Custom goal</button>
           </div>
         ) : (
@@ -424,7 +424,7 @@ export function CreateGoalModal({
                 disabled={submitting}
                 style={{
                   flex: 2, padding: "12px 0", borderRadius: 12, border: "none",
-                  background: `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
+                  background: `linear-gradient(135deg, ${C.purple}, #4A9D6E)`,
                   color: "#fff", fontWeight: 900, fontSize: 14,
                   cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1,
                 }}

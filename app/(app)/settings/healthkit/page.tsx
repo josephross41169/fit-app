@@ -93,7 +93,7 @@ export default function HealthKitSettingsPage() {
   return (
     <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 20px 100px" }}>
       {/* Back link */}
-      <Link href="/settings" style={{ color: "#5BBE93", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+      <Link href="/settings" style={{ color: "#4A9D6E", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
         ← Settings
       </Link>
 
@@ -152,7 +152,7 @@ export default function HealthKitSettingsPage() {
             style={{
               width: "100%",
               padding: "14px 16px",
-              background: "linear-gradient(135deg,#5BBE93,#86CFAE)",
+              background: "linear-gradient(135deg,#1F5F3F,#4A9D6E)",
               border: "none",
               borderRadius: 12,
               color: "#fff",
@@ -241,7 +241,7 @@ export default function HealthKitSettingsPage() {
             style={{
               width: "100%",
               padding: "14px 16px",
-              background: syncing ? "#1F1F2E" : "linear-gradient(135deg,#5BBE93,#A855F7)",
+              background: syncing ? "#1F1F2E" : "linear-gradient(135deg,#1F5F3F,#A855F7)",
               border: "none",
               borderRadius: 12,
               color: "#fff",

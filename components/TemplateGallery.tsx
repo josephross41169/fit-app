@@ -62,8 +62,8 @@ const C = {
   cardBg: "rgba(124,58,237,0.06)",
   border: "#1B231E",
   borderMid: "#3D2A6E",
-  purple: "#5BBE93",
-  purpleLight: "#86CFAE",
+  purple: "#1F5F3F",
+  purpleLight: "#4A9D6E",
   text: "#161D19",
   sub: "#6B7280",
   subMuted: "#9CA3AF",
@@ -145,7 +145,7 @@ export default function TemplateGallery({ ownerId, isOwner, onCreateNew, onUseDa
               width: "100%", padding: "22px 14px",
               borderRadius: 14, border: `2px dashed ${C.borderMid}`,
               background: "rgba(124,58,237,0.04)",
-              color: C.purple, fontWeight: 700, fontSize: 13, cursor: "pointer",
+              color: "#4A9D6E", fontWeight: 700, fontSize: 13, cursor: "pointer",
               display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
             }}
           >

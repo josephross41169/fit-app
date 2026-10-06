@@ -10,7 +10,7 @@ import {
 } from "recharts";
 
 const C = {
-  purple:"#5BBE93", purpleDim:"#1B231E", purpleBorder:"#3D2A6E",
+  purple:"#1F5F3F", purpleDim:"#1B231E", purpleBorder:"#3D2A6E",
   gold:"#F5A623",   goldDim:"#2A1F08",
   cyan:"#06B6D4",   cyanDim:"#062030",
   green:"#4ADE80",  greenDim:"#062010",
@@ -36,7 +36,7 @@ const MUSCLE_MAP: Record<string,string[]> = {
 };
 const MUSCLE_COLORS: Record<string,string> = {
   Chest:"#F87171",Back:"#60A5FA",Legs:"#4ADE80",
-  Shoulders:"#FBBF24",Arms:"#86CFAE",Core:"#F472B6",Other:"#6B7280",
+  Shoulders:"#FBBF24",Arms:"#4A9D6E",Core:"#F472B6",Other:"#6B7280",
 };
 function getMuscle(name:string):string {
   const n = name.toLowerCase();
@@ -206,7 +206,7 @@ function Tip({active,payload,label}:any){
   return(
     <div style={{background:"#161D19",border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"8px 12px",fontSize:12}}>
       <div style={{color:C.subLight,fontWeight:700,marginBottom:3}}>{label}</div>
-      {payload.map((p:any,i:number)=><div key={i} style={{color:p.color||C.purple}}>{p.name}: <b>{typeof p.value==="number"?p.value.toLocaleString():p.value}</b>{p.unit||""}</div>)}
+      {payload.map((p:any,i:number)=><div key={i} style={{color:p.color||"#4A9D6E"}}>{p.name}: <b>{typeof p.value==="number"?p.value.toLocaleString():p.value}</b>{p.unit||""}</div>)}
     </div>
   );
 }
@@ -232,7 +232,7 @@ function MacroRow({label,current,goal,color,unit}:{label:string;current:number;g
           <span style={{fontSize:11,color:C.sub}}>/ {goal.toLocaleString()}{unit}</span>
           <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:99,
             background:over?C.redDim:hit?C.greenDim:C.purpleDim,
-            color:over?C.red:hit?C.green:C.purple}}>{pct}%</span>
+            color:over?C.red:hit?C.green:"#4A9D6E"}}>{pct}%</span>
         </div>
       </div>
       <div style={{background:C.border,borderRadius:99,height:8,overflow:"hidden"}}>
@@ -344,7 +344,7 @@ Hitting calorie goal: ${caloriePct}% of days`;
         </div>
         <button onClick={analyze} disabled={loading} style={{
           padding:"7px 14px",borderRadius:10,border:"none",cursor:"pointer",
-          background:`linear-gradient(135deg,${C.purple},#86CFAE)`,
+          background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,
           color:"#fff",fontWeight:700,fontSize:12,flexShrink:0,
         }}>{loading?"Analyzing…":ran?"Refresh":"Analyze"}</button>
       </div>
@@ -1023,7 +1023,7 @@ export default function StatsPage(){
   }));
   const macroPie=avgCal>0?[
     {name:"Protein",value:Math.round(avgProt*4),color:C.green},
-    {name:"Carbs",value:Math.round(avgCarbs*4),color:C.purple},
+    {name:"Carbs",value:Math.round(avgCarbs*4),color:"#4A9D6E"},
     {name:"Fat",value:Math.round(avgFat*9),color:C.gold},
   ]:[];
 
@@ -1320,7 +1320,7 @@ export default function StatsPage(){
             <button key={t.key} onClick={()=>setTab(t.key)} style={{
               flexShrink:0,padding:"9px 14px",border:"none",background:"transparent",
               fontWeight:700,fontSize:12,cursor:"pointer",
-              color:tab===t.key?C.purple:C.sub,
+              color:tab===t.key?"#4A9D6E":C.sub,
               borderBottom:tab===t.key?`2px solid ${C.purple}`:"2px solid transparent",
               whiteSpace:"nowrap",
             }}>{t.icon} {t.label}</button>
@@ -1487,7 +1487,7 @@ export default function StatsPage(){
                 <div style={{fontSize:28}}>😴</div>
                 <div>
                   <div style={{fontWeight:700,fontSize:14,color:C.text}}>No workout logged today</div>
-                  <button onClick={()=>router.push("/post")} style={{fontSize:12,color:C.purple,fontWeight:700,background:"none",border:"none",cursor:"pointer",padding:0,marginTop:4}}>+ Log a workout →</button>
+                  <button onClick={()=>router.push("/post")} style={{fontSize:12,color:"#4A9D6E",fontWeight:700,background:"none",border:"none",cursor:"pointer",padding:0,marginTop:4}}>+ Log a workout →</button>
                 </div>
               </div>
             )}
@@ -1537,7 +1537,7 @@ export default function StatsPage(){
                 <div style={{fontSize:11,color:C.sub,fontWeight:600,marginBottom:4}}>LAST RECORDED</div>
                 <div style={{fontSize:28,fontWeight:900,color:C.cyan}}>{latestWeight?`${latestWeight} lbs`:"—"}</div>
               </div>
-              <button onClick={()=>setShowWeightModal(true)} style={{fontSize:12,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:10,padding:"7px 14px",cursor:"pointer"}}>+ Log Weight</button>
+              <button onClick={()=>setShowWeightModal(true)} style={{fontSize:12,color:"#4A9D6E",fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:10,padding:"7px 14px",cursor:"pointer"}}>+ Log Weight</button>
             </div>
 
             {/* Today's nutrition */}
@@ -1546,7 +1546,7 @@ export default function StatsPage(){
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
                 <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:6}}>No daily goals set yet</div>
                 <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Set your daily calorie and macro targets to track progress.</div>
-                <button onClick={()=>{setTab("nutrition");setTimeout(()=>setShowGoalEditor(true),100);}} style={{padding:"8px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚙️ Set Goals</button>
+                <button onClick={()=>{setTab("nutrition");setTimeout(()=>setShowGoalEditor(true),100);}} style={{padding:"8px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚙️ Set Goals</button>
               </div>
             ):(
               <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:4}}>
@@ -1561,7 +1561,7 @@ export default function StatsPage(){
                     <div style={{fontSize:24,marginBottom:8}}>🥗</div>
                     <div style={{fontSize:14,color:C.subLight,fontWeight:700,marginBottom:4}}>Nothing logged yet today</div>
                     <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Daily goal: {goals.calories.toLocaleString()} kcal · {goals.protein}g protein · {goals.carbs}g carbs · {goals.fat}g fat</div>
-                    <button onClick={()=>router.push("/post")} style={{padding:"7px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Log Nutrition</button>
+                    <button onClick={()=>router.push("/post")} style={{padding:"7px 16px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Log Nutrition</button>
                   </div>
                 )}
               </div>
@@ -1644,7 +1644,7 @@ export default function StatsPage(){
                                 {/* Count label above bar */}
                                 {w.count>0&&(
                                   <div style={{fontSize:9,fontWeight:800,
-                                    color:isCurrent?C.purple:"rgba(255,255,255,0.5)",
+                                    color:isCurrent?"#4A9D6E":"rgba(255,255,255,0.5)",
                                     lineHeight:1}}>
                                     {w.count}
                                   </div>
@@ -1684,7 +1684,7 @@ export default function StatsPage(){
                       borderRadius:8,border:`1px solid ${C.purpleBorder}`,
                       display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <span style={{fontSize:12,color:C.sub}}>
-                        📅 This week: <strong style={{color:C.purple}}>{weeks[11].count} workout{weeks[11].count!==1?"s":""}</strong>
+                        📅 This week: <strong style={{color:"#4A9D6E"}}>{weeks[11].count} workout{weeks[11].count!==1?"s":""}</strong>
                       </span>
                       <span style={{fontSize:12,color:C.sub}}>
                         12-wk avg: <strong style={{color:C.text}}>{(weeks.reduce((s,w)=>s+w.count,0)/12).toFixed(1)}/wk</strong>
@@ -1826,7 +1826,7 @@ export default function StatsPage(){
             {workoutLogs.length>0?(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:10,marginBottom:20}}>
                 <ChartWrap>
-                  <div style={{fontSize:11,fontWeight:800,color:C.purple,padding:"4px 8px 8px",textTransform:"uppercase",letterSpacing:0.8}}>🏋️ Lifting</div>
+                  <div style={{fontSize:11,fontWeight:800,color:"#4A9D6E",padding:"4px 8px 8px",textTransform:"uppercase",letterSpacing:0.8}}>🏋️ Lifting</div>
                   <ResponsiveContainer width="100%" height={130}>
                     <BarChart data={freqByDayLift} margin={{top:4,right:8,left:-16,bottom:0}}>
                       <XAxis dataKey="day" tick={{fontSize:11,fill:C.sub}}/>
@@ -1955,7 +1955,7 @@ export default function StatsPage(){
                           {details.slice(0,15).map(d=>(
                             <div key={d.name} style={{display:"grid",gridTemplateColumns:"1.5fr 60px 80px 80px",gap:6,padding:"8px 4px",borderTop:`1px solid ${C.border}`,fontSize:12,alignItems:"center"}}>
                               <div style={{color:C.text,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
-                              <div style={{textAlign:"center",color:C.purple,fontWeight:700}}>{d.sets}</div>
+                              <div style={{textAlign:"center",color:"#4A9D6E",fontWeight:700}}>{d.sets}</div>
                               <div style={{textAlign:"right",color:C.gold,fontWeight:800}}>{d.maxWeight>0?`${d.maxWeight} lbs`:"—"}</div>
                               <div style={{textAlign:"right",color:C.text,fontWeight:700,fontSize:11}}>
                                 {d.totalVolume > 0 ? (d.totalVolume>=1000?`${(d.totalVolume/1000).toFixed(1)}k`:d.totalVolume) : "—"}
@@ -2048,7 +2048,7 @@ export default function StatsPage(){
               <div style={{marginTop:32,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:120}}>
                   <div style={{height:1,flex:1,background:C.border}}/>
-                  <div style={{fontWeight:900,fontSize:16,color:C.purple}}>🏋️ Lifting</div>
+                  <div style={{fontWeight:900,fontSize:16,color:"#4A9D6E"}}>🏋️ Lifting</div>
                   <div style={{height:1,flex:1,background:C.border}}/>
                 </div>
                 <div style={{display:"flex",gap:4,flexShrink:0}}>
@@ -2168,7 +2168,7 @@ export default function StatsPage(){
                     </div>
                   ))}
                 </div>
-                <button onClick={saveGoals} disabled={savingGoals} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#86CFAE)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer"}}>{savingGoals?"Saving…":"💾 Save Goals"}</button>
+                <button onClick={saveGoals} disabled={savingGoals} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer"}}>{savingGoals?"Saving…":"💾 Save Goals"}</button>
               </>)}
             </div>
 
@@ -2295,7 +2295,7 @@ export default function StatsPage(){
                           </div>
                           <div>
                             <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Carbs</div>
-                            <div style={{color:C.purple,fontWeight:800,fontSize:13}}>{m.avgCarbs>0?`${m.avgCarbs}g`:"—"}</div>
+                            <div style={{color:"#4A9D6E",fontWeight:800,fontSize:13}}>{m.avgCarbs>0?`${m.avgCarbs}g`:"—"}</div>
                           </div>
                           <div>
                             <div style={{color:C.sub,fontWeight:700,textTransform:"uppercase" as const,letterSpacing:0.6,marginBottom:2}}>Avg Fat</div>
@@ -2563,7 +2563,7 @@ export default function StatsPage(){
                     <MetricField label="Metabolic age" k="metabolic_age" metrics={metrics} setMetrics={setMetrics} placeholder="30" />
                   </div>
 
-                  <button onClick={saveMetrics} disabled={metricsSaving} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:metricsSaving?"#1B231E":metricsSaved?C.green:"linear-gradient(135deg,#5BBE93,#86CFAE)",color:"#fff",fontWeight:900,fontSize:14,cursor:metricsSaving?"not-allowed":"pointer"}}>
+                  <button onClick={saveMetrics} disabled={metricsSaving} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:metricsSaving?"#1B231E":metricsSaved?C.green:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",color:"#fff",fontWeight:900,fontSize:14,cursor:metricsSaving?"not-allowed":"pointer"}}>
                     {metricsSaving?"Saving…":metricsSaved?"✓ Saved":"Save Metrics"}
                   </button>
                   {metricsUpdatedAt && (
@@ -2619,7 +2619,7 @@ export default function StatsPage(){
             {/* Weight chart — kept the line chart but moved the +Log Weight
                 CTA to the section header. */}
             <SecHead title="Body Weight Trend" right={
-              <button onClick={()=>setShowWeightModal(true)} style={{fontSize:11,color:C.purple,fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>+ Log Weight</button>
+              <button onClick={()=>setShowWeightModal(true)} style={{fontSize:11,color:"#4A9D6E",fontWeight:700,background:C.purpleDim,border:`1px solid ${C.purpleBorder}`,borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>+ Log Weight</button>
             }/>
             {weightLogs.length>1?(
               <ChartWrap>
@@ -2889,7 +2889,7 @@ export default function StatsPage(){
             <SecHead title="Body Score"/>
             <div style={{background:C.card,borderRadius:14,padding:16,border:`1px solid ${C.border}`,marginBottom:20}}>
               {[
-                {label:"💪 Workout Consistency",value:totalWorkouts,max:rangeWeeks*5,desc:`${totalWorkouts} sessions in ${rangeLabel(range)}`,color:C.purple},
+                {label:"💪 Workout Consistency",value:totalWorkouts,max:rangeWeeks*5,desc:`${totalWorkouts} sessions in ${rangeLabel(range)}`,color:"#4A9D6E"},
                 {label:"🌿 Recovery Sessions",value:wellnessLogs.length,max:rangeWeeks*7,desc:`${wellnessLogs.length} wellness logs`,color:C.green},
                 {label:"🥗 Nutrition Tracking",value:daysLogged,max:rangeWeeks*7,desc:`${daysLogged} days logged`,color:C.gold},
               ].map(({label,value,max,desc,color})=>(
@@ -2960,7 +2960,7 @@ export default function StatsPage(){
             </div>
             <button onClick={()=>setWeightPublic(p=>!p)} style={{
               width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",
-              background:weightPublic?"#5BBE93":"#1B231E",
+              background:weightPublic?"#1F5F3F":"#1B231E",
               position:"relative",transition:"background 0.2s",flexShrink:0,
             }}>
               <div style={{
@@ -2974,7 +2974,7 @@ export default function StatsPage(){
 
           <button onClick={saveWeight} disabled={!weightInput||weightSaving} style={{
             width:"100%",padding:"14px",borderRadius:14,border:"none",
-            background:!weightInput||weightSaving?"#1B231E":"linear-gradient(135deg,#5BBE93,#86CFAE)",
+            background:!weightInput||weightSaving?"#1B231E":"linear-gradient(135deg,#1F5F3F,#4A9D6E)",
             color:"#fff",fontWeight:900,fontSize:15,cursor:!weightInput||weightSaving?"not-allowed":"pointer",
           }}>
             {weightSaving ? "Saving..." : "Save Weight"}

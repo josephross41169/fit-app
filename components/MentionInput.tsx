@@ -281,7 +281,7 @@ export default function MentionInput({
                       width: 32,
                       height: 32,
                       borderRadius: "50%",
-                      background: "linear-gradient(135deg,#5BBE93,#86CFAE)",
+                      background: "linear-gradient(135deg,#1F5F3F,#4A9D6E)",
                       flexShrink: 0,
                       overflow: "hidden",
                       display: "flex",

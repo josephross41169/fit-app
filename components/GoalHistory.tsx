@@ -38,7 +38,7 @@ function describe(goal: Goal, log: any, amount: number): Omit<Row, "id" | "date"
   return { emoji: "💪", title: label, detail: [exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : "", log.workout_duration_min ? `${log.workout_duration_min} min` : ""].filter(Boolean).join(" · ") || "Workout logged" };
 }
 
-export default function GoalHistory({ goal, accent = "#5BBE93" }: { goal: any; accent?: string }) {
+export default function GoalHistory({ goal, accent = "#1F5F3F" }: { goal: any; accent?: string }) {
   const [rows, setRows] = useState<Row[] | null>(null);
 
   useEffect(() => {

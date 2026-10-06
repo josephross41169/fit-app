@@ -12,7 +12,7 @@ import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } f
 
 export type FeedMember = { userId: string | null; name: string; username?: string | null; avatarUrl?: string | null; avatar?: string };
 
-const C = { card: "#161D19", border: "#232C27", text: "#F0F0F0", sub: "#9CA3AF", green: "#5BBE93", soft: "#86CFAE", gold: "#F5C451", blue: "#5BC8E0", bg: "#0E1311" };
+const C = { card: "#161D19", border: "#232C27", text: "#F0F0F0", sub: "#9CA3AF", green: "#1F5F3F", soft: "#4A9D6E", gold: "#F5C451", blue: "#5BC8E0", bg: "#0E1311" };
 const DAYS_BACK = 14;
 
 const WELL_EMOJI: [RegExp, string][] = [
@@ -81,7 +81,7 @@ function summarize(card: DayCard): { e: string; t: string }[] {
 function Avatar({ m, size }: { m: FeedMember; size: number }) {
   const initials = (m.avatar || m.name || "?").slice(0, 2).toUpperCase();
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#5BBE93,#2E7D5B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.36, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
+    <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#1F5F3F,#2E7D5B)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.36, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
       {m.avatarUrl && m.avatarUrl.startsWith("http") ? <img src={m.avatarUrl} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
     </div>
   );
@@ -296,7 +296,7 @@ function DayDetail({ card, accent, onClose, onProfile }: { card: DayCard; accent
               {pics.map(u => <img key={u} src={u} alt="" loading="lazy" style={{ width: "100%", borderRadius: 12, display: "block" }} />)}
             </div>
           )}
-          <button onClick={onProfile} style={{ padding: "12px 0", borderRadius: 14, border: "none", background: `linear-gradient(135deg,${accent},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer" }}>
+          <button onClick={onProfile} style={{ padding: "12px 0", borderRadius: 14, border: "none", background: `linear-gradient(135deg,${accent},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer" }}>
             View {card.member.name.split(" ")[0]}'s profile →
           </button>
         </div>

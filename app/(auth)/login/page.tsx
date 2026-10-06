@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const G = "#5BBE93";
+const G = "#1F5F3F";
 const GM = "#C9E8D8";
 const DARK_BG = "#0E1311";
 const DARK_CARD = "#161D19";
@@ -68,7 +68,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: G, margin: 0, letterSpacing: -1 }}>Livelee</h1>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: "#4A9D6E", margin: 0, letterSpacing: -1 }}>Livelee</h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 4 }}>Welcome back. Let&apos;s get after it.</p>
         </div>
 
@@ -84,7 +84,7 @@ export default function LoginPage() {
           </div>
 
           <div style={{ textAlign: "right", marginBottom: 16 }}>
-            <Link href="/forgot-password" style={{ color: G, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            <Link href="/forgot-password" style={{ color: "#4A9D6E", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
               Forgot password?
             </Link>
           </div>
@@ -97,7 +97,7 @@ export default function LoginPage() {
 
           <button type="submit" disabled={loading} style={{
             width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
+            background: loading ? DARK_BORDER : `linear-gradient(135deg, ${G}, #4A9D6E)`,
             color: "#fff", fontWeight: 900, fontSize: 16,
             cursor: loading ? "not-allowed" : "pointer",
             transition: "all 0.2s",
@@ -107,7 +107,7 @@ export default function LoginPage() {
 
           <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#6B7280" }}>
             Don&apos;t have an account?{" "}
-            <Link href="/signup" style={{ color: G, fontWeight: 700, textDecoration: "none" }}>Sign up free</Link>
+            <Link href="/signup" style={{ color: "#4A9D6E", fontWeight: 700, textDecoration: "none" }}>Sign up free</Link>
           </div>
         </form>
       </div>

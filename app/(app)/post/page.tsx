@@ -29,7 +29,7 @@ import { saveFood, saveMeal, fetchSavedFoods, type SavedFoodItem, type SavedFood
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { isHealthKitAvailable, isHealthKitConnected, runHealthKitSync } from "@/lib/healthkit";
 const C = {
-  blue: "#5BBE93",
+  blue: "#1F5F3F",
   greenLight: "#111811",
   greenMid: "#1B231E",
   gold: "#F5A623",
@@ -137,9 +137,9 @@ function CardioForm({
     : null;
 
   return (
-    <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}`, position: "relative" }}>
+    <div style={{ marginBottom: 12, padding: 14, borderRadius: 14, background: "rgba(46,125,84,0.08)", border: `1.5px solid ${C.blue}`, position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE" }}>🏃 Cardio{index > 0 ? ` #${index + 1}` : ""}</div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#4A9D6E" }}>🏃 Cardio{index > 0 ? ` #${index + 1}` : ""}</div>
         {onRemove && (
           <button onClick={onRemove} aria-label="Remove this cardio" style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 2 }}>×</button>
         )}
@@ -407,8 +407,8 @@ function ExerciseSearchInput({
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-          background: '#111811', border: '1.5px solid #5BBE93', borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(91,190,147,0.25)', overflow: 'hidden', marginTop: 4,
+          background: '#111811', border: '1.5px solid #1F5F3F', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(46,125,84,0.25)', overflow: 'hidden', marginTop: 4,
         }}>
           {results.map((ex, i) => (
             <button
@@ -423,7 +423,7 @@ function ExerciseSearchInput({
               <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {ex.fromHistory && <span style={{ fontSize: 11 }}>⭐</span>}{ex.name}
               </div>
-              <div style={{ fontSize: 11, color: ex.fromHistory ? '#86CFAE' : '#9CA3AF', marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: ex.fromHistory ? '#4A9D6E' : '#9CA3AF', marginTop: 1 }}>
                 {ex.sub}
               </div>
             </button>
@@ -523,8 +523,8 @@ function FoodSearchInput({
       {open && results.length > 0 && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-          background: '#111811', border: '1.5px solid #5BBE93', borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(91,190,147,0.25)', overflow: 'hidden', marginTop: 4,
+          background: '#111811', border: '1.5px solid #1F5F3F', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(46,125,84,0.25)', overflow: 'hidden', marginTop: 4,
         }}>
           {results.map((food, i) => (
             <button
@@ -540,7 +540,7 @@ function FoodSearchInput({
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13, color: '#F0F0F0' }}>{food.name}</div>
                   {food.brand && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{food.brand}</div>}
-                  <div style={{ fontSize: 11, color: '#86CFAE', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#4A9D6E', marginTop: 2 }}>
                     per {food.servingSize} · {food.protein}g P · {food.carbs}g C · {food.fat}g F
                   </div>
                 </div>
@@ -2848,7 +2848,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         />}
         <button
           onClick={() => setOpen(true)}
-          style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+          style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
         >
           📤 Share PR Card
         </button>
@@ -2876,7 +2876,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
           return null; // handled inline below via local state
         })()}
         <div style={{ fontSize: 64 }}>{hasPRs ? "🏆" : "✓"}</div>
-        <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>
+        <div style={{ fontSize: 24, fontWeight: 900, color: "#4A9D6E" }}>
           {hasPRs ? `${newPRs.length} New PR${newPRs.length > 1 ? "s" : ""}! 🎉` : "Saved to Log!"}
         </div>
         {hasPRs && (
@@ -2886,7 +2886,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 <span style={{ fontSize: 22 }}>🏆</span>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#F5A623" }}>{pr.exercise}</div>
-                  <div style={{ fontSize: 12, color: "#86CFAE" }}>{pr.weight}lbs · {pr.reps} reps{pr.isNew ? " · First PR!" : " · New Best!"}</div>
+                  <div style={{ fontSize: 12, color: "#4A9D6E" }}>{pr.weight}lbs · {pr.reps} reps{pr.isNew ? " · First PR!" : " · New Best!"}</div>
                 </div>
               </div>
             ))}
@@ -2895,8 +2895,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         {/* Badge unlocks — shown when the auto-award engine returned new
             badges. Card is purple-bordered so it's distinct from PR cards. */}
         {hasNewBadges && awardedBadgeMeta.length > 0 && (
-          <div style={{ background: "linear-gradient(135deg,#0E1311,#1B231E)", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #86CFAE", boxShadow: "0 0 24px rgba(134,207,174,0.4)" }}>
-            <div style={{ fontWeight: 900, fontSize: 14, color: "#D6EFE2", marginBottom: 10, letterSpacing: 0.5 }}>
+          <div style={{ background: "linear-gradient(135deg,#0E1311,#1B231E)", borderRadius: 18, padding: "16px 20px", width: "100%", maxWidth: 380, border: "2px solid #4A9D6E", boxShadow: "0 0 24px rgba(74,157,110,0.4)" }}>
+            <div style={{ fontWeight: 900, fontSize: 14, color: "#D4E5DA", marginBottom: 10, letterSpacing: 0.5 }}>
               ✨ {awardedBadgeMeta.length} NEW BADGE{awardedBadgeMeta.length > 1 ? "S" : ""} UNLOCKED!
             </div>
             {awardedBadgeMeta.map((b, i) => (
@@ -2904,7 +2904,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 <BadgeIcon id={b.id} emoji={b.emoji} size={26} imgSize={48} />
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#fff" }}>{b.label}</div>
-                  <div style={{ fontSize: 12, color: "#86CFAE" }}>{b.desc}</div>
+                  <div style={{ fontSize: 12, color: "#4A9D6E" }}>{b.desc}</div>
                 </div>
               </div>
             ))}
@@ -2929,14 +2929,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
           </div>
         ) : null}
         {hasPRs && (
-          <button onClick={onDone} style={{ marginTop: 6, padding: "10px 18px", borderRadius: 14, border: "1.5px dashed #2A3A2A", background: "transparent", color: "#86CFAE", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+          <button onClick={onDone} style={{ marginTop: 6, padding: "10px 18px", borderRadius: 14, border: "1.5px dashed #2A3A2A", background: "transparent", color: "#4A9D6E", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
             ＋ Log something else
           </button>
         )}
         {!hasPRs && (
           <div style={{ display: "flex", gap: 10, marginTop: 10, width: "100%", maxWidth: 380 }}>
             <button onClick={() => { if (doneTimerRef.current) clearTimeout(doneTimerRef.current); onDone(); }}
-              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+              style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
               ＋ Log something else
             </button>
             <button onClick={() => { if (doneTimerRef.current) clearTimeout(doneTimerRef.current); router.push("/profile"); }}
@@ -2954,7 +2954,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
     return (
       <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
         <div style={{ fontSize: 64 }}>🎉</div>
-        <div style={{ fontSize: 24, fontWeight: 900, color: C.blue }}>Posted to Feed!</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: "#4A9D6E" }}>Posted to Feed!</div>
         <div style={{ fontSize: 14, color: C.sub, marginTop: 8 }}>🌐 Visible to your followers</div>
         <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Taking you to the feed...</div>
       </div>
@@ -3057,9 +3057,9 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   }
 
   const TAB_DEFS = [
-    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#5BBE93" },
-    { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#5BBE93" },
-    { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#5BBE93" },
+    { key: "workout" as LogTab, icon: "💪", label: "Workout", color: "#4A9D6E" },
+    { key: "nutrition" as LogTab, icon: "🥗", label: "Nutrition", color: "#4A9D6E" },
+    { key: "wellness" as LogTab, icon: "🧘", label: "Wellness", color: "#4A9D6E" },
   ];
 
   const secExercises = exercises.filter(ex => exGroup(ex) === woSection);
@@ -3103,7 +3103,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   function renderSuppCard(fav: any) {
                         const alreadyAdded = supplements.some(s => s.name.toLowerCase() === fav.name.toLowerCase());
                         return (
-                          <div key={fav.id} style={{ width: 96, flexShrink: 0, borderRadius: 12, background: alreadyAdded ? "rgba(91,190,147,0.12)" : "#111811", border: `1px solid ${alreadyAdded ? C.blue : "#1B231E"}`, overflow: "hidden" }}>
+                          <div key={fav.id} style={{ width: 96, flexShrink: 0, borderRadius: 12, background: alreadyAdded ? "rgba(46,125,84,0.12)" : "#111811", border: `1px solid ${alreadyAdded ? C.blue : "#1B231E"}`, overflow: "hidden" }}>
                             <div
                               role="button"
                               onClick={() => {
@@ -3130,12 +3130,12 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                 {fav.photo_url
                                   ? <img src={fav.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                                   : <span style={{ fontSize: 22 }}>💊</span>}
-                                <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: alreadyAdded ? "#1B231E" : "#5BBE93", color: alreadyAdded ? "#5BBE93" : "#fff", fontSize: alreadyAdded ? 12 : 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{alreadyAdded ? "✓" : "+"}</span>
+                                <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: alreadyAdded ? "#1B231E" : "#1F5F3F", color: alreadyAdded ? "#4A9D6E" : "#fff", fontSize: alreadyAdded ? 12 : 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{alreadyAdded ? "✓" : "+"}</span>
                                 {!(fav as any).is_stack && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFactsEditFor(fav); }}
                                     aria-label={`Edit supplement facts for ${fav.name}`} title="Supplement facts"
-                                    style={{ position: "absolute", bottom: 4, right: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#86CFAE", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✏️</button>
+                                    style={{ position: "absolute", bottom: 4, right: 4, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#4A9D6E", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✏️</button>
                                 )}
                                 <button
                                   onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await deleteSavedSupplement(fav.id); setSuppFavRefresh(k => k + 1); }}
@@ -3184,19 +3184,19 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   style={{
                     width:"100%", textAlign:"left",
                     padding:"12px 14px", borderRadius:12,
-                    background:"rgba(91,190,147,0.10)",
-                    border:"1.5px solid rgba(91,190,147,0.35)",
+                    background:"rgba(46,125,84,0.10)",
+                    border:"1.5px solid rgba(46,125,84,0.35)",
                     color:"#F0F0F0", cursor:"pointer",
                     transition:"all 0.15s",
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(91,190,147,0.20)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(91,190,147,0.10)"; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(46,125,84,0.20)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(46,125,84,0.10)"; }}
                 >
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom:4 }}>
                     <span style={{ fontSize:14, fontWeight:800, color:"#F0F0F0" }}>
                       Day {day.dayNum} · {day.label}
                     </span>
-                    <span style={{ fontSize:11, color:"#86CFAE", fontWeight:700, flexShrink:0 }}>
+                    <span style={{ fontSize:11, color:"#4A9D6E", fontWeight:700, flexShrink:0 }}>
                       {day.estimatedMinutes}m
                     </span>
                   </div>
@@ -3232,7 +3232,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
           text-align: center; border-radius: 20px; padding: 18px 12px; cursor: pointer; min-height: 132px; width: 100%;
           transition: transform 0.12s ease, box-shadow 0.12s ease; -webkit-tap-highlight-color: transparent; }
         .funnel-box:active { transform: scale(0.98); }
-        .funnel-box:hover { box-shadow: 0 6px 22px rgba(91,190,147,0.18); }
+        .funnel-box:hover { box-shadow: 0 6px 22px rgba(46,125,84,0.18); }
         .funnel-wide { min-height: 96px; }
         .ex-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
         @media (max-width: 640px) { .ex-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -3243,7 +3243,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         .ex-box:active { transform: scale(0.97); }
         .ex-box-name { font-weight: 800; font-size: 14px; line-height: 1.25; width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; }
         .ex-box-sub { font-size: 11.5px; color: ${C.sub}; line-height: 1.35; width: 100%; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: auto; }
-        .ex-box-add { align-items: center; justify-content: center; border-style: dashed; border-color: ${C.blue}; background: ${C.greenLight}; color: ${C.blue}; }
+        .ex-box-add { align-items: center; justify-content: center; border-style: dashed; border-color: ${C.blue}; background: ${C.greenLight}; color: ${"#4A9D6E"}; }
         @media (min-width: 768px) {
           .post-sidebar {
             display: flex;
@@ -3276,7 +3276,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
           {(["log", "feed"] as MainMode[]).map(m => (
             <button key={m} onClick={() => setMainMode(m)} style={{
               flex: 1, padding: "11px 0", fontWeight: 800, fontSize: 13, border: "none", cursor: "pointer",
-              background: mainMode === m ? `linear-gradient(135deg,${C.blue},#86CFAE)` : "transparent",
+              background: mainMode === m ? `linear-gradient(135deg,${C.blue},#4A9D6E)` : "transparent",
               color: mainMode === m ? "#fff" : C.sub, transition: "all 0.2s",
             }}>
               {m === "log" ? "📋 Log Activity" : "📢 Share to Feed"}
@@ -3312,7 +3312,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               <button key={m} onClick={() => setMainMode(m)} style={{
                 width: "100%", padding: "12px 14px", borderRadius: 14, border: "none", cursor: "pointer",
                 marginBottom: 6, textAlign: "left", fontWeight: 800, fontSize: 14,
-                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#86CFAE)` : "#111811",
+                background: mainMode === m ? `linear-gradient(135deg,${C.blue},#4A9D6E)` : "#111811",
                 color: mainMode === m ? "#fff" : C.sub,
                 transition: "all 0.15s",
               }}>
@@ -3367,13 +3367,13 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   <span style={{ fontWeight: 900, fontSize: 19, color: C.text }}>{b.t}</span>
                   <span style={{ fontSize: 13, color: C.sub, fontWeight: 600 }}>{b.s}</span>
                 </span>
-                <span style={{ color: C.blue, fontSize: 26, fontWeight: 300 }}>›</span>
+                <span style={{ color: "#4A9D6E", fontSize: 26, fontWeight: 300 }}>›</span>
               </button>
             ))}
           </div>
         ) : funnel === "workoutChoice" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <button onClick={() => setFunnel("home")} style={{ alignSelf: "flex-start", background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>‹ Back</button>
+            <button onClick={() => setFunnel("home")} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#4A9D6E", fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>‹ Back</button>
             <div style={{ fontWeight: 900, fontSize: 24, color: C.text, margin: "0 2px 6px" }}>💪 Workout</div>
             <div className="funnel-grid">
               <button onClick={openAddPicker} className="funnel-box" style={{ border: `2px solid ${C.greenMid}`, background: C.white, minHeight: 170 }}>
@@ -3381,7 +3381,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 <span style={{ fontWeight: 900, fontSize: 17, color: C.text }}>Add to workout</span>
                 <span style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>Today's or yesterday's</span>
               </button>
-              <button onClick={startNewWorkout} className="funnel-box" style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)`, minHeight: 170 }}>
+              <button onClick={startNewWorkout} className="funnel-box" style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)`, minHeight: 170 }}>
                 <span style={{ fontSize: 34 }}>🆕</span>
                 <span style={{ fontWeight: 900, fontSize: 17, color: "#fff" }}>New workout</span>
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>Start fresh</span>
@@ -3392,7 +3392,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 style={{ border: "2px solid rgba(244,114,182,0.55)", background: "rgba(244,114,182,0.08)", cursor: hkSync.busy ? "wait" : "pointer" }}>
                 <span style={{ fontSize: 24 }}>{hkSync.busy ? "⏳" : "❤️"}</span>
                 <span style={{ fontWeight: 900, fontSize: 16, color: C.text }}>{hkSync.busy ? "Syncing…" : "Sync Apple Health"}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: hkSync.msg ? (hkSync.ok ? "#86CFAE" : "#F87171") : C.sub }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: hkSync.msg ? (hkSync.ok ? "#4A9D6E" : "#F87171") : C.sub }}>
                   {hkSync.msg || "Pull in workouts from your Watch, Orangetheory & other apps"}
                 </span>
               </button>
@@ -3408,9 +3408,9 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                     const r = recentWorkouts[w];
                     return (
                       <button key={w} disabled={!r} onClick={() => addToWorkout(w)}
-                        style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "14px 16px", borderRadius: 14, border: `2px solid ${r ? C.blue : C.greenMid}`, background: r ? "rgba(91,190,147,0.10)" : "transparent", cursor: r ? "pointer" : "not-allowed", opacity: r ? 1 : 0.55 }}>
+                        style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "14px 16px", borderRadius: 14, border: `2px solid ${r ? C.blue : C.greenMid}`, background: r ? "rgba(46,125,84,0.10)" : "transparent", cursor: r ? "pointer" : "not-allowed", opacity: r ? 1 : 0.55 }}>
                         <div style={{ fontWeight: 900, fontSize: 15, color: C.text }}>{w === "today" ? "Today's workout" : "Yesterday's workout"}</div>
-                        <div style={{ fontSize: 12, color: r ? "#86CFAE" : C.sub, fontWeight: 700, marginTop: 2 }}>{r ? r.type : "Nothing logged"}</div>
+                        <div style={{ fontSize: 12, color: r ? "#4A9D6E" : C.sub, fontWeight: 700, marginTop: 2 }}>{r ? r.type : "Nothing logged"}</div>
                       </button>
                     );
                   })}
@@ -3432,7 +3432,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               else setFunnel("home");
               if (typeof window !== "undefined") window.scrollTo(0, 0);
             }}
-            style={{ background: "none", border: "none", color: C.blue, fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>
+            style={{ background: "none", border: "none", color: "#4A9D6E", fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>
             ‹ {mainMode === "log" && logTab === "workout" && woSection ? (openEx !== null ? "Exercises" : "Workout")
               : mainMode === "log" && logTab === "nutrition" && nutMeal ? "Meals"
               : mainMode === "log" && logTab === "nutrition" && nutSection ? "Meal"
@@ -3470,15 +3470,15 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               const tagCount = workoutTaggedUsers.length + taggedBusinesses.length;
               const box = (key: WoSection, emoji: string, title: string, sub: string, filled: boolean, wide = false) => (
                 <button key={key} onClick={() => openWoSection(key)} className={"funnel-box" + (wide ? " funnel-wide" : "")}
-                  style={{ border: `2px solid ${filled ? C.blue : C.greenMid}`, background: filled ? "rgba(91,190,147,0.10)" : C.white }}>
+                  style={{ border: `2px solid ${filled ? C.blue : C.greenMid}`, background: filled ? "rgba(46,125,84,0.10)" : C.white }}>
                   <span style={{ fontSize: wide ? 24 : 30 }}>{emoji}</span>
                   <span style={{ fontWeight: 900, fontSize: 16, color: C.text }}>{title}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: filled ? "#86CFAE" : C.sub }}>{sub}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: filled ? "#4A9D6E" : C.sub }}>{sub}</span>
                 </button>
               );
               return (<>
                 {todayLogId && (
-                  <div style={{ background: "rgba(91,190,147,0.12)", borderRadius: 14, padding: "10px 14px", border: "1.5px solid rgba(91,190,147,0.4)", fontSize: 13, color: "#86CFAE", fontWeight: 700 }}>
+                  <div style={{ background: "rgba(46,125,84,0.12)", borderRadius: 14, padding: "10px 14px", border: "1.5px solid rgba(46,125,84,0.4)", fontSize: 13, color: "#4A9D6E", fontWeight: 700 }}>
                     ✏️ Adding to {resumedLabel || "today's"} workout — saving updates that workout.
                   </div>
                 )}
@@ -3490,7 +3490,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 </div>
                 {box("tag", "📍", "Tag location / partner", tagCount ? [...workoutTaggedUsers.map(u => (u as any).username ? "@" + (u as any).username : ((u as any).full_name || "")), ...taggedBusinesses.map(b => (b as any).full_name || (b as any).username || "")].filter(Boolean).join(", ") : "Gym, studio or workout partners", tagCount > 0, true)}
                 <button onClick={() => openWoSection("save")} className="funnel-box funnel-wide"
-                  style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)` }}>
+                  style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)` }}>
                   <span style={{ fontSize: 24 }}>💾</span>
                   <span style={{ fontWeight: 900, fontSize: 17, color: "#fff" }}>Save workout</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>Add a name, notes & photo, then save</span>
@@ -3501,14 +3501,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               {woSection === "lifting" && openEx === null && (<>
               {loadedPlanLabel && (
                 <div style={{
-                  background: "linear-gradient(135deg, rgba(91,190,147,0.18), rgba(74,222,128,0.10))",
+                  background: "linear-gradient(135deg, rgba(46,125,84,0.18), rgba(74,222,128,0.10))",
                   borderRadius: 14, padding: "10px 14px",
-                  border: "1.5px solid rgba(91,190,147,0.4)",
+                  border: "1.5px solid rgba(46,125,84,0.4)",
                   marginBottom: 10,
                   display: "flex", alignItems: "center", gap: 10,
                 }}>
                   <div style={{ fontSize: 18 }}>📋</div>
-                  <div style={{ flex: 1, fontSize: 12, color: "#86CFAE", fontWeight: 700 }}>
+                  <div style={{ flex: 1, fontSize: 12, color: "#4A9D6E", fontWeight: 700 }}>
                     From your AI Plan: <span style={{ color: "#F0F0F0" }}>{loadedPlanLabel}</span>
                   </div>
                   <button onClick={() => setLoadedPlanLabel(null)}
@@ -3527,7 +3527,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       style={{
                         fontSize: 12, fontWeight: 800,
                         padding: "7px 14px", borderRadius: 99,
-                        background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
+                        background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)",
                         border: "none", color: "#fff",
                         cursor: "pointer",
                         display: "flex", alignItems: "center", gap: 6,
@@ -3554,7 +3554,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       <button key={i} onClick={() => { setOpenEx(i); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="ex-box">
                         <span style={{ fontSize: 20 }} aria-hidden="true">{ex.isCircuit ? "🔥" : woSection === "calisthenics" ? "🤸" : woSection === "abs" ? "💪" : "🏋️"}</span>
                         <span className="ex-box-name">{ex.name.trim() || "New exercise"}</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: C.blue }}>{sm.top}</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "#4A9D6E" }}>{sm.top}</span>
                         <span className="ex-box-sub">{sm.bottom}</span>
                       </button>
                     );
@@ -3649,7 +3649,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
                       {/* Previous session reference */}
                       {prev && (
-                        <div style={{ background: "#111811", borderRadius: 10, padding: "7px 12px", marginBottom: 10, fontSize: 12, color: "#86CFAE" }}>
+                        <div style={{ background: "#111811", borderRadius: 10, padding: "7px 12px", marginBottom: 10, fontSize: 12, color: "#4A9D6E" }}>
                           <span style={{ fontWeight: 700 }}>Last time ({prev.date}): </span>
                           {prev.sets.map((s, si) => `${s.weight}lbs\u00d7${s.reps}`).join(' \u00b7 ')}
                         </div>
@@ -3684,12 +3684,12 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       <button type="button"
                         onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, bodyweight: !x.bodyweight } : x))}
                         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", marginBottom: 10,
-                          background: ex.bodyweight ? "rgba(91,190,147,0.15)" : "transparent",
+                          background: ex.bodyweight ? "rgba(46,125,84,0.15)" : "transparent",
                           border: `1.5px solid ${ex.bodyweight ? C.blue : C.greenMid}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>
                         <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                           border: `2px solid ${ex.bodyweight ? C.blue : C.sub}`, background: ex.bodyweight ? C.blue : "transparent",
                           color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.bodyweight ? "✓" : ""}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.bodyweight ? "#86CFAE" : C.sub }}>Bodyweight (no added weight)</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.bodyweight ? "#4A9D6E" : C.sub }}>Bodyweight (no added weight)</span>
                       </button>
                       {/* Timed toggle — planks, carries, dead hangs, intervals:
                           measure sets in SECONDS instead of reps. Values live in
@@ -3697,12 +3697,12 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       <button type="button"
                         onClick={() => setExercises(exs => exs.map((x, j) => j === i ? { ...x, timed: !x.timed } : x))}
                         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", marginBottom: 10,
-                          background: ex.timed ? "rgba(91,190,147,0.15)" : "transparent",
+                          background: ex.timed ? "rgba(46,125,84,0.15)" : "transparent",
                           border: `1.5px solid ${ex.timed ? C.blue : C.greenMid}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>
                         <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                           border: `2px solid ${ex.timed ? C.blue : C.sub}`, background: ex.timed ? C.blue : "transparent",
                           color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.timed ? "✓" : ""}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.timed ? "#86CFAE" : C.sub }}>⏱ Timed — track seconds instead of reps</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.timed ? "#4A9D6E" : C.sub }}>⏱ Timed — track seconds instead of reps</span>
                       </button>
 
                       {/* Per-set rows — each set has its own reps + weight
@@ -3758,7 +3758,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                               />
                               {[2.5, 5, 10].map(d => (
                                 <button key={d} onClick={() => updateW(d)}
-                                  style={{ fontSize: 11, fontWeight: 800, padding: "5px 8px", borderRadius: 8, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: C.blue, cursor: "pointer", flexShrink: 0 }}>
+                                  style={{ fontSize: 11, fontWeight: 800, padding: "5px 8px", borderRadius: 8, border: `1.5px solid ${C.greenMid}`, background: C.greenLight, color: "#4A9D6E", cursor: "pointer", flexShrink: 0 }}>
                                   +{d}
                                 </button>
                               ))}
@@ -3786,8 +3786,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               )}
 
               {woSection === "lifting" && openEx === null && (<>
-                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>🏋️ Lifting</div>
+                  <div style={{ marginBottom: 4, padding: 14, borderRadius: 14, background: "rgba(46,125,84,0.08)", border: `1.5px solid ${C.blue}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#4A9D6E", marginBottom: 10 }}>🏋️ Lifting</div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                     <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
                       <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={woDuration} onChange={e => setWoDuration(e.target.value.replace(/[^0-9]/g, ""))} />
@@ -3803,13 +3803,13 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
                     <button
                       onClick={() => { fetchTemplates(); setTemplateDropdownOpen(o => !o); }}
-                      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: "#4A9D6E", fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                     >
                       <span>📋 Load Template</span>
                       <span style={{ fontSize: 10 }}>{templateDropdownOpen ? "▲" : "▼"}</span>
                     </button>
                     {templateDropdownOpen && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#111811", border: "1.5px solid #5BBE93", borderRadius: 12, boxShadow: "0 8px 32px rgba(91,190,147,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, background: "#111811", border: "1.5px solid #1F5F3F", borderRadius: 12, boxShadow: "0 8px 32px rgba(46,125,84,0.25)", overflow: "hidden", marginTop: 4, maxHeight: 360, overflowY: "auto" }}>
                         {templates.length === 0 ? (
                           <div style={{ padding: "14px 16px", fontSize: 13, color: C.sub, textAlign: "center" }}>No templates yet.<br/>Tap "🔨 Build Template" to create one.</div>
                         ) : templates.map((tpl, i) => {
@@ -3847,7 +3847,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                 >
                                   <div style={{
                                     width: 32, height: 32, borderRadius: 8,
-                                    background: "rgba(91,190,147,0.18)",
+                                    background: "rgba(46,125,84,0.18)",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                     fontSize: 16, flexShrink: 0,
                                   }}>
@@ -3861,7 +3861,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                     </div>
                                   </div>
                                   {isMultiDay && (
-                                    <span style={{ color: "#86CFAE", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                    <span style={{ color: "#4A9D6E", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                                       {isExpanded ? "▲" : "Pick day ▼"}
                                     </span>
                                   )}
@@ -3885,8 +3885,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                       style={{
                                         textAlign: "left", padding: "10px 12px",
                                         borderRadius: 10,
-                                        background: "rgba(91,190,147,0.12)",
-                                        border: "1px solid rgba(91,190,147,0.4)",
+                                        background: "rgba(46,125,84,0.12)",
+                                        border: "1px solid rgba(46,125,84,0.4)",
                                         color: "#F0F0F0", cursor: "pointer",
                                         display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
                                       }}
@@ -3900,7 +3900,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                           {(day.exercises || []).slice(0, 3).length > 0 && ` · ${(day.exercises || []).slice(0, 3).map((e: any) => e.name).filter(Boolean).join(", ")}${(day.exercises || []).length > 3 ? "…" : ""}`}
                                         </div>
                                       </div>
-                                      <span style={{ fontSize: 11, color: "#86CFAE", fontWeight: 700, flexShrink: 0 }}>Use →</span>
+                                      <span style={{ fontSize: 11, color: "#4A9D6E", fontWeight: 700, flexShrink: 0 }}>Use →</span>
                                     </button>
                                   ))}
                                 </div>
@@ -3975,7 +3975,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       style={{
                         width: "100%", marginBottom: 14, padding: "11px",
                         borderRadius: 10, border: `1.5px dashed ${C.blue}`,
-                        background: "transparent", color: "#86CFAE",
+                        background: "transparent", color: "#4A9D6E",
                         fontWeight: 800, fontSize: 13, cursor: "pointer",
                       }}
                     >
@@ -3984,7 +3984,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   </>
                 ) : (
                   <button type="button" onClick={() => { setWoCategory("lifting"); setOtherTypeDuration(""); setOtherTypeDurationSec(""); }}
-                    style={{ width: "100%", marginBottom: 14, padding: "11px", borderRadius: 10, border: `1.5px dashed ${C.blue}`, background: "transparent", color: "#86CFAE", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    style={{ width: "100%", marginBottom: 14, padding: "11px", borderRadius: 10, border: `1.5px dashed ${C.blue}`, background: "transparent", color: "#4A9D6E", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                     ↩ Log running / biking / swimming instead
                   </button>
                 )}
@@ -4013,8 +4013,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   const cat = WORKOUT_CATEGORIES.find(c => c.id === woCategory);
                   if (!cat) return null;
                   return (
-                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(91,190,147,0.08)", border: `1.5px solid ${C.blue}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#86CFAE", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
+                    <div style={{ marginBottom: 14, padding: 14, borderRadius: 14, background: "rgba(46,125,84,0.08)", border: `1.5px solid ${C.blue}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#4A9D6E", marginBottom: 10 }}>{cat.emoji} {cat.label}</div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: C.sub, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Duration</label>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", maxWidth: 220 }}>
                         <input style={{ ...iStyle, flex: 1, minWidth: 0 }} type="text" inputMode="numeric" placeholder="min" value={otherTypeDuration} onChange={e => setOtherTypeDuration(e.target.value.replace(/[^0-9]/g, ""))} />
@@ -4094,7 +4094,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                           onChange={e => setWoDate(e.target.value)}
                         />
                         {chip && (
-                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#5BBE9333", color: woDate === todayStr ? C.green : "#86CFAE", fontWeight: 800, fontSize: 12 }}>
+                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#1F5F3F33", color: woDate === todayStr ? C.green : "#4A9D6E", fontWeight: 800, fontSize: 12 }}>
                             {chip}
                           </span>
                         )}
@@ -4147,7 +4147,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   ) : (
                     <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "20px 0", textAlign: "center", background: C.greenLight }}>
                       <div style={{ fontSize: 28, marginBottom: 6 }}>💪</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add photo</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#4A9D6E" }}>Add photo</div>
                       <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Saved to your activity card</div>
                     </div>
                   )}
@@ -4156,14 +4156,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               </div>
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save workout"}
               </button>
               </>)}
 
               {woSection !== "save" && (
                 <button onClick={() => { if (openEx !== null) closeExercise(); else setWoSection(null); }}
-                  style={{ width: "100%", padding: "15px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+                  style={{ width: "100%", padding: "15px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
                   {openEx !== null ? "✓ Done — back to exercises" : "✓ Done — back to workout"}
                 </button>
               )}
@@ -4190,7 +4190,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
             function MacroBar({ label, current, goal, color }: { label: string; current: number; goal: number; color: string }) {
               const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
-              const barColor = pct > 110 ? '#EF4444' : pct >= 80 ? '#86CFAE' : '#F59E0B';
+              const barColor = pct > 110 ? '#EF4444' : pct >= 80 ? '#4A9D6E' : '#F59E0B';
               return (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -4233,7 +4233,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       <button key={m} onClick={() => openMeal(m)} className="funnel-box" style={{ border: `2px solid ${n ? C.blue : C.greenMid}`, background: C.white, minHeight: 150 }}>
                         <span style={{ fontSize: 36 }}>{MEAL_EMOJI[m]}</span>
                         <span style={{ fontWeight: 900, fontSize: 17, color: C.text }}>{m}</span>
-                        <span style={{ fontSize: 12, color: n ? C.blue : C.sub, fontWeight: 700 }}>{n ? `${n} item${n === 1 ? "" : "s"} · not saved yet` : "Tap to log"}</span>
+                        <span style={{ fontSize: 12, color: n ? "#4A9D6E" : C.sub, fontWeight: 700 }}>{n ? `${n} item${n === 1 ? "" : "s"} · not saved yet` : "Tap to log"}</span>
                       </button>
                     );
                   })}
@@ -4283,7 +4283,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         <button
                           onClick={() => setShowAllSupps(true)}
                           style={{ width: 96, flexShrink: 0, borderRadius: 12, background: "#111811", border: "1px dashed #2A3A2A", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 95, color: C.text }}>
-                          <span style={{ fontSize: 20, fontWeight: 900, color: "#5BBE93" }}>+{suppFavorites.length - 3}</span>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: "#4A9D6E" }}>+{suppFavorites.length - 3}</span>
                           <span style={{ fontSize: 11, fontWeight: 700, marginTop: 2 }}>See all</span>
                         </button>
                       ) : null}
@@ -4332,7 +4332,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       const created = await saveStack(user.id, name.trim(), supplements.map(s2 => ({ name: s2.name, photo_url: s2.photo_url })));
                       if (created) setSuppFavRefresh(k => k + 1);
                     }}
-                    style={{ width: "100%", marginBottom: 12, fontSize: 12, fontWeight: 800, padding: "9px 0", borderRadius: 10, border: `1.5px dashed ${C.blue}`, background: "transparent", color: C.blue, cursor: "pointer" }}>
+                    style={{ width: "100%", marginBottom: 12, fontSize: 12, fontWeight: 800, padding: "9px 0", borderRadius: 10, border: `1.5px dashed ${C.blue}`, background: "transparent", color: "#4A9D6E", cursor: "pointer" }}>
                     ⭐ Save these {supplements.length} as a stack
                   </button>
                 )}
@@ -4374,7 +4374,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       setSuppName(""); setSuppPhoto(null);
                     }}
                     disabled={!suppName.trim()}
-                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#86CFAE)` : "#374151", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
+                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#4A9D6E)` : "#374151", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
                     + Add
                   </button>
                 </div>
@@ -4382,7 +4382,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : "💾 Save & close"}
               </button>
               </>)}
@@ -4402,12 +4402,12 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         ANTHROPIC_API_KEY (server) and NEXT_PUBLIC_AI_SCAN_ENABLED=true. */}
                     {process.env.NEXT_PUBLIC_AI_SCAN_ENABLED === "true" && (
                       <button onClick={() => setShowAIScanner(true)}
-                        style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                        style={{ fontSize: 12, fontWeight: 800, padding: "6px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
                         🤖 Scan with AI
                       </button>
                     )}
                     <button onClick={() => setFoodItems(f => [...f, { name: "", calories: "" }])}
-                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                      style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.blue}`, background: C.greenLight, color: "#4A9D6E", cursor: "pointer" }}>
                       + Manual
                     </button>
                   </div>
@@ -4586,7 +4586,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                               input.click();
                             }}
                             title={item.photoUrl ? "Photo attached" : "Add photo"}
-                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: item.photoUrl ? "#1F3D2D" : "#1B231E", color: item.photoUrl ? "#4ADE80" : "#86CFAE", fontSize: 14, cursor: "pointer", flexShrink: 0 }}>📷</button>
+                            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: item.photoUrl ? "#1F3D2D" : "#1B231E", color: item.photoUrl ? "#4ADE80" : "#4A9D6E", fontSize: 14, cursor: "pointer", flexShrink: 0 }}>📷</button>
                           <button
                             onClick={async () => {
                               if (!user?.id || !item.name?.trim()) return;
@@ -4609,11 +4609,11 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                             <span style={{ fontSize: 10, color: '#9CA3AF' }}>Qty</span>
                             <button onClick={() => setFoodItems(f => f.map((x, j) => j === i ? { ...x, qty: String(Math.max(1, (parseInt(x.qty || '1') || 1) - 1)) } : x))}
                               aria-label="Decrease quantity"
-                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #1B231E', background: '#1B231E', color: '#86CFAE', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>−</button>
+                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #1B231E', background: '#1B231E', color: '#4A9D6E', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>−</button>
                             <span style={{ fontSize: 13, fontWeight: 800, color: '#F0F0F0', minWidth: 22, textAlign: 'center' as const }}>×{parseInt(item.qty || '1') || 1}</span>
                             <button onClick={() => setFoodItems(f => f.map((x, j) => j === i ? { ...x, qty: String((parseInt(x.qty || '1') || 1) + 1) } : x))}
                               aria-label="Increase quantity"
-                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #1B231E', background: '#1B231E', color: '#86CFAE', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>+</button>
+                              style={{ width: 24, height: 24, borderRadius: 7, border: '1px solid #1B231E', background: '#1B231E', color: '#4A9D6E', fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 0 }}>+</button>
                           </div>
                           <span style={{ fontSize: 10, color: '#9CA3AF' }}>Macros</span>
                           {['protein', 'carbs', 'fat'].map(k => (
@@ -4636,13 +4636,13 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         no scrolling back up to the section header. Mirrors the
                         "+ Add Exercise" pattern on the workout tab. */}
                     <button onClick={() => setFoodItems(f => [...f, { name: "", calories: "" }])}
-                      style={{ width: "100%", marginTop: 6, fontSize: 13, fontWeight: 800, padding: "11px 0", borderRadius: 12, border: `1.5px dashed ${C.blue}`, background: C.greenLight, color: C.blue, cursor: "pointer" }}>
+                      style={{ width: "100%", marginTop: 6, fontSize: 13, fontWeight: 800, padding: "11px 0", borderRadius: 12, border: `1.5px dashed ${C.blue}`, background: C.greenLight, color: "#4A9D6E", cursor: "pointer" }}>
                       + Add Food
                     </button>
                     {/* Auto-calculated totals */}
                     {autoCalories > 0 && (
-                      <div style={{ background: '#111811', borderRadius: 12, padding: '10px 14px', border: '1px solid #5BBE93', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#86CFAE' }}>This meal:</span>
+                      <div style={{ background: '#111811', borderRadius: 12, padding: '10px 14px', border: '1px solid #1F5F3F', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#4A9D6E' }}>This meal:</span>
                         <div style={{ display: 'flex', gap: 14 }}>
                           <span style={{ fontSize: 12, color: '#F5A623', fontWeight: 700 }}>{Math.round(autoCalories)} cal</span>
                           {autoProtein > 0 && <span style={{ fontSize: 12, color: '#F0F0F0' }}>{Math.round(autoProtein)}g P</span>}
@@ -4670,7 +4670,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   ) : (
                     <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "22px 0", textAlign: "center", background: C.greenLight }}>
                       <div style={{ fontSize: 24, marginBottom: 4 }}>📸</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>Add a photo of your {mealType.toLowerCase()}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#4A9D6E" }}>Add a photo of your {mealType.toLowerCase()}</div>
                     </div>
                   )}
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, (url) => setMealPhotos(p => ({ ...p, [mealType]: url })))} />
@@ -4707,7 +4707,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
               <SaveErrorBanner />
               <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
+              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
                 {loading ? "Saving..." : `💾 Save ${mealType.toLowerCase()} & close`}
               </button>
               </>)}
@@ -4721,7 +4721,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             const back = () => { setWlSection(null); if (typeof window !== "undefined") window.scrollTo(0, 0); };
             const extrasCount = (wellnessPhotoUrl ? 1 : 0) + wellnessTaggedUsers.length + taggedBusinesses.length + (wellnessNotes.trim() ? 1 : 0);
             const doneBtn = (
-              <button onClick={back} style={{ width: "100%", padding: "14px 0", borderRadius: 16, border: `2px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+              <button onClick={back} style={{ width: "100%", padding: "14px 0", borderRadius: 16, border: `2px solid ${C.blue}`, background: "transparent", color: "#4A9D6E", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
                 ✓ Done
               </button>
             );
@@ -4741,11 +4741,11 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         const on = picked(t); const n = wlCount(t);
                         return (
                           <button key={t} onClick={() => toggleWellness(t)} className="funnel-box"
-                            style={{ position: "relative", minHeight: 118, padding: "14px 8px", border: `2px solid ${on ? C.blue : C.greenMid}`, background: on ? "rgba(91,190,147,0.12)" : C.white }}>
-                            {on && <span style={{ position: "absolute", top: 8, right: 10, fontSize: 14, color: C.blue, fontWeight: 900 }}>✓</span>}
+                            style={{ position: "relative", minHeight: 118, padding: "14px 8px", border: `2px solid ${on ? C.blue : C.greenMid}`, background: on ? "rgba(46,125,84,0.12)" : C.white }}>
+                            {on && <span style={{ position: "absolute", top: 8, right: 10, fontSize: 14, color: "#4A9D6E", fontWeight: 900 }}>✓</span>}
                             <span style={{ fontSize: 30 }}>{WL_EMOJI[t] || "🌿"}</span>
                             <span style={{ fontWeight: 900, fontSize: 14, color: C.text, textAlign: "center", lineHeight: 1.2 }}>{t}</span>
-                            <span style={{ fontSize: 11, color: n ? C.blue : C.sub, fontWeight: 700 }}>{n ? `Logged ${n}×` : "Tap to add"}</span>
+                            <span style={{ fontSize: 11, color: n ? "#4A9D6E" : C.sub, fontWeight: 700 }}>{n ? `Logged ${n}×` : "Tap to add"}</span>
                           </button>
                         );
                       })}
@@ -4777,7 +4777,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         onChange={e => setWlCustom(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter" && wlCustom.trim()) { const t = wlCustom.trim(); setWellnessActivities(p => [...p, { id: `w-${Date.now()}`, type: t, duration: "", cat: wlSection } as any]); setWlCustom(""); } }} />
                       <button disabled={!wlCustom.trim()} onClick={() => { const t = wlCustom.trim(); if (!t) return; setWellnessActivities(p => [...p, { id: `w-${Date.now()}`, type: t, duration: "", cat: wlSection } as any]); setWlCustom(""); }}
-                        style={{ flexShrink: 0, padding: "0 16px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>+ Add</button>
+                        style={{ flexShrink: 0, padding: "0 16px", borderRadius: 12, border: `1.5px solid ${C.blue}`, background: "transparent", color: "#4A9D6E", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>+ Add</button>
                     </div>
                   )}
 
@@ -4789,7 +4789,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                         {["12", "14", "16", "18", "20", "24"].map(h => (
                           <button key={h} onClick={() => { setFastingHours(h); if (!hasFasting) toggleWellness("Fasting"); }}
-                            style={{ padding: "10px 16px", borderRadius: 12, border: `2px solid ${hasFasting && fastingHours === h ? C.blue : C.greenMid}`, background: hasFasting && fastingHours === h ? "rgba(91,190,147,0.15)" : "transparent", color: C.text, fontWeight: 900, fontSize: 15, cursor: "pointer" }}>{h}h</button>
+                            style={{ padding: "10px 16px", borderRadius: 12, border: `2px solid ${hasFasting && fastingHours === h ? C.blue : C.greenMid}`, background: hasFasting && fastingHours === h ? "rgba(46,125,84,0.15)" : "transparent", color: C.text, fontWeight: 900, fontSize: 15, cursor: "pointer" }}>{h}h</button>
                         ))}
                       </div>
                       <input style={iStyle} inputMode="numeric" placeholder="Or type hours, e.g. 17" value={fastingHours}
@@ -4855,10 +4855,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                     const on = here.length > 0;
                     return (
                       <button key={c.key} onClick={() => { setWlSection(c.key); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="funnel-box"
-                        style={{ border: `2px solid ${on ? C.blue : C.greenMid}`, background: on ? "rgba(91,190,147,0.08)" : C.white, minHeight: 160 }}>
+                        style={{ border: `2px solid ${on ? C.blue : C.greenMid}`, background: on ? "rgba(46,125,84,0.08)" : C.white, minHeight: 160 }}>
                         <span style={{ fontSize: 38 }}>{c.emoji}</span>
                         <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>{c.label}</span>
-                        <span style={{ fontSize: 12, color: on ? C.blue : C.sub, fontWeight: 700, textAlign: "center", padding: "0 6px" }}>
+                        <span style={{ fontSize: 12, color: on ? "#4A9D6E" : C.sub, fontWeight: 700, textAlign: "center", padding: "0 6px" }}>
                           {c.key === "fasting" && hasFasting ? `${fastingHours || "?"}h fast` : on ? here.map(a => a.type).join(" · ") : c.sub}
                         </span>
                       </button>
@@ -4868,13 +4868,13 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                 <button onClick={() => { setWlSection("extras"); if (typeof window !== "undefined") window.scrollTo(0, 0); }} className="funnel-box"
                   style={{ border: `2px solid ${extrasCount ? C.blue : C.greenMid}`, background: C.white, minHeight: 110 }}>
                   <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>📸 Add a photo & tag a friend</span>
-                  <span style={{ fontSize: 12, color: extrasCount ? C.blue : C.sub, fontWeight: 700 }}>
+                  <span style={{ fontSize: 12, color: extrasCount ? "#4A9D6E" : C.sub, fontWeight: 700 }}>
                     {extrasCount ? [wellnessPhotoUrl ? "Photo added" : "", wellnessTaggedUsers.length ? `${wellnessTaggedUsers.length} friend${wellnessTaggedUsers.length === 1 ? "" : "s"} tagged` : "", taggedBusinesses.length ? "Business tagged" : "", wellnessNotes.trim() ? "Notes" : ""].filter(Boolean).join(" · ") : "Photo, friends, a business, notes"}
                   </span>
                 </button>
                 <SaveErrorBanner />
                 <PrivacyToggle />
-                <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "18px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 17, cursor: loading ? "not-allowed" : "pointer" }}>
+                <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "18px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 17, cursor: loading ? "not-allowed" : "pointer" }}>
                   {loading ? "Saving..." : wellnessActivities.length ? `💾 Save ${wellnessActivities.length} activit${wellnessActivities.length === 1 ? "y" : "ies"} & close` : "💾 Save and close"}
                 </button>
               </div>
@@ -4927,7 +4927,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               <label style={{ display:"block",cursor:"pointer" }}>
                 <div style={{ border:`2px dashed ${C.greenMid}`,borderRadius:22,aspectRatio:"1/1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:C.greenLight,gap:12 }}>
                   <div style={{ fontSize:56 }}>🎉</div>
-                  <div style={{ fontSize:17,fontWeight:800,color:C.blue }}>Add Photos or Videos</div>
+                  <div style={{ fontSize:17,fontWeight:800,color:"#4A9D6E" }}>Add Photos or Videos</div>
                   <div style={{ fontSize:13,color:C.sub }}>Tap to upload · Select multiple</div>
                 </div>
                 <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
@@ -4948,7 +4948,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             {feedPhotos.length > 0 && (
               <label style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:16,border:`1.5px solid ${C.greenMid}`,background:C.greenLight,cursor:"pointer",justifyContent:"center" }}>
                 <span style={{ fontSize:16 }}>?</span>
-                <span style={{ fontWeight:700,fontSize:13,color:C.blue }}>Add more ({feedPhotos.length} item{feedPhotos.length!==1?"s":""})</span>
+                <span style={{ fontWeight:700,fontSize:13,color:"#4A9D6E" }}>Add more ({feedPhotos.length} item{feedPhotos.length!==1?"s":""})</span>
                 <input type="file" accept="image/*,video/*" multiple style={{ display:"none" }} onChange={e=>{
                   ingestMediaFiles(Array.from(e.target.files || []));
                   e.target.value="";
@@ -5004,7 +5004,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               </div>
             </div>
 
-            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#86CFAE)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
+            <button onClick={handlePost} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading?C.greenMid:`linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading?"not-allowed":"pointer" }}>
               {loading?"Posting...":"Post to Feed 🚀"}
             </button>
           </div>

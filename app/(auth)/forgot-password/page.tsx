@@ -10,7 +10,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const G = "#5BBE93";
+const G = "#1F5F3F";
 const DARK_BG = "#0E1311";
 const DARK_CARD = "#161D19";
 const DARK_BORDER = "#232C27";
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>{sent ? "✉️" : "🔑"}</div>
-          <h1 style={{ fontSize: 28, fontWeight: 900, color: G, margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 900, color: "#4A9D6E", margin: 0, letterSpacing: -0.5 }}>
             {sent ? "Check Your Email" : "Reset Password"}
           </h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 6, lineHeight: 1.5 }}>
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
             <div style={{ fontSize: 13, color: "#9CA3AF", lineHeight: 1.6, marginBottom: 20 }}>
               Don&apos;t see it? Check your spam folder. The link expires in 1 hour.
             </div>
-            <Link href="/login" style={{ display: "block", padding: "13px 0", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #86CFAE)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
+            <Link href="/login" style={{ display: "block", padding: "13px 0", borderRadius: 16, background: `linear-gradient(135deg, ${G}, #4A9D6E)`, color: "#fff", fontWeight: 800, fontSize: 15, textDecoration: "none" }}>
               Back to Sign In
             </Link>
           </div>
@@ -97,7 +97,7 @@ export default function ForgotPasswordPage() {
 
             <button type="submit" disabled={loading || !email} style={{
               width: "100%", padding: "15px 0", borderRadius: 16, border: "none",
-              background: loading || !email ? DARK_BORDER : `linear-gradient(135deg, ${G}, #86CFAE)`,
+              background: loading || !email ? DARK_BORDER : `linear-gradient(135deg, ${G}, #4A9D6E)`,
               color: "#fff", fontWeight: 900, fontSize: 16,
               cursor: loading || !email ? "not-allowed" : "pointer",
               transition: "all 0.2s",
@@ -107,7 +107,7 @@ export default function ForgotPasswordPage() {
 
             <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#6B7280" }}>
               Remembered it?{" "}
-              <Link href="/login" style={{ color: G, fontWeight: 700, textDecoration: "none" }}>Sign in</Link>
+              <Link href="/login" style={{ color: "#4A9D6E", fontWeight: 700, textDecoration: "none" }}>Sign in</Link>
             </div>
           </form>
         )}

@@ -48,7 +48,7 @@ export default function WorkoutCard({
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #5BBE93, #86CFAE)" }}>
+          style={{ background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)" }}>
           {getInitials(user.full_name)}
         </div>
         <div className="flex-1 min-w-0">
@@ -64,7 +64,7 @@ export default function WorkoutCard({
 
       {/* Workout banner */}
       <div className="mx-4 mb-3 rounded-2xl px-4 py-3"
-        style={{ background: "linear-gradient(135deg, #5BBE93, #86CFAE)" }}>
+        style={{ background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)" }}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-white font-bold text-base">{content.workout_type}</p>
@@ -93,7 +93,7 @@ export default function WorkoutCard({
             <span className="text-sm font-semibold" style={{ color: "#161D19" }}>{ex.name}</span>
             <div className="flex items-center gap-2">
               <span className="text-xs px-2 py-1 rounded-lg font-medium"
-                style={{ background: "#EFF7F2", color: "#5BBE93" }}>
+                style={{ background: "#EFF7F2", color: "#4A9D6E" }}>
                 {ex.sets}�{ex.reps}
               </span>
               <span className="text-xs font-medium" style={{ color: "#6B7280" }}>{ex.weight}</span>
@@ -110,12 +110,12 @@ export default function WorkoutCard({
         <button onClick={toggleLike}
           className="flex items-center gap-1.5 transition-all duration-150 active:scale-90">
           <svg viewBox="0 0 24 24"
-            fill={liked ? "#5BBE93" : "none"}
-            stroke={liked ? "#5BBE93" : "#6B7280"}
+            fill={liked ? "#1F5F3F" : "none"}
+            stroke={liked ? "#1F5F3F" : "#6B7280"}
             strokeWidth="2" className="w-5 h-5">
             <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
           </svg>
-          <span className="text-sm font-semibold" style={{ color: liked ? "#5BBE93" : "#6B7280" }}>
+          <span className="text-sm font-semibold" style={{ color: liked ? "#4A9D6E" : "#6B7280" }}>
             {likes}
           </span>
         </button>

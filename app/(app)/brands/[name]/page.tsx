@@ -3,7 +3,7 @@ import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
 
 const C = {
-  blue:"#5BBE93", blueLight:"#EFF7F2", blueMid:"#C9E8D8",
+  blue:"#1F5F3F", blueLight:"#EFF7F2", blueMid:"#C9E8D8",
   gold:"#F5A623", text:"#1A2B3C", sub:"#5A7A8A", white:"#FFFFFF", bg:"#F8F5FF",
   darkCard:"#161D19", darkBorder:"#232C27", darkSub:"#8892A4",
 };
@@ -34,7 +34,7 @@ export default function BrandPage() {
 
         <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:C.blueLight, border:`1.5px solid ${C.blueMid}`, borderRadius:99, padding:"8px 20px", marginBottom:24 }}>
           <span style={{ fontSize:16 }}>🚧</span>
-          <span style={{ fontWeight:700, fontSize:13, color:C.blue }}>Brand page coming in beta</span>
+          <span style={{ fontWeight:700, fontSize:13, color:"#4A9D6E" }}>Brand page coming in beta</span>
         </div>
         <p style={{ fontSize:14, color:C.sub, lineHeight:1.7, marginBottom:28 }}>
           This page will show <strong style={{ color:C.text }}>tagged posts, sponsored content, brand challenges, and product links</strong> once connected to the live database.

@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
 const C = {
-  purple:"#5BBE93", purpleDim:"#1B231E", purpleBorder:"#3D2A6E",
+  purple:"#1F5F3F", purpleDim:"#1B231E", purpleBorder:"#3D2A6E",
   gold:"#F5A623", cyan:"#06B6D4", green:"#4ADE80", red:"#F87171",
   text:"#F0F0F0", sub:"#6B7280", subLight:"#9CA3AF",
   bg:"#0A0A0F", card:"#111118", border:"#1E1E2E",
@@ -144,7 +144,7 @@ export default function OpenChallengeBoardPage() {
                           {meta.label}{chal.lift_type ? ` · ${LIFT_LABELS[chal.lift_type]||chal.lift_type}` : ""}
                         </span>
                         <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99,
-                          background:`${C.purple}22`, color:C.purple }}>
+                          background:`${C.purple}22`, color:"#4A9D6E" }}>
                           ⚔️ {chal.member_count}v{chal.member_count}
                         </span>
                         <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99,

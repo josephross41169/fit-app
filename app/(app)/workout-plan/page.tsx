@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C = {
-  purple:     "#5BBE93",
+  purple:     "#1F5F3F",
   purpleDark: "#3E9E74",
   purpleBg:   "rgba(124,58,237,0.12)",
   purpleMid:  "#1E3D34",
@@ -80,9 +80,9 @@ const EQUIPMENT_GROUPS = [
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const CATEGORY_COLORS: Record<string, string> = {
-  Chest: "#EC4899", Back: "#3B82F6", Shoulders: "#5BBE93",
+  Chest: "#EC4899", Back: "#3B82F6", Shoulders: "#1F5F3F",
   Biceps: "#F59E0B", Triceps: "#EF4444", Legs: "#10B981",
-  Glutes: "#F97316", Core: "#6366F1", "Full Body": "#5BBE93",
+  Glutes: "#F97316", Core: "#6366F1", "Full Body": "#1F5F3F",
   Olympic: "#A7DCC4", Cardio: "#34D399", Forearms: "#D97706",
 };
 
@@ -93,7 +93,7 @@ function CategoryBadge({ cat }: { cat: string }) {
     <span style={{
       fontSize: 10, fontWeight: 700, padding: "2px 7px",
       borderRadius: 999, background: `${CATEGORY_COLORS[cat] ?? C.purple}22`,
-      color: CATEGORY_COLORS[cat] ?? C.purple, letterSpacing: "0.03em",
+      color: CATEGORY_COLORS[cat] ?? "#4A9D6E", letterSpacing: "0.03em",
     }}>{cat}</span>
   );
 }
@@ -251,7 +251,7 @@ function DayCard({ day, isRest, onRecycleExercise }: { day?: TrainingDay; isRest
           <div style={{ color: C.sub, fontSize: 11, marginTop: 2 }}>{day.focus}</div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ color: C.purple, fontSize: 12, fontWeight: 700 }}>{day.exercises.length} exercises</div>
+          <div style={{ color: "#4A9D6E", fontSize: 12, fontWeight: 700 }}>{day.exercises.length} exercises</div>
           <div style={{ color: C.sub, fontSize: 11 }}>~{day.estimatedMinutes} min</div>
         </div>
         <span style={{ color: C.sub, fontSize: 12, marginLeft: 4 }}>{expanded ? "▲" : "▼"}</span>
@@ -495,9 +495,9 @@ export default function WorkoutPlanPage() {
         </div>
 
         {autofilledFromStats && (
-          <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(91,190,147,0.10)", border: "1px solid rgba(91,190,147,0.45)", borderRadius: 10, padding: "9px 12px", marginBottom: 16, fontSize: 12, color: "#86CFAE" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(46,125,84,0.10)", border: "1px solid rgba(46,125,84,0.45)", borderRadius: 10, padding: "9px 12px", marginBottom: 16, fontSize: 12, color: "#4A9D6E" }}>
             <span style={{ fontWeight: 800 }}>✓</span>
-            <span>Filled from your saved body metrics — edit below, or update them on <Link href="/stats" style={{ color: "#5BBE93", fontWeight: 800, textDecoration: "underline" }}>Stats → Body</Link>.</span>
+            <span>Filled from your saved body metrics — edit below, or update them on <Link href="/stats" style={{ color: "#4A9D6E", fontWeight: 800, textDecoration: "underline" }}>Stats → Body</Link>.</span>
           </div>
         )}
         {/* Sex */}
@@ -540,7 +540,7 @@ export default function WorkoutPlanPage() {
           </div>
           {bmi !== null && (
             <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
-              <span style={{ color: C.purple, fontWeight: 800 }}>BMI {bmi.toFixed(1)}</span>
+              <span style={{ color: "#4A9D6E", fontWeight: 800 }}>BMI {bmi.toFixed(1)}</span>
               <span style={{ fontWeight: 700, color: C.text }}> · {bmiCat}</span>
               <span style={{ color: C.sub }}> — a rough guide only; your goal and experience drive the plan far more than this number.</span>
             </div>
@@ -635,7 +635,7 @@ export default function WorkoutPlanPage() {
         {/* Generate Button */}
         <button onClick={generate} disabled={generating} style={{
           width: "100%", padding: "16px", borderRadius: 14, cursor: generating ? "not-allowed" : "pointer",
-          background: generating ? C.purpleMid : `linear-gradient(135deg, ${C.purple}, #86CFAE)`,
+          background: generating ? C.purpleMid : `linear-gradient(135deg, ${C.purple}, #4A9D6E)`,
           border: "none", color: "#fff", fontSize: 16, fontWeight: 900, letterSpacing: "0.01em",
           boxShadow: generating ? "none" : `0 4px 24px ${C.purple}44`,
           transition: "all 0.2s",
@@ -659,7 +659,7 @@ export default function WorkoutPlanPage() {
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: C.purple }}>{plan.weeklyVolume}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#4A9D6E" }}>{plan.weeklyVolume}</div>
                 <div style={{ fontSize: 11, color: C.sub }}>weekly total</div>
               </div>
             </div>
@@ -677,7 +677,7 @@ export default function WorkoutPlanPage() {
                     border: `1px solid ${isRest ? C.border : C.purple}`,
                   }}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase" }}>{name}</div>
-                    <div style={{ fontSize: 10, color: isRest ? C.sub : C.purple, fontWeight: 700, marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: isRest ? C.sub : "#4A9D6E", fontWeight: 700, marginTop: 2 }}>
                       {isRest ? "REST" : trainingDay?.label.split(" ")[0] ?? ""}
                     </div>
                   </div>
@@ -713,7 +713,7 @@ export default function WorkoutPlanPage() {
 
           {/* Tips */}
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 20px" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.purple, marginBottom: 12 }}>💡 Pro Tips for {GOALS.find(g => g.value === plan.goal)?.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#4A9D6E", marginBottom: 12 }}>💡 Pro Tips for {GOALS.find(g => g.value === plan.goal)?.label}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {plan.tips.map((tip, i) => (
                 <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -730,7 +730,7 @@ export default function WorkoutPlanPage() {
             cursor: generating ? "not-allowed" : "pointer",
             background: generating
               ? "rgba(124,58,237,0.15)"
-              : `linear-gradient(135deg,${C.purple},#86CFAE)`,
+              : `linear-gradient(135deg,${C.purple},#4A9D6E)`,
             border: `1px solid ${generating ? C.purple : "transparent"}`,
             color: "#fff", fontSize: 14, fontWeight: 800,
             opacity: generating ? 0.7 : 1,

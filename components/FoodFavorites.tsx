@@ -45,7 +45,7 @@ const C = {
   text: "#F0F0F0",
   sub: "#9CA3AF",
   gold: "#F5A623",
-  blue: "#5BBE93",
+  blue: "#1F5F3F",
   chip: "#1A1228",
   chipBorder: "#2D1F52",
   inputBg: "#0D0D0D",
@@ -260,7 +260,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
               style={{
                 fontSize: 12, fontWeight: 800, padding: "7px 14px", borderRadius: 20,
                 border: active ? "none" : `1.5px solid ${C.chipBorder}`,
-                background: active ? "linear-gradient(135deg, #5BBE93, #86CFAE)" : "transparent",
+                background: active ? "linear-gradient(135deg, #1F5F3F, #4A9D6E)" : "transparent",
                 color: active ? "#fff" : C.sub, cursor: "pointer",
               }}
             >
@@ -289,7 +289,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
             <button
               onClick={handlePhotoPick}
               disabled={uploadingPhoto}
-              style={{ fontSize: 12, fontWeight: 700, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${C.chipBorder}`, background: "transparent", color: C.blue, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+              style={{ fontSize: 12, fontWeight: 700, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${C.chipBorder}`, background: "transparent", color: "#4A9D6E", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
             >
               📷 {uploadingPhoto ? "Uploading…" : fPhoto ? "Change photo" : "Add photo"}
             </button>
@@ -305,7 +305,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
             <button
               onClick={handleSubmitForm}
               disabled={!fName.trim() || saving}
-              style={{ flex: 1, fontSize: 13, fontWeight: 800, padding: "10px 14px", borderRadius: 10, border: "none", background: !fName.trim() || saving ? "#24382E" : "linear-gradient(135deg, #5BBE93, #86CFAE)", color: "#fff", cursor: !fName.trim() || saving ? "default" : "pointer" }}
+              style={{ flex: 1, fontSize: 13, fontWeight: 800, padding: "10px 14px", borderRadius: 10, border: "none", background: !fName.trim() || saving ? "#24382E" : "linear-gradient(135deg, #1F5F3F, #4A9D6E)", color: "#fff", cursor: !fName.trim() || saving ? "default" : "pointer" }}
             >
               {saving ? "Saving…" : editingId ? "Save changes" : `⭐ Save to ${activeTab}`}
             </button>
@@ -341,7 +341,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
               <button
                 onClick={() => setShowAllModal(true)}
                 style={{ width: 96, flexShrink: 0, borderRadius: 12, background: C.chip, border: `1px dashed ${C.chipBorder}`, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 95, color: C.text }}>
-                <span style={{ fontSize: 20, fontWeight: 900, color: "#5BBE93" }}>+{visible.length - 3}</span>
+                <span style={{ fontSize: 20, fontWeight: 900, color: "#4A9D6E" }}>+{visible.length - 3}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, marginTop: 2 }}>See all</span>
               </button>
             ) : null}
@@ -384,7 +384,7 @@ export default function FoodFavorites({ userId, currentMealType, onAddFood, onAd
               <span style={{ fontSize: 22 }}>{fav.is_meal ? "🍱" : "🍽️"}</span>
             )}
             {!manageMode ? (
-              <div style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "#5BBE93", color: "#fff", fontSize: 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>+</div>
+              <div style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "#1F5F3F", color: "#fff", fontSize: 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>+</div>
             ) : null}
           </div>
           <div style={{ padding: "6px 8px 7px" }}>

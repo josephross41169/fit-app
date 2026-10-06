@@ -26,7 +26,7 @@ const C = {
   border: "#1F2937",
   text: "#F9FAFB",
   sub: "#9CA3AF",
-  purple: "#5BBE93",
+  purple: "#1F5F3F",
 };
 
 export default function GroupBadges({

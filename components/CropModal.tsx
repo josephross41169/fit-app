@@ -107,7 +107,7 @@ export default function CropModal({
           disabled={working || !croppedAreaPixels}
           style={{
             background: "transparent", border: "none",
-            color: working || !croppedAreaPixels ? "#5B5B5B" : "#5BBE93",
+            color: working || !croppedAreaPixels ? "#5B5B5B" : "#4A9D6E",
             fontSize: 15, fontWeight: 800,
             cursor: working || !croppedAreaPixels ? "default" : "pointer",
           }}
@@ -151,7 +151,7 @@ export default function CropModal({
           onChange={(e) => setZoom(Number(e.target.value))}
           style={{
             flex: 1,
-            accentColor: "#5BBE93",
+            accentColor: "#1F5F3F",
           }}
         />
         <div style={{ color: "#9CA3AF", fontSize: 11, minWidth: 38, textAlign: "right" }}>

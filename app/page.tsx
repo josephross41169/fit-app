@@ -105,7 +105,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #5BBE93 0%, #86CFAE 50%, #FF8C42 100%)" }}>
+      style={{ background: "linear-gradient(135deg, #1F5F3F 0%, #4A9D6E 50%, #FF8C42 100%)" }}>
 
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -150,7 +150,7 @@ export default function LandingPage() {
         {/* CTA */}
         <Link href="/signup"
           className="w-full py-4 rounded-2xl font-bold text-lg text-center transition-all duration-200 active:scale-95 shadow-lg"
-          style={{ background: "#FFFFFF", color: "#5BBE93" }}>
+          style={{ background: "#FFFFFF", color: "#4A9D6E" }}>
           Get Started · It&apos;s Free
         </Link>
 
@@ -167,7 +167,7 @@ export default function LandingPage() {
             {["JM", "SC", "MD", "LF"].map((init, i) => (
               <div key={i}
                 className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-xs font-bold text-white"
-                style={{ background: i % 2 === 0 ? "#5BBE93" : "#86CFAE", opacity: 0.9 - i * 0.1 }}>
+                style={{ background: i % 2 === 0 ? "#1F5F3F" : "#4A9D6E", opacity: 0.9 - i * 0.1 }}>
                 {init}
               </div>
             ))}

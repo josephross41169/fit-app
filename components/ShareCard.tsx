@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect, useState } from "react";
 
-const PURPLE = "#5BBE93";
+const PURPLE = "#1F5F3F";
 const PURPLE_DARK = "#4C1D95";
 const GOLD = "#F5A623";
 const BG = "#0E1311";
@@ -33,7 +33,7 @@ export type ShareCardData = {
 
 const TIER_COLORS: Record<string, { label: string; color: string; emoji: string }> = {
   default:     { label: "Default",     color: "#9CA3AF", emoji: "🩶" },
-  active:      { label: "Active",      color: "#5BBE93", emoji: "🟣" },
+  active:      { label: "Active",      color: "#4A9D6E", emoji: "🟣" },
   grinder:     { label: "Grinder",     color: "#F5A623", emoji: "🔥" },
   elite:       { label: "Elite",       color: "#06B6D4", emoji: "⚡" },
   untouchable: { label: "Untouchable", color: "#EC4899", emoji: "💀" },
@@ -219,7 +219,7 @@ function renderCanvas(canvas: HTMLCanvasElement, data: ShareCardData) {
 
     const macros = [
       { label: "Calories", value: `${data.totalCalories || 0}`, unit: "kcal", color: "#F5A623" },
-      { label: "Protein",  value: `${data.protein || 0}g`,  unit: "",       color: "#5BBE93" },
+      { label: "Protein",  value: `${data.protein || 0}g`,  unit: "",       color: "#4A9D6E" },
       { label: "Carbs",    value: `${data.carbs || 0}g`,    unit: "",       color: "#06B6D4" },
       { label: "Fat",      value: `${data.fat || 0}g`,      unit: "",       color: "#F87171" },
     ];
@@ -368,7 +368,7 @@ export default function ShareCard({ data, onClose }: { data: ShareCardData; onCl
             onClick={download}
             style={{
               flex: 1, padding: "14px 0", borderRadius: 14, border: "none",
-              background: "linear-gradient(135deg, #5BBE93, #86CFAE)",
+              background: "linear-gradient(135deg, #1F5F3F, #4A9D6E)",
               color: "#ffffff", fontSize: 15, fontWeight: 700,
               cursor: "pointer",
               opacity: downloading ? 0.7 : 1,
