@@ -66,7 +66,7 @@ export default function HealthKitSettingsPage() {
     if (!user) return;
     setSyncing(true);
     try {
-      const result = await runHealthKitSync(user.id);
+      const result = await runHealthKitSync(user.id, { minDays: 7 });
       setLastResult(result);
       setLastSync(getLastSyncDate(user.id));
     } finally {
