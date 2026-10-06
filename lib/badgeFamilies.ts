@@ -23,6 +23,7 @@
 // This is a DISPLAY LAYER. The database keeps every earned badge row.
 
 import { BADGES } from "./badges";
+import { badgeArt } from "./badgeArt";
 
 // ── TYPE DEFINITIONS ────────────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ export interface EarnedBadge {
   id?: string;
   /** Pin slot 1-5, null if unpinned. Lets the profile preview show pinned badges first. */
   pin_slot?: number | null;
+  /** When the badge was earned (ISO). */
+  earned_at?: string | null;
 }
 
 // Visual style per progression tier. Higher tiers = more dramatic.
@@ -301,6 +304,7 @@ export interface DisplayBadge {
   key: string;                    // unique key for React rendering
   renderType: BadgeRenderType;
   emoji: string;
+  image?: string | null;           // custom badge art (public/badges), else emoji
   label: string;
   desc: string;
   category: string;
@@ -328,6 +332,13 @@ export interface DisplayBadge {
   /** DB row id of the badge to pin/unpin. For ladders, this is the
    *  current-tier row (the most recent unlock). */
   badge_row_id?: string | null;
+
+  /** When it was earned (credential / yearly / single), or when the
+   *  first tier was earned (ladders). ISO string. */
+  earnedAt?: string | null;
+  /** Ladders: every tier in order, with the threshold and when it was
+   *  earned (null = not earned yet). Drives the badge detail sheet. */
+  history?: { id: string; label: string; threshold?: number; earned: boolean; earnedAt?: string | null }[];
 }
 
 // What label to show as the progress unit. Falls back to "earned".
@@ -396,6 +407,13 @@ export function groupBadgesIntoFamilies(
   // when populating DisplayBadge.pin_slot below. For ladder families we
   // pick the lowest pin_slot found across all rows in the family.
   const pinByBadgeId = new Map<string, { pin_slot: number | null; id: string | null }>();
+  const earnedAtById = new Map<string, string | null>();
+  for (const eb of earnedBadges) {
+    const prev = earnedAtById.get(eb.badge_id);
+    const cur = eb.earned_at ?? null;
+    // Keep the earliest date if a badge id appears more than once.
+    if (prev === undefined || (cur && (!prev || cur < prev))) earnedAtById.set(eb.badge_id, cur);
+  }
   for (const eb of earnedBadges) {
     if (eb.id) {
       pinByBadgeId.set(eb.badge_id, { pin_slot: eb.pin_slot ?? null, id: eb.id });
@@ -433,12 +451,14 @@ export function groupBadgesIntoFamilies(
       key: `${eb.badge_id}-${year ?? "null"}`,
       renderType: "yearly",
       emoji: badge.emoji,
+      image: badgeArt(badge.id),
       label: `${yearLabel} ${badge.label}`,
       desc: badge.desc,
       category: badge.category,
       year: year ?? undefined,
       pin_slot: yearlyPin?.pin_slot ?? null,
       badge_row_id: yearlyPin?.id ?? null,
+      earnedAt: eb.earned_at ?? null,
     });
     consumedIds.add(eb.badge_id);
   }
@@ -454,11 +474,13 @@ export function groupBadgesIntoFamilies(
       key: credId,
       renderType: "credential",
       emoji: badge.emoji,
+      image: badgeArt(badge.id),
       label: badge.label,
       desc: badge.desc,
       category: badge.category,
       pin_slot: credPin?.pin_slot ?? null,
       badge_row_id: credPin?.id ?? null,
+      earnedAt: earnedAtById.get(credId) ?? null,
     });
     consumedIds.add(credId);
   }
@@ -480,11 +502,13 @@ export function groupBadgesIntoFamilies(
         key: family.key,
         renderType: "credential",
         emoji: badge.emoji,
+        image: badgeArt(badge.id),
         label: badge.label,
         desc: badge.desc,
         category: family.category,
         pin_slot: singlePin?.pin_slot ?? null,
         badge_row_id: singlePin?.id ?? null,
+        earnedAt: earnedAtById.get(onlyId) ?? null,
       });
       consumedIds.add(onlyId);
       continue;
@@ -542,6 +566,7 @@ export function groupBadgesIntoFamilies(
       key: family.key,
       renderType: "progression",
       emoji: peakBadge.emoji,
+      image: badgeArt(peakBadge.id),
       label: peakBadge.label,
       desc: peakBadge.desc,
       category: family.category,
@@ -555,6 +580,14 @@ export function groupBadgesIntoFamilies(
       progressLabel,
       pin_slot: famPin.pin_slot,
       badge_row_id: famPin.id,
+      earnedAt: earnedMembers.map((id) => earnedAtById.get(id)).filter(Boolean).sort()[0] ?? null,
+      history: family.members.map((id, i) => {
+        const b = BADGES.find((x) => x.id === id);
+        // A tier counts as earned if its row exists or the live counter
+        // already passed it (badge rows can lag behind activity).
+        const earned = earnedIds.has(id) || i < positionInFamily;
+        return { id, label: b?.label ?? id, threshold: family.thresholds?.[i], earned, earnedAt: earnedAtById.get(id) ?? null };
+      }),
     });
 
     for (const memberId of family.members) consumedIds.add(memberId);
@@ -571,6 +604,7 @@ export function groupBadgesIntoFamilies(
       key: `orphan-${eb.badge_id}`,
       renderType: "progression",
       emoji: badge.emoji,
+      image: badgeArt(badge.id),
       label: badge.label,
       desc: badge.desc,
       category: badge.category,
@@ -579,6 +613,7 @@ export function groupBadgesIntoFamilies(
       maxTier: 1,
       pin_slot: orphanPin?.pin_slot ?? null,
       badge_row_id: orphanPin?.id ?? null,
+      earnedAt: eb.earned_at ?? null,
     });
   }
 
