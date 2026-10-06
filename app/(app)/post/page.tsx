@@ -26,6 +26,7 @@ import { fetchSavedSupplements, saveSupplement, bumpSupplementUse, deleteSavedSu
 import SupplementFactsEditor from "@/components/SupplementFactsEditor";
 import { saveFood, saveMeal, fetchSavedFoods, type SavedFoodItem, type SavedFood } from "@/lib/savedFoods";
 
+import { BadgeIcon } from "@/components/BadgeIcon";
 import { isHealthKitAvailable, isHealthKitConnected, runHealthKitSync } from "@/lib/healthkit";
 const C = {
   blue: "#5BBE93",
@@ -2900,7 +2901,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             </div>
             {awardedBadgeMeta.map((b, i) => (
               <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < awardedBadgeMeta.length - 1 ? "1px solid #2A3A2A" : "none" }}>
-                <span style={{ fontSize: 26 }}>{b.emoji}</span>
+                <BadgeIcon id={b.id} emoji={b.emoji} size={26} imgSize={48} />
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#fff" }}>{b.label}</div>
                   <div style={{ fontSize: 12, color: "#86CFAE" }}>{b.desc}</div>
