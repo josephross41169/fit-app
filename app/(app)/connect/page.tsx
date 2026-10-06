@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -566,32 +566,39 @@ function ConnectPageInner() {
   const [loadingJoined, setLoadingJoined] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Kick off both initial network calls in parallel. Previously these
-    // ran sequentially (getUser first, THEN loadGroups). Now both fire
-    // at once. Once we have the user ID, we re-fetch get_groups with the
-    // userId so the API can flag groups the user is already a member of.
-    // If the user is landing on the My Groups tab, we also pre-fetch the
-    // joined-groups list in parallel so it's ready instantly when they
-    // look at it.
-    (async () => {
-      const [{ data: { user } }] = await Promise.all([
-        supabase.auth.getUser(),
-        loadGroups(),
-      ]);
+  // Speed-ups for "My Groups" (was slow on mobile):
+  //  • the user id comes from the locally stored session (getSession) instead
+  //    of getUser(), which is a network round-trip to the auth server;
+  //  • the joined-groups request fires right away, in parallel with the
+  //    all-groups list, instead of waiting for it;
+  //  • the last joined list is cached on the device and shown instantly,
+  //    then refreshed in the background.
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const joinedFetchedAt = useRef(0);
+  const joinedCacheKey = (uid: string) => `lv_joined_groups_${uid}`;
 
-      if (user) {
-        setCurrentUserId(user.id);
-        // If user landing on joined tab, prefetch in parallel.
-        if (initialTab === "joined") {
-          loadJoinedGroups(user.id);
-        }
-      }
+  useEffect(() => {
+    (async () => {
+      let uid: string | null = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        uid = data.session?.user?.id ?? null;
+      } catch { /* treat as signed out */ }
+      setSessionChecked(true);
+      loadGroups(uid);
+      if (!uid) return;
+      setCurrentUserId(uid);
+      try {
+        const cached = localStorage.getItem(joinedCacheKey(uid));
+        if (cached) setJoinedGroups(JSON.parse(cached));
+      } catch { /* no cache */ }
+      loadJoinedGroups(uid);
     })();
   }, []);
 
   useEffect(() => {
-    if (tab === 'joined' && currentUserId) {
+    // Re-check when switching to the tab, but not if we just fetched.
+    if (tab === 'joined' && currentUserId && Date.now() - joinedFetchedAt.current > 30_000) {
       loadJoinedGroups();
     }
   }, [tab, currentUserId]);
@@ -602,12 +609,18 @@ function ConnectPageInner() {
     // for the existing tab-switch trigger.
     const userId = uid ?? currentUserId;
     if (!userId) return;
-    setLoadingJoined(true);
+    joinedFetchedAt.current = Date.now();
+    // Only show the skeleton when there's nothing (cached) to show yet.
+    let hasCache = false;
+    try { hasCache = !!localStorage.getItem(joinedCacheKey(userId)); } catch {}
+    if (!hasCache) setLoadingJoined(true);
     try {
       const res = await fetch(`/api/db?action=get_user_groups&userId=${userId}`);
       const data = await res.json();
       if (data.groups) {
-        setJoinedGroups(data.groups.map((g: any) => normalizeDbGroup({ ...g, is_member: true })));
+        const list = data.groups.map((g: any) => normalizeDbGroup({ ...g, is_member: true }));
+        setJoinedGroups(list);
+        try { localStorage.setItem(joinedCacheKey(userId), JSON.stringify(list)); } catch {}
       }
     } catch {
       // ignore
@@ -616,11 +629,10 @@ function ConnectPageInner() {
     }
   }
 
-  async function loadGroups() {
+  async function loadGroups(uid?: string | null) {
     const params = new URLSearchParams({ action: 'get_groups' });
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) params.append('userId', user.id);
+      if (uid) params.append('userId', uid);
       const url = `/api/db?${params}`;
       let res: Response;
       try {
@@ -832,7 +844,7 @@ function ConnectPageInner() {
           )}
 
           {tab === "joined" && (
-            loadingJoined
+            loadingJoined || !sessionChecked
               ? <div>
                   {[0, 1, 2].map(i => (
                     <div key={i} style={{
@@ -868,8 +880,8 @@ function ConnectPageInner() {
 
           {!loadingGroups && tab !== "joined" && (
             tab === "local"
-              ? filteredLocal.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadGroups()} />)
-              : filteredOnline.map(g => <GroupCard key={g.id} group={g} onJoin={() => loadGroups()} />)
+              ? filteredLocal.map(g => <GroupCard key={g.id} group={g} onJoin={() => { loadGroups(currentUserId); loadJoinedGroups(); }} />)
+              : filteredOnline.map(g => <GroupCard key={g.id} group={g} onJoin={() => { loadGroups(currentUserId); loadJoinedGroups(); }} />)
           )}
         </div>
 
