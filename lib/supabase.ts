@@ -93,10 +93,22 @@ function buildNativeStorage(): AnyStorage {
   // for the whole run and the app boots logged-out even though the session
   // is safely persisted. (This was the sign-out-on-every-launch bug.)
   const mirror = new Map<string, string | null>();
-  const loadPlugin = async () => {
-    if (prefs) return prefs;
-    const mod = await import('@capacitor/preferences');
-    prefs = mod.Preferences;
+  // IMPORTANT: never return the Capacitor plugin object itself from an async
+  // function. Capacitor plugins are Proxies that answer ANY property — including
+  // `then` — so `return Preferences` from an async function makes JS treat it as
+  // a promise, call Preferences.then(), and wait forever. That hang is what made
+  // every Keychain call sit until its 4s timeout on launch. We hand back a plain
+  // wrapper object instead.
+  const loadPlugin = async (): Promise<{ get: (o: any) => Promise<any>; set: (o: any) => Promise<any>; remove: (o: any) => Promise<any> }> => {
+    if (!prefs) {
+      const mod = await import('@capacitor/preferences');
+      const P = mod.Preferences;
+      prefs = {
+        get: (o: any) => P.get(o),
+        set: (o: any) => P.set(o),
+        remove: (o: any) => P.remove(o),
+      };
+    }
     return prefs;
   };
 
@@ -125,6 +137,16 @@ function buildNativeStorage(): AnyStorage {
   return {
     getItem(key: string): string | null | Promise<string | null> {
       if (mirror.has(key)) return mirror.get(key) ?? null;
+      // Fast path (app start speed): every write lands in localStorage
+      // synchronously before the Keychain, so a localStorage copy is never
+      // older than the Keychain one. Serve it instantly instead of waiting on
+      // the native bridge, and only fall back to the Keychain when it's gone
+      // (e.g. iOS cleared WebView storage).
+      const fast = lsGet(key);
+      if (fast !== null) {
+        mirror.set(key, fast);
+        return fast;
+      }
       return (async () => {
         const fromPrefs = await prefsGet(key);
         if (fromPrefs !== PREFS_FAIL && fromPrefs !== '__livelee_prefs_null__') {
@@ -147,19 +169,24 @@ function buildNativeStorage(): AnyStorage {
         return null;
       })();
     },
+    // Writes return as soon as localStorage has the value (synchronous); the
+    // Keychain copy is written in the background so a token refresh never
+    // waits on the native bridge.
     setItem(key: string, value: string): Promise<void> {
       mirror.set(key, value);
       lsSet(key, value); // synchronous — survives even a broken plugin
-      return withTimeout((async () => {
+      withTimeout((async () => {
         try { const p = await loadPlugin(); await p.set({ key, value }); } catch {}
       })(), 4000, undefined);
+      return Promise.resolve();
     },
     removeItem(key: string): Promise<void> {
       mirror.set(key, null);
       lsRemove(key);
-      return withTimeout((async () => {
+      withTimeout((async () => {
         try { const p = await loadPlugin(); await p.remove({ key }); } catch {}
       })(), 4000, undefined);
+      return Promise.resolve();
     },
   };
 }

@@ -71,6 +71,25 @@ function readStoredSession(): any | null {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// ── Fast app start: cached profile row ─────────────────────────────────────
+// The signed-in user's `users` row is cached on the device so the app can
+// paint the real screen (name, avatar, layout) right away on launch instead
+// of waiting for the session check + profile query. It's refreshed from the
+// server every launch and cleared on sign-out.
+const PROFILE_CACHE_KEY = 'lv_profile_cache';
+function readProfileCache(userId: string): any | undefined {
+  try {
+    const v = JSON.parse(localStorage.getItem(PROFILE_CACHE_KEY) || 'null');
+    return v && v.id === userId ? v.profile : undefined;
+  } catch { return undefined; }
+}
+function writeProfileCache(userId: string, profile: any) {
+  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: userId, profile })); } catch {}
+}
+function clearProfileCache() {
+  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch {}
+}
+
 // 'dead'  → server rejected the refresh token: genuinely signed out.
 // Session → recovered.
 // null    → still couldn't reach the server (offline): keep the user in.
@@ -126,7 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select('*')
         .eq('id', authUser.id)
         .single();
-      return { ...authUser, profile: data || undefined };
+      if (data) writeProfileCache(authUser.id, data);
+      return { ...authUser, profile: data || readProfileCache(authUser.id) };
     } catch {
       return authUser;
     }
@@ -172,11 +192,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       if (userIdRef.current !== s.user.id) {
         userIdRef.current = s.user.id;
-        setUser(s.user);
+        // Keep the (cached) profile we may already be showing — dropping it
+        // would flash the loading skeleton while the fresh row loads.
+        setUser(prev => ({ ...s.user, profile: prev?.id === s.user.id ? prev.profile : readProfileCache(s.user.id) }));
         fetchProfile(s.user).then(withProfile => { if (mounted) setUser(withProfile); });
       }
     }
     function signedOutLocally() {
+      clearProfileCache();
       userIdRef.current = null;
       setUser(null);
       setSession(null);
@@ -205,6 +228,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } finally {
         recoveryInFlight = false;
+      }
+    }
+
+    // Let the /api fetch wrapper wait for a token if a call goes out before
+    // the session check below has finished (see optimistic start below).
+    if (typeof window !== 'undefined') {
+      (window as any).__liveleeGetToken = async () => {
+        try { return (await supabase.auth.getSession()).data.session?.access_token ?? null; } catch { return null; }
+      };
+    }
+
+    // ── Optimistic start for returning users ───────────────────────────
+    // A saved session means a returning, signed-in user. Show the app right
+    // away with the saved identity + cached profile instead of a spinner
+    // while the session is re-validated (which can include a token refresh
+    // over the network after the app has been closed for a while). If the
+    // saved session turns out to be dead, the checks below sign out as before.
+    {
+      const stored = readStoredSession();
+      if (stored?.user?.id) {
+        setUser({ ...stored.user, profile: readProfileCache(stored.user.id) });
+        setLoading(false);
       }
     }
 
@@ -246,6 +291,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Real sign-out — honor it.
       if (event === 'SIGNED_OUT') {
+        clearProfileCache();
         userIdRef.current = null;
         setUser(null);
         setSession(null);
@@ -267,7 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // tab switch" the user noticed). Same id ⇒ no-op for `user`.
         if (userIdRef.current !== newSession.user.id) {
           userIdRef.current = newSession.user.id;
-          setUser(newSession.user);
+          setUser(prev => ({ ...newSession.user, profile: prev?.id === newSession.user.id ? prev.profile : readProfileCache(newSession.user.id) }));
           fetchProfile(newSession.user).then(withProfile => { if (mounted) setUser(withProfile); });
         }
         return;
@@ -359,6 +405,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    clearProfileCache();
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

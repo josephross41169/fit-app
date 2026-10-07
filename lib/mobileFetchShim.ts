@@ -70,7 +70,18 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
     }
   };
 
-  window.fetch = ((input: RequestInfo | URL, init0?: RequestInit) => {
+  // On a fast app start the screen can fire /api calls before the session
+  // check has finished (no token yet). For those, wait for the token instead
+  // of sending an unauthenticated request.
+  const needsTokenWait = (input: RequestInfo | URL): boolean => {
+    try {
+      if (window.__liveleeAccessToken || !(window as any).__liveleeGetToken) return false;
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return new URL(url, window.location.href).pathname.startsWith('/api/');
+    } catch { return false; }
+  };
+
+  const shimmedFetch = (input: RequestInfo | URL, init0?: RequestInit): Promise<Response> => {
     const init = withAuth(input, init0);
     if (shouldRewrite()) {
       // String URL starting with `/api/` → rewrite to absolute live API.
@@ -100,6 +111,19 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
     }
 
     return originalFetch(input as RequestInfo, init);
+  };
+
+  window.fetch = ((input: RequestInfo | URL, init0?: RequestInit) => {
+    if (needsTokenWait(input)) {
+      return (async () => {
+        try {
+          const t = await (window as any).__liveleeGetToken();
+          if (t && !window.__liveleeAccessToken) window.__liveleeAccessToken = t;
+        } catch { /* send without a token, as before */ }
+        return shimmedFetch(input, init0);
+      })();
+    }
+    return shimmedFetch(input, init0);
   }) as typeof fetch;
 
   window.__liveleeFetchShimInstalled = true;
