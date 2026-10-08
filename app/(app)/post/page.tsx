@@ -3487,11 +3487,30 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   {box("calisthenics", "🤸", "Calisthenics", named(cali.length, "exercise"), cali.length > 0)}
                 </div>
                 {box("tag", "📍", "Tag location / partner", tagCount ? [...workoutTaggedUsers.map(u => (u as any).username ? "@" + (u as any).username : ((u as any).full_name || "")), ...taggedBusinesses.map(b => (b as any).full_name || (b as any).username || "")].filter(Boolean).join(", ") : "Gym, studio or workout partners", tagCount > 0, true)}
+                {woPhoto ? (
+                  <div className="funnel-wide" style={{ position: "relative", borderRadius: 18, overflow: "hidden", border: `2px solid ${C.blue}` }}>
+                    <img src={woPhoto} alt="" style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }} />
+                    <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 8 }}>
+                      <label style={{ padding: "7px 12px", borderRadius: 10, background: "rgba(0,0,0,0.65)", color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+                        Change
+                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setWoPhoto)} />
+                      </label>
+                      <button type="button" onClick={() => setWoPhoto(null)} style={{ padding: "7px 12px", borderRadius: 10, border: "none", background: "rgba(0,0,0,0.65)", color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Remove</button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="funnel-box funnel-wide" style={{ border: `2px dashed ${C.greenMid}`, background: C.white, cursor: "pointer" }}>
+                    <span style={{ fontSize: 24 }}>📷</span>
+                    <span style={{ fontWeight: 900, fontSize: 16, color: C.text }}>Add photo</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Shows on your activity card</span>
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setWoPhoto)} />
+                  </label>
+                )}
                 <button onClick={() => openWoSection("save")} className="funnel-box funnel-wide"
                   style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)` }}>
                   <span style={{ fontSize: 24 }}>💾</span>
                   <span style={{ fontWeight: 900, fontSize: 17, color: "#fff" }}>Save workout</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>Add a name, notes & photo, then save</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>Add a name & notes, then save</span>
                 </button>
               </>);
             })() : (<>
