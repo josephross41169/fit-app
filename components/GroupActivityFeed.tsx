@@ -1,9 +1,8 @@
 "use client";
 // ─────────────────────────────────────────────────────────────────────────────
-// Group "Activity" feed — one box per member per day, built from the
-// members' PUBLIC activity_logs (last 14 days). Each box shows who, when and
-// a short summary; tapping it opens the full daily card (exercises, cardio,
-// wellness, meals, notes, photos).
+// Group "Activity" feed — one box per member (their most recent day), built
+// from the members' PUBLIC activity_logs (last 14 days). Tapping a box opens
+// the full daily card; "See more" opens that member's other days.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -92,6 +91,7 @@ export default function GroupActivityFeed({ members, accent = C.green }: { membe
   const [logs, setLogs] = useState<any[] | null>(null);
   const [open, setOpen] = useState<DayCard | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [history, setHistory] = useState<DayCard[] | null>(null);
   const ids = useMemo(() => members.map(m => m.userId).filter(Boolean) as string[], [members]);
   const idKey = ids.join(",");
 
@@ -115,6 +115,13 @@ export default function GroupActivityFeed({ members, accent = C.green }: { membe
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!history || open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setHistory(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [history, open]);
+
   const cards: DayCard[] = useMemo(() => {
     const byId = new Map(members.filter(m => m.userId).map(m => [m.userId as string, m]));
     const map = new Map<string, DayCard>();
@@ -127,7 +134,50 @@ export default function GroupActivityFeed({ members, accent = C.green }: { membe
     return Array.from(map.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [logs, members]);
 
-  const visible = showAll ? cards : cards.slice(0, 12);
+  // One box per member: their latest day, with the rest behind "See more".
+  const byMember: DayCard[][] = useMemo(() => {
+    const g = new Map<string, DayCard[]>();
+    cards.forEach(c => { const id = c.member.userId as string; if (!g.has(id)) g.set(id, []); g.get(id)!.push(c); });
+    return Array.from(g.values());
+  }, [cards]);
+
+  const visible = showAll ? byMember : byMember.slice(0, 12);
+
+  const renderBox = (card: DayCard, more: DayCard[] | null) => {
+    const lines = summarize(card);
+    const pics = card.logs.flatMap(photosOf);
+    const extra = more ? more.length - 1 : 0;
+    return (
+      <div key={card.key} role="button" tabIndex={0} className="gaf-box" onClick={() => setOpen(card)}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(card); } }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+          <Avatar m={card.member} size={30} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.member.name}</div>
+            <div style={{ fontSize: 10.5, color: accent, fontWeight: 700 }}>{dayLabel(card.date)}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+          {lines.slice(0, 3).map((x, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, fontSize: 12, fontWeight: 700, color: C.text, minWidth: 0 }}>
+              <span style={{ flexShrink: 0 }}>{x.e}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.t}</span>
+            </div>
+          ))}
+          {lines.length > 3 && <div style={{ fontSize: 11, color: C.sub }}>+{lines.length - 3} more</div>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 6, fontSize: 10.5, color: C.sub, fontWeight: 700 }}>
+          <span>{pics.length ? `📸 ${pics.length}` : ""}</span>
+          <span style={{ color: accent }}>View ›</span>
+        </div>
+        {more && extra > 0 && (
+          <button className="gaf-more" onClick={e => { e.stopPropagation(); setHistory(more); }}>
+            See {extra} more day{extra === 1 ? "" : "s"}
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -137,6 +187,8 @@ export default function GroupActivityFeed({ members, accent = C.green }: { membe
         .gaf-box { min-width: 0; text-align: left; background: ${C.card}; border: 1.5px solid ${C.border}; border-radius: 16px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; color: ${C.text}; transition: border-color .15s, transform .12s; min-height: 150px; }
         .gaf-box:hover { border-color: ${accent}; }
         .gaf-box:active { transform: scale(0.98); }
+        .gaf-more { width: 100%; padding: 7px 0; border-radius: 10px; border: 1px solid ${C.border}; background: #1C2520; color: ${C.text}; font-weight: 800; font-size: 11.5px; cursor: pointer; }
+        .gaf-more:hover { border-color: ${accent}; }
       `}</style>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 17, color: C.text }}>📋 Member activity</div>
@@ -154,41 +206,33 @@ export default function GroupActivityFeed({ members, accent = C.green }: { membe
       ) : (
         <>
           <div className="gaf-grid">
-            {visible.map(card => {
-              const lines = summarize(card);
-              const pics = card.logs.flatMap(photosOf);
-              return (
-                <button key={card.key} className="gaf-box" onClick={() => setOpen(card)}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                    <Avatar m={card.member} size={30} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 800, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.member.name}</div>
-                      <div style={{ fontSize: 10.5, color: accent, fontWeight: 700 }}>{dayLabel(card.date)}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                    {lines.slice(0, 3).map((x, i) => (
-                      <div key={i} style={{ display: "flex", gap: 6, fontSize: 12, fontWeight: 700, color: C.text, minWidth: 0 }}>
-                        <span style={{ flexShrink: 0 }}>{x.e}</span>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.t}</span>
-                      </div>
-                    ))}
-                    {lines.length > 3 && <div style={{ fontSize: 11, color: C.sub }}>+{lines.length - 3} more</div>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", fontSize: 10.5, color: C.sub, fontWeight: 700 }}>
-                    <span>{pics.length ? `📸 ${pics.length}` : ""}</span>
-                    <span style={{ color: accent }}>View ›</span>
-                  </div>
-                </button>
-              );
-            })}
+            {visible.map(list => renderBox(list[0], list))}
           </div>
-          {cards.length > 12 && (
+          {byMember.length > 12 && (
             <button onClick={() => setShowAll(s => !s)} style={{ width: "100%", marginTop: 12, padding: "11px 0", borderRadius: 12, border: `1.5px solid ${C.border}`, background: "transparent", color: C.text, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-              {showAll ? "Show less" : `Show all ${cards.length} cards`}
+              {showAll ? "Show less" : `Show all ${byMember.length} members`}
             </button>
           )}
         </>
+      )}
+
+      {history && (
+        <div onClick={() => setHistory(null)} style={{ position: "fixed", inset: 0, zIndex: 8900, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+          <div onClick={e => e.stopPropagation()} role="dialog" aria-label="Member activity"
+            style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 22, width: "100%", maxWidth: 820, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <Avatar m={history[0].member} size={36} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 900, fontSize: 16, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{history[0].member.name}</div>
+                <div style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>{history.length} day{history.length === 1 ? "" : "s"} of activity · last {DAYS_BACK} days</div>
+              </div>
+              <button onClick={() => setHistory(null)} aria-label="Close" style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "#232C27", color: C.text, fontSize: 18, cursor: "pointer" }}>×</button>
+            </div>
+            <div style={{ overflowY: "auto", padding: 14 }}>
+              <div className="gaf-grid">{history.map(c => renderBox(c, null))}</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {open && <DayDetail card={open} accent={accent} onClose={() => setOpen(null)} onProfile={() => { const u = open.member.username; setOpen(null); router.push(u ? `/profile/${u}` : "/profile"); }} />}
