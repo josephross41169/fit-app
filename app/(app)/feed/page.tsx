@@ -3294,6 +3294,7 @@ export default function FeedPage() {
                 disabled={postingStory}
                 style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", flexShrink:0, padding:0, opacity: postingStory ? 0.5 : 1 }}
               >
+                <div style={{ position:"relative" }}>
                 <TierFrame tier={tier} size={60}>
                   {myStory ? (
                     <div style={{ width:"100%",height:"100%",position:"relative" }}>
@@ -3317,12 +3318,17 @@ export default function FeedPage() {
                         ) : (
                           <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg, ${C.blue}, #4ADE80)` }} />
                         )}
-                        {/* ＋ badge — corner overlay so the avatar stays visible */}
-                        <div style={{ position:"absolute", bottom:-2, right:-2, width:22, height:22, borderRadius:"50%", background:C.blue, border:"2px solid #0E1311", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, lineHeight:1, color:"#fff" }}>＋</div>
                       </div>
                     );
                   })()}
                 </TierFrame>
+                {/* ＋ badge — sits on the edge of the circle (Instagram-style) */}
+                {!myStory && !postingStory && (
+                  <div style={{ position:"absolute", bottom:-1, right:-3, width:24, height:24, borderRadius:"50%", background:"#4A9D6E", border:"3px solid #0E1311", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2 }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" /></svg>
+                  </div>
+                )}
+                </div>
                 <span style={{ fontSize:11, fontWeight:600, color: C.text, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                   {myStory ? "Your story" : "Add story"}
                 </span>
