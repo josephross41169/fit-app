@@ -25,6 +25,7 @@
 import React from "react";
 import { TIER_STYLES, type BadgeTier } from "@/lib/badgeFamilies";
 
+import { ShinyBadge } from "./ShinyBadge";
 // ── Category theming ──────────────────────────────────────────────────────
 // Each category gets:
 //  • accentColor — color overlay for the sigil + glow
@@ -443,7 +444,7 @@ export function BadgeTile({
           fontSize: compact ? 22 : 36, marginBottom: compact ? 3 : 6,
           filter: `drop-shadow(0 2px 5px rgba(0,0,0,0.7)) drop-shadow(0 0 8px ${theme.accent}88)`,
         }}>{image
-          ? <img src={image} alt="" draggable={false} style={{ width: compact ? 60 : 100, height: compact ? 60 : 100, objectFit: "contain", display: "block", margin: "0 auto" }} />
+          ? <ShinyBadge src={image} width={compact ? 60 : 100} height={compact ? 60 : 100} style={{ display: "block", margin: "0 auto" }} />
           : emoji}</div>
         <div style={{
           fontWeight: 900, fontSize: compact ? 10 : 12,

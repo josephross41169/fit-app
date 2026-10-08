@@ -1,5 +1,6 @@
 "use client";
 import { badgeArt } from "@/lib/badgeArt";
+import { ShinyBadge } from "./ShinyBadge";
 
 /** Badge artwork if we have it, otherwise the emoji. `size` is in px. */
 export function BadgeIcon({ id, image, emoji, size, imgSize, style }: {
@@ -7,8 +8,8 @@ export function BadgeIcon({ id, image, emoji, size, imgSize, style }: {
 }) {
   const src = image ?? badgeArt(id);
   if (src) {
-    return <img src={src} alt="" draggable={false}
-      style={{ width: imgSize ?? size * 1.35, height: imgSize ?? size * 1.35, objectFit: "contain", display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }} />;
+    const px = imgSize ?? size * 1.35;
+    return <ShinyBadge src={src} width={px} height={px} sparkles={px >= 36} style={style} />;
   }
   return <span style={{ fontSize: size, flexShrink: 0, ...style }}>{emoji}</span>;
 }

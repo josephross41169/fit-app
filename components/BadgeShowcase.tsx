@@ -3,6 +3,7 @@
 // badge detail sheet (when you earned it, totals, tier history, pinning).
 import type { CSSProperties, MouseEvent } from "react";
 import { TIER_STYLES, type DisplayBadge } from "@/lib/badgeFamilies";
+import { ShinyBadge } from "./ShinyBadge";
 
 const fmtDate = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
@@ -16,8 +17,8 @@ function ringColor(b: DisplayBadge): string {
 /** Badge art (or emoji) at a given size. Art is already a finished round badge. */
 export function BadgeArt({ b, size }: { b: DisplayBadge; size: number }) {
   if (b.image) {
-    return <img src={b.image} alt="" draggable={false}
-      style={{ width: size, height: size, objectFit: "contain", display: "block", filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.55))" }} />;
+    return <ShinyBadge src={b.image} width={size} height={size} style={{ display: "block" }}
+      imgStyle={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.55))" }} />;
   }
   const ring = ringColor(b);
   return (
@@ -77,8 +78,8 @@ export function BadgeShowcase({ badges, compact, onSelect }: {
 /** BadgeArt that fills its (square) parent. */
 function BadgeArtFill({ b }: { b: DisplayBadge }) {
   if (b.image) {
-    return <img src={b.image} alt="" draggable={false}
-      style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.55))" }} />;
+    return <ShinyBadge src={b.image} width="100%" height="100%" style={{ display: "block" }}
+      imgStyle={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.55))" }} />;
   }
   const ring = ringColor(b);
   return (
