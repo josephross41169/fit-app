@@ -940,8 +940,8 @@ export default function GroupPage() {
                 .eq("approved", false)
                 .order("created_at", { ascending: false })
             : Promise.resolve({ data: [] as any[] }),
-          // Leaderboard
-          fetch(`/api/db?action=get_leaderboard&groupId=${data.group.id}`).then(r => r.json()),
+          // Leaderboard removed with challenges — no fetch needed.
+          Promise.resolve({ leaderboard: [] as any[] }),
         ]);
 
         const newEvents = (newEventsResult as any).data;
@@ -3304,7 +3304,6 @@ export default function GroupPage() {
             {([
               { key:"activity",    label:"📋 Activity" },
               { key:"posts",       label:"📸 Posts" },
-              { key:"leaderboard", label:"🏆 Board" },
             ] as const).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} style={{
                 flex:1, padding:"11px 4px", borderRadius:10, border:"none",
