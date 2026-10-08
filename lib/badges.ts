@@ -174,9 +174,6 @@ export const BADGES: Badge[] = [
   ...easyLadder({ prefix: "meditation", emoji: "🕊️", noun: "meditation", nounPlural: "meditations", category: "wellness",
     tierNames: ["First Sit", "Settled", "Quiet Hour", "Steady Sitter", "Hundred Sits", "Open Sky Mind", "Empty Bowl", "Stillness Itself"] }),
 
-  ...easyLadder({ prefix: "breathwork", emoji: "🫁", noun: "breathwork session", nounPlural: "breathwork sessions", category: "wellness",
-    tierNames: ["First Breath", "Slow Inhale", "Long Exhale", "Breath Patient", "Hundred Cycles", "Steady Lungs", "Breath Keeper", "Air Mastered"] }),
-
   ...easyLadder({ prefix: "stretching", emoji: "🤸", noun: "stretch session", nounPlural: "stretch sessions", category: "wellness",
     tierNames: ["First Stretch", "Lengthened", "Open Hips", "Mobile Body", "Hundred Sessions Loose", "Free Spine", "Limber Lifer", "Bend Like Water"] }),
 
@@ -192,9 +189,6 @@ export const BADGES: Badge[] = [
 
   ...easyLadder({ prefix: "float-tank", emoji: "🌊", noun: "float tank session", nounPlural: "float tank sessions", category: "wellness",
     tierNames: ["First Float", "Suspended", "Sensory Quiet", "Weightless", "Hundred Floats Deep", "Brine Soaked", "Long Drift", "Inner Sea"] }),
-
-  ...easyLadder({ prefix: "mobility", emoji: "🦵", noun: "mobility session", nounPlural: "mobility sessions", category: "wellness",
-    tierNames: ["First Open", "Joints Awake", "Range Found", "Free Hips", "Hundred Sessions Loose", "Limber Architect", "Mobility Lifer", "Move Like Water"] }),
 
   ...easyLadder({ prefix: "journaling", emoji: "📓", noun: "journal entry", nounPlural: "journal entries", category: "wellness",
     tierNames: ["First Page", "Honest Ink", "Daily Pages", "Reflection Habit", "Hundred Entries In", "Open Pages", "Self-Witness", "Recorded Life"] }),
@@ -223,9 +217,6 @@ export const BADGES: Badge[] = [
 
   ...easyLadder({ prefix: "likes", emoji: "❤️", noun: "like received", nounPlural: "likes received", category: "social",
     tierNames: ["First Like", "Liked", "Crowd Pleaser", "Fan Favorite", "Hundred Hearts Strong", "Inspiration", "Idol", "Adored"] }),
-
-  ...easyLadder({ prefix: "comments", emoji: "💬", noun: "comment", nounPlural: "comments", category: "social",
-    tierNames: ["First Word", "Speaking Up", "Conversationalist", "Community Voice", "Hundred Conversations", "Pillar", "Mentor", "Sage"] }),
 
   ...easyLadder({ prefix: "early-bird", emoji: "🌅", noun: "pre-7am workout", nounPlural: "pre-7am workouts", category: "consistency",
     tierNames: ["Early Bird", "Up With the Sun", "Dawn Regular", "Sunrise Hunter", "Hundred Mornings Up", "First Light", "Day Earned", "Wakes the Sun"] }),
@@ -471,12 +462,12 @@ export const BADGES: Badge[] = [
 export const EASY_LADDER_PREFIXES = [
   "workouts", "runs", "lifts", "yoga", "walks", "biking", "swimming", "rowing",
   "hiit", "pilates", "boxing", "sports", "sauna", "cold-plunge", "meditation",
-  "breathwork", "stretching",
+  "stretching",
   // New wellness modalities (Apr 2026 expansion)
-  "infrared-sauna", "red-light", "massage", "float-tank", "mobility",
+  "infrared-sauna", "red-light", "massage", "float-tank",
   "journaling", "sunlight",
   "wellness", "nutrition", "fasting-12h", "posts",
-  "followers", "likes", "comments", "early-bird",
+  "followers", "likes", "early-bird",
   // Moved from hard ladder Apr 2026 — 5K is common, not a rare event
   "5k",
   // Workout Partner ladder — was missing here, which left every tier
