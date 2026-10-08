@@ -13,6 +13,7 @@ const EXACT: Record<string, string> = {
   "new-years": "new-year",
   "holiday-hustle": "christmas",
   "halloween": "halloween",
+  "group-member": "group-member",
 };
 
 const BY_PREFIX: Record<string, string> = {
@@ -30,6 +31,20 @@ const BY_PREFIX: Record<string, string> = {
   "followers": "followers",
   "meditation": "meditation",
   "partner": "partner",
+  "streak": "streak",
+  "early-bird": "early-bird",
+  "yoga": "yoga",
+  "stretching": "stretching",
+  "hiit": "hiit",
+  "biking": "biking",
+  "swimming": "swimming",
+  "rowing": "rowing",
+  "boxing": "boxing",
+  "sports": "sports",
+  "likes": "likes",
+  "5k": "5k",
+  "10k": "10k",
+  "marathon": "marathon",
 };
 
 export function badgeArt(id: string | null | undefined): string | null {
