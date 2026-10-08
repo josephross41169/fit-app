@@ -3430,7 +3430,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
   // One earned-badge family tile (credential / yearly / progression look).
   // Shared by the Badges card and the Badges box preview.
   const badgeFamilyTile = (g: DisplayBadge) => (
-    <div key={g.key} onClick={() => setBadgeDetailKey(g.key)} style={{ cursor: "pointer", minWidth: 0 }}>{badgeFamilyTileInner(g)}</div>
+    <div key={g.key} onClick={() => setBadgeDetailKey(g.key)} style={{ cursor: "pointer", minWidth: 0, display: "grid" }}>{badgeFamilyTileInner(g)}</div>
   );
   const badgeFamilyTileInner = (g: DisplayBadge) => {
                         // ── CREDENTIAL: holographic prestige look (compact) ──
@@ -4145,8 +4145,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                     <div style={{fontSize:13}}>Complete fitness milestones to earn badges and unlock achievements</div>
                   </div>
                 ) : (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
-                    {grouped.map(g => <div key={g.key} onClick={() => setBadgeDetailKey(g.key)} style={{ cursor: "pointer", minWidth: 0 }}>{(() => {
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gridAutoRows:"1fr",gap:12}}>
+                    {grouped.map(g => <div key={g.key} onClick={() => setBadgeDetailKey(g.key)} style={{ cursor: "pointer", minWidth: 0, display: "grid" }}>{(() => {
                       // ── CREDENTIAL: holographic prestige look ──
                       if (g.renderType === "credential") {
                         return (
@@ -4156,6 +4156,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             textAlign:"center",
                             position:"relative",
                             overflow:"hidden",
+                            display:"flex",flexDirection:"column",justifyContent:"center",
                             border:"2px solid transparent",
                             background: `
                               linear-gradient(#0A0A14, #0A0A14) padding-box,
@@ -4196,6 +4197,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                             textAlign:"center",
                             position:"relative",
                             overflow:"hidden",
+                            display:"flex",flexDirection:"column",justifyContent:"center",
                             border:"2px solid #F472B6",
                             background:"linear-gradient(135deg, #12291D, #0E1F17, #183B4E)",
                             animation:"birthdayPulse 3s ease-in-out infinite",
@@ -4228,7 +4230,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                       // continuous shimmer, and orbiting sparkles on high tiers.
                       // Wrapped in a button so tapping opens the pin-menu sheet.
                       return (
-                        <div key={g.key} style={{ position: "relative" }}>
+                        <div key={g.key} style={{ position: "relative", display: "grid" }}>
                           {g.badge_row_id && (
                             <button
                               aria-label="Pin options"
