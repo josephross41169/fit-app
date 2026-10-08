@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import LiveleeLogo from "@/components/LiveleeLogo";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -105,7 +106,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #1F5F3F 0%, #4A9D6E 50%, #FF8C42 100%)" }}>
+      style={{ background: "linear-gradient(160deg, #1F5F3F 0%, #2E7D54 100%)" }}>
 
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -121,10 +122,9 @@ export default function LandingPage() {
 
         {/* Logo */}
         <div className="mb-3 text-center">
-          <div className="text-9xl font-black text-white tracking-tighter leading-none drop-shadow-lg">
-            Livelee
-          </div>
-          <div className="text-5xl -mt-2">💪</div>
+          <h1 style={{ margin: 0, display: "flex", justifyContent: "center" }}>
+            <LiveleeLogo height={64} iconColor="#DDE8DF" textColor="#FFFFFF" />
+          </h1>
         </div>
 
         {/* Tagline */}

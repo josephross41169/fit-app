@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import LiveleeLogo from "@/components/LiveleeLogo";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -3155,8 +3156,7 @@ export default function FeedPage() {
       <div style={{ position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,0.97)",backdropFilter:"blur(14px)",borderBottom:`1px solid #1B231E`, paddingTop:"var(--safe-top)" }}>
         <div className="feed-header-inner" style={{ padding:"14px 20px 12px",display:"flex",alignItems:"center",gap:14 }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
-            <span style={{ fontSize:20 }}>⚡</span>
-            <span style={{ fontWeight:900,fontSize:22,color:"#4A9D6E",letterSpacing:1.5 }}>Livelee</span>
+            <LiveleeLogo height={26} />
           </div>
           {/* Search bar — sits right next to the FIT logo. Fixed width so it
               doesn't stretch out wide and feel disconnected from the logo. */}

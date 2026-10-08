@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import LiveleeLogo from "@/components/LiveleeLogo";
 import { supabase } from "@/lib/supabase";
 
 const G = "#1F5F3F";
@@ -67,8 +68,7 @@ export default function LoginPage() {
     <div style={{ minHeight: "100vh", background: DARK_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>⚡</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: "#4A9D6E", margin: 0, letterSpacing: -1 }}>Livelee</h1>
+          <h1 style={{ margin: "0 0 10px", display: "flex", justifyContent: "center" }}><LiveleeLogo height={46} /></h1>
           <p style={{ color: "#6B7280", fontSize: 14, marginTop: 4 }}>Welcome back. Let&apos;s get after it.</p>
         </div>
 

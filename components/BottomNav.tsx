@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import LiveleeLogo from "@/components/LiveleeLogo";
 import { useAuth } from "@/lib/auth";
 import { isBusinessAccount } from "@/lib/businessTypes";
 import { useUnreadCounts } from "@/lib/useUnreadCounts";
@@ -351,7 +352,7 @@ export default function BottomNav() {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", marginBottom: 32, padding: "0 4px" }}>
           {!collapsed && (
-            <span className="text-2xl font-black" style={{ color: ACCENT, whiteSpace: "nowrap" }}>Livelee</span>
+            <LiveleeLogo height={28} />
           )}
           <button
             onClick={toggleSidebar}

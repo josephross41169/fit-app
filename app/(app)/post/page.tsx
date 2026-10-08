@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
+import LiveleeLogo from "@/components/LiveleeLogo";
 import { uploadPhotoDirect } from "@/lib/uploadPhotoDirect";
 import { compressImage } from "@/lib/compressImage";
 import { track } from "@/components/PostHogProvider";
@@ -3301,7 +3302,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
 
         {/* -- Desktop sidebar -- */}
         <div className="post-sidebar">
-          <div style={{ fontWeight: 900, fontSize: 15, color: C.text, marginBottom: 24, letterSpacing: -0.3 }}>Livelee</div>
+          <div style={{ marginBottom: 24 }}><LiveleeLogo height={22} /></div>
 
           {/* Mode toggle */}
           <div style={{ marginBottom: 28 }}>
