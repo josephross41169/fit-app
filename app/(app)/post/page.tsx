@@ -2456,12 +2456,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         // is a sauna variant. The infrared-only ladder below is additional, not exclusive.
         { types: ['sauna'],                     prefix: 'sauna' },
         { types: ['infrared sauna'],            prefix: 'infrared-sauna' },
-        { types: ['breathwork'],                prefix: 'breathwork' },
         { types: ['stretching'],                prefix: 'stretching' },
         { types: ['red light'],                 prefix: 'red-light' },
         { types: ['massage'],                   prefix: 'massage' },
         { types: ['float tank'],                prefix: 'float-tank' },
-        { types: ['mobility'],                  prefix: 'mobility' },
         { types: ['journaling'],                prefix: 'journaling' },
         { types: ['sunlight', 'grounding'],     prefix: 'sunlight' },
       ];
