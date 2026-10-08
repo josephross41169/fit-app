@@ -716,7 +716,7 @@ function LocalTab({ userCity, localPosts, onChangeCity, dbEvents, showAllEvents,
                 ? `No posts in ${userCity} yet — be the first! Showing top posts from across the app.`
                 : postsToShow.length === 0
                   ? `Nothing here yet — posts tagged ${userCity} will show up here`
-                  : `Showing fitness content near you · ${postsToShow.length} posts this week`}
+                  : `Posts from people in ${userCity}`}
             </div>
           </div>
           <button onClick={onChangeCity} style={{ marginLeft:"auto",background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.4)",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,padding:"7px 14px",cursor:"pointer",flexShrink:0 }}>
@@ -910,7 +910,6 @@ function DiscoverTab({ people }: { people: RealPerson[] }) {
 // -----------------------------------------------------------------------------
 export default function DiscoverPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"local" | "world" | "discover">("local");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{id:string;username:string;full_name:string;avatar_url:string|null}[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -922,35 +921,6 @@ export default function DiscoverPage() {
   const [worldPosts, setWorldPosts] = useState<any[]>([]);
   const [topPeople, setTopPeople] = useState<RealPerson[]>([]);
 
-  // Real data for the Worldwide + Discover tabs — replaces the hardcoded
-  // celebrity/mock arrays (fabricated posts and stats attributed to real
-  // public figures were both a UX honesty problem and an App Review risk).
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const [{ data: posts }, { data: users }] = await Promise.all([
-        supabase
-          .from("posts")
-          .select("*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)")
-          .eq("is_public", true)
-          .or("post_type.is.null,post_type.neq.achievement")
-          .order("likes_count", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabase
-          .from("users")
-          .select("id, username, full_name, avatar_url, city, followers_count, deleted_at")
-          .order("followers_count", { ascending: false })
-          .limit(12),
-      ]);
-      if (!alive) return;
-      setWorldPosts(posts || []);
-      setTopPeople(((users || []) as any[]).filter(u =>
-        !u.deleted_at && u.username && u.full_name !== "Deleted User" && !String(u.username).startsWith("deleted_")
-      ).slice(0, 5) as RealPerson[]);
-    })();
-    return () => { alive = false; };
-  }, []);
   const [showChangeCityOverlay, setShowChangeCityOverlay] = useState(false);
   const [newCityInput, setNewCityInput] = useState("");
 
@@ -1069,40 +1039,25 @@ export default function DiscoverPage() {
       // the legacy ILIKE-only path applies, so we kick off the legacy
       // query speculatively and discard it if locations had results.
       // Net: cuts the cold-load chain from 4 sequential round-trips to 2.
-      const [locResult, legacyPostsResult] = await Promise.all([
-        supabase
-          .from('locations')
-          .select('id')
-          .ilike('city', `%${cityKey}%`)
-          .limit(500),
-        supabase
-          .from('posts')
-          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
-          .ilike('location', `%${cityKey}%`)
-          .order('created_at', { ascending: false })
-          .limit(30),
+      // Local = public posts from anyone whose profile city matches, plus
+      // posts tagged with a location in this city.
+      const [locResult, usersResult] = await Promise.all([
+        supabase.from('locations').select('id').ilike('city', `%${cityKey}%`).limit(500),
+        supabase.from('users').select('id').ilike('city', `%${cityKey}%`).is('deleted_at', null).limit(1000),
       ]);
-
       const locationIds = (locResult.data || []).map((l: any) => l.id);
-
-      let data: any[] | null = null;
-      if (locationIds.length > 0) {
-        // Locations matched — run the combined query (legacy text OR
-        // location_id IN (...)). The speculative legacyPostsResult above
-        // is a strict subset of this, so we discard it.
-        const inList = locationIds.map((id: string) => `"${id}"`).join(',');
-        const { data: combined } = await supabase
-          .from('posts')
-          .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
-          .or(`location.ilike.%${cityKey}%,location_id.in.(${inList})`)
-          .order('created_at', { ascending: false })
-          .limit(30);
-        data = combined;
-      } else {
-        // No new-style locations in this city — the speculative legacy
-        // query we already fired IS the answer. Use its result directly.
-        data = legacyPostsResult.data;
-      }
+      const localUserIds = (usersResult.data || []).map((u: any) => u.id);
+      const ors = [`location.ilike.%${cityKey}%`];
+      if (locationIds.length) ors.push(`location_id.in.(${locationIds.map((id: string) => `"${id}"`).join(',')})`);
+      if (localUserIds.length) ors.push(`user_id.in.(${localUserIds.map((id: string) => `"${id}"`).join(',')})`);
+      const { data } = await supabase
+        .from('posts')
+        .select('*, user:users!posts_user_id_fkey(id,username,full_name,avatar_url,avatar_video_url,city)')
+        .eq('is_public', true)
+        .or('post_type.is.null,post_type.neq.achievement')
+        .or(ors.join(','))
+        .order('created_at', { ascending: false })
+        .limit(40);
 
       if (data && data.length > 0) {
         setLocalPosts(data);
@@ -1168,8 +1123,8 @@ export default function DiscoverPage() {
         <div style={{ maxWidth:1200,margin:"0 auto",padding:"14px 24px 0",display:"flex",alignItems:"center",gap:16 }}>
           {/* Title */}
           <div style={{ display:"flex",alignItems:"center",gap:8,marginRight:8 }}>
-            <span style={{ fontSize:20 }}>🔍</span>
-            <span style={{ fontWeight:900,fontSize:20,color:C.text }}>Discovery</span>
+            <span style={{ fontSize:20 }}>📍</span>
+            <span style={{ fontWeight:900,fontSize:20,color:C.text }}>Local</span>
           </div>
 
           {/* Search bar */}
@@ -1220,33 +1175,20 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{ maxWidth:1200,margin:"0 auto",padding:"0 24px",display:"flex",gap:0,marginTop:12 }}>
-          {(["local","world","discover"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding:"10px 28px",
-              fontWeight:800,
-              fontSize:14,
-              background:"none",
-              border:"none",
-              cursor:"pointer",
-              color: tab===t ? "#4A9D6E" : C.sub,
-              borderBottom: tab===t ? `3px solid ${C.blue}` : "3px solid transparent",
-              transition:"all 0.15s",
-              display:"flex",
-              alignItems:"center",
-              gap:8,
-            }}>
-              {t === "local" ? "📍 Local" : t === "world" ? "🌍 Worldwide" : "🧭 Discover"}
-            </button>
+        {/* Same tabs as the feed — Local is the active one */}
+        <div style={{ maxWidth:1200,margin:"0 auto",padding:"12px 24px 10px",display:"flex",gap:4 }}>
+          {[
+            { href:"/feed", label:"For You" },
+            { href:"/feed?tab=following", label:"Following" },
+          ].map(t => (
+            <Link key={t.href} href={t.href} style={{ padding:"8px 20px",borderRadius:99,fontWeight:800,fontSize:13,textDecoration:"none",color:"#6B7280" }}>{t.label}</Link>
           ))}
+          <span style={{ padding:"8px 20px",borderRadius:99,fontWeight:800,fontSize:13,background:"#1F5F3F",color:"#fff" }}>📍 Local</span>
         </div>
       </div>
 
       {/* -- Tab content -- */}
-      {tab === "local" ? <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} dbEvents={dbEvents} showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} />
-        : tab === "world" ? <WorldTab posts={worldPosts} people={topPeople} />
-        : <DiscoverTab people={topPeople} />}
+      <LocalTab userCity={userCity} localPosts={localPosts} onChangeCity={() => { setNewCityInput(userCity); setShowChangeCityOverlay(true); }} dbEvents={dbEvents} showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} />
 
       {/* -- Change City Overlay -- */}
       {showChangeCityOverlay && (
