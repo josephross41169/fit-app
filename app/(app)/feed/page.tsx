@@ -2080,6 +2080,10 @@ export default function FeedPage() {
   const [ptrRefreshing, setPtrRefreshing] = useState(false);
   const ptrStartYRef = useRef<number | null>(null);
   const [feedTab, setFeedTab] = useState<"foryou" | "following" | "notifications">("foryou");
+  // /feed?tab=following (linked from the Local page) opens the Following tab.
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get("tab") === "following") setFeedTab("following"); } catch {}
+  }, []);
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
   // Streak reminder card — shows at top of For You when user has an active
