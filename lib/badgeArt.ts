@@ -9,6 +9,10 @@ const EXACT: Record<string, string> = {
   "founder": "founder",
   "veteran": "veteran",
   "fasting": "fasting",
+  "group-leader": "group-leader",
+  "new-years": "new-year",
+  "holiday-hustle": "christmas",
+  "halloween": "halloween",
 };
 
 const BY_PREFIX: Record<string, string> = {
@@ -19,6 +23,13 @@ const BY_PREFIX: Record<string, string> = {
   "fasting-12h": "fasting",
   "nutrition": "nutrition",
   "wellness": "self-care",
+  "workouts": "workouts",
+  "lifts": "lifts",
+  "posts": "posts",
+  "walks": "walks",
+  "followers": "followers",
+  "meditation": "meditation",
+  "partner": "partner",
 };
 
 export function badgeArt(id: string | null | undefined): string | null {

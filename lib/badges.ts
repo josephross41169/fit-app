@@ -417,6 +417,7 @@ export const BADGES: Badge[] = [
   { id:"birthday-workout",  emoji:"🎂", label:"Birthday Grind",      desc:"Worked out on your birthday",                   category:"special" },
   { id:"new-years",         emoji:"🎆", label:"New Year, New Me",    desc:"Logged a workout on January 1st",               category:"special" },
   { id:"holiday-hustle",    emoji:"🎄", label:"Holiday Hustle",      desc:"Worked out on a major holiday",                 category:"special" },
+  { id:"halloween",         emoji:"🎃", label:"Halloween Grind",     desc:"Worked out on Halloween",                       category:"special" },
   { id:"outdoor-adventurer",emoji:"🧗", label:"Outdoor Adventurer",  desc:"Completed a hike, climb, or outdoor adventure", category:"special" },
   { id:"sport-competitor",  emoji:"🏆", label:"Competitor",          desc:"Competed in any athletic event",                category:"special" },
 
