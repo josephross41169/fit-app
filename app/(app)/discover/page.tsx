@@ -288,8 +288,8 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
 
   return (
     <div style={{ background:C.white,borderRadius:20,border:`2px solid ${C.greenMid}`,boxShadow:"0 4px 24px rgba(124,58,237,0.09)",marginBottom:28,overflow:"hidden" }}>
-      {/* Header */}
-      <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
+      {/* Header — pine green bar */}
+      <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"linear-gradient(135deg,#1F5F3F,#2E7D54)" }}>
         {/* Wrapped in Link so Next.js auto-prefetches the destination
             profile when this card scrolls into view (mobile) or the
             user hovers (desktop). Previously these were divs with
@@ -297,17 +297,17 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
             prefetch step. */}
         <Link href={`/profile/${displayHandle}`} prefetch style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.blue},#4A9D6E)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0,cursor:"pointer",overflow:"hidden" }}>
-            {avatarVideoUrl
-              ? <video src={avatarVideoUrl} poster={avatarUrl || undefined} autoPlay muted loop playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              : avatarUrl
-              ? <img src={avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display="none"}}/>
+            {/* Still avatar only in lists — looping avatar videos in every
+                card cost a lot of data and battery. */}
+            {avatarUrl
+              ? <img src={ImagePresets.avatarSm(avatarUrl)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display="none"}}/>
               : (displayAvatar || avatarIni)}
           </div>
         </Link>
         <Link href={`/profile/${displayHandle}`} prefetch style={{ flex: 1, textDecoration: "none", color: "inherit" }}>
           <div style={{ flex:1,cursor:"pointer" }}>
-            <div style={{ fontWeight:900,fontSize:15,color:C.text }}>{displayName}</div>
-            <div style={{ fontSize:12,color:C.sub }}>@{displayHandle} · {post.time || ""}</div>
+            <div style={{ fontWeight:900,fontSize:15,color:"#fff" }}>{displayName}</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.75)" }}>@{displayHandle}{(() => { const t = post.time || ((post as any).created_at ? (() => { const d = new Date((post as any).created_at); const diff = Date.now() - d.getTime(); if (diff < 3600000) return `${Math.max(1, Math.floor(diff/60000))}m ago`; if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`; if (diff < 604800000) return `${Math.floor(diff/86400000)}d ago`; return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); })() : ""); return t ? ` · ${t}` : ""; })()}</div>
           </div>
         </Link>
         {userObj?.id && user && userObj.id !== user.id && (

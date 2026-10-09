@@ -2362,13 +2362,14 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       console.error('Failed to load activity logs:', e);
       setRealDays([]);
     }
-  }, [user, buildDaysFromLogs]);
+  }, [viewUserId, buildDaysFromLogs]);
 
   useEffect(() => {
     if (!user) return;
     setLoadingLogs(true);
     loadActivityLogs(50).finally(() => setLoadingLogs(false));
-  }, [user, loadActivityLogs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, loadActivityLogs]);
 
   const loadMonthLogs = useCallback(async () => {
     if (!viewUserId) return;
@@ -2979,7 +2980,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
       setTierInfo(info);
       setUserTier(info.tier);
       // Persist tier back to DB for feed to pick up — only for your own profile.
-      if (isOwn && user) {
+      // Only write when it actually changed (this used to write on every visit).
+      const prof = (user as any)?.profile || {};
+      if (isOwn && user && (prof.tier !== info.tier || prof.logs_last_28_days !== logsCount)) {
         supabase.from('users').update({ tier: info.tier, logs_last_28_days: logsCount } as any).eq('id', user.id).then(() => {}, () => {});
       }
     }

@@ -1388,8 +1388,8 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
         {/* (Removed the top-right "🏆 PR" ribbon — it overlapped the date
             badge. The gold celebration card body already makes clear this is
             a PR, so the extra corner badge was redundant.) */}
-        {/* Header */}
-        <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 18px 10px" }}>
+        {/* Header — pine green bar */}
+        <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"linear-gradient(135deg,#1F5F3F,#2E7D54)" }}>
           <div onClick={() => router.push(`/profile/${post.username}`)} style={{ cursor:"pointer",flexShrink:0 }}>
             <TierFrame tier={post.tier || "default"} size={46}>
               <div style={{ width:"100%",height:"100%",background:`linear-gradient(135deg,${C.blue},#4ADE80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",overflow:"hidden" }}>
@@ -1399,20 +1399,20 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
                      and rendering many videos on the feed page hammered
                      mobile performance. Moving avatar still shows on the
                      full-size profile page where it actually reads. */
-                    <img src={post.avatar} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+                    <img src={ImagePresets.avatarSm(post.avatar)} loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
                   : post.avatar}
               </div>
             </TierFrame>
           </div>
           <div style={{ flex:1,cursor:"pointer" }} onClick={() => router.push(`/profile/${post.username}`)}>
             <div style={{ display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }}>
-              <span style={{ fontWeight:900,fontSize:15,color:C.text }}>{post.user}</span>
+              <span style={{ fontWeight:900,fontSize:15,color:"#fff" }}>{post.user}</span>
               <TierBadgeChip tier={post.tier || "default"} small />
             </div>
             <TierTitle tier={post.tier || "default"} />
-            <div style={{ fontSize:12,color:C.sub }}>@{post.username} · {post.time}</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.75)" }}>@{post.username} · {post.time}</div>
           </div>
-          <div style={{ width:50,height:50,borderRadius:13,background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,0.3)" }}>
+          <div style={{ width:50,height:50,borderRadius:13,background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.18)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
             <span style={{ color:"#fff",fontWeight:900,fontSize:18,lineHeight:1 }}>{d}</span>
             <span style={{ color:"rgba(255,255,255,0.85)",fontSize:10,fontWeight:700 }}>{MONTHS[m-1]}</span>
           </div>
@@ -1420,7 +1420,7 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
               Report button covers Apple Guideline 1.2 for user-generated content. */}
           {(isOwner || (currentUser && !isOwner)) && (
             <div style={{ position:"relative" }}>
-              <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:C.sub,fontSize:20,lineHeight:1 }}>···</button>
+              <button onClick={() => setShowMenu(m => !m)} style={{ background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:8,color:"rgba(255,255,255,0.85)",fontSize:20,lineHeight:1 }}>···</button>
               {showMenu && (
                 <div style={{ position:"absolute",right:0,top:"100%",zIndex:50,background:"#111118",border:"1.5px solid #1B231E",borderRadius:14,boxShadow:"0 8px 24px rgba(0,0,0,0.4)",minWidth:160,overflow:"hidden" }}>
                   {isOwner && onDelete && !confirmDelete && (
@@ -2084,6 +2084,16 @@ export default function FeedPage() {
   // /feed?tab=following (linked from the Local page) opens the Following tab.
   useEffect(() => {
     try { if (new URLSearchParams(window.location.search).get("tab") === "following") setFeedTab("following"); } catch {}
+  }, []);
+  // Render only the layout for this screen size. Both the desktop and mobile
+  // trees used to mount (CSS hid one), so every post rendered twice.
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
   }, []);
   const [followingPosts, setFollowingPosts] = useState<any[]>([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
@@ -2750,8 +2760,8 @@ export default function FeedPage() {
   // Load activity logs for sidebar
   useEffect(() => {
     async function loadActivityFeed() {
-      await fetchActivityLogs(0, false, activityFilter);
-      // legacy badge load already handled inside fetchActivityLogs
+      // Initial load is done by the [activityFilter] effect below — calling it
+      // here too fetched the same activity feed twice on every visit.
       if (false) {
       const { data } = await supabase
         .from('activity_logs')
@@ -2826,9 +2836,9 @@ export default function FeedPage() {
       setNotifications(json.notifications || []);
     }
     loadNotifs();
-    const interval = setInterval(loadNotifs, 30000);
+    const interval = setInterval(() => { if (document.visibilityState === 'visible') loadNotifs(); }, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.id]);
 
   // Real suggested users — most-followed accounts this user doesn't follow yet.
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
@@ -3367,6 +3377,7 @@ export default function FeedPage() {
       </div>
 
       {/* ── Desktop: two-column layout ── */}
+      {isMobile === false && (
       <div className="feed-layout">
 
         {/* LEFT: Social feed (desktop only) */}
@@ -3584,12 +3595,15 @@ export default function FeedPage() {
         </div>
       </div>
 
+      )}
+
       {/* ── Mobile: interleaved single-column feed ──
           Pull-to-refresh: native iOS gesture. We listen on touch events instead
           of pointer events because PTR specifically wants to consume vertical
           scroll at the top of the page — pointer events would fight the
           carousel swipe handlers in the PostCards below. The detection is
           gated on `window.scrollY === 0` so mid-feed pulls don't trigger. */}
+      {isMobile === true && (
       <div
         className="feed-mobile-only"
         style={{ padding:"0 12px", touchAction:"pan-y" }}
@@ -3796,6 +3810,7 @@ export default function FeedPage() {
         )}
         </div>{/* close PTR transform wrapper */}
       </div>
+      )}
 
       {/* ReportModal — activated when ⋯ → Report is clicked on a post */}
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />

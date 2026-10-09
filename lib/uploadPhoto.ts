@@ -1,3 +1,4 @@
+import { ImagePresets } from "./imageUrls";
 /**
  * Upload a base64 data URL or File to Supabase Storage via the server-side API route.
  * This bypasses storage RLS — works for authenticated users on Vercel.
@@ -32,6 +33,12 @@ export async function uploadPhoto(
       console.error('Upload error:', json.error);
       return null;
     }
+    // Warm the resized copies on the image CDN so the first person to see
+    // this photo doesn't wait for it to be generated.
+    try {
+      const u = json.publicUrl as string;
+      [ImagePresets.feed(u), ImagePresets.thumb(u), ImagePresets.avatarSm(u)].forEach(x => { if (x && x !== u) fetch(x, { mode: 'no-cors' }).catch(() => {}); });
+    } catch {}
     return json.publicUrl as string;
   } catch (e) {
     console.error('Upload exception:', e);

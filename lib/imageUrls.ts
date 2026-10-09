@@ -35,37 +35,15 @@ export function thumbUrl(
 ): string {
   if (!url || typeof url !== 'string') return url || '';
 
-  // Supabase image transformations (/render/image/) are a paid-plan
-  // feature; on the Free plan they return 403 and every photo breaks.
-  // Serve the original file until the project is on a plan that
-  // includes transforms.
-  return url;
-
-  // Only transform Supabase storage URLs. Anything else passes through
-  // unchanged — third-party URLs, data URLs, blob URLs, etc.
+  // Supabase's own image transforms are a paid-plan feature, so resize
+  // through wsrv.nl (free, Cloudflare-cached image CDN) instead. Only
+  // public Supabase storage images are routed; everything else passes
+  // through. If wsrv ever fails, a global <img> error handler (lib/auth.tsx)
+  // swaps back to the original URL.
   if (!url.includes('/storage/v1/object/public/')) return url;
-
-  // Skip transformation for non-image files (videos, etc). Cheap suffix
-  // check — if it's not one of the common image extensions, don't try
-  // to render-resize it.
   if (/\.(mp4|mov|webm|m4v|qt)(\?|#|$)/i.test(url)) return url;
+  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${opts.width}&q=${opts.quality ?? 75}&output=webp&we`;
 
-  // Swap the URL segment to hit the transformation endpoint
-  const transformedUrl = url.replace(
-    '/storage/v1/object/public/',
-    '/storage/v1/render/image/public/'
-  );
-
-  // Build query params. Quality 75 is a sweet spot — visually similar
-  // to 90 but ~30% smaller. Resize mode 'cover' is the default for our
-  // square/aspect-cropped UI; pass 'contain' if you want letterboxing.
-  const params = new URLSearchParams();
-  params.set('width', String(opts.width));
-  if (opts.quality !== undefined) params.set('quality', String(opts.quality));
-  else params.set('quality', '75');
-  if (opts.resize) params.set('resize', opts.resize);
-
-  return `${transformedUrl}?${params.toString()}`;
 }
 
 /** Common preset sizes — call these instead of memorizing widths. */

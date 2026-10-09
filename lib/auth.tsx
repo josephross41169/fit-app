@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useMemo, ReactNode } from 'react';
 import ToastHost, { showToast } from '@/components/ToastHost';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
@@ -182,6 +182,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true;
 
+    // Only hand components a new user object when the profile actually
+    // changed. The cached profile usually matches the fresh one, so this
+    // skips a full app re-render (and every page's data refetch) on launch.
+    function applyProfile(next: AuthUser) {
+      setUser(prev => (prev && prev.id === next.id && JSON.stringify(prev.profile ?? null) === JSON.stringify(next.profile ?? null)) ? prev : next);
+    }
+
+    // Resized images come from the wsrv.nl CDN (lib/imageUrls.ts). If that
+    // ever fails, fall back to the original file so no photo goes blank.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', (ev) => {
+        const el = ev.target as HTMLImageElement | null;
+        if (!el || el.tagName !== 'IMG' || !el.src.startsWith('https://wsrv.nl/')) return;
+        try { const orig = new URL(el.src).searchParams.get('url'); if (orig) el.src = orig; } catch {}
+      }, true);
+    }
+
     // ── Initial session load ───────────────────────────────────────────
     // Reads from localStorage on web, Capacitor Preferences on native.
     // No session AND nothing saved = logged out. No session but a saved
@@ -190,12 +207,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     function applySession(s: Session) {
       setSession(s);
       setLoading(false);
+      // Same user as the optimistic start: keep the existing user object
+      // (no re-render cascade), but make sure one is set.
+      setUser(prev => (prev && prev.id === s.user.id) ? prev : { ...s.user, profile: readProfileCache(s.user.id) });
       if (userIdRef.current !== s.user.id) {
         userIdRef.current = s.user.id;
         // Keep the (cached) profile we may already be showing — dropping it
         // would flash the loading skeleton while the fresh row loads.
         setUser(prev => ({ ...s.user, profile: prev?.id === s.user.id ? prev.profile : readProfileCache(s.user.id) }));
-        fetchProfile(s.user).then(withProfile => { if (mounted) setUser(withProfile); });
+        fetchProfile(s.user).then(withProfile => { if (mounted) applyProfile(withProfile); });
       }
     }
     function signedOutLocally() {
@@ -220,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (userIdRef.current !== stored.user.id) {
             userIdRef.current = stored.user.id;
             setUser(stored.user);
-            fetchProfile(stored.user).then(withProfile => { if (mounted) setUser(withProfile); });
+            fetchProfile(stored.user).then(withProfile => { if (mounted) applyProfile(withProfile); });
           }
           setLoading(false);
         } else {
@@ -248,8 +268,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     {
       const stored = readStoredSession();
       if (stored?.user?.id) {
+        // Mark this user as current so the session check below doesn't
+        // re-set the same user (each re-set re-runs every page's loaders).
+        userIdRef.current = stored.user.id;
         setUser({ ...stored.user, profile: readProfileCache(stored.user.id) });
         setLoading(false);
+        fetchProfile(stored.user).then(withProfile => { if (mounted) applyProfile(withProfile); });
       }
     }
 
@@ -314,7 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userIdRef.current !== newSession.user.id) {
           userIdRef.current = newSession.user.id;
           setUser(prev => ({ ...newSession.user, profile: prev?.id === newSession.user.id ? prev.profile : readProfileCache(newSession.user.id) }));
-          fetchProfile(newSession.user).then(withProfile => { if (mounted) setUser(withProfile); });
+          fetchProfile(newSession.user).then(withProfile => { if (mounted) applyProfile(withProfile); });
         }
         return;
       }
@@ -411,8 +435,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }
 
+  // Stable context value: consumers only re-render when these change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ctxValue = useMemo(() => ({ user, session, loading, signUp, signIn, signOut, refreshProfile }), [user, session, loading]);
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={ctxValue}>
       {children}
       <ToastHost />
     </AuthContext.Provider>
