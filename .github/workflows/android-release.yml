@@ -34,8 +34,10 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # The GitHub Ubuntu runner already ships the Android SDK (ANDROID_HOME),
+      # and Gradle downloads any missing platform/build-tools itself.
+      - name: Check Android SDK
+        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME"
 
       - name: Build app bundle (web) and sync native projects
         env:
