@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, memo } from "react";
+import PostCaption from "@/components/PostCaption";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -437,9 +438,6 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
         )}
       </div>
 
-      {/* Caption */}
-      {caption && <div style={{ padding:"12px 18px 8px",fontSize:14,color:C.text,lineHeight:1.65 }}>{caption}</div>}
-
       {/* Actions */}
       <div style={{ padding:"8px 18px 14px",display:"flex",alignItems:"center",gap:20,borderTop:`1px solid ${C.greenLight}`,marginTop:4 }}>
         <button onClick={handleToggleLike} disabled={likeBusy} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:likeBusy?"default":"pointer",padding:0 }}>
@@ -463,6 +461,13 @@ const DiscoverPost = memo(function DiscoverPost({ post, liked: initLiked }: { po
           </svg>
         </button>
       </div>
+
+      {/* Caption — Instagram-style: bold name + text, then info tags */}
+      <PostCaption
+        name={displayName}
+        rawText={caption}
+        tags={(() => { const loc = (post as any).location_name || (post as any).location; return typeof loc === "string" && loc ? [`📍 ${loc}`] : []; })()}
+      />
 
       {/* ── First comment preview — always visible when comments exist
           and the full thread isn't expanded. Tapping it opens the full

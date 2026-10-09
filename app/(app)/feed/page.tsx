@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import PostCaption from "@/components/PostCaption";
 import LiveleeLogo from "@/components/LiveleeLogo";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -197,7 +198,26 @@ type Post = {
   // 'wellness'. Optional because mock posts and older rows may not
   // carry it.
   post_type?: string;
+  location?: string;
 };
+
+// Small info tags shown under a post caption (workout type, duration,
+// calories, wellness activity, location). Only includes what exists.
+function postTags(post: Post): string[] {
+  const tags: string[] = [];
+  const w = post.workout;
+  if (w) {
+    if (w.type) tags.push(`🏋️ ${w.type}`);
+    const d = fmtDur(w.duration);
+    if (d) tags.push(`⏱ ${d}`);
+    if (w.calories) tags.push(`🔥 ${Math.round(w.calories)} cal`);
+  }
+  if (post.nutrition?.calories) tags.push(`🥗 ${Math.round(post.nutrition.calories)} cal`);
+  const we = post.wellness?.entries?.[0];
+  if (we?.activity) tags.push(`${we.emoji || "🧘"} ${we.activity}`);
+  if (post.location) tags.push(`📍 ${post.location}`);
+  return tags;
+}
 
 // Format a workout duration for display. Stored durations are decimal minutes
 // (e.g. 17.3667 → "17:22"). Whole-minute values stay "45 min". Accepts a
@@ -1448,14 +1468,6 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
           )}
         </div>
 
-        {/* Caption */}
-        {post.caption && post.post_type !== 'achievement' && (
-          // Plain caption rendering. Skipped on achievement posts —
-          // the celebration card below visualizes the same content,
-          // so double-rendering would be redundant.
-          <div style={{ padding:"0 18px 12px",fontSize:14,color:C.text,lineHeight:1.6 }}>{renderMentions(post.caption)}</div>
-        )}
-
         {/* ── MEDIA — square, full width ── */}
         {post.photos.length > 0 ? (
           <div
@@ -1830,6 +1842,17 @@ const PostCardInner = memo(function PostCard({ post, onUpdate, onDelete, onRepor
             </button>
           </div>
         </div>
+
+        {/* Caption — Instagram-style: bold name + text, then info tags */}
+        {post.post_type !== 'achievement' && (
+          <PostCaption
+            name={post.user}
+            rawText={post.caption}
+            caption={post.caption ? renderMentions(post.caption) : undefined}
+            tags={postTags(post)}
+            onNameClick={() => router.push(`/profile/${post.username}`)}
+          />
+        )}
 
         {/* Comments */}
         {post.comments.length > 0 && (
@@ -2972,7 +2995,7 @@ export default function FeedPage() {
         photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
         mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
-        caption: p.caption || "",
+        caption: p.caption || "", location: p.locationData?.name || p.location || "",
         // Carry post_type so PostCard can apply the gold "achievement"
         // skin to PR-ticker auto-posts. Falls back gracefully if the
         // column isn't selected on this code path.
@@ -3432,7 +3455,7 @@ export default function FeedPage() {
                   photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
                   mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
-                  caption: p.caption || "",
+                  caption: p.caption || "", location: p.locationData?.name || p.location || "",
                   post_type: p.post_type, // see Post type definition for why
                   likes: p.likes_count || 0,
                   liked: p._liked || false,
@@ -3705,7 +3728,7 @@ export default function FeedPage() {
                 photos: normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url),
                 mediaTypes: mediaTypesFor(normalizePhotoUrls(p.media_urls, p.media_url, p.photo_url), p.media_types, p.media_type),
         mediaPositions: Array.isArray(p.media_positions) ? p.media_positions : null,
-                caption: p.caption || "",
+                caption: p.caption || "", location: p.locationData?.name || p.location || "",
                 post_type: p.post_type, // see Post type definition for why
                 likes: p.likes_count || 0,
                 liked: p._liked || false,
