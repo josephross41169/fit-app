@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback, useEffect, CSSProperties } from "react";
-import { generatePlan, swapExercise, Goal, Level, Sex, Injury, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay } from "@/lib/workoutPlanner";
+import { generatePlan, swapExercise, levelForExperience, Goal, Level, Sex, Injury, Experience, TrainingFor, PlanConfig, WeeklyPlan, PlannedExercise, TrainingDay, ExtraSession } from "@/lib/workoutPlanner";
 import { Equipment, EQUIPMENT_TYPES } from "@/lib/exercises";
 import { getExerciseImage } from "@/lib/exerciseImages";
 import Link from "next/link";
@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth";
 const C = {
   purple:     "#1F5F3F",
   purpleDark: "#3E9E74",
-  purpleBg:   "rgba(124,58,237,0.12)",
+  purpleBg:   "rgba(46,125,84,0.14)",
   purpleMid:  "#1E3D34",
   gold:       "#F5A623",
   green:      "#10B981",
@@ -32,10 +32,32 @@ const GOALS: { value: Goal; label: string; desc: string; emoji: string }[] = [
   { value: "athletic",    label: "Athletic",    desc: "Power, speed, and functional strength", emoji: "🎯" },
 ];
 
-const LEVELS: { value: Level; label: string; desc: string }[] = [
-  { value: "beginner",     label: "Beginner",     desc: "0-1 year lifting" },
-  { value: "intermediate", label: "Intermediate", desc: "1-3 years lifting" },
-  { value: "advanced",     label: "Advanced",     desc: "3+ years lifting" },
+const EXPERIENCES: { value: Experience; label: string; desc: string }[] = [
+  { value: "new",          label: "New",          desc: "Never lifted or under 6 months" },
+  { value: "novice",       label: "Novice",       desc: "6-12 months, still learning form" },
+  { value: "intermediate", label: "Intermediate", desc: "1-3 years, train consistently" },
+  { value: "advanced",     label: "Advanced",     desc: "3-5 years, follow programs" },
+  { value: "elite",        label: "Elite",        desc: "5+ years or compete" },
+];
+
+const TRAINING_FOR: { value: TrainingFor; label: string; emoji: string }[] = [
+  { value: "none",         label: "Just getting fit", emoji: "✨" },
+  { value: "5k_10k",       label: "5K / 10K",         emoji: "🏃" },
+  { value: "marathon",     label: "Half / Marathon",  emoji: "🛣️" },
+  { value: "powerlifting", label: "Powerlifting meet", emoji: "🏋️" },
+  { value: "bodybuilding", label: "Bodybuilding show", emoji: "🪞" },
+  { value: "hyrox",        label: "Hyrox / CrossFit", emoji: "🔥" },
+  { value: "team_sport",   label: "Team sport season", emoji: "🏈" },
+  { value: "hiking",       label: "Hiking trip",      emoji: "🥾" },
+  { value: "event",        label: "Wedding / event",  emoji: "🎉" },
+];
+
+const WEEKS_OUT: { value: number | null; label: string }[] = [
+  { value: 4,    label: "≤ 4 weeks" },
+  { value: 8,    label: "~8 weeks" },
+  { value: 12,   label: "~12 weeks" },
+  { value: 16,   label: "16+ weeks" },
+  { value: null, label: "No date" },
 ];
 
 const DAYS_OPTIONS: { value: 3 | 4 | 5 | 6; label: string }[] = [
@@ -166,8 +188,8 @@ function ExerciseRow({ ex, idx, onRecycle }: { ex: PlannedExercise; idx: number;
             style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               width: 28, height: 28, borderRadius: 8,
-              background: "rgba(124,58,237,0.15)",
-              border: "1px solid rgba(124,58,237,0.35)",
+              background: "rgba(46,125,84,0.15)",
+              border: "1px solid rgba(46,125,84,0.35)",
               fontSize: 13, cursor: "pointer",
             }}>
             🔄
@@ -219,8 +241,20 @@ function ExerciseRow({ ex, idx, onRecycle }: { ex: PlannedExercise; idx: number;
   );
 }
 
-function DayCard({ day, isRest, onRecycleExercise }: { day?: TrainingDay; isRest: boolean; dayNum: number; onRecycleExercise?: (exIdx: number) => void }) {
+function DayCard({ day, isRest, extra, onRecycleExercise }: { day?: TrainingDay; isRest: boolean; dayNum: number; extra?: ExtraSession; onRecycleExercise?: (exIdx: number) => void }) {
   const [expanded, setExpanded] = useState(false);
+  if ((isRest || !day) && extra) {
+    return (
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, background: "rgba(245,166,35,0.10)", border: "1.5px solid rgba(245,166,35,0.45)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{extra.emoji}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: C.text, fontSize: 15, fontWeight: 700 }}>{extra.title}</div>
+          <div style={{ color: C.sub, fontSize: 12, marginTop: 2, lineHeight: 1.4 }}>{extra.detail}</div>
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.gold, textTransform: "uppercase", flexShrink: 0 }}>No lifting</div>
+      </div>
+    );
+  }
   if (isRest || !day) {
     return (
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px", opacity: 0.5 }}>
@@ -267,6 +301,12 @@ function DayCard({ day, isRest, onRecycleExercise }: { day?: TrainingDay; isRest
                 onRecycle={onRecycleExercise ? () => onRecycleExercise(i) : undefined}
               />
             ))}
+            {day.finisher && (
+              <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 10, background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.35)" }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: C.gold, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>🔥 Finisher</div>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.45 }}>{day.finisher}</div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -278,7 +318,12 @@ function DayCard({ day, isRest, onRecycleExercise }: { day?: TrainingDay; isRest
 
 export default function WorkoutPlanPage() {
   const [goal, setGoal] = useState<Goal>("hypertrophy");
-  const [level, setLevel] = useState<Level>("intermediate");
+  const [experience, setExperience] = useState<Experience>("intermediate");
+  const level: Level = levelForExperience(experience);
+  const [returning, setReturning] = useState(false);
+  const [secondaryGoal, setSecondaryGoal] = useState<Goal | null>(null);
+  const [trainingFor, setTrainingFor] = useState<TrainingFor>("none");
+  const [weeksOut, setWeeksOut] = useState<number | null>(null);
   const [days, setDays] = useState<3 | 4 | 5 | 6>(4);
   const [equipment, setEquipment] = useState<Equipment[]>(["Barbell", "Dumbbell", "Cable", "Machine", "Smith Machine", "EZ Bar"]);
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
@@ -376,6 +421,11 @@ export default function WorkoutPlanPage() {
         weightKg: lb > 0 ? Math.round(lb * 0.453592) : undefined,
         minutesPerSession: minutes || undefined,
         injuries: injuries.length > 0 ? injuries : undefined,
+        experience,
+        returningFromBreak: returning || undefined,
+        secondaryGoal: secondaryGoal && secondaryGoal !== goal ? secondaryGoal : undefined,
+        trainingFor,
+        weeksOut: trainingFor !== "none" && weeksOut ? weeksOut : undefined,
       };
       const newPlan = generatePlan(config);
       setPlan(newPlan);
@@ -389,7 +439,7 @@ export default function WorkoutPlanPage() {
         }));
       } catch { /* localStorage might be full or disabled */ }
     }, 600);
-  }, [goal, level, days, equipment, sex, age, heightFt, heightIn, weightLb, minutes, injuries]);
+  }, [goal, level, days, equipment, sex, age, heightFt, heightIn, weightLb, minutes, injuries, experience, returning, secondaryGoal, trainingFor, weeksOut]);
 
   // Swap a single exercise in a single training day for a different one
   // from the same muscle group. Updates state AND localStorage so the
@@ -462,7 +512,7 @@ export default function WorkoutPlanPage() {
           <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Your Goal</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
             {GOALS.map(g => (
-              <button key={g.value} onClick={() => setGoal(g.value)} style={{
+              <button key={g.value} onClick={() => { setGoal(g.value); if (secondaryGoal === g.value) setSecondaryGoal(null); }} style={{
                 padding: "12px 10px", borderRadius: 12, cursor: "pointer", textAlign: "left",
                 background: goal === g.value ? C.purpleBg : "#161616",
                 border: `1.5px solid ${goal === g.value ? C.purple : C.border}`,
@@ -476,15 +526,72 @@ export default function WorkoutPlanPage() {
           </div>
         </div>
 
-        {/* Level */}
+        {/* Secondary goal */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Secondary Goal <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional</span></div>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 10, opacity: 0.9 }}>Blended into your main goal — e.g. build muscle while getting stronger.</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {GOALS.filter(g => g.value !== goal).map(g => {
+              const on = secondaryGoal === g.value;
+              return (
+                <button key={g.value} onClick={() => setSecondaryGoal(on ? null : g.value)} style={{
+                  padding: "8px 14px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  background: on ? "#1E3D34" : "#161616", color: on ? "#A7DCC4" : C.sub,
+                  border: `1px solid ${on ? C.purple : C.border}`, transition: "all 0.15s",
+                }}>{g.emoji} {g.label}</button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Training for */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Training For <span style={{ textTransform: "none", fontWeight: 600, opacity: 0.7 }}>· optional</span></div>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 10, opacity: 0.9 }}>Adds event-specific lifts, off-day sessions and finishers.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
+            {TRAINING_FOR.map(t => {
+              const on = trainingFor === t.value;
+              return (
+                <button key={t.value} onClick={() => setTrainingFor(t.value)} style={{
+                  padding: "10px 10px", borderRadius: 12, cursor: "pointer", textAlign: "left",
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: on ? C.purpleBg : "#161616",
+                  border: `1.5px solid ${on ? C.purple : C.border}`, transition: "all 0.15s",
+                }}>
+                  <span style={{ fontSize: 18 }}>{t.emoji}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {trainingFor !== "none" && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: C.sub, marginBottom: 6, fontWeight: 700 }}>When is it?</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {WEEKS_OUT.map(w => {
+                  const on = weeksOut === w.value;
+                  return (
+                    <button key={w.label} onClick={() => setWeeksOut(w.value)} style={{
+                      padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      background: on ? "#1E3D34" : "#161616", color: on ? "#A7DCC4" : C.sub,
+                      border: `1px solid ${on ? C.purple : C.border}`, transition: "all 0.15s",
+                    }}>{w.label}</button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Experience */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Experience Level</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {LEVELS.map(l => (
-              <button key={l.value} onClick={() => setLevel(l.value)} style={{
-                flex: 1, padding: "12px 8px", borderRadius: 12, cursor: "pointer", textAlign: "center",
-                background: level === l.value ? C.purpleBg : "#161616",
-                border: `1.5px solid ${level === l.value ? C.purple : C.border}`,
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8 }}>
+            {EXPERIENCES.map(l => (
+              <button key={l.value} onClick={() => setExperience(l.value)} style={{
+                padding: "12px 8px", borderRadius: 12, cursor: "pointer", textAlign: "center",
+                background: experience === l.value ? C.purpleBg : "#161616",
+                border: `1.5px solid ${experience === l.value ? C.purple : C.border}`,
                 transition: "all 0.15s",
               }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{l.label}</div>
@@ -492,6 +599,18 @@ export default function WorkoutPlanPage() {
               </button>
             ))}
           </div>
+          <button onClick={() => setReturning(r => !r)} style={{
+            marginTop: 10, display: "flex", alignItems: "center", gap: 10, width: "100%",
+            padding: "10px 12px", borderRadius: 12, cursor: "pointer", textAlign: "left",
+            background: returning ? C.purpleBg : "#161616",
+            border: `1.5px solid ${returning ? C.purple : C.border}`,
+          }}>
+            <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#fff", background: returning ? C.purple : "transparent", border: `1.5px solid ${returning ? C.purple : "#3A4A40"}` }}>{returning ? "✓" : ""}</span>
+            <span>
+              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.text }}>Coming back from a break</span>
+              <span style={{ display: "block", fontSize: 11, color: C.sub }}>3+ weeks off — we'll ease the volume back in</span>
+            </span>
+          </button>
         </div>
 
         {autofilledFromStats && (
@@ -654,9 +773,16 @@ export default function WorkoutPlanPage() {
                 <div style={{ fontSize: 20, fontWeight: 900, color: C.text }}>{plan.splitName}</div>
                 <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>
                   {GOALS.find(g => g.value === plan.goal)?.emoji}{" "}
-                  {GOALS.find(g => g.value === plan.goal)?.label} ·{" "}
-                  {plan.level.charAt(0).toUpperCase() + plan.level.slice(1)}
+                  {GOALS.find(g => g.value === plan.goal)?.label}
+                  {plan.secondaryGoal ? ` + ${GOALS.find(g => g.value === plan.secondaryGoal)?.label}` : ""} ·{" "}
+                  {plan.experience ? EXPERIENCES.find(e => e.value === plan.experience)?.label : plan.level.charAt(0).toUpperCase() + plan.level.slice(1)}
                 </div>
+                {plan.trainingFor && (
+                  <div style={{ fontSize: 12, color: "#4A9D6E", fontWeight: 700, marginTop: 4 }}>
+                    {TRAINING_FOR.find(t => t.value === plan.trainingFor)?.emoji} Training for {TRAINING_FOR.find(t => t.value === plan.trainingFor)?.label}
+                    {plan.phase ? <span style={{ color: C.gold }}> · {plan.phase}</span> : null}
+                  </div>
+                )}
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 22, fontWeight: 900, color: "#4A9D6E" }}>{plan.weeklyVolume}</div>
@@ -670,6 +796,7 @@ export default function WorkoutPlanPage() {
                 const dayNum = i + 1;
                 const isRest = plan.restDays.includes(dayNum);
                 const trainingDay = plan.days.find(d => d.dayNum === dayNum);
+                const extra = plan.extraSessions?.find(x => x.dayNum === dayNum);
                 return (
                   <div key={name} style={{
                     textAlign: "center", padding: "8px 4px", borderRadius: 8,
@@ -678,7 +805,7 @@ export default function WorkoutPlanPage() {
                   }}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: C.sub, textTransform: "uppercase" }}>{name}</div>
                     <div style={{ fontSize: 10, color: isRest ? C.sub : "#4A9D6E", fontWeight: 700, marginTop: 2 }}>
-                      {isRest ? "REST" : trainingDay?.label.split(" ")[0] ?? ""}
+                      {isRest ? (extra ? <span style={{ color: C.gold }}>{extra.emoji}</span> : "REST") : trainingDay?.label.split(" ")[0] ?? ""}
                     </div>
                   </div>
                 );
@@ -704,6 +831,7 @@ export default function WorkoutPlanPage() {
                     day={trainingDay}
                     isRest={isRest}
                     dayNum={dayNum}
+                    extra={plan.extraSessions?.find(x => x.dayNum === dayNum)}
                     onRecycleExercise={trainingDay ? (exIdx) => handleRecycleExercise(dayNum, exIdx) : undefined}
                   />
                 </div>
@@ -729,7 +857,7 @@ export default function WorkoutPlanPage() {
             width: "100%", marginTop: 16, padding: "13px", borderRadius: 12,
             cursor: generating ? "not-allowed" : "pointer",
             background: generating
-              ? "rgba(124,58,237,0.15)"
+              ? "rgba(46,125,84,0.15)"
               : `linear-gradient(135deg,${C.purple},#4A9D6E)`,
             border: `1px solid ${generating ? C.purple : "transparent"}`,
             color: "#fff", fontSize: 14, fontWeight: 800,
