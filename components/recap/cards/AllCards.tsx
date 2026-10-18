@@ -837,7 +837,7 @@ export function StreaksCard({
             {longest}
           </div>
           <div style={{ fontSize: 28, fontWeight: 800, color: theme.textSub }}>
-            day{longest === 1 ? "" : "s"}
+            week{longest === 1 ? "" : "s"}
           </div>
         </div>
       ) : (
@@ -899,7 +899,7 @@ function StreakMeter({ label, current, best, theme }: { label: string; current: 
             {current}
           </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: theme.textSub }}>
-            / best {best}
+            wk / best {best}
           </span>
         </div>
       </div>

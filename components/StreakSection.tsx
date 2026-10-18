@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { computeAllStreaks, type StreakResult } from "@/lib/streaks";
+import { computeAllStreaks, EMPTY_STREAK, WEEKLY_GOAL, type StreakResult } from "@/lib/streaks";
 
 type Props = {
   /** UUID of the user whose streaks to compute. */
@@ -30,7 +30,7 @@ const SPECS: StreakCardSpec[] = [
     label: "Workouts",
     accent: "#F97316",
     bgTint: "rgba(249, 115, 22, 0.08)",
-    desc: "Counts every day you log a workout — lifting, running, yoga, anything.",
+    desc: `Log a workout on ${WEEKLY_GOAL} different days each week to keep it going — lifting, running, yoga, anything.`,
   },
   {
     key: "wellness",
@@ -38,7 +38,7 @@ const SPECS: StreakCardSpec[] = [
     label: "Wellness",
     accent: "#10B981",
     bgTint: "rgba(16, 185, 129, 0.08)",
-    desc: "Counts every day you log a wellness session — cold plunge, sauna, meditation, stretching, anything.",
+    desc: `Log wellness on ${WEEKLY_GOAL} different days each week to keep it going — cold plunge, sauna, meditation, stretching, anything.`,
   },
   {
     key: "nutrition",
@@ -46,23 +46,17 @@ const SPECS: StreakCardSpec[] = [
     label: "Nutrition",
     accent: "#EC4899",
     bgTint: "rgba(236, 72, 153, 0.08)",
-    desc: "Counts every day you log a meal or nutrition entry.",
+    desc: `Log meals on ${WEEKLY_GOAL} different days each week to keep it going.`,
   },
 ];
 
 /**
  * Streak section for profile pages.
  *
- * Displays three strict consecutive-day streak cards — Workouts / Wellness /
- * Nutrition. Each card shows current streak (with flame icon if active),
- * best streak, and tap-to-detail.
- *
- * Math is strict: miss a day = streak resets. We allow a one-day "today not
- * logged yet" grace because today isn't over, but yesterday must have been
- * logged for the streak to still be alive.
- *
- * Performance: pulls 90 days of activity_logs in one query, computes all
- * three streaks client-side. Sub-millisecond compute for typical histories.
+ * Displays three weekly streak cards — Workouts / Wellness / Nutrition.
+ * A week counts when that category is logged on WEEKLY_GOAL different days.
+ * Each card shows the current streak in weeks, this week's progress, best
+ * streak, and tap-to-detail. See lib/streaks.ts for the math.
  */
 export default function StreakSection({ userId, theme = "purple" }: Props) {
   const [streaks, setStreaks] = useState<{
@@ -81,7 +75,8 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
         // needs historical data; if a user has a 1-year-old 50-day streak we
         // miss it, but they can't currently SEE that on the UI either, so
         // it's fine. Bumping this to 365 if anyone complains is trivial.
-        const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        // A year back so "best" week streaks are meaningful.
+        const since = new Date(Date.now() - 371 * 24 * 60 * 60 * 1000).toISOString();
         const { data } = await supabase
           .from("activity_logs")
           .select("log_type, logged_at, created_at")
@@ -94,9 +89,9 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
       } catch {
         if (!cancelled) {
           setStreaks({
-            workout: { current: 0, best: 0, lastLogged: null, daysSinceLastLog: null, loggedToday: false },
-            wellness: { current: 0, best: 0, lastLogged: null, daysSinceLastLog: null, loggedToday: false },
-            nutrition: { current: 0, best: 0, lastLogged: null, daysSinceLastLog: null, loggedToday: false },
+            workout: { ...EMPTY_STREAK },
+            wellness: { ...EMPTY_STREAK },
+            nutrition: { ...EMPTY_STREAK },
           });
         }
       } finally {
@@ -109,7 +104,7 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
   // Theme tokens — lets the component blend with both own-profile (purple)
   // and other-profile (green) page palettes.
   const themeTokens = theme === "purple"
-    ? { bg: "#1A1228", border: "#2D1F52", text: "#F0F0F0", sub: "#9CA3AF", subBg: "#0E0820" }
+    ? { bg: "#141A16", border: "#1B231E", text: "#F0F0F0", sub: "#9CA3AF", subBg: "#0E1311" }
     : { bg: "#0F1A0F", border: "#2D5238", text: "#E2E8F0", sub: "#9CA3AF", subBg: "#0A140A" };
 
   return (
@@ -122,7 +117,7 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 900, fontSize: 15, color: themeTokens.text }}>🔥 Streaks</div>
-        <div style={{ fontSize: 10, color: themeTokens.sub, fontWeight: 600 }}>Strict · miss a day to reset</div>
+        <div style={{ fontSize: 10, color: themeTokens.sub, fontWeight: 600 }}>Log each {WEEKLY_GOAL}× a week to keep it</div>
       </div>
 
       {loading ? (
@@ -187,8 +182,12 @@ export default function StreakSection({ userId, theme = "purple" }: Props) {
                       {cur}
                     </div>
                     <div style={{ fontSize: 11, color: themeTokens.sub, fontWeight: 600 }}>
-                      {cur === 0 ? "start today" : cur === 1 ? "day" : "days"}
+                      {cur === 1 ? "week" : "weeks"}
                     </div>
+                  </div>
+                  {/* This week's progress toward the goal */}
+                  <div style={{ fontSize: 11, fontWeight: 700, marginTop: 4, color: s?.weekDone ? spec.accent : themeTokens.sub }}>
+                    {s?.weekDone ? "✓ This week done" : `${s?.thisWeekDays ?? 0}/${WEEKLY_GOAL} this week`}
                   </div>
                 </div>
                 {/* Best ever — small, right-aligned */}
@@ -229,13 +228,14 @@ function StreakDetailModal({
   onClose: () => void;
 }) {
   const lastLine = (() => {
-    if (!streak.lastLogged) return "Never logged. Tap Log Activity to start a streak.";
-    if (streak.loggedToday) return "✓ Logged today. Streak is safe.";
-    if (streak.daysSinceLastLog === 1) return "Last logged yesterday. Log today to keep the streak alive.";
-    if (streak.daysSinceLastLog && streak.daysSinceLastLog >= 2) {
-      return `Last logged ${streak.daysSinceLastLog} days ago. Streak is broken.`;
-    }
-    return "";
+    const left = Math.max(0, streak.weekGoal - streak.thisWeekDays);
+    const daysLeft = 6 - new Date().getDay(); // days left after today (week ends Saturday)
+    if (!streak.lastLogged) return `Never logged. Log ${streak.weekGoal} days this week to start a streak.`;
+    if (streak.weekDone) return `✓ ${streak.thisWeekDays} days logged this week. Streak is safe.`;
+    const need = `${left} more day${left === 1 ? "" : "s"}`;
+    const when = daysLeft === 0 ? "today" : `by Saturday`;
+    if (streak.current > 0) return `${streak.thisWeekDays}/${streak.weekGoal} this week. Log ${need} ${when} to keep your ${streak.current}-week streak.`;
+    return `${streak.thisWeekDays}/${streak.weekGoal} this week. Log ${need} ${when} to start a streak.`;
   })();
 
   return (
@@ -258,7 +258,7 @@ function StreakDetailModal({
           <div style={{ fontSize: 36 }}>{streak.current > 0 ? "🔥" : spec.emoji}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 900, color: "#E2E8F0" }}>{spec.label} Streak</div>
-            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>Strict · miss a day to reset</div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>Log {streak.weekGoal} days a week to keep it</div>
           </div>
           <button onClick={onClose} aria-label="Close"
             style={{ background: "transparent", border: "none", color: "#9CA3AF", fontSize: 22, lineHeight: 1, cursor: "pointer" }}>×</button>
@@ -268,12 +268,12 @@ function StreakDetailModal({
           <div style={{ flex: 1, background: spec.accent + "15", border: `1px solid ${spec.accent}55`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>Current</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: spec.accent, lineHeight: 1 }}>{streak.current}</div>
-            <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 3 }}>days</div>
+            <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 3 }}>weeks</div>
           </div>
           <div style={{ flex: 1, background: "#1A1A1A", border: "1px solid #2A2A2A", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>Best Ever</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: "#E2E8F0", lineHeight: 1 }}>{streak.best}</div>
-            <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 3 }}>days</div>
+            <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 3 }}>weeks</div>
           </div>
         </div>
 

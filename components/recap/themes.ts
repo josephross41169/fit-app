@@ -149,7 +149,7 @@ export function pickTheme(
   const longestStreak = currentStreaks
     ? Math.max(currentStreaks.workout, currentStreaks.wellness, currentStreaks.nutrition)
     : 0;
-  if (longestStreak >= 7) return INFERNO;
+  if (longestStreak >= 4) return INFERNO; // 4+ week streak
 
   const totalSessions = recap.lifts.sessions + recap.cardio.sessions + recap.wellness.sessions;
   if (totalSessions === 0) return SPECTRUM;
