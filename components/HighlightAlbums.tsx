@@ -1,9 +1,7 @@
 "use client";
 // components/HighlightAlbums.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Profile highlights, organized three ways (Instagram-style):
-//   ⭐ Favorites — the hand-picked strip (users.highlights). Rendered by the
-//                 profile page and passed in as `favorites`.
+// Profile highlight albums, shown as two simple boxes under the Highlights box:
 //   📁 Albums    — custom named albums; the owner picks the photos/videos.
 //   🗓 Monthly   — automatic: every photo/video posted lands in that month's
 //                 album. The owner can hide items or add extra ones.
@@ -12,7 +10,7 @@
 //   { custom: [{ id, title, items: string[] }],
 //     monthly: { "YYYY-MM": { hidden: string[], added: string[] } } }
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { isVideoUrl } from "@/components/GroupHighlights";
 
@@ -84,19 +82,21 @@ function Bubble({ cover, label, sub, onClick, dashed }: { cover?: string; label:
 
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.88)", display: "flex", flexDirection: "column" };
 const sheetHeader: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, padding: "calc(14px + env(safe-area-inset-top, 0px)) 16px 12px", borderBottom: `1px solid ${C.border}`, background: C.dark };
-const pillBtn = (primary = false): React.CSSProperties => ({ fontSize: 12, fontWeight: 800, padding: "7px 13px", borderRadius: 20, cursor: "pointer", border: primary ? "none" : `1.5px solid ${C.border}`, background: primary ? `linear-gradient(135deg, ${C.green}, ${C.greenLight})` : C.chip, color: primary ? "#04342C" : C.greenLight, whiteSpace: "nowrap" });
+const pillBtn = (primary = false): React.CSSProperties => ({ fontSize: 12, fontWeight: 800, padding: "7px 13px", borderRadius: 20, cursor: "pointer", border: primary ? "none" : `1.5px solid ${C.border}`, background: primary ? `linear-gradient(135deg, ${C.green}, ${C.greenLight})` : C.chip, color: primary ? "#fff" : C.greenLight, whiteSpace: "nowrap" });
+const box: React.CSSProperties = { background: C.card, borderRadius: 22, padding: 20, border: `2px solid ${C.border}`, marginBottom: 16 };
+const boxHead: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 };
+const boxTitle: React.CSSProperties = { fontWeight: 900, fontSize: 16, color: C.text };
+const boxSub: React.CSSProperties = { fontSize: 12, color: C.sub, marginBottom: 12, lineHeight: 1.45 };
+const emptyBtn: React.CSSProperties = { width: "100%", padding: "18px 14px", borderRadius: 14, border: `2px dashed ${C.border}`, background: "rgba(46,125,84,0.06)", color: C.greenLight, fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 };
+const emptyNote: React.CSSProperties = { padding: "18px 14px", borderRadius: 14, border: `2px dashed ${C.border}`, color: C.sub, fontWeight: 700, fontSize: 13, textAlign: "center" };
 const closeBtn: React.CSSProperties = { width: 36, height: 36, borderRadius: "50%", border: "none", background: C.chip, color: C.text, fontSize: 20, cursor: "pointer", flexShrink: 0 };
 
 export default function HighlightAlbums({
-  viewUserId, isOwn, favorites, favoritesActions, favoritesCount,
+  viewUserId, isOwn,
 }: {
   viewUserId: string;
   isOwn: boolean;
-  favorites: ReactNode;
-  favoritesActions?: ReactNode;
-  favoritesCount: number;
 }) {
-  const [tab, setTab] = useState<"favorites" | "albums" | "monthly">("favorites");
   const [data, setData] = useState<AlbumData>(EMPTY);
   const [media, setMedia] = useState<Media[]>([]);
   const [open, setOpen] = useState<OpenAlbum | null>(null);
@@ -218,59 +218,87 @@ export default function HighlightAlbums({
     const title = newTitle.trim() || "New album";
     const album: CustomAlbum = { id: newId(), title: title.slice(0, 40), items: picked };
     const ok = await persist({ ...data, custom: [album, ...data.custom] });
-    if (ok) { setPicker(null); setPicked([]); setNewTitle(""); setTab("albums"); }
+    if (ok) { setPicker(null); setPicked([]); setNewTitle(""); }
   }
 
-  const tabs: { key: typeof tab; label: string; count: number }[] = [
-    { key: "favorites", label: "⭐ Favorites", count: favoritesCount },
-    { key: "albums", label: "📁 Albums", count: data.custom.length },
-    { key: "monthly", label: "🗓 Monthly", count: months.length },
-  ];
+  const startCreate = () => { setPicked([]); setNewTitle(""); setPicker({ mode: "create" }); };
+  const thisMonthKey = monthKey(Date.now());
+  const thisMonth = months.find((m) => m.key === thisMonthKey);
+  const pastMonths = months.filter((m) => m.key !== thisMonthKey);
 
   return (
     <div>
-      {/* Segmented tabs — wrap instead of scrolling sideways. */}
-      <div style={{ display: "flex", gap: 4, background: C.dark, borderRadius: 12, padding: 4, marginBottom: 12 }}>
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{ flex: 1, minWidth: 0, padding: "8px 4px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 800, background: tab === t.key ? C.chip : "transparent", color: tab === t.key ? C.greenLight : C.sub, boxShadow: tab === t.key ? `inset 0 0 0 1.5px ${C.border}` : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {t.label}{t.count > 0 && <span style={{ color: C.sub, fontWeight: 600, marginLeft: 4 }}>{t.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      {tab === "favorites" && (
-        <div>
-          {favoritesActions && <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10 }}>{favoritesActions}</div>}
-          {favorites}
+      {/* ── Box: Albums ── */}
+      <div style={box}>
+        <div style={boxHead}>
+          <div style={boxTitle}>📁 Albums</div>
+          {isOwn && <button onClick={startCreate} style={pillBtn(true)}>+ New album</button>}
         </div>
-      )}
-
-      {tab === "albums" && (
-        data.custom.length === 0 && !isOwn ? (
-          <div style={{ padding: "22px 14px", borderRadius: 14, border: `2px dashed ${C.border}`, color: C.sub, fontWeight: 700, fontSize: 13, textAlign: "center" }}>No albums yet</div>
+        <div style={boxSub}>
+          {isOwn ? "Group photos however you like. Tap an album to rename it or add and remove photos." : "Photo albums"}
+        </div>
+        {data.custom.length === 0 ? (
+          isOwn ? (
+            <button onClick={startCreate} style={emptyBtn}>
+              <span style={{ fontSize: 22 }}>📁</span>
+              <span>Create your first album — e.g. Leg day, Race season</span>
+            </button>
+          ) : (
+            <div style={emptyNote}>No albums yet</div>
+          )
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            {isOwn && <Bubble dashed label="New" onClick={() => { setPicked([]); setNewTitle(""); setPicker({ mode: "create" }); }} />}
             {data.custom.map((a) => (
               <Bubble key={a.id} cover={a.items[0]} label={a.title} sub={`${a.items.length}`} onClick={() => { setEditing(false); setOpen({ kind: "custom", id: a.id }); }} />
             ))}
           </div>
-        )
-      )}
+        )}
+      </div>
 
-      {tab === "monthly" && (
-        months.length === 0 ? (
-          <div style={{ padding: "22px 14px", borderRadius: 14, border: `2px dashed ${C.border}`, color: C.sub, fontWeight: 700, fontSize: 13, textAlign: "center" }}>
-            {isOwn ? "Post a photo or video — it lands in this month's album automatically" : "No monthly highlights yet"}
+      {/* ── Box: Monthly ── */}
+      <div style={box}>
+        <div style={boxHead}>
+          <div style={boxTitle}>🗓 Monthly highlights</div>
+        </div>
+        <div style={boxSub}>
+          {isOwn ? "Every photo you post lands in that month automatically. Hide the ones you don't want, or add others." : "A month-by-month look back"}
+        </div>
+
+        {/* This month — front and center with a Customize shortcut */}
+        <div style={{ background: C.dark, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: 12, marginBottom: pastMonths.length ? 14 : 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 14, color: C.text }}>{monthLabel(thisMonthKey, true)}</div>
+              <div style={{ fontSize: 11, color: C.sub }}>{thisMonth ? `${thisMonth.items.length} ${thisMonth.items.length === 1 ? "item" : "items"}` : "Nothing yet this month"}</div>
+            </div>
+            {isOwn && (
+              <button onClick={() => { setOpen({ kind: "monthly", key: thisMonthKey }); setEditing(true); }} style={pillBtn()}>✏️ Customize</button>
+            )}
           </div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            {months.map((m) => (
-              <Bubble key={m.key} cover={m.items[0]} label={monthLabel(m.key)} sub={`${m.items.length}`} onClick={() => { setEditing(false); setOpen({ kind: "monthly", key: m.key }); }} />
-            ))}
-          </div>
-        )
-      )}
+          {thisMonth && thisMonth.items.length > 0 ? (
+            <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+              {thisMonth.items.slice(0, 12).map((u, i) => (
+                <button key={u} onClick={() => setViewer({ items: thisMonth.items, idx: i })} style={{ flexShrink: 0, width: 72, height: 72, padding: 0, border: "none", background: "none", cursor: "pointer" }}>
+                  <Thumb src={u} radius={8} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: C.sub }}>{isOwn ? "Post a photo or video and it shows up here." : ""}</div>
+          )}
+        </div>
+
+        {pastMonths.length > 0 && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Past months</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+              {pastMonths.map((m) => (
+                <Bubble key={m.key} cover={m.items[0]} label={monthLabel(m.key)} sub={`${m.items.length}`} onClick={() => { setEditing(false); setOpen({ kind: "monthly", key: m.key }); }} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Album sheet ── */}
       {open && current && (

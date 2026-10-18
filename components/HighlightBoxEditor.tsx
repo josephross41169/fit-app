@@ -1,8 +1,8 @@
 "use client";
 // ─────────────────────────────────────────────────────────────────────────────
-// "Photos in your box" — lets the owner choose exactly which photos show in
-// the Highlights box on their profile. Shown at the top of the Highlights
-// sheet (owner only).
+// "Highlights" — lets the owner choose exactly which photos show in the
+// Highlights box on their profile. First box of the Highlights sheet (owner
+// only; visitors see a read-only strip).
 //
 // Stored in users.highlight_box (jsonb string[]). null = automatic
 // (favorites first, then newest post photos).
@@ -39,18 +39,20 @@ export default function HighlightBoxEditor({ shown, all, isCustom, onSave, isVid
   return (
     <div style={{ background: C.card, borderRadius: 22, padding: 20, border: `2px solid ${C.border}`, marginBottom: 16, opacity: busy ? 0.7 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-        <div style={{ fontWeight: 900, fontSize: 16, color: C.text }}>🖼️ Photos in your box</div>
+        <div style={{ fontWeight: 900, fontSize: 16, color: C.text }}>📸 Highlights</div>
         <button onClick={() => setPicking(p => !p)} style={{ ...btn, border: "none", background: picking ? C.green : "linear-gradient(135deg,#1F5F3F,#4A9D6E)", color: "#fff" }}>
           {picking ? "✓ Done" : "+ Add photos"}
         </button>
       </div>
       <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>
-        {isCustom ? "You picked these. Tap × to remove one." : "Picked automatically right now. Tap × to remove one, or add your own."}
+        {isCustom
+          ? "These show on your profile. Tap × to remove one, or add more."
+          : "These show on your profile — picked automatically from your posts for now. Tap × to remove one, or add your own."}
       </div>
 
       {shown.length === 0 ? (
         <div style={{ padding: "18px 10px", textAlign: "center", border: `1.5px dashed ${C.border}`, borderRadius: 12, color: C.sub, fontSize: 13 }}>
-          No photos in your box. Tap “+ Add photos”.
+          No highlights yet. Tap “+ Add photos”.
         </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

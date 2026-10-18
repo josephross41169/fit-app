@@ -5321,8 +5321,12 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               );
             })()}
 
-            {isOwn && (
-              <InTile slot="photos">
+            {/* ── Highlights sheet: three simple boxes ──
+                1. Highlights — what shows in the profile's Highlights box
+                2. Albums     — custom albums (create / rename / add / remove)
+                3. Monthly    — automatic month albums, this month up front */}
+            <InTile slot="photos">
+              {isOwn ? (
                 <HighlightBoxEditor
                   shown={boxPhotos ?? Array.from(new Set([...highlights, ...feedPhotos])).slice(0, 16)}
                   all={Array.from(new Set([...highlights, ...feedPhotos]))}
@@ -5330,80 +5334,24 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                   onSave={saveBoxPhotos}
                   isVideo={isVideoUrl}
                 />
-              </InTile>
-            )}
-            <InTile slot="photos">
-            <div style={{background:C.white,borderRadius:22,padding:24,border:`2px solid ${C.purpleMid}`,boxShadow:"0 4px 14px rgba(46,125,84,0.08)",marginBottom:20}}>
-              {/* Title row — just the heading + Edit toggle. The three
-                  navigation buttons (All Photos / Tagged In / Recaps) used
-                  to live here too, but with three of them the row wrapped
-                  awkwardly in the narrow profile column. They moved to a
-                  dedicated row below (see next div). */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <div style={{fontWeight:900,fontSize:17,color:C.text}}>📸 Highlights</div>
-              </div>
-              {/* Nav buttons row */}
-              <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-                <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>📷 All Photos</button>
-                <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged In</button>
-                {isOwn && (<Link href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:11,fontWeight:700,padding:"7px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</Link>)}
-              </div>
-              {/* Highlights strip — horizontal scroll. Same component used by
-                  group highlights (HighlightsStrip from GroupHighlights.tsx).
-                  Auto-plays videos when scrolled into view, supports tap-to-
-                  unmute, opens lightbox on tap. We render an edit overlay on
-                  top when editingHighlights is true so users can remove items
-                  without losing the strip's visual flow. */}
-              <HighlightAlbums
-                viewUserId={viewUserId}
-                isOwn={isOwn}
-                favoritesCount={highlights.length}
-                favoritesActions={isOwn && (highlights.length > 0 || highlights.length < HIGHLIGHT_SLOTS) ? (<>{isOwn && highlights.length > 0 && (
-                    <button onClick={()=>setEditingHighlights(e=>!e)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:editingHighlights?C.purple:"#1B231E",color:editingHighlights?"#fff":"#4A9D6E",border:`1.5px solid ${C.purpleMid}`,cursor:"pointer"}}>
-                      {editingHighlights ? "✓ Done" : "✏️ Edit"}
-                    </button>
-                  )}
-                  {isOwn && highlights.length < HIGHLIGHT_SLOTS && (
-                    <button onClick={()=>setShowHighlightPicker(true)} style={{fontSize:12,fontWeight:700,padding:"5px 12px",borderRadius:20,background:`linear-gradient(135deg,${C.purple},#4A9D6E)`,color:"#fff",border:"none",cursor:"pointer"}}>
-                      + Add
-                    </button>
-                  )}</>) : null}
-                favorites={<>{highlights.length === 0 ? (
-                isOwn ? (
-                <button onClick={()=>setShowHighlightPicker(true)} style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(46,125,84,0.06)",color:"#4A9D6E",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:24}}>+</span>
-                  <span>Add highlights — photos and videos from your posts</span>
-                </button>
-                ) : (
-                  <div style={{width:"100%",padding:"22px 14px",borderRadius:14,border:`2px dashed ${C.purpleMid}`,background:"rgba(46,125,84,0.06)",color:C.sub,fontWeight:700,fontSize:13,textAlign:"center"}}>No highlights yet</div>
-                )
-              ) : editingHighlights ? (
-                // Edit mode: show items as small thumbnails with × buttons.
-                // We don't autoplay here so the user can focus on managing
-                // the list. Videos still show their first frame as a poster.
-                <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6}}>
-                  {highlights.map((src, idx) => {
-                    const isVid = isVideoUrl(src);
-                    return (
-                      <div key={src+idx} style={{position:"relative",flexShrink:0,width:96,height:96,borderRadius:10,overflow:"hidden",border:`1px solid ${C.purpleMid}`,background:"#000"}}>
-                        {isVid ? (
-                          <video src={src} muted playsInline preload="metadata" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                        ) : (
-                          <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                        )}
-                        {isVid && (
-                          <div style={{position:"absolute",bottom:4,right:4,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,fontWeight:800,padding:"1px 5px",borderRadius:99}}>▶</div>
-                        )}
-                        <button onClick={()=>removeHighlight(idx)} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.85)",border:"none",color:"#fff",fontSize:14,lineHeight:"22px",cursor:"pointer",padding:0}}>×</button>
-                      </div>
-                    );
-                  })}
-                </div>
               ) : (
-                <HighlightsStrip urls={highlights} />
-              )}</>}
-              />
-            </div>
+                <div style={{background:"#161D19",borderRadius:22,padding:20,border:"2px solid #2A3A2A",marginBottom:16}}>
+                  <div style={{fontWeight:900,fontSize:16,color:C.text,marginBottom:12}}>📸 Highlights</div>
+                  {(() => {
+                    const shown = boxPhotos ?? Array.from(new Set([...highlights, ...feedPhotos])).slice(0, 16);
+                    return shown.length ? <HighlightsStrip urls={shown} /> : (
+                      <div style={{padding:"18px 14px",borderRadius:14,border:"2px dashed #2A3A2A",color:C.sub,fontWeight:700,fontSize:13,textAlign:"center"}}>No highlights yet</div>
+                    );
+                  })()}
+                </div>
+              )}
+              <HighlightAlbums viewUserId={viewUserId} isOwn={isOwn} />
+              {/* Quick links */}
+              <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+                <button onClick={()=>setShowAllPhotos(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:12,fontWeight:700,padding:"9px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>📷 All photos</button>
+                <button onClick={()=>setShowTaggedPosts(true)} style={{flex:"1 1 30%",minWidth:90,fontSize:12,fontWeight:700,padding:"9px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textAlign:"center"}}>🏷️ Tagged in</button>
+                {isOwn && (<Link href="/recap" style={{flex:"1 1 30%",minWidth:90,fontSize:12,fontWeight:700,padding:"9px 8px",borderRadius:14,background:"#1B231E",color:"#4A9D6E",border:"1.5px solid #2A3A2A",cursor:"pointer",textDecoration:"none",textAlign:"center",display:"inline-block"}}>📊 Recaps</Link>)}
+              </div>
             </InTile>
 
             {/* Goals card — shows up to 5 active or past goals with progress
