@@ -115,11 +115,11 @@ export default function TagPicker({
             <div key={u.id} style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "4px 10px 4px 4px", borderRadius: 99,
-              background: "rgba(124,58,237,0.18)", border: "1px solid rgba(124,58,237,0.45)",
+              background: "rgba(46,125,84,0.18)", border: "1px solid rgba(46,125,84,0.45)",
             }}>
               <div style={{
                 width: 22, height: 22, borderRadius: "50%",
-                background: "linear-gradient(135deg,#7C3AED,#4ADE80)",
+                background: "linear-gradient(135deg,#1F5F3F,#4A9D6E)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 9, fontWeight: 900, color: "#fff", overflow: "hidden",
                 flexShrink: 0,
@@ -130,7 +130,7 @@ export default function TagPicker({
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, color: "#E2E8F0" }}>@{u.username}</span>
               <button onClick={() => removeUser(u.id)} aria-label={`Remove ${u.username}`}
-                style={{ background: "transparent", border: "none", color: "#A78BFA", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: "0 2px" }}>×</button>
+                style={{ background: "transparent", border: "none", color: "#7FBF98", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: "0 2px" }}>×</button>
             </div>
           ))}
         </div>
@@ -148,7 +148,7 @@ export default function TagPicker({
             placeholder={placeholder}
             style={{
               width: "100%", padding: "10px 14px",
-              background: "#1A1228", border: "1.5px solid #2D1F52",
+              background: "#111111", border: "1.5px solid #1B231E",
               borderRadius: 12, color: "#E2E8F0",
               fontSize: 14, outline: "none",
             }}
@@ -157,7 +157,7 @@ export default function TagPicker({
           {open && query.trim() && (
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-              background: "#111118", border: "1.5px solid #2D1F52", borderRadius: 12,
+              background: "#161D19", border: "1.5px solid #1B231E", borderRadius: 12,
               boxShadow: "0 8px 24px rgba(0,0,0,0.4)", zIndex: 50,
               maxHeight: 260, overflowY: "auto",
             }}>
@@ -171,14 +171,14 @@ export default function TagPicker({
                     display: "flex", alignItems: "center", gap: 10,
                     width: "100%", padding: "10px 14px",
                     background: "transparent", border: "none",
-                    borderBottom: "1px solid #2D1F52",
+                    borderBottom: "1px solid #1B231E",
                     cursor: "pointer", textAlign: "left",
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#2D1F52")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#1B231E")}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                   <div style={{
                     width: 32, height: 32, borderRadius: "50%",
-                    background: "linear-gradient(135deg,#7C3AED,#4ADE80)",
+                    background: "linear-gradient(135deg,#1F5F3F,#4A9D6E)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, fontWeight: 900, color: "#fff", overflow: "hidden", flexShrink: 0,
                   }}>

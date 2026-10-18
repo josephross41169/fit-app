@@ -58,12 +58,12 @@ interface Props {
 
 const C = {
   bg: "#0D0D0D",
-  card: "#1A1228",
-  border: "#2D1F52",
+  card: "#111111",
+  border: "#1B231E",
   text: "#F0F0F0",
   sub: "#9CA3AF",
-  purple: "#7C3AED",
-  purpleLight: "#A78BFA",
+  purple: "#1F5F3F",
+  purpleLight: "#7FBF98",
   green: "#16A34A",
   amber: "#F5A623",
   red: "#EF4444",
@@ -301,7 +301,7 @@ export default function AIFoodScanner({ userId, onClose, onResult }: Props) {
                 <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Estimated Totals</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                   {[
-                    { label: "Cal", val: Math.round(result.totals.calories), color: C.purple },
+                    { label: "Cal", val: Math.round(result.totals.calories), color: C.purpleLight },
                     { label: "P", val: Math.round(result.totals.protein_g) + "g", color: "#4ADE80" },
                     { label: "C", val: Math.round(result.totals.carbs_g) + "g", color: C.amber },
                     { label: "F", val: Math.round(result.totals.fat_g) + "g", color: "#F472B6" },

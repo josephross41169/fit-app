@@ -210,10 +210,10 @@ function CardioForm({
       </div>
 
       {entry.type === "swimming" && (
-        <div style={{ marginTop: 10, background: "rgba(59,130,246,0.06)", borderRadius: 12, padding: 12, border: `1px solid ${C.blue}` }}>
+        <div style={{ marginTop: 10, background: "rgba(46,125,84,0.06)", borderRadius: 12, padding: 12, border: `1px solid ${C.blue}` }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: entry.useSwimPool ? 12 : 0 }}>
             <input type="checkbox" checked={entry.useSwimPool} onChange={e => onChange({ useSwimPool: e.target.checked })} style={{ width: 16, height: 16, accentColor: C.blue }} />
-            <span style={{ fontSize: 12, fontWeight: 800, color: "#93C5FD" }}>🏊 Track by laps in my pool</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#7FBF98" }}>🏊 Track by laps in my pool</span>
           </label>
           {entry.useSwimPool && (
             <>
@@ -271,7 +271,7 @@ function CardioForm({
         </div>
       ) : ((durNum > 0 || swimMeters) && !bodyMetrics?.body_weight_lbs) ? (
         <div style={{ marginTop: 10, background: "#0D0D0D", borderRadius: 10, padding: "8px 12px", border: `1px dashed ${C.border}` }}>
-          <div style={{ fontSize: 11, color: C.sub }}>💡 Add your body metrics in <span style={{ fontWeight: 800, color: "#93C5FD" }}>Stats</span> to see estimated calories burned.</div>
+          <div style={{ fontSize: 11, color: C.sub }}>💡 Add your body metrics in <span style={{ fontWeight: 800, color: "#7FBF98" }}>Stats</span> to see estimated calories burned.</div>
         </div>
       ) : null}
     </div>
@@ -3162,7 +3162,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
           <div onClick={e => e.stopPropagation()}
             style={{
-              background:"#111118", borderRadius:20, padding:"20px 20px 16px",
+              background:"#161D19", borderRadius:20, padding:"20px 20px 16px",
               maxWidth:480, width:"100%", maxHeight:"80vh", overflowY:"auto",
               border:"1.5px solid #1B231E",
             }}>
@@ -4158,19 +4158,12 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>📝 Notes</div>
                 <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>Shows on your activity card when you open this workout.</div>
-                <textarea rows={3} style={{ ...iStyle, resize: "none", marginBottom: 14 }} placeholder="How did it feel? Any PRs?" value={woNotes} onChange={e => setWoNotes(e.target.value)} />
-                <label style={{ display: "block", cursor: "pointer" }}>
-                  {woPhoto ? (
-                    <img src={woPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
-                  ) : (
-                    <div style={{ border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "20px 0", textAlign: "center", background: C.greenLight }}>
-                      <div style={{ fontSize: 28, marginBottom: 6 }}>💪</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#4A9D6E" }}>Add photo</div>
-                      <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Saved to your activity card</div>
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setWoPhoto)} />
-                </label>
+                <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How did it feel? Any PRs?" value={woNotes} onChange={e => setWoNotes(e.target.value)} />
+                {/* Photo is added on the workout screen (the "Add photo" box above
+                    Save workout); show it here so the user sees what's saving. */}
+                {woPhoto && (
+                  <img src={woPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block", marginTop: 14 }} alt="" />
+                )}
               </div>
               <SaveErrorBanner />
               <PrivacyToggle />
@@ -4333,7 +4326,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       <div key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.greenLight, border: `1px solid ${C.greenMid}`, borderRadius: 999, padding: "5px 8px 5px 6px" }}>
                         {s.photo_url
                           ? <img src={s.photo_url} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                          : <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#1F2937", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>💊</span>}
+                          : <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#1F2E27", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>💊</span>}
                         <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{s.name}</span>
                         <button onClick={() => setSupplements(arr => arr.filter((_, j) => j !== i))} aria-label="Remove supplement" title="Remove supplement"
                           style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.12)", color: "#FF6B6B", fontSize: 15, fontWeight: 800, lineHeight: 1, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>×</button>
@@ -4392,7 +4385,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                       setSuppName(""); setSuppPhoto(null);
                     }}
                     disabled={!suppName.trim()}
-                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#4A9D6E)` : "#374151", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
+                    style={{ flexShrink: 0, padding: "11px 16px", borderRadius: 12, border: "none", background: suppName.trim() ? `linear-gradient(135deg,${C.blue},#4A9D6E)` : "#1B231E", color: "#fff", fontWeight: 800, fontSize: 13, cursor: suppName.trim() ? "pointer" : "not-allowed" }}>
                     + Add
                   </button>
                 </div>
@@ -4535,7 +4528,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                               .slice(0, 6);
                             if (matches.length === 0) return null;
                             return (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, background: '#111811', border: '1px solid #2E2440', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, background: '#111811', border: '1px solid #1B231E', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
                                 {matches.map((s) => (
                                   <button
                                     key={s.id}
@@ -4553,7 +4546,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                       } : x));
                                       setFoodAutofillIdx(null);
                                     }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid #241B38' }}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid #1F2E27' }}
                                   >
                                     <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#F0F0F0', fontSize: 13, fontWeight: 600 }}>
                                       {s.name}
@@ -4829,14 +4822,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                   <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 10 }}>📸 Photo</div>
                     {wellnessPhotoUrl ? (
-                      <div style={{ position: "relative", display: "inline-block" }}>
-                        <img src={wellnessPhotoUrl} style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 14, border: `2px solid #2A3A2A` }} alt="" />
-                        <button onClick={() => setWellnessPhotoUrl(null)} aria-label="Remove photo" style={{ position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", fontSize: 13, cursor: "pointer" }}>×</button>
+                      <div style={{ position: "relative" }}>
+                        <img src={wellnessPhotoUrl} style={{ width: "100%", maxHeight: 320, objectFit: "cover", borderRadius: 14, display: "block" }} alt="" />
+                        <button onClick={() => setWellnessPhotoUrl(null)} aria-label="Remove photo" style={{ position: "absolute", top: 8, right: 8, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "none", color: "#fff", fontSize: 16, cursor: "pointer" }}>×</button>
                       </div>
                     ) : (
-                      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 18px", borderRadius: 14, border: `1.5px dashed #2A3A2A`, background: "#111", cursor: "pointer" }}>
-                        <span style={{ fontSize: 18 }}>➕</span>
-                        <span style={{ fontSize: 14, color: C.sub, fontWeight: 700 }}>Add a photo</span>
+                      <label style={{ display: "block", border: `2px dashed ${C.greenMid}`, borderRadius: 14, padding: "22px 0", textAlign: "center", background: C.greenLight, cursor: "pointer" }}>
+                        <div style={{ fontSize: 24, marginBottom: 4 }}>📸</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#4A9D6E" }}>Add a photo</div>
                         <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
                           const file = e.target.files?.[0]; if (!file) return;
                           const reader = new FileReader();

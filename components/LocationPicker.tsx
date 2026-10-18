@@ -265,7 +265,7 @@ export default function LocationPicker({
         placeholder="Search a place or business name…"
         style={{
           width: "100%", padding: "10px 14px",
-          background: "#1A1228", border: "1.5px solid #2D1F52",
+          background: "#111111", border: "1.5px solid #1B231E",
           borderRadius: 12, color: "#E2E8F0",
           fontSize: 14, outline: "none",
         }}
@@ -275,7 +275,7 @@ export default function LocationPicker({
       {query.trim().length >= 2 && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-          background: "#111118", border: "1.5px solid #2D1F52", borderRadius: 12,
+          background: "#161D19", border: "1.5px solid #1B231E", borderRadius: 12,
           boxShadow: "0 8px 24px rgba(0,0,0,0.4)", zIndex: 50,
           maxHeight: 320, overflowY: "auto",
         }}>
@@ -290,10 +290,10 @@ export default function LocationPicker({
                     display: "flex", alignItems: "center", gap: 10,
                     width: "100%", padding: "12px 14px",
                     background: "transparent", border: "none",
-                    borderBottom: "1px solid #2D1F52",
+                    borderBottom: "1px solid #1B231E",
                     cursor: "pointer", textAlign: "left",
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#2D1F52")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#1B231E")}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                   <span style={{ fontSize: 18, flexShrink: 0 }}>{loc.kind === "business" ? "🏢" : "📍"}</span>
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -316,10 +316,10 @@ export default function LocationPicker({
                     display: "flex", alignItems: "center", gap: 10,
                     width: "100%", padding: "12px 14px",
                     background: "transparent", border: "none",
-                    borderBottom: "1px solid #2D1F52",
+                    borderBottom: "1px solid #1B231E",
                     cursor: "pointer", textAlign: "left",
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#1F1A2E")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#1F2E27")}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                   <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -330,7 +330,7 @@ export default function LocationPicker({
                       {s.fullAddress.replace(s.name + ", ", "") || s.city}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: "#A78BFA", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.6 }}>Tap to pin</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "#7FBF98", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.6 }}>Tap to pin</span>
                 </button>
               ))}
             </>
@@ -460,13 +460,13 @@ function MapPickerModal({
     }} onClick={onClose}>
       <div style={{
         background: "#0D0D0D", borderRadius: 18,
-        border: "1.5px solid #2D1F52", overflow: "hidden",
+        border: "1.5px solid #1B231E", overflow: "hidden",
         width: "100%", maxWidth: 540, display: "flex", flexDirection: "column",
         maxHeight: "90vh",
       }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid #2D1F52", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid #1B231E", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: "#E2E8F0" }}>Drop a pin</div>
             <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
@@ -477,7 +477,7 @@ function MapPickerModal({
         </div>
 
         {/* Map area */}
-        <div style={{ height: 360, background: "#1A1228", position: "relative" }}>
+        <div style={{ height: 360, background: "#111111", position: "relative" }}>
           {loadError ? (
             <div style={{ padding: 24, color: "#9CA3AF", fontSize: 13, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
               {loadError}
@@ -508,18 +508,18 @@ function MapPickerModal({
 
         {/* Naming form — only shown once a pin is placed */}
         {pinLat !== null && pinLng !== null && (
-          <div style={{ padding: 18, borderTop: "1px solid #2D1F52", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ padding: 18, borderTop: "1px solid #1B231E", display: "flex", flexDirection: "column", gap: 10 }}>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Name this spot</label>
               <input value={name} onChange={e => setName(e.target.value)} maxLength={200}
                 placeholder="e.g. Red Rock Canyon trailhead"
-                style={{ width: "100%", padding: "10px 14px", background: "#1A1228", border: "1.5px solid #2D1F52", borderRadius: 10, color: "#E2E8F0", fontSize: 14, outline: "none" }}/>
+                style={{ width: "100%", padding: "10px 14px", background: "#111111", border: "1.5px solid #1B231E", borderRadius: 10, color: "#E2E8F0", fontSize: 14, outline: "none" }}/>
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>City</label>
               <input value={city} onChange={e => setCity(e.target.value)} maxLength={100}
                 placeholder="Las Vegas"
-                style={{ width: "100%", padding: "10px 14px", background: "#1A1228", border: "1.5px solid #2D1F52", borderRadius: 10, color: "#E2E8F0", fontSize: 14, outline: "none" }}/>
+                style={{ width: "100%", padding: "10px 14px", background: "#111111", border: "1.5px solid #1B231E", borderRadius: 10, color: "#E2E8F0", fontSize: 14, outline: "none" }}/>
             </div>
             {submitError && (
               <div style={{ fontSize: 12, color: "#FCA5A5", padding: "6px 10px", background: "#3B1F1F", borderRadius: 8 }}>⚠️ {submitError}</div>
@@ -527,7 +527,7 @@ function MapPickerModal({
             <button disabled={submitting} onClick={submitPin}
               style={{
                 marginTop: 4, padding: "12px 16px",
-                background: "linear-gradient(135deg,#7C3AED,#A78BFA)",
+                background: "linear-gradient(135deg,#1F5F3F,#4A9D6E)",
                 border: "none", borderRadius: 12, color: "#fff",
                 fontWeight: 800, fontSize: 14, cursor: submitting ? "wait" : "pointer",
                 opacity: submitting ? 0.7 : 1,

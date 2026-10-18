@@ -20,7 +20,7 @@ export function FitbitActivityCard({ data }: { data: FitbitData }) {
   }
 
   const C = {
-    blue: '#7C3AED',
+    blue: '#1F5F3F',
     text: '#F0F0F0',
     sub: '#9CA3AF',
     white: '#1A1A1A',
@@ -150,7 +150,7 @@ export function FitbitActivityCard({ data }: { data: FitbitData }) {
             <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>
               Sleep
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#7C3AED' }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#4A9D6E' }}>
               {Math.round(data.sleep_minutes / 60)}h {data.sleep_minutes % 60}m
             </div>
           </div>

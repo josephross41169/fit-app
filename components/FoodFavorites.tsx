@@ -46,8 +46,8 @@ const C = {
   sub: "#9CA3AF",
   gold: "#F5A623",
   blue: "#1F5F3F",
-  chip: "#1A1228",
-  chipBorder: "#2D1F52",
+  chip: "#111111",
+  chipBorder: "#1B231E",
   inputBg: "#0D0D0D",
 };
 
