@@ -27,8 +27,8 @@ type ExerciseStats = {
 };
 
 const C = {
-  purple: "#1F5F3F", purpleDark: "#1E1530", purpleMid: "#1B231E",
-  purpleBorder: "#4C3A7A", gold: "#F5A623", cyan: "#06B6D4",
+  purple: "#1F5F3F", purpleDark: "#141A16", purpleMid: "#1B231E",
+  purpleBorder: "#2A3A2A", gold: "#F5A623", cyan: "#06B6D4",
   text: "#F0F0F0", sub: "#9CA3AF", green: "#4ADE80",
 };
 
@@ -301,14 +301,14 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
   // ── Week-by-week summaries (newest first) ───────────────────────────────
   // One card per week instead of bar/line charts: how many sessions, and
   // how much (distance + time for cardio; sets, volume, muscles for lifting).
-  const weeks = useMemo(() => {
+  function buildWeeks(rows: any[]) {
     type DayItem = { date: Date; title: string; detail: string };
     type Wk = { start: Date; lift: number; sets: number; volume: number; groups: Record<string, number>;
                 cardio: number; miles: number; minutes: number; types: Record<string, number>;
                 liftDays: DayItem[]; cardioDays: DayItem[] };
     const map: Record<string, Wk> = {};
     const num = (v: any) => { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return isNaN(n) ? 0 : n; };
-    filteredWorkouts.forEach((w: any) => {
+    rows.forEach((w: any) => {
       const d = new Date(w.logged_at || w.created_at || w.id || 0);
       if (isNaN(d.getTime())) return;
       const ws = new Date(d); ws.setDate(d.getDate() - d.getDay()); ws.setHours(0, 0, 0, 0);
@@ -346,7 +346,23 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
       }
     });
     return Object.values(map).sort((a, b) => b.start.getTime() - a.start.getTime());
-  }, [filteredWorkouts]);
+  }
+  type Week = ReturnType<typeof buildWeeks>[number];
+  const weeks = useMemo(() => buildWeeks(filteredWorkouts), [filteredWorkouts]);
+  // This week + last week always come from ALL logs, whatever range is picked.
+  const allWeeks = useMemo(() => buildWeeks(workouts || []), [workouts]);
+  // Previous calendar month, for the "Last month" overview tab.
+  const lastMonth = useMemo(() => {
+    const n = new Date();
+    const start = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+    const end = new Date(n.getFullYear(), n.getMonth(), 1);
+    const rows = (workouts || []).filter((w: any) => {
+      const d = new Date(w.logged_at || w.created_at || 0);
+      return d >= start && d < end;
+    });
+    return { start, end, weeks: buildWeeks(rows) };
+  }, [workouts]);
+  const [weekView, setWeekView] = useState<"weeks" | "month">("weeks");
   const liftWeeks = weeks.filter(w => w.lift > 0);
   const cardioWeeks = weeks.filter(w => w.cardio > 0);
   const thisWeekStart = (() => { const t = new Date(); t.setDate(t.getDate() - t.getDay()); t.setHours(0, 0, 0, 0); return t.getTime(); })();
@@ -547,29 +563,15 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
         const isLift = activeGraph === "lifting";
         const list = isLift ? liftWeeks : cardioWeeks;
         const accent = isLift ? C.gold : C.cyan;
-        if (!list.length) return (
-          <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", color: C.sub, fontSize: 13, marginBottom: 20 }}>
-            {isLift ? "No lifting sessions logged in this period 💪" : "No cardio logged in this period 🏃"}
-          </div>
-        );
         const tot = list.reduce((a, w) => ({ s: a.s + (isLift ? w.lift : w.cardio), x: a.x + (isLift ? w.sets : w.miles), y: a.y + (isLift ? w.volume : w.minutes) }), { s: 0, x: 0, y: 0 });
-        const best = Math.max(...list.map(w => isLift ? w.volume || w.sets : w.miles || w.minutes), 1);
         const totals = isLift
           ? [{ l: "Sessions", v: String(tot.s) }, { l: "Sets", v: String(tot.x) }, { l: "Volume", v: tot.y ? `${fmtVol(tot.y)} lbs` : "—" }]
           : [{ l: "Sessions", v: String(tot.s) }, { l: "Distance", v: `${Math.round(tot.x * 10) / 10} mi` }, { l: "Time", v: tot.y ? fmtMin(tot.y) : "—" }];
-        return (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
-              {totals.map(t => (
-                <div key={t.l} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
-                  <div style={{ fontSize: 19, fontWeight: 900, color: accent }}>{t.v}</div>
-                  <div style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, marginTop: 2 }}>{t.l}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Week by week</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {list.map(w => {
+        // Bars in the two week cards are scaled against the bigger of the two.
+        const shownWeeks = allWeeks.filter(x => (x.start.getTime() === thisWeekStart || x.start.getTime() === thisWeekStart - 7 * 86400000) && (isLift ? x.lift > 0 : x.cardio > 0));
+        const weekBest = Math.max(...shownWeeks.map(w => isLift ? w.volume || w.sets : w.miles || w.minutes), 1);
+        const weekCard = (w: Week) => {
+          const best = weekBest;
                 const count = isLift ? w.lift : w.cardio;
                 const size = isLift ? (w.volume || w.sets) : (w.miles || w.minutes);
                 const chips = Object.entries(isLift ? w.groups : w.types).sort((a, b) => b[1] - a[1]);
@@ -633,7 +635,108 @@ export default function WorkoutProgressGraphs({ workouts }: WorkoutProgressGraph
                     )}
                   </div>
                 );
-              })}
+        };
+
+        // ── Last month overview ──
+        const monthView = () => {
+          const mw = lastMonth.weeks;
+          const name = lastMonth.start.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+          const sessions = mw.reduce((a, w) => a + (isLift ? w.lift : w.cardio), 0);
+          const items = mw.flatMap(w => isLift ? w.liftDays : w.cardioDays);
+          const activeDays = new Set(items.map(x => x.date.getDate()));
+          const amtA = mw.reduce((a, w) => a + (isLift ? w.sets : w.miles), 0);
+          const amtB = mw.reduce((a, w) => a + (isLift ? w.volume : w.minutes), 0);
+          const chipMap: Record<string, number> = {};
+          mw.forEach(w => Object.entries(isLift ? w.groups : w.types).forEach(([k, v]) => { chipMap[k] = (chipMap[k] || 0) + v; }));
+          const chips = Object.entries(chipMap).sort((a, b) => b[1] - a[1]);
+          const bestWk = [...mw].filter(w => isLift ? w.lift > 0 : w.cardio > 0)
+            .sort((a, b) => isLift ? (b.volume || b.sets) - (a.volume || a.sets) : (b.miles || b.minutes) - (a.miles || a.minutes))[0];
+          const daysInMonth = new Date(lastMonth.end.getTime() - 86400000).getDate();
+          const offset = lastMonth.start.getDay();
+          const perWeek = Math.round((sessions / (daysInMonth / 7)) * 10) / 10;
+          const tiles = isLift
+            ? [{ l: "Sessions", v: String(sessions) }, { l: "Active days", v: String(activeDays.size) }, { l: "Sets", v: String(amtA) }, { l: "Volume", v: amtB ? `${fmtVol(amtB)} lbs` : "—" }]
+            : [{ l: "Sessions", v: String(sessions) }, { l: "Active days", v: String(activeDays.size) }, { l: "Distance", v: `${Math.round(amtA * 10) / 10} mi` }, { l: "Time", v: amtB ? fmtMin(amtB) : "—" }];
+          return (
+            <div style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 14, padding: "14px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: C.text }}>{name}</div>
+                {sessions > 0 && <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>{perWeek} / week avg</div>}
+              </div>
+              {sessions === 0 ? (
+                <div style={{ fontSize: 12, color: C.sub, marginTop: 6 }}>{isLift ? "No lifting logged last month." : "No cardio logged last month."}</div>
+              ) : (<>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, margin: "12px 0" }}>
+                  {tiles.map(t => (
+                    <div key={t.l} style={{ background: C.purpleMid, borderRadius: 10, padding: "8px 4px", textAlign: "center" }}>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: accent }}>{t.v}</div>
+                      <div style={{ fontSize: 9.5, color: C.sub, fontWeight: 700, marginTop: 1 }}>{t.l}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Month calendar — trained days highlighted */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4 }}>
+                  {["S", "M", "T", "W", "T", "F", "S"].map((L, i) => (
+                    <div key={"h" + i} style={{ textAlign: "center", fontSize: 9.5, fontWeight: 800, color: C.sub }}>{L}</div>
+                  ))}
+                  {Array.from({ length: offset }, (_, i) => <div key={"b" + i} />)}
+                  {Array.from({ length: daysInMonth }, (_, i) => {
+                    const on = activeDays.has(i + 1);
+                    return (
+                      <div key={i} style={{ textAlign: "center", borderRadius: 8, padding: "5px 0", fontSize: 12, fontWeight: 800, background: on ? accent : "transparent", color: on ? "#0E1311" : C.sub, border: `1px solid ${on ? accent : C.purpleBorder}` }}>{i + 1}</div>
+                    );
+                  })}
+                </div>
+                {bestWk && (
+                  <div style={{ fontSize: 12, color: C.sub, marginTop: 12 }}>
+                    <span style={{ color: accent, fontWeight: 800 }}>Best week:</span>{" "}
+                    <span style={{ color: C.text, fontWeight: 700 }}>{fmtWeekRange(bestWk.start)}</span>
+                    {" · "}{isLift ? `${bestWk.sets} sets${bestWk.volume ? ` · ${fmtVol(bestWk.volume)} lbs` : ""}` : (bestWk.miles ? `${Math.round(bestWk.miles * 10) / 10} mi` : fmtMin(bestWk.minutes))}
+                  </div>
+                )}
+                {chips.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
+                    {chips.map(([n, c]) => (
+                      <span key={n} style={{ fontSize: 11, fontWeight: 700, color: C.text, background: C.purpleMid, border: `1px solid ${C.purpleBorder}`, borderRadius: 99, padding: "2px 8px" }}>
+                        {n}{c > 1 ? <span style={{ color: C.sub }}> ×{c}</span> : null}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>)}
+            </div>
+          );
+        };
+
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
+              {totals.map(t => (
+                <div key={t.l} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: 19, fontWeight: 900, color: accent }}>{t.v}</div>
+                  <div style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, marginTop: 2 }}>{t.l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 4, background: C.purpleMid, borderRadius: 10, padding: 3, marginBottom: 10 }}>
+              {([["weeks", "This & last week"], ["month", lastMonth.start.toLocaleDateString("en-US", { month: "long" })]] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setWeekView(k)} style={{ flex: 1, padding: "7px 4px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 800, background: weekView === k ? C.purple : "transparent", color: weekView === k ? "#fff" : C.sub }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {weekView === "weeks" ? (
+                [thisWeekStart, thisWeekStart - 7 * 86400000].map(ts => {
+                  const w = allWeeks.find(x => x.start.getTime() === ts && (isLift ? x.lift > 0 : x.cardio > 0));
+                  return w ? weekCard(w) : (
+                    <div key={ts} style={{ background: C.purpleDark, border: `1px solid ${C.purpleBorder}`, borderRadius: 14, padding: "14px" }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{weekName(new Date(ts))}</div>
+                      <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{isLift ? "No lifting logged" : "No cardio logged"}{ts === thisWeekStart ? " yet" : ""}</div>
+                    </div>
+                  );
+                })
+              ) : monthView()}
             </div>
           </div>
         );

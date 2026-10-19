@@ -52,3 +52,32 @@ export function badgeArt(id: string | null | undefined): string | null {
   const file = EXACT[id] ?? BY_PREFIX[getBadgePrefix(id) ?? ""];
   return file ? `/badges/${file}.webp` : null;
 }
+
+// ── Activity → badge art ────────────────────────────────────────────────────
+// Used for the small icons on activity logs: a cold plunge log shows the cold
+// plunge badge, a run shows the running badge, etc. Returns null when no badge
+// fits so callers can fall back to their emoji.
+const ACTIVITY_ART: [RegExp, string][] = [
+  [/cold\s*plunge|ice\s*bath|cryo/i, "cold-plunge"],
+  [/sauna|steam/i, "sauna"],
+  [/fast/i, "fasting"],
+  [/meditat|breath|yoga\s*nidra|sound\s*bath|journal|mindful/i, "meditation"],
+  [/yoga|pilates/i, "yoga"],
+  [/stretch|mobility|foam|massage|chiro|cupping|acupunct/i, "stretching"],
+  [/swim/i, "swimming"],
+  [/bik|cycl|spin/i, "biking"],
+  [/row/i, "rowing"],
+  [/box|kickbox|mma|martial/i, "boxing"],
+  [/hiit|interval|circuit|crossfit|bootcamp/i, "hiit"],
+  [/run|jog|treadmill|sprint|track/i, "runs"],
+  [/walk|hik|stair/i, "walks"],
+  [/basketball|soccer|football|tennis|pickleball|golf|volleyball|baseball|hockey|sport/i, "sports"],
+  [/lift|weight|strength|workout/i, "lifts"],
+  [/meal|nutrition|food|breakfast|lunch|dinner|snack/i, "nutrition"],
+];
+
+export function artForActivity(name: string | null | undefined): string | null {
+  if (!name) return null;
+  for (const [re, file] of ACTIVITY_ART) if (re.test(name)) return `/badges/${file}.webp`;
+  return null;
+}

@@ -10,6 +10,7 @@ import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@
 import { BadgeTile } from "@/components/BadgeTile";
 import { BadgeShowcase, BadgeDetailSheet } from "@/components/BadgeShowcase";
 import FollowButton from "@/components/FollowButton";
+import { artForActivity } from "@/lib/badgeArt";
 import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 import { prettyWorkoutType, workoutSource } from "@/lib/workoutSource";
 import { HighlightsStrip, isVideoUrl } from "@/components/GroupHighlights";
@@ -1154,7 +1155,15 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:16,overflow:"hidden",border:`1px solid ${tierInner.border}`,marginBottom:20,background:tierInner.body}}>
             <button onClick={()=>setWoOpen(o=>!o)} style={{width:"100%",background:tierInner.collapsed,padding:"13px 16px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:7,border:"none",borderBottom:woOpen?`1px solid ${tierInner.border}`:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
-                <div style={{width:38,height:38,borderRadius:11,background:tierInner.iconBg,border:`1px solid ${tierInner.iconBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>💪</div>
+                {(() => {
+                  // Badge for what this workout was: lifts if there were
+                  // exercises, otherwise the first cardio type (run, bike…).
+                  const cardioTypes = ((workout as any).cardio || []).map((c:any) => cardioLabel(c));
+                  const art = (workout.exercises || []).length ? artForActivity("lift") : (artForActivity(cardioTypes[0]) || artForActivity(workout.type) || artForActivity("workout"));
+                  return art
+                    ? <img src={art} alt="" style={{width:38,height:38,objectFit:"contain",flexShrink:0}} />
+                    : <div style={{width:38,height:38,borderRadius:11,background:tierInner.iconBg,border:`1px solid ${tierInner.iconBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>💪</div>;
+                })()}
                 <div style={{flex:1,minWidth:0,fontWeight:800,fontSize:16,color:C.text}}>{(()=>{
                     const cardioList = ((workout as any).cardio || []) as any[];
                     const exList = workout.exercises || [];
@@ -1448,7 +1457,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:16,overflow:"hidden",border:`1px solid ${tierInner.border}`,background:tierInner.body}}>
             <button onClick={()=>setNut(n=>!n)} style={{width:"100%",background:tierInner.collapsed,padding:"13px 16px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:7,border:"none",borderBottom:nut?`1px solid ${tierInner.border}`:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
-                <div style={{width:38,height:38,borderRadius:11,background:"rgba(74,222,128,0.14)",border:"1px solid rgba(74,222,128,0.32)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>🥗</div>
+                <img src="/badges/nutrition.webp" alt="" style={{width:38,height:38,objectFit:"contain",flexShrink:0}} />
                 <div style={{flex:1,minWidth:0,fontWeight:800,fontSize:16,color:C.text}}>Nutrition</div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
@@ -1610,7 +1619,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{borderRadius:18,overflow:"hidden",border:`1px solid ${tierInner.border}`,marginTop:16,background:tierInner.body}}>
             <button onClick={()=>setWellOpen(o=>!o)} style={{width:"100%",background:tierInner.collapsed,padding:"13px 18px",display:"flex",flexDirection:"column",alignItems:"stretch",gap:7,border:"none",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,width:"100%"}}>
-                <span style={{fontSize:22}}>🌿</span>
+                <img src="/badges/self-care.webp" alt="" style={{width:32,height:32,objectFit:"contain",flexShrink:0}} />
                 <div style={{flex:1,minWidth:0,fontWeight:900,fontSize:17,color:C.text}}>Wellness</div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
@@ -1639,13 +1648,21 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     borderLeft:`4px solid ${style.accent}`,
                     border:`1.5px solid #2A3A2A`,borderLeftWidth:4,borderLeftColor:style.accent,
                   }}>
-                    <div style={{
-                      width:44,height:44,borderRadius:13,
-                      // Tinted background using the activity's accent at 20% opacity
-                      background:`${style.accent}33`,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:22,flexShrink:0,
-                    }}>{style.emoji}</div>
+                    {(() => {
+                      // The matching badge (sauna, cold plunge, yoga…) stands
+                      // in for the emoji; unmatched activities keep the emoji.
+                      const art = artForActivity(e.activity);
+                      return art ? (
+                        <img src={art} alt="" style={{width:44,height:44,objectFit:"contain",flexShrink:0}} onError={ev=>{(ev.target as HTMLImageElement).style.visibility="hidden";}} />
+                      ) : (
+                        <div style={{
+                          width:44,height:44,borderRadius:13,
+                          background:`${style.accent}33`,
+                          display:"flex",alignItems:"center",justifyContent:"center",
+                          fontSize:22,flexShrink:0,
+                        }}>{style.emoji}</div>
+                      );
+                    })()}
                     <div style={{flex:1,minWidth:0}}>
                       {/* Top row: activity name + duration + time pills.
                           Pills use the activity's accent color so each card
