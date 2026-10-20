@@ -3,6 +3,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import FollowButton from "@/components/FollowButton";
+import { notifHref } from "@/lib/notifLinks";
 
 const C = {
   purple: "#1F5F3F",
@@ -18,7 +21,7 @@ const C = {
   red: "#EF4444",
 };
 
-type NotifType = "like_post" | "like_activity" | "follow" | "comment_post" | "comment_activity" | "badge";
+type NotifType = "like_post" | "like_activity" | "follow" | "comment_post" | "comment_activity" | "badge" | string;
 
 interface Notif {
   id: string;
@@ -31,6 +34,37 @@ interface Notif {
   target_preview: string | null;
   created_at: string;
   read_at: string | null;
+  /** Text stored with the notification ("Sam tagged you in a post"). */
+  body?: string | null;
+  /** The raw row from the API, used to work out where a tap should go. */
+  raw?: any;
+}
+
+// Rows from /api/db get_notifications use the table's real columns
+// (user_id, from_user_id, type, reference_id, body, read). Convert them into
+// the shape this page renders.
+function fromApiRow(r: any): Notif {
+  const ref = r.reference_id ? String(r.reference_id) : "";
+  const onCard = ref.includes("__"); // activity-card ids look like "<userId>__MM/DD/YYYY"
+  let type: string = r.type;
+  if (type === "like") type = onCard ? "like_activity" : "like_post";
+  else if (type === "comment" || type === "reply") type = onCard ? "comment_activity" : "comment_post";
+  else if (type === "activity_comment") type = "comment_activity";
+  const fu = r.from_user || {};
+  return {
+    id: r.id,
+    type,
+    actor_id: r.from_user_id || null,
+    actor_name: fu.full_name || fu.username || "Livelee",
+    actor_username: fu.username || "",
+    actor_avatar: fu.avatar_url || null,
+    target_id: ref || null,
+    target_preview: null,
+    created_at: r.created_at,
+    read_at: r.read ? r.created_at : null,
+    body: r.body || null,
+    raw: r,
+  };
 }
 
 function timeAgo(iso: string) {
@@ -60,7 +94,11 @@ function Avatar({ name, url, size = 44 }: { name: string; url?: string | null; s
 }
 
 function NotifIcon({ type }: { type: NotifType }) {
-  const map: Record<NotifType, string> = {
+  const map: Record<string, string> = {
+    tag: "🏷️",
+    mention: "@",
+    message: "✉️",
+    reply: "💬",
     like_post: "❤️",
     like_activity: "💪",
     follow: "➕",
@@ -76,7 +114,7 @@ function NotifIcon({ type }: { type: NotifType }) {
       fontSize: 14, flexShrink: 0, marginLeft: -10, marginTop: 22,
       border: `2px solid ${C.bg}`,
     }}>
-      {map[type]}
+      {map[type] || "🔔"}
     </div>
   );
 }
@@ -92,7 +130,15 @@ function notifText(n: Notif): string {
     case "mention": return "mentioned you";
     case "tag": return "tagged you in a post";
     case "buddy_matched": return "matched with you as a workout buddy";
-    default: return "interacted with you";
+    case "reply": return "replied to your comment";
+    case "message": return "sent you a message";
+    default: {
+      // Unknown types: show the stored text, minus the sender's name if it
+      // starts with it (the name is already printed in bold before this).
+      const b = (n.body || "").trim();
+      if (b && n.actor_name && b.startsWith(n.actor_name)) return b.slice(n.actor_name.length).trim();
+      return b || "interacted with you";
+    }
   }
 }
 
@@ -109,22 +155,17 @@ export default function NotificationsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // Try to query the notifications table — if it doesn't exist yet, use static
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("recipient_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(60);
-
-      // No demo fallback: real notifications or an honest empty state.
-      // (The old static demo data confused new users — fake "likes" for
-      // posts they never made — and read as placeholder content in review.)
-      if (error || !data) {
-        setNotifs([]);
-      } else {
-        setNotifs(data as Notif[]);
-      }
+      // Same API the bell badge uses. (This page used to query columns
+      // named recipient_id / read_at, which don't exist on the table, so it
+      // always came back empty.)
+      const res = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_notifications", payload: { userId: user.id } }),
+      });
+      const json = await res.json().catch(() => ({}));
+      const rows: any[] = Array.isArray(json?.notifications) ? json.notifications : [];
+      setNotifs(rows.map(fromApiRow));
     } catch {
       setNotifs([]);
     } finally {
@@ -134,15 +175,15 @@ export default function NotificationsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Mark all as read when page opens
+  // Mark all as read when the page opens (unread dots still show for this
+  // visit because they were loaded before the update).
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("recipient_id", user.id)
-      .is("read_at", null)
-      .then(() => {});
+    fetch("/api/db", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_notifications_read", payload: { userId: user.id } }),
+    }).catch(() => {});
   }, [user]);
 
   const filtered = notifs.filter(n => {
@@ -243,18 +284,25 @@ export default function NotificationsPage() {
 
 function NotifRow({ notif: n }: { notif: Notif }) {
   const isUnread = !n.read_at;
+  const router = useRouter();
+  const { user } = useAuth();
+  const open = async () => {
+    const href = await notifHref(n.raw, user?.id);
+    if (href) router.push(href);
+  };
 
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 12,
       padding: "14px 20px",
-      background: isUnread ? "rgba(124,58,237,0.06)" : "transparent",
+      background: isUnread ? "rgba(46,125,84,0.10)" : "transparent",
       borderBottom: `1px solid ${C.border}`,
       transition: "background 0.15s",
       cursor: "pointer",
     }}
-      onMouseEnter={e => (e.currentTarget.style.background = "rgba(124,58,237,0.1)")}
-      onMouseLeave={e => (e.currentTarget.style.background = isUnread ? "rgba(124,58,237,0.06)" : "transparent")}
+      onClick={open}
+      onMouseEnter={e => (e.currentTarget.style.background = "rgba(46,125,84,0.14)")}
+      onMouseLeave={e => (e.currentTarget.style.background = isUnread ? "rgba(46,125,84,0.10)" : "transparent")}
     >
       {/* Avatar + type icon */}
       <div style={{ position: "relative", flexShrink: 0 }}>
@@ -282,15 +330,11 @@ function NotifRow({ notif: n }: { notif: Notif }) {
         <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.purple, flexShrink: 0 }} />
       )}
 
-      {/* Follow back button */}
-      {n.type === "follow" && (
-        <button style={{
-          padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${C.purple}`,
-          background: "transparent", color: "#4A9D6E", fontWeight: 700, fontSize: 12,
-          cursor: "pointer", flexShrink: 0,
-        }}>
-          Follow
-        </button>
+      {/* Follow back — real button (shows "Following ✓" if you already do) */}
+      {n.type === "follow" && n.actor_id && (
+        <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0 }}>
+          <FollowButton targetUserId={n.actor_id} size="sm" />
+        </div>
       )}
     </div>
   );

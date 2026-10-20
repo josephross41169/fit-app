@@ -141,7 +141,7 @@ function setup(userId: string) {
   try {
     notifChannel = supabase
       .channel(`unread-notif-${userId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         () => fetchCounts(userId))
       .subscribe();
   } catch {}
