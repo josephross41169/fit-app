@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FollowButton from "@/components/FollowButton";
 import { notifHref } from "@/lib/notifLinks";
+import { clearUnreadNotifs } from "@/lib/useUnreadCounts";
 
 const C = {
   purple: "#1F5F3F",
@@ -183,7 +184,7 @@ export default function NotificationsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "mark_notifications_read", payload: { userId: user.id } }),
-    }).catch(() => {});
+    }).then(() => clearUnreadNotifs()).catch(() => {});
   }, [user]);
 
   const filtered = notifs.filter(n => {

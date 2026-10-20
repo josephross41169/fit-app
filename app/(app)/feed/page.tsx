@@ -23,6 +23,7 @@ import MentionInput, { parseMentions } from "@/components/MentionInput";
 import { getCached, setCached } from "@/lib/queryCache";
 import { maybeRunAutoSync as maybeRunHealthKitAutoSync } from "@/lib/healthkit";
 import { notifHref } from "@/lib/notifLinks";
+import { clearUnreadNotifs } from "@/lib/useUnreadCounts";
 import { wellnessLabel, autoWellnessStyle, isAppleHealth, APPLE_HEALTH_LABEL } from "@/lib/wellnessLabels";
 import { prettyWorkoutType, workoutSource } from "@/lib/workoutSource";
 
@@ -3226,6 +3227,7 @@ export default function FeedPage() {
               if (user) {
                 await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_notifications_read', payload:{ userId: user.id }}) });
                 setNotifications(p => p.map(n => ({...n, read: true})));
+                clearUnreadNotifs(); // also clear the nav "Alerts" badge right away
               }
             }}
             aria-label="Notifications"

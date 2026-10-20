@@ -106,6 +106,15 @@ async function fetchCounts(userId: string) {
   }
 }
 
+/**
+ * Clear the notification badge immediately (call after marking notifications
+ * read) instead of waiting for the next poll to notice.
+ */
+export function clearUnreadNotifs() {
+  unreadNotifs = 0;
+  notify();
+}
+
 function teardown() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   try { msgChannel?.unsubscribe(); } catch {}
@@ -202,6 +211,12 @@ export function useUnreadCounts() {
   // pathname inside every consuming component.
   const onMessages = pathname === "/messages";
   const onNotifs = pathname === "/notifications";
+
+  // Visiting the notifications page marks everything read, so drop the
+  // stored count too — otherwise the badge reappears when you navigate away.
+  useEffect(() => {
+    if (onNotifs) clearUnreadNotifs();
+  }, [onNotifs]);
 
   return {
     unreadMessages: onMessages ? 0 : msg,
