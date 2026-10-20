@@ -14,6 +14,7 @@ import { forceSyncAllProgress } from "@/lib/syncProgress";
 import { syncGroupChallengeProgressFor } from "@/lib/groupGoalSync";
 import GroupHighlights from "@/components/GroupHighlights";
 import GroupBadges from "@/components/GroupBadges";
+import GroupChallenges from "@/components/GroupChallenges";
 import GroupActivityFeed from "@/components/GroupActivityFeed";
 import PostDeleteMenu from "@/components/PostDeleteMenu";
 
@@ -3072,6 +3073,19 @@ export default function GroupPage() {
           )}
 
           {!locked && (<>
+          {/* Group badges on phones — right under "About this group", above
+              the photos. Desktop shows them in the sidebar instead. */}
+          {dbGroup?.id && (
+            <div className="groups-mobile-tab-content" style={{ marginBottom: 20 }}>
+              <GroupBadges
+                groupId={dbGroup.id}
+                isOwner={isOwnerDB}
+                hiddenBadges={Array.isArray(dbGroup.hidden_group_badges) ? dbGroup.hidden_group_badges : []}
+                onHiddenChange={(next) => setDbGroup((g: any) => g ? { ...g, hidden_group_badges: next } : g)}
+              />
+            </div>
+          )}
+
           {/* Group highlights — 27-slot photo grid curated by owners/mods.
               Photos are pulled from the group's posts, notes, and war
               media via the group-photos API. Members see read-only.
@@ -3285,6 +3299,17 @@ export default function GroupPage() {
               </div>
             );
           })()}
+
+          {/* Challenges (owner/mods create; members join) — between Goals and Wars. */}
+          {dbGroup?.id && (
+            <GroupChallenges
+              groupId={dbGroup.id}
+              isStaff={!!(isOwnerDB || isModDB)}
+              isMember={!!(isMemberDB || isOwnerDB || isModDB)}
+              currentUserId={currentUser?.id || null}
+              members={displayMembers.map((m: any) => ({ userId: m.userId, name: m.name, username: m.username, avatarUrl: m.avatarUrl }))}
+            />
+          )}
 
           {/* Challenges & Wars — its own box that opens a separate screen. */}
           <button onClick={() => { setTab("war"); if (typeof window !== "undefined") window.scrollTo(0, 0); }}

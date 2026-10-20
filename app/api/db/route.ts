@@ -7,6 +7,7 @@ import { recomputeGoalProgress, isGoalComplete, type Goal as GoalType, type Acti
 // device. If VAPID env vars aren't set, sendPushToUser is a no-op.
 import { sendPushToUser } from '@/lib/pushServer';
 import { XP_FOR_NEXT, type Level } from '@/lib/tiers';
+import * as GCH from '@/lib/groupChallenges';
 
 // Mark as dynamic to avoid static collection at build time
 export const dynamic = 'force-dynamic';
@@ -3540,6 +3541,177 @@ async function handlePOST(req: NextRequest) {
     // same target) are treated as success (idempotent) so clicking report
     // twice doesn't error. The actual content stays visible until a human
     // reviews — reports just flag for moderation queue.
+    // ── Group challenges (v2): gchallenges / gchallenge_members / gchallenge_checkins ──
+    // Owner + moderators create; anyone in the group joins before it starts;
+    // staff can add people any time. Scores are computed here from activity_logs.
+    if (typeof action === 'string' && action.startsWith('gch_')) {
+      const cid = await callerId(req);
+      const p = payload || {};
+      const tz = Number.isFinite(Number(p.tz)) ? Math.max(-840, Math.min(840, Number(p.tz))) : 0;
+      const today = GCH.todayStr(tz);
+      const loadChallenge = async (id: string) => {
+        const { data } = await admin.from('gchallenges').select('*').eq('id', id).maybeSingle();
+        return data as GCH.ChallengeRow | null;
+      };
+
+      if (action === 'gch_list') {
+        const { groupId } = p;
+        if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 });
+        const role = await groupRoleOf(groupId, cid);
+        if (!role) {
+          const { data: g } = await admin.from('groups').select('is_private').eq('id', groupId).maybeSingle();
+          if (g?.is_private) return NextResponse.json({ challenges: [], role: null, today });
+        }
+        const { data: rows, error } = await admin.from('gchallenges').select('*').eq('group_id', groupId)
+          .order('start_date', { ascending: false }).limit(30);
+        if (error) return NextResponse.json({ error: error.message, setup_needed: true }, { status: 500 });
+        const list = (rows || []) as GCH.ChallengeRow[];
+        if (!list.length) return NextResponse.json({ challenges: [], role, today });
+        const ids = list.map(c => c.id);
+        const [{ data: mem }, { data: chk }] = await Promise.all([
+          admin.from('gchallenge_members').select('challenge_id, user_id, joined_at, user:users!gchallenge_members_user_id_fkey(id, username, full_name, avatar_url)').in('challenge_id', ids),
+          admin.from('gchallenge_checkins').select('challenge_id, user_id, day, task').in('challenge_id', ids),
+        ]);
+        const memberIds = Array.from(new Set((mem || []).map((m: any) => m.user_id)));
+        // Logs only for challenges that have started.
+        const started = list.filter(c => c.start_date <= today);
+        let metrics: Record<string, Record<string, GCH.DayMetrics>> = {};
+        if (started.length && memberIds.length) {
+          const from = started.reduce((a, c) => (c.start_date < a ? c.start_date : a), started[0].start_date);
+          const to = started.reduce((a, c) => { const e = GCH.endDate(c); return e > a ? e : a; }, from);
+          const fromIso = new Date(new Date(GCH.addDays(from, -1) + 'T00:00:00Z').getTime()).toISOString();
+          const toIso = new Date(new Date(GCH.addDays(to, 2) + 'T00:00:00Z').getTime()).toISOString();
+          // Page through (Supabase caps a single response at 1000 rows).
+          const logs: any[] = [];
+          for (let off = 0; off < 20000; off += 1000) {
+            const { data: page } = await admin.from('activity_logs').select(GCH.LOG_COLUMNS)
+              .in('user_id', memberIds).gte('logged_at', fromIso).lt('logged_at', toIso)
+              .order('logged_at', { ascending: true }).range(off, off + 999);
+            if (!page?.length) break;
+            logs.push(...page);
+            if (page.length < 1000) break;
+          }
+          metrics = GCH.metricsByUserDay(logs, tz);
+        }
+        const out = list.map(c => {
+          const status = GCH.statusOf(c, today);
+          const members = (mem || []).filter((m: any) => m.challenge_id === c.id);
+          const board = members.map((m: any) => {
+            const u = m.user || {};
+            const base = { userId: m.user_id, name: u.full_name || u.username || 'Member', username: u.username || null, avatarUrl: u.avatar_url || null };
+            if (status === 'upcoming') return { ...base, score: 0 };
+            if (c.kind === 'points') {
+              const r = GCH.scorePoints(c, metrics[m.user_id], today);
+              return { ...base, score: r.points, breakdown: r.breakdown };
+            }
+            const checks = new Set<string>((chk || []).filter((k: any) => k.challenge_id === c.id && k.user_id === m.user_id).map((k: any) => `${k.day}|${k.task}`));
+            const r = GCH.scoreDaily(c, metrics[m.user_id], checks, today);
+            return { ...base, score: c.strict ? r.streak : r.completedDays, completedDays: r.completedDays, streak: r.streak, restarts: r.restarts, todayTasks: r.today };
+          }).sort((a: any, b: any) => (b.score - a.score) || ((b.completedDays || 0) - (a.completedDays || 0)) || a.name.localeCompare(b.name));
+          return { ...c, status, endDate: GCH.endDate(c), memberCount: members.length, joined: !!cid && members.some((m: any) => m.user_id === cid), board };
+        });
+        return NextResponse.json({ challenges: out, role, today });
+      }
+
+      if (action === 'gch_create') {
+        const { groupId, name, emoji, description, kind, preset, tasks, target, startDate, days, strict } = p;
+        if (!groupId || !isGroupStaff(await groupRoleOf(groupId, cid))) return NextResponse.json({ error: 'Only the owner or moderators can create challenges.' }, { status: 403 });
+        const nm = String(name || '').trim().slice(0, 80);
+        if (!nm) return NextResponse.json({ error: 'Give the challenge a name.' }, { status: 400 });
+        if (kind !== 'points' && kind !== 'daily') return NextResponse.json({ error: 'Bad challenge kind' }, { status: 400 });
+        const nDays = Math.round(Number(days));
+        if (!(nDays >= 1 && nDays <= 365)) return NextResponse.json({ error: 'Length must be 1–365 days.' }, { status: 400 });
+        const start = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || '')) ? String(startDate) : today;
+        if (start < today) return NextResponse.json({ error: 'Start date can’t be in the past.' }, { status: 400 });
+        let cleanTasks: any[] = [];
+        if (kind === 'points') {
+          cleanTasks = (Array.isArray(tasks) ? tasks : [])
+            .filter((t: any) => t && GCH.TASK_BY_KEY[t.key])
+            .map((t: any) => ({ key: t.key, points: Math.max(0, Math.min(1000, Number(t.points) || 0)) }))
+            .filter((t: any, i: number, arr: any[]) => arr.findIndex(x => x.key === t.key) === i)
+            .slice(0, 12);
+          if (!cleanTasks.length) return NextResponse.json({ error: 'Add at least one task.' }, { status: 400 });
+        } else {
+          const pre = GCH.PRESET_BY_ID[preset];
+          if (!pre || pre.kind !== 'daily') return NextResponse.json({ error: 'Unknown preset' }, { status: 400 });
+          cleanTasks = pre.tasks;
+        }
+        const { data, error } = await admin.from('gchallenges').insert({
+          group_id: groupId, created_by: cid, name: nm, emoji: String(emoji || '🏆').slice(0, 8),
+          description: description ? String(description).slice(0, 500) : null,
+          kind, preset: preset || null, tasks: cleanTasks,
+          target: target != null && Number(target) > 0 ? Number(target) : null,
+          start_date: start, days: nDays, strict: kind === 'daily' ? !!strict : false,
+        }).select().single();
+        if (error) return NextResponse.json({ error: error.message, setup_needed: true }, { status: 500 });
+        // Creator is in automatically.
+        await admin.from('gchallenge_members').insert({ challenge_id: data.id, user_id: cid, added_by: cid });
+        await logGroupEvent(groupId, 'challenge_created', cid, null, `${await userName(cid)} started the challenge “${nm}”`);
+        return NextResponse.json({ challenge: data });
+      }
+
+      const c = p.challengeId ? await loadChallenge(p.challengeId) : null;
+      if (!c) return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+      const role = await groupRoleOf(c.group_id, cid);
+      const status = GCH.statusOf(c, today);
+
+      if (action === 'gch_join' || action === 'gch_leave') {
+        if (!cid || !role) return NextResponse.json({ error: 'Join the group first.' }, { status: 403 });
+        if (status !== 'upcoming') return NextResponse.json({ error: action === 'gch_join' ? 'This challenge already started — ask the owner or a moderator to add you.' : 'You can’t leave once it has started.' }, { status: 400 });
+        if (action === 'gch_leave') {
+          await admin.from('gchallenge_members').delete().eq('challenge_id', c.id).eq('user_id', cid);
+          return NextResponse.json({ ok: true });
+        }
+        const { error } = await admin.from('gchallenge_members').upsert({ challenge_id: c.id, user_id: cid, added_by: cid }, { onConflict: 'challenge_id,user_id', ignoreDuplicates: true });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'gch_add_member') {
+        const uid = p.userId;
+        if (!isGroupStaff(role)) return NextResponse.json({ error: 'Only the owner or moderators can add people.' }, { status: 403 });
+        if (!uid || !(await groupRoleOf(c.group_id, uid))) return NextResponse.json({ error: 'That person isn’t in this group.' }, { status: 400 });
+        if (status === 'ended') return NextResponse.json({ error: 'This challenge is over.' }, { status: 400 });
+        const { error } = await admin.from('gchallenge_members').upsert({ challenge_id: c.id, user_id: uid, added_by: cid }, { onConflict: 'challenge_id,user_id', ignoreDuplicates: true });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        if (uid !== cid) {
+          const who = await userName(cid);
+          admin.from('notifications').insert({ user_id: uid, from_user_id: cid, type: 'challenge_join', reference_id: c.id, body: `${who} added you to the challenge “${c.name}”`, read: false }).then(() => {}, () => {});
+          sendPushToUser(uid, { title: `${c.emoji} ${c.name}`, body: `${who} added you to this challenge`, url: `/groups/${c.group_id}`, tag: `gch-${c.id}` }).catch(() => {});
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      if (action === 'gch_checkin') {
+        const { task, day } = p;
+        if (!cid) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+        const { data: me } = await admin.from('gchallenge_members').select('user_id').eq('challenge_id', c.id).eq('user_id', cid).maybeSingle();
+        if (!me) return NextResponse.json({ error: 'You’re not in this challenge.' }, { status: 403 });
+        const t = (c.tasks || []).find((x: any) => x.id === task);
+        if (c.kind !== 'daily' || !t?.manual) return NextResponse.json({ error: 'That task can’t be checked off by hand.' }, { status: 400 });
+        const d = day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : today;
+        // Today, or yesterday (in case you forgot before midnight).
+        if (d > today || d < GCH.addDays(today, -1) || d < c.start_date || d > GCH.endDate(c)) return NextResponse.json({ error: 'You can only check off today.' }, { status: 400 });
+        const { data: existing } = await admin.from('gchallenge_checkins').select('task').eq('challenge_id', c.id).eq('user_id', cid).eq('day', d).eq('task', task).maybeSingle();
+        if (existing) {
+          await admin.from('gchallenge_checkins').delete().eq('challenge_id', c.id).eq('user_id', cid).eq('day', d).eq('task', task);
+          return NextResponse.json({ ok: true, checked: false });
+        }
+        const { error } = await admin.from('gchallenge_checkins').insert({ challenge_id: c.id, user_id: cid, day: d, task });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ ok: true, checked: true });
+      }
+
+      if (action === 'gch_delete') {
+        if (!isGroupStaff(role)) return NextResponse.json({ error: 'Only the owner or moderators can delete challenges.' }, { status: 403 });
+        const { error } = await admin.from('gchallenges').delete().eq('id', c.id);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ ok: true });
+      }
+
+      return NextResponse.json({ error: 'Unknown challenge action' }, { status: 400 });
+    }
+
     if (action === 'report_content') {
       const { reporterId, targetType, targetId, reason, details } = payload;
       if (!reporterId || !targetType || !targetId || !reason) {
