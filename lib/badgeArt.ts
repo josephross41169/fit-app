@@ -14,6 +14,9 @@ const EXACT: Record<string, string> = {
   "holiday-hustle": "christmas",
   "halloween": "halloween",
   "group-member": "group-member",
+  "birthday-workout": "birthday-workout",
+  "personal-trainer": "personal-trainer",
+  "6min-mile": "6min-mile",
 };
 
 const BY_PREFIX: Record<string, string> = {
@@ -45,6 +48,10 @@ const BY_PREFIX: Record<string, string> = {
   "5k": "5k",
   "10k": "10k",
   "marathon": "marathon",
+  "pilates": "pilates",
+  "massage": "massage",
+  "journaling": "journaling",
+  "float-tank": "float-tank",
 };
 
 export function badgeArt(id: string | null | undefined): string | null {
@@ -58,12 +65,16 @@ export function badgeArt(id: string | null | undefined): string | null {
 // plunge badge, a run shows the running badge, etc. Returns null when no badge
 // fits so callers can fall back to their emoji.
 const ACTIVITY_ART: [RegExp, string][] = [
+  [/float/i, "float-tank"],
+  [/massage/i, "massage"],
+  [/journal/i, "journaling"],
+  [/pilates/i, "pilates"],
   [/cold\s*plunge|ice\s*bath|cryo/i, "cold-plunge"],
   [/sauna|steam/i, "sauna"],
   [/fast/i, "fasting"],
-  [/meditat|breath|yoga\s*nidra|sound\s*bath|journal|mindful/i, "meditation"],
-  [/yoga|pilates/i, "yoga"],
-  [/stretch|mobility|foam|massage|chiro|cupping|acupunct/i, "stretching"],
+  [/meditat|breath|yoga\s*nidra|sound\s*bath|mindful/i, "meditation"],
+  [/yoga/i, "yoga"],
+  [/stretch|mobility|foam|chiro|cupping|acupunct/i, "stretching"],
   [/swim/i, "swimming"],
   [/bik|cycl|spin/i, "biking"],
   [/row/i, "rowing"],
