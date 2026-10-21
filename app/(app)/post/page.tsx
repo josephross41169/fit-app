@@ -293,7 +293,7 @@ type Exercise = { name: string; sets: string; reps: string; weight: string; weig
   group?: ExGroup;
 };
 type ExGroup = "lifting" | "abs" | "calisthenics";
-type WoSection = "lifting" | "cardio" | "abs" | "calisthenics" | "tag" | "save";
+type WoSection = "lifting" | "cardio" | "abs" | "calisthenics" | "tag";
 type Funnel = "home" | "workoutChoice" | "form";
 const exGroup = (ex: Exercise): ExGroup => ex.group || (ex.isCircuit ? "abs" : "lifting");
 
@@ -3446,7 +3446,6 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               : woSection === "abs" ? "🔥 Ab work"
               : woSection === "calisthenics" ? "🤸 Calisthenics"
               : woSection === "tag" ? "📍 Tag location / partner"
-              : woSection === "save" ? "💾 Save workout"
               : todayLogId ? "✏️ Add to workout" : "🆕 New workout"}
           </div>
         </div>
@@ -3457,7 +3456,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {woSection === null ? (() => {
               // ── NEW-WORKOUT HUB — the "boxes" screen. Each box opens its own
-              // logging panel; "Save workout" opens the final details + save.
+              // logging panel; "Save workout" saves right away.
               const lift = exercises.filter(e => exGroup(e) === "lifting");
               const abs = exercises.filter(e => exGroup(e) === "abs");
               const cali = exercises.filter(e => exGroup(e) === "calisthenics");
@@ -3507,11 +3506,11 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                     <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadPhoto(e, setWoPhoto)} />
                   </label>
                 )}
-                <button onClick={() => openWoSection("save")} className="funnel-box funnel-wide"
-                  style={{ border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)` }}>
-                  <span style={{ fontSize: 24 }}>💾</span>
-                  <span style={{ fontWeight: 900, fontSize: 17, color: "#fff" }}>Save workout</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>Add a name & notes, then save</span>
+                <SaveErrorBanner />
+                <PrivacyToggle />
+                <button onClick={handleSave} disabled={loading}
+                  style={{ width: "100%", padding: "18px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 17, cursor: loading ? "not-allowed" : "pointer" }}>
+                  {loading ? "Saving..." : "💾 Save workout & close"}
                 </button>
               </>);
             })() : (<>
@@ -4065,119 +4064,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               </div>
               </>)}
 
-              {woSection === "save" && (<>
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14 }}>💾 Workout details</div>
-                {/* Name — optional user label like "Push Day A" or "Morning 5K" */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    Workout Name <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
-                  </label>
-                  <input style={iStyle} placeholder={`e.g. ${includeLifting ? 'Push Day A' : includeCardio ? 'Morning 5K' : 'Give it a name'}`} value={woType} onChange={e => setWoType(e.target.value)} />
-                </div>
-                {/* Date — optional. Defaults to today. Bounded to the last 3
-                    calendar days so users can backfill recent missed workouts
-                    without being able to retroactively edit ancient history. */}
-                {(() => {
-                  const today = new Date();
-                  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  const todayStr = ymd(today);
-                  const min = new Date(today); min.setDate(today.getDate() - 3);
-                  const minStr = ymd(min);
-                  // Friendly chip — what does the chosen date look like in plain English?
-                  let chip = "";
-                  if (woDate) {
-                    const [y, mo, d] = woDate.split('-').map(Number);
-                    const picked = new Date(y, mo - 1, d);
-                    const yest = new Date(today); yest.setDate(today.getDate() - 1);
-                    if (woDate === todayStr) chip = "Today";
-                    else if (woDate === ymd(yest)) chip = "Yesterday";
-                    else {
-                      const days = Math.round((today.getTime() - picked.getTime()) / 86400000);
-                      chip = `${days} days ago · ${picked.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
-                    }
-                  }
-                  return (
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                        Date <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · log a late workout up to 3 days back)</span>
-                      </label>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <input
-                          type="date"
-                          min={minStr}
-                          max={todayStr}
-                          style={{ ...iStyle, flex: 1, minWidth: 160 }}
-                          value={woDate}
-                          onChange={e => setWoDate(e.target.value)}
-                        />
-                        {chip && (
-                          <span style={{ padding: "6px 12px", borderRadius: 999, background: woDate === todayStr ? `${C.green}33` : "#1F5F3F33", color: woDate === todayStr ? C.green : "#4A9D6E", fontWeight: 800, fontSize: 12 }}>
-                            {chip}
-                          </span>
-                        )}
-                        {woDate && (
-                          <button
-                            onClick={() => setWoDate("")}
-                            style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
-                            type="button"
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {/* Workout time — optional. If set, uses today's date at this
-                    time. Defaults to "now" when blank. Lets users log after
-                    the fact and still show the correct time on their card. */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: C.sub, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    Time <span style={{ color: C.sub, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional · defaults to now)</span>
-                  </label>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      type="time"
-                      style={{ ...iStyle, flex: 1 }}
-                      value={woTime}
-                      onChange={e => setWoTime(e.target.value)}
-                    />
-                    {woTime && (
-                      <button
-                        onClick={() => setWoTime("")}
-                        style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.greenMid}`, background: "transparent", color: C.sub, fontWeight: 800, fontSize: 12, cursor: "pointer" }}
-                        type="button"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div style={{ background: C.white, borderRadius: 22, padding: 20, border: `2px solid ${C.greenMid}` }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>📝 Notes</div>
-                <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>Shows on your activity card when you open this workout.</div>
-                <textarea rows={3} style={{ ...iStyle, resize: "none" }} placeholder="How did it feel? Any PRs?" value={woNotes} onChange={e => setWoNotes(e.target.value)} />
-                {/* Photo is added on the workout screen (the "Add photo" box above
-                    Save workout); show it here so the user sees what's saving. */}
-                {woPhoto && (
-                  <img src={woPhoto} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 14, display: "block", marginTop: 14 }} alt="" />
-                )}
-              </div>
-              <SaveErrorBanner />
-              <PrivacyToggle />
-              <button onClick={handleSave} disabled={loading} style={{ width: "100%", padding: "16px 0", borderRadius: 18, border: "none", background: loading ? C.greenMid : `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Saving..." : "💾 Save workout"}
+              <button onClick={() => { if (openEx !== null) closeExercise(); else setWoSection(null); }}
+                style={{ width: "100%", padding: "15px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+                {openEx !== null ? "✓ Done — back to exercises" : "✓ Done — back to workout"}
               </button>
-              </>)}
-
-              {woSection !== "save" && (
-                <button onClick={() => { if (openEx !== null) closeExercise(); else setWoSection(null); }}
-                  style={{ width: "100%", padding: "15px 0", borderRadius: 18, border: "none", background: `linear-gradient(135deg,${C.blue},#4A9D6E)`, color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
-                  {openEx !== null ? "✓ Done — back to exercises" : "✓ Done — back to workout"}
-                </button>
-              )}
             </>)}
             </div>
           )}
