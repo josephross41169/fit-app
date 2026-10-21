@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 import { compressImage } from "@/lib/compressImage";
-import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount } from "@/lib/badges";
+import { BADGES, isManualBadge, findManualBadgeFamily, getTierForCount, countEarlyNight } from "@/lib/badges";
 import { BadgeTile } from "@/components/BadgeTile";
 import { BadgeShowcase, BadgeDetailSheet } from "@/components/BadgeShowcase";
 import FollowButton from "@/components/FollowButton";
@@ -2713,6 +2713,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           // check expressed as filter (`tagged_user_ids.cs.{}` doesn't work for
           // "non-empty" — we use a server-side filter instead.)
           partnerWorkoutsResult,
+          workoutTimesResult,
         ] = await Promise.all([
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'running'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('log_type', 'workout').eq('workout_category', 'lifting'),
@@ -2762,6 +2763,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           // alone doesn't reject empty arrays, so we fetch the column and count
           // client-side. Cheap because tagged_user_ids is small.
           supabase.from('activity_logs').select('tagged_user_ids').eq('user_id', uid).eq('log_type', 'workout').not('tagged_user_ids', 'is', null),
+          // Workout times — for Early Bird / Night Owl progress.
+          supabase.from('activity_logs').select('logged_at').eq('user_id', uid).eq('log_type', 'workout').limit(1000),
         ]);
 
         // Compute strength PRs from exercises array. Each `weights` array entry
@@ -2813,6 +2816,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           (r: any) => Array.isArray(r.tagged_user_ids) && r.tagged_user_ids.length > 0
         ).length;
 
+        const earlyNight = countEarlyNight((((workoutTimesResult as any).data || []) as any[]).map((r: any) => r.logged_at));
+
         setBadgeCounters({
           runs: runs.count ?? 0,
           liftSessions: liftSessions.count ?? 0,
@@ -2851,6 +2856,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           totalLiftMax,
           fiveKCount,
           partnerWorkouts,
+          earlyBirdCount: earlyNight.early,
+          nightOwlCount: earlyNight.night,
         });
       } catch (e) {
         console.error('Failed to fetch badge counters:', e);

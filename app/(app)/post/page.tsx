@@ -12,7 +12,7 @@ import AIFoodScanner from "@/components/AIFoodScanner";
 import { EXERCISES } from "@/lib/exercises";
 import { syncGroupChallengeProgressFor, syncMemberChallengeProgressFor } from "@/lib/groupGoalSync";
 import { syncGroupBadgesForUser } from "@/lib/groupBadges";
-import { BADGES } from "@/lib/badges";
+import { BADGES, countEarlyNight } from "@/lib/badges";
 import { awardXp } from "@/lib/xp";
 import { swimDistance, estimateCardioCalories, type PoolUnit, type BodyMetrics } from "@/lib/calorieEstimate";
 
@@ -2419,11 +2419,26 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         } catch { /* non-fatal */ }
       }
 
-      // Early Bird — workouts before 7am (uses created_at hour)
-      // Approximation: count workouts where created_at hour is < 7.
-      // Postgres function call would be cleaner but we keep it client-side
-      // by fetching recent rows and filtering. For now a simple heuristic:
-      // skip this check — Early Bird stays manual until we add a counter.
+      // Early Bird (4–7am) and Night Owl (9pm–4am) — counted from each
+      // workout's logged time in the user's own timezone.
+      try {
+        const times: string[] = [];
+        for (let off = 0; off < 5000; off += 1000) {
+          const { data: page } = await supabase
+            .from('activity_logs')
+            .select('logged_at')
+            .eq('user_id', userId)
+            .eq('log_type', 'workout')
+            .order('logged_at', { ascending: true })
+            .range(off, off + 999);
+          if (!page?.length) break;
+          for (const r of page as any[]) times.push(r.logged_at);
+          if (page.length < 1000) break;
+        }
+        const { early, night } = countEarlyNight(times);
+        if (early > 0) await awardLadder('early-bird', early);
+        if (night > 0) await awardLadder('night-owl', night);
+      } catch { /* non-fatal */ }
 
       // ── Workout Partner ladder ───────────────────────────────────────────
       // Counts workouts where tagged_user_ids has at least one entry. The

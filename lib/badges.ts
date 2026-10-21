@@ -218,8 +218,11 @@ export const BADGES: Badge[] = [
   ...easyLadder({ prefix: "likes", emoji: "❤️", noun: "like received", nounPlural: "likes received", category: "social",
     tierNames: ["First Like", "Liked", "Crowd Pleaser", "Fan Favorite", "Hundred Hearts Strong", "Inspiration", "Idol", "Adored"] }),
 
-  ...easyLadder({ prefix: "early-bird", emoji: "🌅", noun: "pre-7am workout", nounPlural: "pre-7am workouts", category: "consistency",
+  ...easyLadder({ prefix: "early-bird", emoji: "🌅", noun: "workout before 7am", nounPlural: "workouts before 7am", category: "consistency",
     tierNames: ["Early Bird", "Up With the Sun", "Dawn Regular", "Sunrise Hunter", "Hundred Mornings Up", "First Light", "Day Earned", "Wakes the Sun"] }),
+
+  ...easyLadder({ prefix: "night-owl", emoji: "🦉", noun: "workout after 9pm", nounPlural: "workouts after 9pm", category: "consistency",
+    tierNames: ["Night Owl", "After Hours", "Moonlighter", "Midnight Regular", "Hundred Nights Out", "Graveyard Shift", "Nocturnal", "Owns the Night"] }),
 
   // ── Streak (different thresholds: 3/7/14/30/60/90/180/365) ──
   // Cohesive theme: time / weather / patience. Same vibe as Cold Plunge ladder.
@@ -467,7 +470,7 @@ export const EASY_LADDER_PREFIXES = [
   "infrared-sauna", "red-light", "massage", "float-tank",
   "journaling", "sunlight",
   "wellness", "nutrition", "fasting-12h", "posts",
-  "followers", "likes", "early-bird",
+  "followers", "likes", "early-bird", "night-owl",
   // Moved from hard ladder Apr 2026 — 5K is common, not a rare event
   "5k",
   // Workout Partner ladder — was missing here, which left every tier
@@ -479,6 +482,22 @@ export const EASY_LADDER_PREFIXES = [
   // on workout saves, so progression continues to work correctly.
   "partner",
 ];
+
+// Early Bird = a workout logged 4:00–6:59am; Night Owl = 9:00pm–3:59am.
+// Hours are the user's local time (the app runs in their timezone).
+export const isEarlyBirdHour = (h: number) => h >= 4 && h < 7;
+export const isNightOwlHour = (h: number) => h >= 21 || h < 4;
+export function countEarlyNight(loggedAt: (string | null | undefined)[]): { early: number; night: number } {
+  let early = 0, night = 0;
+  for (const ts of loggedAt) {
+    if (!ts) continue;
+    const h = new Date(ts).getHours();
+    if (isNaN(h)) continue;
+    if (isEarlyBirdHour(h)) early++;
+    else if (isNightOwlHour(h)) night++;
+  }
+  return { early, night };
+}
 
 export const EASY_LADDER_THRESHOLDS = [1, 5, 20, 50, 100, 200, 500, 1000];
 

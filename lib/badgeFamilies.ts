@@ -223,6 +223,7 @@ export const BADGE_FAMILIES: BadgeFamily[] = [
   { key: "workouts",     name: "Total Workouts",   category: "consistency", members: ["workouts-1","workouts-5","workouts-20","workouts-50","workouts-100","workouts-200","workouts-500","workouts-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "totalWorkouts" },
   { key: "streak",       name: "Streak",           category: "consistency", members: ["streak-3","streak-7","streak-14","streak-30","streak-60","streak-90","streak-180","streak-365"], thresholds: [3,7,14,30,60,90,180,365], counterSource: "currentStreak" },
   { key: "early-bird",   name: "Early Bird",       category: "consistency", members: ["early-bird-1","early-bird-5","early-bird-20","early-bird-50","early-bird-100","early-bird-200","early-bird-500","early-bird-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "earlyBirdCount" },
+  { key: "night-owl",    name: "Night Owl",        category: "consistency", members: ["night-owl-1","night-owl-5","night-owl-20","night-owl-50","night-owl-100","night-owl-200","night-owl-500","night-owl-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "nightOwlCount" },
 
   // SOCIAL
   { key: "posts",        name: "Posts",            category: "social",      members: ["posts-1","posts-5","posts-20","posts-50","posts-100","posts-200","posts-500","posts-1000"], thresholds: [1,5,20,50,100,200,500,1000], counterSource: "postCount" },
@@ -374,7 +375,8 @@ const PROGRESS_LABEL_BY_COUNTER: Record<string, string> = {
   sportsSessions: "games",
   likesReceived: "likes",
   commentsMade: "comments",
-  earlyBirdCount: "pre-7am",
+  earlyBirdCount: "before 7am",
+  nightOwlCount: "after 9pm",
   fiveKCount: "5Ks",
   // Workout Partner ladder — counts workouts where tagged_user_ids has length>=1
   partnerWorkouts: "partner workouts",
