@@ -456,9 +456,13 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
   const d = parseInt(parts[1]) || 1;
 
   // Load existing photo from DB on mount
+  const dayPhotoKey = [(day as any).photo_url, ...((day as any).photoUrls || []), ...((day as any).nutrition?.photoUrls || [])].filter(Boolean).join('|');
   useEffect(() => {
     const allPhotos: string[] = [];
     if ((day as any).photo_url) allPhotos.push((day as any).photo_url);
+    ((day as any).photoUrls || []).forEach((url: string) => {
+      if (url && !allPhotos.includes(url)) allPhotos.push(url);
+    });
     // Also load all nutrition photos
     const nutPhotos: string[] = ((day as any).nutrition?.photoUrls || []).filter(Boolean);
     nutPhotos.forEach((url: string) => {
@@ -486,7 +490,9 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
       if (!cancelled && alive.length !== allPhotos.length) setPhotos(alive);
     })();
     return () => { cancelled = true; };
-  }, []);
+  // Re-run when the day's photos change (e.g. the list refreshes after a new log).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayPhotoKey]);
 
   function onFiles(e:React.ChangeEvent<HTMLInputElement>) {
     Array.from(e.target.files??[]).forEach(f=>{
@@ -1008,7 +1014,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
           <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
             {photos.map((src,i)=>(
               <div key={i} style={{position:"relative",borderRadius:16,overflow:"hidden",border:`2px solid ${C.purpleMid}`}}>
-                <img onClick={()=>setLb(src)} src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{(e.target as HTMLImageElement).parentElement!.style.display='none'}}/>
+                <img onClick={()=>setLb(src)} src={ImagePresets.thumb(src)} loading="lazy" decoding="async" style={{width:108,height:108,objectFit:"cover",display:"block",cursor:"pointer"}} alt="" onError={e=>{const el=e.target as HTMLImageElement; if(!el.dataset.fallback && !src.startsWith('data:')){el.dataset.fallback='1'; el.src=src;} else {el.parentElement!.style.display='none';}}}/>
                 {editable && <button onClick={()=>setPhotos(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",fontSize:13,lineHeight:"22px",textAlign:"center",cursor:"pointer",padding:0}}>×</button>}
               </div>
             ))}
@@ -2345,6 +2351,10 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         _nutritionLogIds: nutritionLogs.map((l: any) => l.id),
         _wellnessLogIds: wellnessLogs.map((l: any) => l.id),
         photo_url: sortedWorkouts[0]?.photo_url || nutritionLogs[0]?.photo_url || wellnessLogs[0]?.photo_url || null,
+        // Every photo attached to any of the day's logs. A day can have several
+        // workouts (e.g. a synced walk + a class logged later); only reading the
+        // first one's photo hid photos added to the others.
+        photoUrls: Array.from(new Set([...sortedWorkouts, ...wellnessLogs].map((l: any) => l.photo_url).filter(Boolean))),
         _date: date.getTime(),
       };
     });

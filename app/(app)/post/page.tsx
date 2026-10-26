@@ -1750,6 +1750,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         let woPhotoUrl: string | null = null;
         if (woPhoto) {
           woPhotoUrl = await uploadPhoto(await compressImage(woPhoto), 'activity', `${user.id}/workout-${Date.now()}.jpg`);
+          // Don't silently save the workout without the photo the user added.
+          if (!woPhotoUrl) throw new Error("Your photo didn't upload. Tap Save again, or remove the photo to save without it.");
         }
         // Normalize exercises: ensure weights array is stored
         // and per-set reps (repsArr) is persisted alongside per-set weights.
