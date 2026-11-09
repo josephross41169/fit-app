@@ -23,7 +23,21 @@
 // is always false and fetches pass through unchanged — identical behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { fetchWithTimeout, NET_TIMEOUT_MS, NET_SLOW_TIMEOUT_MS } from './fetchTimeout';
+
 const API_BASE = 'https://liveleeapp.com';
+
+// Our own /api/* calls get a time limit (see lib/fetchTimeout.ts). Uploads,
+// AI and image generation routes get longer.
+const SLOW_API = /^\/api\/(upload|ai|ai-food-scan|share-card|fitbit-sync|image-proxy|group-photos)(\/|$|\?)/;
+const apiTimeoutFor = (input: RequestInfo | URL): number | null => {
+  try {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const path = new URL(url, window.location.href).pathname;
+    if (!path.startsWith('/api/')) return null;
+    return SLOW_API.test(path) ? NET_SLOW_TIMEOUT_MS : NET_TIMEOUT_MS;
+  } catch { return null; }
+};
 
 declare global {
   interface Window {
@@ -113,7 +127,7 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
     return originalFetch(input as RequestInfo, init);
   };
 
-  window.fetch = ((input: RequestInfo | URL, init0?: RequestInit) => {
+  const sendFetch = (input: RequestInfo | URL, init0?: RequestInit): Promise<Response> => {
     if (needsTokenWait(input)) {
       return (async () => {
         try {
@@ -124,6 +138,12 @@ if (typeof window !== 'undefined' && !window.__liveleeFetchShimInstalled) {
       })();
     }
     return shimmedFetch(input, init0);
+  };
+
+  window.fetch = ((input: RequestInfo | URL, init0?: RequestInit) => {
+    const limit = apiTimeoutFor(input);
+    if (limit) return fetchWithTimeout(sendFetch, input, init0, limit);
+    return sendFetch(input, init0);
   }) as typeof fetch;
 
   window.__liveleeFetchShimInstalled = true;

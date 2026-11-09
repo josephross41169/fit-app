@@ -19,6 +19,7 @@
 // push delivery; failures get logged but don't fail the event.
 
 import { createClient } from '@supabase/supabase-js';
+import { sendNativePushToUser } from './nativePushServer';
 // web-push handles VAPID JWT signing + the actual HTTPS POST to
 // each push service. Without it we'd be reimplementing RFC 8030.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -64,6 +65,13 @@ const adminClient = () => createClient(
  * Fire-and-forget: never throws, just logs failures.
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+  // App Store / Play Store devices (APNs / FCM) — independent of web push.
+  const native = sendNativePushToUser(adminClient(), userId, payload);
+  await sendWebPushToUser(userId, payload);
+  await native;
+}
+
+async function sendWebPushToUser(userId: string, payload: PushPayload): Promise<void> {
   configureOnce();
   if (!configured) return; // env vars missing — silently skip
 

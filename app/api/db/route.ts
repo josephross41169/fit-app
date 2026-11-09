@@ -303,7 +303,19 @@ async function handleGET(req: NextRequest) {
       // Private group + not a member → only the public "cover" (name, photo,
       // description, member count). Plus whether they already asked to join.
       const isOwnerViewer = !!viewerId && (groupData.created_by === viewerId || groupData.creator_id === viewerId);
-      const locked = !!groupData.is_private && !isMember && !isOwnerViewer;
+      // Someone with a pending invite can look around before deciding.
+      let invite: { id: string; invited_by: string | null; inviter_name: string } | null = null;
+      if (!isMember && !isOwnerViewer) {
+        const inviteeId = viewerId || await callerId(req);
+        if (inviteeId) {
+          try {
+            const { data: inv } = await admin.from('group_invites').select('id, inviter_id')
+              .eq('group_id', gid).eq('invitee_id', inviteeId).eq('status', 'pending').maybeSingle();
+            if (inv) invite = { id: inv.id, invited_by: inv.inviter_id, inviter_name: await userName(inv.inviter_id) };
+          } catch { /* table may not exist yet */ }
+        }
+      }
+      const locked = !!groupData.is_private && !isMember && !isOwnerViewer && !invite;
       let joinRequest: string | null = null;
       if (groupData.is_private && viewerId && !isMember) {
         try {
@@ -323,6 +335,7 @@ async function handleGET(req: NextRequest) {
         is_member: isMember,
         locked,
         join_request: joinRequest,
+        invite,
         joined_challenge_ids: joinedChallengeIds,
       });
     }
@@ -2605,6 +2618,100 @@ async function handlePOST(req: NextRequest) {
       if (!cid || !groupId) return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
       await admin.from('group_join_requests').delete().eq('group_id', groupId).eq('user_id', cid).eq('status', 'pending');
       return NextResponse.json({ ok: true });
+    }
+
+    // ── Group invites ─────────────────────────────────────────────────────
+    // Members invite people already on Livelee. Public groups: any member can
+    // invite. Private groups: owner/moderators only (an invite skips approval).
+    // Table: group_invites (group_id, inviter_id, invitee_id, status).
+    if (action === 'group_invite_candidates') {
+      const { groupId, q } = payload || {};
+      const cid = await callerId(req);
+      if (!cid || !groupId) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+      const role = await groupRoleOf(groupId, cid);
+      if (!role) return NextResponse.json({ error: 'Join the group to invite people.' }, { status: 403 });
+      const query = typeof q === 'string' ? q.trim().replace(/[%,()]/g, '').slice(0, 40) : '';
+      let users: any[] = [];
+      if (query.length >= 2) {
+        const { data } = await admin.from('users').select('id, username, full_name, avatar_url')
+          .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`).neq('id', cid).limit(25);
+        users = data || [];
+      } else {
+        // Default list: people you follow.
+        const { data: f } = await admin.from('follows').select('following_id').eq('follower_id', cid).limit(200);
+        const ids = (f || []).map((r: any) => r.following_id).filter((x: string) => x && x !== cid);
+        if (ids.length) {
+          const { data } = await admin.from('users').select('id, username, full_name, avatar_url').in('id', ids).limit(200);
+          users = data || [];
+        }
+      }
+      // Hide blocked users either way.
+      try {
+        const { data: blocks } = await admin.from('user_blocks').select('blocker_id, blocked_id')
+          .or(`blocker_id.eq.${cid},blocked_id.eq.${cid}`);
+        const hidden = new Set((blocks || []).map((b: any) => b.blocker_id === cid ? b.blocked_id : b.blocker_id));
+        users = users.filter(u => !hidden.has(u.id));
+      } catch { /* table may not exist */ }
+      const ids = users.map(u => u.id);
+      const [mem, inv] = ids.length ? await Promise.all([
+        admin.from('group_members').select('user_id').eq('group_id', groupId).in('user_id', ids),
+        admin.from('group_invites').select('invitee_id').eq('group_id', groupId).eq('status', 'pending').in('invitee_id', ids),
+      ]) : [{ data: [] }, { data: [] }] as any;
+      const memSet = new Set((mem.data || []).map((r: any) => r.user_id));
+      const invSet = new Set((inv.data || []).map((r: any) => r.invitee_id));
+      const out = users.map(u => ({ ...u, status: memSet.has(u.id) ? 'member' : invSet.has(u.id) ? 'invited' : 'none' }))
+        .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || ''));
+      return NextResponse.json({ users: out, canInvite: !(await admin.from('groups').select('is_private').eq('id', groupId).maybeSingle()).data?.is_private || isGroupStaff(role) });
+    }
+
+    if (action === 'invite_to_group') {
+      const { groupId, inviteeId } = payload || {};
+      const cid = await callerId(req);
+      if (!cid || !groupId || !inviteeId) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+      const { data: g } = await admin.from('groups').select('id, name, is_private').eq('id', groupId).maybeSingle();
+      if (!g) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+      const role = await groupRoleOf(groupId, cid);
+      if (!role || (g.is_private && !isGroupStaff(role))) {
+        return NextResponse.json({ error: g.is_private ? 'Only the owner or moderators can invite to a private group.' : 'Join the group to invite people.' }, { status: 403 });
+      }
+      if (await groupRoleOf(groupId, inviteeId)) return NextResponse.json({ status: 'member' });
+      const { data: blocked } = await admin.from('user_blocks').select('blocker_id')
+        .or(`and(blocker_id.eq.${cid},blocked_id.eq.${inviteeId}),and(blocker_id.eq.${inviteeId},blocked_id.eq.${cid})`).limit(1);
+      if (blocked && blocked.length) return NextResponse.json({ error: 'Cannot invite this user' }, { status: 403 });
+      const { error } = await admin.from('group_invites').upsert(
+        { group_id: groupId, inviter_id: cid, invitee_id: inviteeId, status: 'pending', created_at: new Date().toISOString() },
+        { onConflict: 'group_id,invitee_id' },
+      );
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const name = await userName(cid);
+      try {
+        await admin.from('notifications').insert({
+          user_id: inviteeId, from_user_id: cid, type: 'group_invite', reference_id: groupId,
+          body: `${name} invited you to join ${g.name}`, read: false,
+        });
+      } catch { /* non-fatal */ }
+      sendPushToUser(inviteeId, { title: g.name, body: `${name} invited you to join the group 💪`, url: `/groups/${groupId}`, tag: `group-invite:${groupId}` });
+      return NextResponse.json({ status: 'invited' });
+    }
+
+    if (action === 'respond_group_invite') {
+      const { groupId, accept } = payload || {};
+      const cid = await callerId(req);
+      if (!cid || !groupId) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+      const { data: inv } = await admin.from('group_invites').select('id, inviter_id')
+        .eq('group_id', groupId).eq('invitee_id', cid).eq('status', 'pending').maybeSingle();
+      if (!inv) return NextResponse.json({ error: 'This invite is no longer available.' }, { status: 404 });
+      if (!accept) {
+        await admin.from('group_invites').update({ status: 'declined' }).eq('id', inv.id);
+        return NextResponse.json({ status: 'declined' });
+      }
+      const r = await addGroupMember(groupId, cid);
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
+      await admin.from('group_invites').update({ status: 'accepted' }).eq('id', inv.id);
+      // Clear any open join request now that they're in.
+      try { await admin.from('group_join_requests').update({ status: 'approved' }).eq('group_id', groupId).eq('user_id', cid).eq('status', 'pending'); } catch {}
+      await logGroupEvent(groupId, 'member_joined', cid, cid, `${await userName(cid)} joined the group (invited by ${await userName(inv.inviter_id)})`);
+      return NextResponse.json({ status: 'member' });
     }
 
     // ── Group inbox (owner / moderators): pending requests + group activity ──

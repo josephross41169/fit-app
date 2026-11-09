@@ -3,6 +3,7 @@
 import './mobileFetchShim'
 
 import { createClient } from '@supabase/supabase-js'
+import { fetchWithTimeout, NET_TIMEOUT_MS, NET_SLOW_TIMEOUT_MS } from './fetchTimeout'
 import type { Database } from './database.types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
@@ -215,7 +216,19 @@ const authStorage: AnyStorage | undefined = (() => {
   return isNativeShell ? buildNativeStorage() : buildWebStorage();
 })();
 
+// Every Supabase request (database, auth, storage) gets a time limit so a hung
+// request can't leave a screen on "Saving…"/"Loading…" forever. File uploads
+// get longer. Calls window.fetch at request time so the mobile shim applies.
+const supabaseFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  if (typeof window === 'undefined') return fetch(input, init);
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+  const isUpload = url.includes('/storage/v1/object') && method !== 'GET' && method !== 'HEAD';
+  return fetchWithTimeout((i, o) => window.fetch(i, o), input, init, isUpload ? NET_SLOW_TIMEOUT_MS : NET_TIMEOUT_MS);
+};
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: supabaseFetch },
   auth: {
     persistSession: true,
     autoRefreshToken: true,

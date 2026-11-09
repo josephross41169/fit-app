@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useShellParams } from "@/lib/shellRoutes";
 import Link from "next/link";
+import GroupInviteSheet from "@/components/GroupInviteSheet";
 import { supabase } from "@/lib/supabase";
 import { TRACKED_METRICS, metricsByCategory } from "@/lib/trackedMetrics";
 import { compressImage } from "@/lib/compressImage";
@@ -689,6 +690,11 @@ export default function GroupPage() {
   const [isMemberDB, setIsMemberDB] = useState(false);
   // Private groups
   const [serverLocked, setServerLocked] = useState(false);
+  // Pending invite for the viewer ({ inviter_name }) — lets them preview the
+  // group and shows Join / Decline. inviteOpen = the "Invite" sheet.
+  const [groupInvite, setGroupInvite] = useState<{ id: string; inviter_name: string } | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [joinRequest, setJoinRequest] = useState<string | null>(null);
   // Group inbox (owner / moderators)
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -883,6 +889,7 @@ export default function GroupPage() {
       if (data.group) {
         setServerLocked(!!data.locked);
         setJoinRequest(data.join_request || null);
+        setGroupInvite(data.invite || null);
         setDbGroup(data.group);
         setDbPosts(data.posts || []);
         // Hydrate highlights array. Newer schemas have a `highlights` jsonb
@@ -1222,7 +1229,21 @@ export default function GroupPage() {
   const isOwnerOrMod = group._isOwner || isOwnerDB || isModDB;
   const isPrivateGroup = !!(dbGroup as any)?.is_private;
   // Private + not a member (and not staff) → only the cover and About show.
-  const locked = isPrivateGroup && !isMemberDB && !isOwnerOrMod && (serverLocked || !joined);
+  const locked = isPrivateGroup && !isMemberDB && !isOwnerOrMod && !groupInvite && (serverLocked || !joined);
+  const isAnyMember = !!(isMemberDB || isOwnerDB || isModDB);
+  // Private groups: only owner/mods can invite (an invite skips approval).
+  const canInvite = !!(dbGroup as any)?.id && (isPrivateGroup ? isOwnerOrMod : isAnyMember);
+  const respondInvite = async (accept: boolean) => {
+    if (!(dbGroup as any)?.id || inviteBusy) return;
+    setInviteBusy(true);
+    try {
+      const r = await groupApi("respond_group_invite", { groupId: (dbGroup as any).id, accept });
+      if (r.error) { alert(r.error); return; }
+      setGroupInvite(null);
+      if (accept) { setJoined(true); setIsMemberDB(true); }
+      loadGroupData();
+    } finally { setInviteBusy(false); }
+  };
   const loadInbox = async () => {
     if (!(dbGroup as any)?.id) return;
     const r = await groupApi("get_group_inbox", { groupId: (dbGroup as any).id });
@@ -2846,6 +2867,23 @@ export default function GroupPage() {
         {/* ══ LEFT: Main content ══ */}
         <div className="groups-left" style={{ flex:1, minWidth:0 }}>
 
+          {/* Invited: preview the group, then Join or Decline */}
+          {groupInvite && !isAnyMember && (
+            <div style={{ border:"1.5px solid #4A9D6E", background:"linear-gradient(135deg,#12291D,#111811)", borderRadius:16, padding:14, marginBottom:18 }}>
+              <div style={{ fontWeight:900, fontSize:15, color:"#F0F0F0" }}>{groupInvite.inviter_name} invited you to join</div>
+              <div style={{ fontSize:13, color:"#9CA3AF", fontWeight:700, marginTop:2 }}>Look around first, then decide.</div>
+              <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+                <button onClick={() => respondInvite(true)} disabled={inviteBusy} style={{ flex:1, minWidth:110, padding:"11px 14px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#1F5F3F,#4A9D6E)", color:"#fff", fontWeight:900, fontSize:14, cursor:"pointer", opacity:inviteBusy?0.7:1 }}>Join group</button>
+                <button onClick={() => document.getElementById("group-preview")?.scrollIntoView({ behavior:"smooth", block:"start" })} style={{ flex:1, minWidth:110, padding:"11px 14px", borderRadius:12, border:"1.5px solid #1B231E", background:"#111", color:"#F0F0F0", fontWeight:800, fontSize:14, cursor:"pointer" }}>👀 View group</button>
+                <button onClick={() => respondInvite(false)} disabled={inviteBusy} style={{ padding:"11px 14px", borderRadius:12, border:"1.5px solid #1B231E", background:"transparent", color:"#9CA3AF", fontWeight:800, fontSize:14, cursor:"pointer" }}>Decline</button>
+              </div>
+            </div>
+          )}
+          <div id="group-preview" />
+
+          {inviteOpen && (dbGroup as any)?.id && (
+            <GroupInviteSheet groupId={(dbGroup as any).id} groupName={group?.name || "group"} onClose={() => setInviteOpen(false)} onShareLink={shareGroup} />
+          )}
           {!(tab === "challenges" || tab === "war") && (<>
           {/* Action buttons */}
           <div className="groups-action-bar" style={{ display:"flex", gap:12, marginBottom:20 }}>
@@ -2855,6 +2893,11 @@ export default function GroupPage() {
             <button onClick={shareGroup} style={{ padding:"12px 22px", borderRadius:13, background:shareCopied ? `rgba(124,58,237,0.1)` : C.white, border:`2px solid ${shareCopied ? "#1F5F3F" : C.blueMid}`, color:shareCopied ? "#4A9D6E" : C.sub, fontWeight:700, fontSize:14, cursor:"pointer", transition:"all 0.2s" }}>
               {shareCopied ? "✓ Copied!" : "Share"}
             </button>
+            {canInvite && (
+              <button onClick={() => setInviteOpen(true)} style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid #1F5F3F`, color:"#4A9D6E", fontWeight:800, fontSize:14, cursor:"pointer" }}>
+                ＋ Invite
+              </button>
+            )}
             {isOwnerOrMod && dbGroup && !editing && (
               <button onClick={startEditing} style={{ padding:"12px 22px", borderRadius:13, background:C.white, border:`2px solid #1F5F3F`, color:"#4A9D6E", fontWeight:800, fontSize:14, cursor:"pointer" }}>
                 ✏️ Edit Group

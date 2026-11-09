@@ -1,4 +1,5 @@
 "use client";
+import { fmtTimedSec } from "@/lib/timedFormat";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -1233,12 +1234,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                     <div key={key}>
                       {exList.length > 0 && (
                         <div style={{background:"#0E1311",border:`1px solid ${C.purpleMid}`,borderRadius:14,padding:"12px 14px"}}>
-                        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>
-                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8}}>Exercise</span>
-                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"center"}}>Sets</span>
-                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"center"}}>Reps</span>
-                          <span style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,textAlign:"right"}}>Weight</span>
-                        </div>
+                        <div style={{fontSize:11,fontWeight:800,color:C.sub,textTransform:"uppercase",letterSpacing:0.8,paddingBottom:8,marginBottom:4,borderBottom:`1.5px solid ${C.purpleMid}`}}>Exercises</div>
                         {exList.map((ex: any, i: number) => {
                           // Ab/finisher circuit: render as a single labeled block
                           // (name · X min, plus any listed moves) instead of the
@@ -1281,16 +1277,23 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                           const rArr: string[] = savedReps.length > 1
                             ? ex.repsArr
                             : Array(Math.max(1, setCount)).fill(String(ex.reps ?? ''));
-                          const repsDisplay = rArr.length > 1
-                            ? rArr.join(' / ')
-                            : (rArr[0] || String(ex.reps ?? '') || '—');
+                          const shownReps = ex.timed ? rArr.map((r: any) => fmtTimedSec(r)) : rArr;
+                          const repsDisplay = shownReps.length > 1
+                            ? shownReps.join(' / ')
+                            : (shownReps[0] || String(ex.reps ?? '') || '—');
+                          // Name gets its own full-width line (wraps between words,
+                          // never mid-word); sets/reps/weight sit underneath with
+                          // small labels, so long names stay readable on phones.
+                          const statLbl = {fontSize:9,fontWeight:800,color:C.sub,textTransform:"uppercase" as const,letterSpacing:0.8,marginBottom:2};
                           return (
                             <div key={i}>
-                              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 32px 72px 92px",gap:10,alignItems:"start",padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
-                                <span style={{fontSize:13,fontWeight:600,color:C.text,overflowWrap:"anywhere",wordBreak:"break-word",lineHeight:1.3}}>{ex.name}</span>
-                                <span style={{fontSize:14,fontWeight:900,color:"#4A9D6E",textAlign:"center"}}>{ex.sets}</span>
-                                <span style={{fontSize:11,fontWeight:800,color:"#4A9D6E",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{repsDisplay}</span>
-                                <span style={{fontSize:11,fontWeight:800,color:C.gold,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{weightDisplay}</span>
+                              <div style={{padding:"10px 10px",borderRadius:10,background:i%2===0?`${C.purpleMid}55`:"transparent"}}>
+                                <div style={{fontSize:14,fontWeight:700,color:C.text,overflowWrap:"break-word",lineHeight:1.3,marginBottom:6}}>{ex.name}</div>
+                                <div style={{display:"grid",gridTemplateColumns:"44px minmax(0,1fr) minmax(0,1.2fr)",gap:10,alignItems:"start"}}>
+                                  <div><div style={statLbl}>Sets</div><div style={{fontSize:14,fontWeight:900,color:"#4A9D6E"}}>{ex.sets}</div></div>
+                                  <div><div style={statLbl}>{ex.timed ? 'Time' : 'Reps'}</div><div style={{fontSize:12,fontWeight:800,color:"#4A9D6E",overflowWrap:"break-word"}}>{repsDisplay}</div></div>
+                                  <div style={{textAlign:"right"}}><div style={statLbl}>Weight</div><div style={{fontSize:12,fontWeight:800,color:C.gold,overflowWrap:"break-word"}}>{weightDisplay}</div></div>
+                                </div>
                               </div>
                               {ex.notes && String(ex.notes).trim().length > 0 && (
                                 <div style={{fontSize:12,color:C.sub,padding:"2px 8px 8px",lineHeight:1.4,whiteSpace:"pre-wrap"}}>📝 {ex.notes}</div>
@@ -2403,15 +2406,20 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     try {
-      const { data } = await supabase
+      const cols = 'id, log_type, logged_at, created_at, exercises, cardio, workout_category, workout_duration_min, wellness_type, wellness_duration_min';
+      const run = (select: string) => supabase
         .from('activity_logs')
-        .select('id, log_type, logged_at, created_at, exercises, cardio, workout_category, workout_duration_min, wellness_type, wellness_duration_min')
+        .select(select)
         .eq('user_id', viewUserId)
         .in('log_type', ['workout', 'wellness'])
         .gte('logged_at', start.toISOString())
         .order('logged_at', { ascending: false })
         .limit(1000);
-      setMonthLogs(data || []);
+      // muscle_groups = groups picked on "What are you training today?".
+      // Fall back to the old columns if that column hasn't been added yet.
+      let { data, error } = await run(cols + ', muscle_groups');
+      if (error) ({ data } = await run(cols));
+      setMonthLogs((data as any[]) || []);
     } catch (e) {
       console.warn('Failed to load month logs:', e);
     }

@@ -188,17 +188,27 @@ export function monthActivitySummary(logs: any[], now: Date = new Date()) {
     const cur = cardio.get(label) || { count: 0, minutes: 0, miles: 0 };
     cur.count += 1; cur.minutes += mins; cur.miles += miles; cardio.set(label, cur);
   };
+  // Muscle groups trained per calendar day. Uses the groups picked on the Post
+  // page ("What are you training today?") when the workout has them; older
+  // workouts fall back to their exercises' categories. Either way a group
+  // counts once per day — 5 chest exercises on one day is "Chest 1".
+  const dayGroups = new Map<string, Set<string>>();
   workouts.forEach((w: any) => {
     const exs = (w.exercises || []).filter((e: any) => e?.name);
-    if (exs.length) {
+    const picked: string[] = Array.isArray(w.muscle_groups) ? w.muscle_groups.filter(Boolean) : [];
+    if (exs.length || picked.length) {
       liftSessions += 1;
-      const hit = new Set<string>();
+      const hit = new Set<string>(picked);
       exs.forEach((e: any) => {
         sets += parseInt(e.sets) || 0;
+        if (picked.length) return;
         const c = categoryForExercise(e.name);
         if (c && c !== "Cardio") hit.add(c);
       });
-      hit.forEach(c => groupCounts.set(c, (groupCounts.get(c) || 0) + 1));
+      const day = new Date(w.logged_at || w.created_at).toDateString();
+      const set = dayGroups.get(day) || new Set<string>();
+      hit.forEach(c => set.add(c));
+      dayGroups.set(day, set);
     }
     minutes += Number(w.workout_duration_min) || 0;
     const cs = (w.cardio || []).filter(Boolean);
@@ -215,6 +225,8 @@ export function monthActivitySummary(logs: any[], now: Date = new Date()) {
       addCardio(prettyCat(String(w.workout_category)), Number(w.workout_duration_min) || 0, 0);
     }
   });
+
+  dayGroups.forEach(set => set.forEach(c => groupCounts.set(c, (groupCounts.get(c) || 0) + 1)));
 
   const wellness = new Map<string, { count: number; minutes: number }>();
   wellnessLogs.forEach((l: any) => {

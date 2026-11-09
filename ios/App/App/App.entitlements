@@ -22,6 +22,10 @@
 	                                              trigger extra App Review
 	                                              scrutiny.
 	     ───────────────────────────────────────────────────────────────── -->
+	<!-- Push notifications (APNs). Xcode switches this to "production"
+	     automatically for TestFlight / App Store builds. -->
+	<key>aps-environment</key>
+	<string>development</string>
 	<key>com.apple.developer.healthkit</key>
 	<true/>
 	<key>com.apple.developer.healthkit.access</key>

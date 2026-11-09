@@ -331,6 +331,14 @@ function NotifRow({ notif: n }: { notif: Notif }) {
         <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.purple, flexShrink: 0 }} />
       )}
 
+      {/* Group invite — open the group to look around, then Join / Decline there */}
+      {n.type === "group_invite" && n.target_id && (
+        <a href={`/groups/${encodeURIComponent(n.target_id)}`} onClick={e => e.stopPropagation()}
+          style={{ flexShrink: 0, fontSize: 12, fontWeight: 800, padding: "6px 12px", borderRadius: 999, border: "1.5px solid #4A9D6E", background: "#1F5F3F", color: "#fff", textDecoration: "none" }}>
+          View group
+        </a>
+      )}
+
       {/* Follow back — real button (shows "Following ✓" if you already do) */}
       {n.type === "follow" && n.actor_id && (
         <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0 }}>

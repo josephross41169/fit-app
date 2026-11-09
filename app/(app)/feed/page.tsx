@@ -1,4 +1,5 @@
 "use client";
+import { fmtTimedSec } from "@/lib/timedFormat";
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import PostCaption from "@/components/PostCaption";
 import LiveleeLogo from "@/components/LiveleeLogo";
@@ -791,7 +792,7 @@ function SideWorkout({ workout }: { workout: NonNullable<Post["workout"]> }) {
               const rArr: string[] = savedReps.length > 1 ? (ex.repsArr as string[]) : Array(Math.max(1, setCount)).fill(String(ex.reps ?? ''));
               // Timed exercises store seconds in the reps slots: 45 → "45s",
               // 90 → "1:30" so a plank never reads like a 90-rep set.
-              const fmtT = (v: string) => { const n = parseInt(v); if (!n || isNaN(n)) return v || '—'; return n < 60 ? `${n}s` : `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`; };
+              const fmtT = (v: string) => fmtTimedSec(v);
               const shown = ex.timed ? rArr.map(fmtT) : rArr;
               const repsDisplay = shown.length > 1 ? shown.join(' / ') : (shown[0] || (ex.timed ? fmtT(String(ex.reps ?? '')) : String(ex.reps ?? '')) || '—');
               return (

@@ -4,6 +4,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import BottomNav from "@/components/BottomNav";
 import MessagesFAB from "@/components/MessagesFAB";
+import NetworkTimeoutBanner from "@/components/NetworkTimeoutBanner";
+import NativePushInit from "@/components/NativePushInit";
 import { isBusinessAccount } from "@/lib/businessTypes";
 
 // Routes business accounts should never visit. Centralized here so the
@@ -96,6 +98,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             }
           }
         `}</style>
+        <NetworkTimeoutBanner />
+        <NativePushInit />
         {children}
       </main>
     </div>

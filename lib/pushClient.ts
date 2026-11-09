@@ -58,7 +58,20 @@ export type PushStatus =
 
 /** Synchronous check used by the settings toggle to render the right
  *  button state before kicking off any registration. */
+function isNativeApp(): boolean {
+  try { return !!(window as any).Capacitor?.isNativePlatform?.(); } catch { return false; }
+}
+
 export async function getPushStatus(): Promise<PushStatus> {
+  // App Store / Play Store build: native notifications (lib/nativePushClient.ts).
+  if (isNativeApp()) {
+    const m = await import('./nativePushClient');
+    if (!m.nativePushAvailable()) return 'unsupported';
+    let off = false; try { off = localStorage.getItem('livelee_native_push_off') === '1'; } catch {}
+    const perm = await m.nativePushPermission();
+    if (perm === 'denied') return 'denied';
+    return perm === 'granted' && !off ? 'subscribed' : 'unsubscribed';
+  }
   if (!pushSupported()) return 'unsupported';
   if (!pushAvailableOnThisDevice()) return 'needs-install';
   if (Notification.permission === 'denied') return 'denied';
@@ -92,6 +105,13 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
  *  permission → subscribe → POST to server. Throws on failure with
  *  a human-readable message so the caller can show an alert. */
 export async function enablePush(userId: string): Promise<void> {
+  if (isNativeApp()) {
+    const m = await import('./nativePushClient');
+    try { localStorage.removeItem('livelee_native_push_off'); } catch {}
+    const perm = await m.registerNativePush(userId, (url) => { window.location.href = url; }, true);
+    if (perm !== 'granted') throw new Error('Notifications are turned off for Livelee. Turn them on in your phone\'s Settings → Livelee → Notifications.');
+    return;
+  }
   if (!pushSupported()) throw new Error('This browser does not support push notifications.');
   if (!pushAvailableOnThisDevice()) {
     throw new Error(
@@ -154,6 +174,12 @@ export async function enablePush(userId: string): Promise<void> {
 
 /** Opt out. Unsubscribes locally + tells server to drop the row. */
 export async function disablePush(userId: string): Promise<void> {
+  if (isNativeApp()) {
+    try { localStorage.setItem('livelee_native_push_off', '1'); } catch {}
+    const m = await import('./nativePushClient');
+    await m.unregisterNativePush(userId);
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = reg ? await reg.pushManager.getSubscription() : null;

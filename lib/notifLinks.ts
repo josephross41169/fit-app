@@ -40,6 +40,7 @@ export async function notifHref(n: any, myId?: string | null): Promise<string | 
         return ref ? `/events/${encodeURIComponent(ref)}` : "/events";
       case "group_join_request":
       case "group_approved":
+      case "group_invite":
         return ref ? `/groups/${encodeURIComponent(ref)}` : "/connect";
       case "challenge_join":
         return "/challenges";

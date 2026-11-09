@@ -4,6 +4,7 @@
 // from the members' PUBLIC activity_logs (last 14 days). Tapping a box opens
 // the full daily card; "See more" opens that member's other days.
 // ─────────────────────────────────────────────────────────────────────────────
+import { fmtTimedSec } from "@/lib/timedFormat";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -46,7 +47,7 @@ function setsLine(ex: any): string {
   const parts = Array.from({ length: n }, (_, k) => {
     const r = String(reps[k] || ex?.reps || "").trim(); const w = String((ws.length ? ws[k] : ex?.weight) || "").trim();
     if (!r) return "";
-    if (ex?.timed) return `${r}s`;
+    if (ex?.timed) return ex?.bodyweight || !w ? fmtTimedSec(r) : `${fmtTimedSec(r)}×${w}`;
     return ex?.bodyweight || !w ? r : `${r}×${w}`;
   }).filter(Boolean);
   return parts.length ? parts.join(" · ") : `${n} sets`;

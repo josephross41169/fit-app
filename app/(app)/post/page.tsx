@@ -1,4 +1,6 @@
 "use client";
+import { fmtTimedSec, splitTimedSec, joinTimedSec } from "@/lib/timedFormat";
+import { friendlyNetError } from "@/lib/fetchTimeout";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -294,7 +296,23 @@ type Exercise = { name: string; sets: string; reps: string; weight: string; weig
 };
 type ExGroup = "lifting" | "abs" | "calisthenics";
 type WoSection = "lifting" | "cardio" | "abs" | "calisthenics" | "tag";
-type Funnel = "home" | "workoutChoice" | "form";
+type Funnel = "home" | "workoutChoice" | "muscles" | "form";
+
+// "What are you training today?" — the muscle groups a workout targets.
+// Saved on the workout (activity_logs.muscle_groups) and counted once per day
+// by the profile Activity stats, instead of once per exercise.
+const MUSCLE_GROUPS: { k: string; e: string }[] = [
+  { k: "Chest", e: "🏋️" }, { k: "Back", e: "🧗" }, { k: "Shoulders", e: "🏔️" },
+  { k: "Biceps", e: "💪" }, { k: "Triceps", e: "🦾" }, { k: "Legs", e: "🦵" },
+  { k: "Glutes", e: "🍑" }, { k: "Core", e: "🔥" }, { k: "Full Body", e: "⚡" },
+];
+const MUSCLE_QUICK_PICKS: { label: string; groups: string[] }[] = [
+  { label: "Push day", groups: ["Chest", "Shoulders", "Triceps"] },
+  { label: "Pull day", groups: ["Back", "Biceps"] },
+  { label: "Leg day", groups: ["Legs", "Glutes"] },
+  { label: "Upper", groups: ["Chest", "Back", "Shoulders", "Biceps", "Triceps"] },
+  { label: "Lower", groups: ["Legs", "Glutes", "Core"] },
+];
 const exGroup = (ex: Exercise): ExGroup => ex.group || (ex.isCircuit ? "abs" : "lifting");
 
 function newCircuit(): Exercise {
@@ -655,6 +673,8 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
   // ── Box-funnel navigation ──
   // home → (Workout → workoutChoice → hub/sections) | Meal | Wellness | Post.
   const [funnel, setFunnel] = useState<Funnel>("home");
+  const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
+  const [lastMuscles, setLastMuscles] = useState<string[] | null>(null);
   const [woSection, setWoSection] = useState<WoSection | null>(null);
   const [addPickOpen, setAddPickOpen] = useState(false);
   // Apple Health sync from the workout screen (iPhone app only).
@@ -1884,6 +1904,9 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
           ...taggedBusinesses.map(b => b.id),
         ]));
         const insertWorkoutRow: any = { ...base, log_type: 'workout', ...workoutPayload };
+        // Muscle groups picked on "What are you training today?". When adding
+        // onto an existing workout without picking any, keep what it had.
+        if (muscleGroups.length > 0) insertWorkoutRow.muscle_groups = muscleGroups;
         if (taggedIds.length > 0) insertWorkoutRow.tagged_user_ids = taggedIds;
         // Adding to an existing workout without a new photo: keep its old photo.
         if (todayLogId && !woPhotoUrl) delete insertWorkoutRow.photo_url;
@@ -1893,6 +1916,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
           // creating a second log for the same day. Adds the new exercises/
           // cardio onto the workout the user already posted.
           res = await (supabase as any).from('activity_logs').update(insertWorkoutRow).eq('id', todayLogId).select('id').single();
+          if (res.error && /muscle_groups/i.test(res.error.message || '')) {
+            delete insertWorkoutRow.muscle_groups;
+            res = await (supabase as any).from('activity_logs').update(insertWorkoutRow).eq('id', todayLogId).select('id').single();
+          }
           if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
             delete insertWorkoutRow.tagged_user_ids;
             res = await (supabase as any).from('activity_logs').update(insertWorkoutRow).eq('id', todayLogId).select('id').single();
@@ -1900,6 +1927,10 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
         } else {
           res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
           // Graceful fallback if the migration hasn't been run yet
+          if (res.error && /muscle_groups/i.test(res.error.message || '')) {
+            delete insertWorkoutRow.muscle_groups;
+            res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
+          }
           if (res.error && /tagged_user_ids/i.test(res.error.message || '')) {
             delete insertWorkoutRow.tagged_user_ids;
             res = await supabase.from('activity_logs').insert(insertWorkoutRow).select('id').single();
@@ -2057,7 +2088,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
     setLoading(false);
     if (error) {
       submittingRef.current = false;
-      setSaveError(error.message || "Something went wrong. Please try again.");
+      setSaveError(friendlyNetError(error.message) || "Something went wrong. Please try again.");
     } else {
       // The log itself is now saved. Flip to the success screen immediately so
       // the user is NOT held on the spinner while the (currently overloaded) DB
@@ -3038,8 +3069,24 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
     setOtherTypeDuration(""); setOtherTypeDurationSec("");
     setWoPhoto(null); setWorkoutTaggedUsers([]); setTaggedBusinesses([]);
     setLoadedPlanLabel(null);
-    setMainMode("log"); setLogTab("workout"); setWoSection(null); setFunnel("form");
+    setMuscleGroups([]);
+    setMainMode("log"); setLogTab("workout"); setWoSection(null); setFunnel("muscles");
     if (typeof window !== "undefined") window.scrollTo(0, 0);
+    loadLastMuscles();
+  }
+  // "Last time: Back + Biceps" hint on the muscle-group screen.
+  async function loadLastMuscles() {
+    if (!user) return;
+    try {
+      const { data, error } = await (supabase as any).from('activity_logs')
+        .select('muscle_groups')
+        .eq('user_id', user.id).eq('log_type', 'workout')
+        .not('muscle_groups', 'is', null)
+        .order('logged_at', { ascending: false }).limit(1);
+      if (error) return; // column not added yet — just hide the hint
+      const g = data?.[0]?.muscle_groups;
+      setLastMuscles(Array.isArray(g) && g.length ? g : null);
+    } catch { /* hint is optional */ }
   }
   async function openAddPicker() {
     setAddPickOpen(true);
@@ -3110,7 +3157,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
       const r = (reps[k] || ex.reps || "").trim();
       const w = ((ex.weights && ex.weights.length ? ex.weights[k] : ex.weight) || "").trim();
       if (!r) return "";
-      if (ex.timed) return `${r}s`;
+      if (ex.timed) return ex.bodyweight || !w ? fmtTimedSec(r) : `${fmtTimedSec(r)}×${w}`;
       return ex.bodyweight || !w ? r : `${r}×${w}`;
     }).filter(Boolean);
     return { top: `${n} set${n === 1 ? "" : "s"}`, bottom: parts.join(" · ") || "Tap to log" };
@@ -3435,13 +3482,51 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
               </div>
             )}
           </div>
+        ) : funnel === "muscles" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button onClick={() => setFunnel("workoutChoice")} style={{ background: "none", border: "none", color: "#4A9D6E", fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>‹ Back</button>
+              <button onClick={() => { setMuscleGroups([]); setFunnel("form"); }} style={{ background: "none", border: "none", color: "#4A9D6E", fontWeight: 800, fontSize: 15, cursor: "pointer", padding: "6px 0" }}>Skip</button>
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 24, color: C.text, lineHeight: 1.2, margin: "0 2px" }}>What are you training today? 💪</div>
+              <div style={{ fontSize: 13, color: C.sub, fontWeight: 700, margin: "6px 2px 0" }}>Pick everything you&apos;re hitting. This is what your profile stats count.</div>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: C.sub, textTransform: "uppercase", marginTop: 4 }}>Muscle groups</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+              {MUSCLE_GROUPS.map(g => {
+                const on = muscleGroups.includes(g.k);
+                return (
+                  <button key={g.k} onClick={() => setMuscleGroups(m => on ? m.filter(x => x !== g.k) : [...m, g.k])}
+                    style={{ padding: "14px 6px", borderRadius: 14, border: `1.5px solid ${on ? "#4A9D6E" : C.greenMid}`, background: on ? C.blue : "#111", color: on ? "#fff" : C.text, fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 20 }} aria-hidden="true">{g.e}</span>{g.k}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: C.sub, textTransform: "uppercase", marginTop: 4 }}>Quick picks</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {MUSCLE_QUICK_PICKS.map(q => (
+                <button key={q.label} onClick={() => setMuscleGroups(q.groups)}
+                  style={{ padding: "8px 14px", borderRadius: 999, border: `1.5px solid ${C.greenMid}`, background: "#111", color: C.text, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>{q.label}</button>
+              ))}
+            </div>
+            <div style={{ background: C.greenLight, border: `1.5px solid ${C.greenMid}`, borderRadius: 16, padding: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>Today: <span style={{ color: "#4A9D6E" }}>{muscleGroups.length ? muscleGroups.join(" + ") : "Nothing picked yet"}</span></span>
+              {lastMuscles && <span style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>Last time: {lastMuscles.join(" + ")}</span>}
+            </div>
+            <button onClick={() => setFunnel("form")} disabled={muscleGroups.length === 0}
+              style={{ marginTop: 4, padding: 15, borderRadius: 14, border: "none", background: muscleGroups.length ? "linear-gradient(135deg,#1F5F3F,#4A9D6E)" : C.greenMid, color: muscleGroups.length ? "#fff" : C.sub, fontWeight: 900, fontSize: 16, cursor: muscleGroups.length ? "pointer" : "not-allowed" }}>
+              Continue to workout →
+            </button>
+          </div>
         ) : (<>
         {/* Back bar — workout sections go back to the workout boxes; everything else to the home boxes. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <button onClick={() => {
               if (mainMode === "log" && logTab === "workout" && woSection && openEx !== null) { closeExercise(); return; }
               if (mainMode === "log" && logTab === "workout" && woSection) setWoSection(null);
-              else if (mainMode === "log" && logTab === "workout") setFunnel("workoutChoice");
+              else if (mainMode === "log" && logTab === "workout") setFunnel(todayLogId ? "workoutChoice" : "muscles");
               else if (mainMode === "log" && logTab === "nutrition" && nutMeal) closeMeal();
               else if (mainMode === "log" && logTab === "nutrition" && nutSection) setNutSection(null);
               else if (mainMode === "log" && logTab === "wellness" && wlSection) setWlSection(null);
@@ -3736,14 +3821,14 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                         <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                           border: `2px solid ${ex.timed ? C.blue : C.sub}`, background: ex.timed ? C.blue : "transparent",
                           color: "#fff", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{ex.timed ? "✓" : ""}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.timed ? "#4A9D6E" : C.sub }}>⏱ Timed — track seconds instead of reps</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: ex.timed ? "#4A9D6E" : C.sub }}>⏱ Timed — track time instead of reps</span>
                       </button>
 
                       {/* Per-set rows — each set has its own reps + weight
                           inputs side-by-side, with quick +2.5/+5/+10 lb
                           buttons. Lets users log pyramid sets, drop sets,
                           warm-up sets etc. without losing detail. */}
-                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>{ex.timed ? (ex.bodyweight ? "Time in seconds (per set)" : "Seconds × Weight (per set)") : (ex.bodyweight ? "Reps (per set)" : "Reps × Weight (per set)")}</label>
+                      <label style={{ fontSize: 10, fontWeight: 800, color: C.sub, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>{ex.timed ? (ex.bodyweight ? "Time per set (min : sec)" : "Time (min : sec) × Weight per set") : (ex.bodyweight ? "Reps (per set)" : "Reps × Weight (per set)")}</label>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {Array.from({ length: numSets }).map((_, s) => {
                           function updateW(delta: number) {
@@ -3761,9 +3846,30 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                               <span style={{ fontSize: 11, color: C.sub, fontWeight: 700, width: 24, flexShrink: 0 }}>S{s+1}</span>
                               {/* Reps for this specific set. Free-text but
                                   numeric keypad on mobile so it feels native. */}
+                              {ex.timed ? (() => {
+                                // Timed set: minutes + seconds, stored as total seconds
+                                // in the same per-set slot (so 10 min = "600").
+                                const t = splitTimedSec((ex.repsArr || [])[s]);
+                                const setTime = (min: string, sec: string) => setExercises(exs => exs.map((x, j) => {
+                                  if (j !== i) return x;
+                                  const rs = [...(x.repsArr || Array(numSets).fill(''))];
+                                  rs[s] = joinTimedSec(min, sec);
+                                  return { ...x, repsArr: rs, reps: rs[0] || x.reps };
+                                }));
+                                const box = { ...iStyle, width: 52, padding: "7px 6px", fontSize: 13, textAlign: "center" as const, flexShrink: 0 };
+                                return (
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4, flex: ex.bodyweight ? 1 : undefined, flexShrink: 0 }}>
+                                    <input style={box} type="text" inputMode="numeric" placeholder="min" aria-label={`Set ${s + 1} minutes`}
+                                      value={t.min} onChange={e => setTime(e.target.value, t.sec)} />
+                                    <span style={{ fontSize: 13, color: C.sub, fontWeight: 800 }}>:</span>
+                                    <input style={box} type="text" inputMode="numeric" placeholder="sec" aria-label={`Set ${s + 1} seconds`}
+                                      value={t.sec} onChange={e => setTime(t.min, e.target.value)} />
+                                  </div>
+                                );
+                              })() : (
                               <input
                                 style={ex.bodyweight ? { ...iStyle, flex: 1, padding: "7px 10px", fontSize: 13 } : { ...iStyle, width: 56, padding: "7px 8px", fontSize: 13, textAlign: "center" as const, flexShrink: 0 }}
-                                type="text" inputMode="numeric" placeholder={ex.timed ? "sec" : "reps"}
+                                type="text" inputMode="numeric" placeholder="reps"
                                 value={(ex.repsArr || [])[s] ?? ''}
                                 onChange={e => setExercises(exs => exs.map((x, j) => {
                                   if (j !== i) return x;
@@ -3775,6 +3881,7 @@ function PostPageInner({ onDone }: { onDone: () => void }) {
                                   return { ...x, repsArr: rs, reps: rs[0] || x.reps };
                                 }))}
                               />
+                              )}
                               {ex.bodyweight ? (
                                 <span style={{ fontSize: 11, fontWeight: 800, color: C.sub, flexShrink: 0, padding: "0 6px" }}>bodyweight</span>
                               ) : (<>
