@@ -1,4 +1,5 @@
 "use client";
+import ShareCardSheet from "@/components/ShareCardSheet";
 import { fmtTimedSec } from "@/lib/timedFormat";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
@@ -426,8 +427,10 @@ function MonthCard({ mDays, makeCard }: { mDays: any[]; makeCard: (d:any)=>React
 }
 
 // ── Day Card ──────────────────────────────────────────────────────────────────
-type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; onLogSaved?: ()=>void; earnedBadges?: string[]; userLevel?: number; editable?: boolean };
-function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, onLogSaved, earnedBadges = [], userLevel = 1, editable = true}:DayCardProps) {
+type DayCardProps = { day: typeof DAYS[0]; workoutLogId?: string | null; nutritionLogIds?: string[]; wellnessLogIds?: string[]; onDelete?: ()=>void; onLogSaved?: ()=>void; earnedBadges?: string[]; userLevel?: number; editable?: boolean; owner?: { name: string; username?: string; avatarUrl?: string | null } };
+function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, onLogSaved, earnedBadges = [], userLevel = 1, editable = true, owner}:DayCardProps) {
+  // "Share your day" screen (components/ShareCardSheet.tsx).
+  const [shareOpen, setShareOpen] = useState(false);
   const { user } = useAuth();
   const [open,setOpen]       = useState(false);
   const [confirmDel,setConfirmDel] = useState(false);
@@ -932,6 +935,7 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
 
   return (<>
     {lb && <Lightbox src={lb} onClose={()=>{ if (lb.startsWith("blob:")) URL.revokeObjectURL(lb); setLb(null); }}/>}
+    {shareOpen && <ShareCardSheet day={day} owner={owner || { name: "Livelee athlete" }} earnedBadgeIds={earnedBadges} onClose={()=>setShareOpen(false)} />}
     <div className={tierCardClass} style={{...tierCardStyle, borderRadius:22, marginBottom:16, overflow:"hidden"}}>
 
       {/* HEADER */}
@@ -982,8 +986,8 @@ function DayCard({day, workoutLogId, nutritionLogIds, wellnessLogIds, onDelete, 
                 {/* tap-away backdrop */}
                 <div onClick={()=>{setMenuOpen(false);setConfirmDel(false);}} style={{position:"fixed",inset:0,zIndex:40}}/>
                 <div style={{position:"absolute",top:38,right:0,zIndex:41,minWidth:184,background:"#111811",border:`1px solid ${C.purpleMid}`,borderRadius:14,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",overflow:"hidden",padding:4,display:"flex",flexDirection:"column",gap:2}}>
-                  <button onClick={viewCard} disabled={cardLoading} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:C.text,fontSize:14,fontWeight:600,cursor:cardLoading?"default":"pointer",textAlign:"left"}}>
-                    <span style={{fontSize:16}}>{cardLoading ? "⏳" : "🖼️"}</span> {cardLoading ? "Generating…" : "View photo"}
+                  <button onClick={()=>{ setMenuOpen(false); setShareOpen(true); }} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:C.text,fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
+                    <span style={{fontSize:16}}>📤</span> Share your day
                   </button>
                   {onDelete && (!confirmDel
                     ? <button onClick={()=>setConfirmDel(true)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",background:"transparent",color:"#F87171",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left"}}>
@@ -2240,6 +2244,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
 
       const parts = sortedWorkouts.map((w: any) => ({
         id: w.id,
+        muscle_groups: Array.isArray(w.muscle_groups) ? w.muscle_groups : [],
         type: prettyWorkoutType(w.workout_type),
         source: workoutSource(w),
         time: w.logged_at,
@@ -2255,6 +2260,8 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
               weights: Array.isArray(e.weights) ? e.weights : [],
               repsArr: Array.isArray(e.repsArr) ? e.repsArr : [],
               notes: e.notes || '',
+              timed: !!e.timed,
+              bodyweight: !!e.bodyweight,
             }))
           : [],
         cardio: Array.isArray(w.cardio)
@@ -2297,6 +2304,9 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
           source: parts.every((p: any) => p.source && p.source === parts[0].source) ? parts[0].source : null,
           exercises: allExercises,
           cardio: allCardio,
+          // For the share card: muscle groups picked on the Post page and total minutes.
+          muscleGroups: Array.from(new Set(parts.flatMap((p: any) => p.muscle_groups || []))),
+          durationMin: totalDurationMin,
         };
       }
 
@@ -2358,6 +2368,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
         // workouts (e.g. a synced walk + a class logged later); only reading the
         // first one's photo hid photos added to the others.
         photoUrls: Array.from(new Set([...sortedWorkouts, ...wellnessLogs].map((l: any) => l.photo_url).filter(Boolean))),
+        workoutPhotoUrls: Array.from(new Set(sortedWorkouts.map((l: any) => l.photo_url).filter(Boolean))),
         _date: date.getTime(),
       };
     });
@@ -5603,6 +5614,7 @@ export default function ProfilePage({ overrideUserId, overrideProfile }: { overr
                         return earnedBadges.map(b => b.badge_id).filter(id => badgeEarnedDay[id] === key);
                       })()}
                       userLevel={progressInfo?.level ?? 1}
+                      owner={{ name: viewProfile?.full_name || viewProfile?.username || "", username: viewProfile?.username || undefined, avatarUrl: viewProfile?.avatar_url || null }}
                       // Refresh the profile's goal panel after a save so the
                       // user sees their goals tick up immediately. Without
                       // this the server recomputes correctly but the UI
